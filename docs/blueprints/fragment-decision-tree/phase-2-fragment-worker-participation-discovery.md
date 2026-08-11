@@ -284,3 +284,115 @@ This investigative pass is complete when:
 Passing this pass authorizes only the next single decision-tree split, discovered by the ranked
 variable sweep. It does not authorize a general adaptive controller or any production implementation
 in the same pass.
+
+## Completion notes
+
+Implemented on 2026-08-10. The change is confined to
+`benchmarks/src/main/java/io/euhedral_execution/core/control_plane/FragmentPathCalibrationBenchmark.java`
+and its benchmark test. The fixture now retains worker logical CPUs in stable physical-core order,
+uses `PaddedLongAdder.getAcquire(cpu)` around every fixed completion invocation, excludes warmup
+iterations through the JMH iteration lifecycle, aggregates raw worker deltas per measurement
+iteration, and reports per-window and per-fork fractions, dominance, and effective lanes. The
+executor hot loop and all production modules are unchanged.
+
+### Environment and protocol
+
+- CPU: Intel Core i9-14900K, x86-64, one socket, 24 physical cores, 32 logical CPUs
+- Effective process CPUs: 0-31; diagnostic workers: logical CPUs 0 and 6
+- Cache: 36 MiB shared L3
+- JVM: OpenJDK 64-Bit Server VM 21.0.2+13-58
+- JMH: 1.37, three forks, three 3-second warmups, five 5-second measurements
+- Batch target: 32; completion window: 1,048,576 frames
+- CPU single-lane ceiling for `L`: 4,444,444 frames/s from the fixed 225 ns body
+- No-op `L`: fork throughput divided by the phase 1 isolated same-mode control, 88.797 million
+  frames/s for DIRECT and 35.919 million frames/s for STAGED
+
+The primary CPU matrix produced these JMH aggregate scores:
+
+| Mode | Sources | Mean frames/s | 99.9% error |
+|---|---|---:|---:|
+| DIRECT | plentiful | 7,086,484 | 2,225,429 |
+| DIRECT | scarce | 4,246,564 | 25,865 |
+| STAGED | plentiful | 7,467,877 | 90,907 |
+| STAGED | scarce | 7,492,984 | 25,375 |
+
+DIRECT/plentiful was rerun for three additional forks because the primary run contained only one
+low-regime fork. Across both runs there were three low and three high forks. The table below records
+the added run, which contains both regimes, and the primary run for the other rows. `Deltas` are the
+raw per-worker completion deltas summed over the five measurement windows. `f0/f1`, `D`, and `L` are
+derived from those same windows; throughput is the mean of the five matching JMH iterations.
+
+| Mode | Sources | Fork | Throughput | Deltas | f0 / f1 | D | L |
+|---|---|---:|---:|---|---|---:|---:|
+| DIRECT | plentiful | A1 | 4,242,189 | `[0, 110103894]` | 0.000000 / 1.000000 | 1.000000 | 0.954545 |
+| DIRECT | plentiful | A2 | 8,516,287 | `[107348958, 107614951]` | 0.499381 / 0.500619 | 0.500619 | 1.916280 |
+| DIRECT | plentiful | A3 | 4,252,830 | `[0, 110103174]` | 0.000000 / 1.000000 | 1.000000 | 0.956937 |
+| DIRECT | scarce | 1 | 4,255,473 | `[110103418, 0]` | 1.000000 / 0.000000 | 1.000000 | 0.957539 |
+| DIRECT | scarce | 2 | 4,242,196 | `[0, 109055577]` | 0.000000 / 1.000000 | 1.000000 | 0.954646 |
+| DIRECT | scarce | 3 | 4,242,024 | `[0, 110103440]` | 0.000000 / 1.000000 | 1.000000 | 0.954508 |
+| STAGED | plentiful | 1 | 7,573,507 | `[96999162, 96993185]` | 0.500015 / 0.499985 | 0.500015 | 1.704147 |
+| STAGED | plentiful | 2 | 7,375,619 | `[94346229, 94401911]` | 0.499852 / 0.500148 | 0.500148 | 1.659590 |
+| STAGED | plentiful | 3 | 7,454,507 | `[94272857, 94476258]` | 0.499461 / 0.500539 | 0.500539 | 1.677365 |
+| STAGED | scarce | 1 | 7,487,114 | `[94534246, 94215245]` | 0.500845 / 0.499155 | 0.500845 | 1.684708 |
+| STAGED | scarce | 2 | 7,470,150 | `[93885266, 94864184]` | 0.497407 / 0.502593 | 0.502593 | 1.680891 |
+| STAGED | scarce | 3 | 7,521,688 | `[93964271, 94784957]` | 0.497826 / 0.502174 | 0.502174 | 1.692485 |
+
+The no-op matrix produced these aggregate JMH scores:
+
+| Mode | Sources | Mean frames/s | 99.9% error |
+|---|---|---:|---:|
+| DIRECT | plentiful | 122,467,336 | 32,714,177 |
+| DIRECT | scarce | 81,185,718 | 582,089 |
+| STAGED | plentiful | 38,420,521 | 1,997,376 |
+| STAGED | scarce | 46,834,661 | 1,706,497 |
+
+The corresponding fork evidence is:
+
+| Mode | Sources | Fork | Throughput | Deltas | f0 / f1 | D | L |
+|---|---|---:|---:|---|---|---:|---:|
+| DIRECT | plentiful | 1 | 143,798,565 | `[1788074610, 1810017665]` | 0.496951 / 0.503049 | 0.503049 | 1.619 |
+| DIRECT | plentiful | 2 | 142,941,833 | `[1788933257, 1788178069]` | 0.500106 / 0.499894 | 0.500106 | 1.610 |
+| DIRECT | plentiful | 3 | 80,661,611 | `[0, 2018645094]` | 0.000000 / 1.000000 | 1.000000 | 0.908 |
+| DIRECT | scarce | 1 | 81,704,944 | `[0, 2045911520]` | 0.000000 / 1.000000 | 1.000000 | 0.920 |
+| DIRECT | scarce | 2 | 80,481,811 | `[2015499515, 0]` | 1.000000 / 0.000000 | 1.000000 | 0.906 |
+| DIRECT | scarce | 3 | 81,370,398 | `[2036478983, 0]` | 1.000000 / 0.000000 | 1.000000 | 0.916 |
+| STAGED | plentiful | 1 | 39,296,153 | `[493081325, 492618937]` | 0.500235 / 0.499765 | 0.500235 | 1.094 |
+| STAGED | plentiful | 2 | 35,906,646 | `[451489276, 450318408]` | 0.500649 / 0.499351 | 0.500649 | 1.000 |
+| STAGED | plentiful | 3 | 40,058,564 | `[504321541, 500254844]` | 0.502024 / 0.497976 | 0.502024 | 1.115 |
+| STAGED | scarce | 1 | 47,474,000 | `[29628339, 1159517379]` | 0.024916 / 0.975084 | 0.975084 | 1.322 |
+| STAGED | scarce | 2 | 48,115,498 | `[8681624, 1197242005]` | 0.007199 / 0.992801 | 0.992801 | 1.339 |
+| STAGED | scarce | 3 | 44,914,504 | `[12030849, 1112097824]` | 0.010702 / 0.989298 | 0.989298 | 1.250 |
+
+### Verdict
+
+- H1: **accepted**. DIRECT throughput and participation are bimodal in lockstep in both CPU and
+  no-op plentiful-source forks.
+- H2: **accepted**. Every low CPU DIRECT fork has `D = 1.0` and `L = 0.955-0.957`; one worker does
+  effectively all completions.
+- H3: **accepted**. Every high CPU DIRECT fork has `D` near 0.5 and `L` near 1.92. The no-op high
+  forks are likewise balanced, while their low fork has `D = 1.0`.
+- H4: **accepted for the stated CPU fixture**. STAGED is balanced in every CPU fork for both source
+  shapes and remains near 7.47-7.49 million frames/s in aggregate. The no-op control exposes a
+  boundary: STAGED/scarce is highly dominated, so request-first ordering does not guarantee balanced
+  participation for every workload.
+- H0 and HA: **rejected**. No low DIRECT fork was balanced and no high DIRECT fork was dominated.
+- HP: **supported as a starvation mechanism, but rejected as a complete source-count split**.
+  One shared source always leaves DIRECT with one productive worker, and two sources make balanced
+  execution possible. However, plentiful DIRECT still selects either one or two productive workers
+  across otherwise fixed forks. Nominal source count relative to worker count therefore does not
+  select the regime by itself. Source/handle acquisition, assignment, or insertion order remains the
+  next unresolved variable.
+
+The participation hypothesis explains the Tier 1 bimodality, but the ranked source-count sweep does
+not yet identify a deterministic decision-tree signal. This pass authorizes the next bounded
+experiment on handle acquisition or assignment; it does not authorize the production split sketched
+above.
+
+### Verification
+
+- `mise exec -- gradle :benchmarks:test --tests io.euhedral_execution.core.control_plane.FragmentPathCalibrationBenchmarkTest`
+  passed.
+- `mise exec -- gradle :euhedral-core:test :benchmarks:test :benchmarks:assemble` passed.
+- The full CPU and no-op JMH matrices completed at the declared protocol; three additional
+  DIRECT/plentiful CPU forks supplied three observations in each regime across both runs.
+- `git diff --check` is clean.

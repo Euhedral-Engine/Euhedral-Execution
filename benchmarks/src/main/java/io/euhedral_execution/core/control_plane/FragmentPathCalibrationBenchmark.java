@@ -40,6 +40,8 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.IterationParams;
+import org.openjdk.jmh.runner.IterationType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,6 +60,12 @@ public class FragmentPathCalibrationBenchmark {
     static final int SAMPLE_COUNT = 9;
     static final int CPU_WORK_ROUNDS = 256;
     static final long TIMEOUT_NS = TimeUnit.MINUTES.toNanos(1);
+    /// The blueprint's 225 ns theoretical one-worker ceiling for CPU-work lane estimates.
+    static final double CPU_SINGLE_LANE_CEILING_FRAMES_PER_SECOND = 1_000_000_000.0 / 225.0;
+    /// Phase 1's isolated DIRECT no-op throughput control on the calibration host.
+    static final double DIRECT_NO_OP_SINGLE_LANE_CEILING_FRAMES_PER_SECOND = 88_797_000.0;
+    /// Phase 1's isolated STAGED no-op throughput control on the calibration host.
+    static final double STAGED_NO_OP_SINGLE_LANE_CEILING_FRAMES_PER_SECOND = 35_919_000.0;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(FragmentPathCalibrationBenchmark.class);
 
@@ -146,6 +154,93 @@ public class FragmentPathCalibrationBenchmark {
         return value;
     }
 
+    /// Reads the selected worker counters with acquire semantics in stable worker order.
+    static long[] workerCounts(PaddedLongAdder counters, int[] workerCpus) {
+        long[] counts = new long[workerCpus.length];
+        for (int i = 0; i < workerCpus.length; i++) {
+            counts[i] = counters.getAcquire(workerCpus[i]);
+        }
+        return counts;
+    }
+
+    /// Adds one monotonic fixed-window delta to its measurement-iteration accumulator.
+    static void accumulateCompletionDeltas(long[] accumulated, long[] before, long[] after) {
+        if (accumulated.length != before.length || before.length != after.length) {
+            throw new IllegalArgumentException("Worker counter arrays must have equal lengths");
+        }
+        for (int i = 0; i < accumulated.length; i++) {
+            long delta = after[i] - before[i];
+            if (delta < 0L) {
+                throw new IllegalArgumentException("Worker counters must be monotonic");
+            }
+            accumulated[i] = Math.addExact(accumulated[i], delta);
+        }
+    }
+
+    /// Derives participation fractions, dominance, and effective lanes from one completion window.
+    static ParticipationMetrics participationMetrics(long[] workerDeltas, long elapsedNanos) {
+        return participationMetrics(workerDeltas, elapsedNanos, CPU_SINGLE_LANE_CEILING_FRAMES_PER_SECOND);
+    }
+
+    /// Derives participation metrics relative to the selected workload's isolated lane ceiling.
+    static ParticipationMetrics participationMetrics(
+            long[] workerDeltas, long elapsedNanos, double singleLaneCeilingFramesPerSecond) {
+        if (workerDeltas.length == 0) {
+            throw new IllegalArgumentException("At least one worker delta is required");
+        }
+        if (elapsedNanos <= 0L) {
+            throw new IllegalArgumentException("Elapsed time must be positive");
+        }
+        if (!Double.isFinite(singleLaneCeilingFramesPerSecond) || singleLaneCeilingFramesPerSecond <= 0.0) {
+            throw new IllegalArgumentException("Single-lane ceiling must be finite and positive");
+        }
+        long completed = 0L;
+        long maximum = 0L;
+        for (long delta : workerDeltas) {
+            if (delta < 0L) {
+                throw new IllegalArgumentException("Worker deltas must be non-negative");
+            }
+            completed = Math.addExact(completed, delta);
+            maximum = Math.max(maximum, delta);
+        }
+        double[] fractions = new double[workerDeltas.length];
+        if (completed > 0L) {
+            for (int i = 0; i < workerDeltas.length; i++) {
+                fractions[i] = (double) workerDeltas[i] / completed;
+            }
+        }
+        double dominance = completed == 0L ? 0.0 : (double) maximum / completed;
+        double throughput = (double) completed * TimeUnit.SECONDS.toNanos(1L) / elapsedNanos;
+        return new ParticipationMetrics(
+                fractions, dominance, throughput, throughput / singleLaneCeilingFramesPerSecond);
+    }
+
+    /// Selects the predeclared isolated single-worker control for effective-lane reporting.
+    static double singleLaneCeiling(Workload workload, ForcedMode mode) {
+        if (workload == Workload.CPU_WORK) {
+            return CPU_SINGLE_LANE_CEILING_FRAMES_PER_SECOND;
+        }
+        return mode == ForcedMode.DIRECT
+                ? DIRECT_NO_OP_SINGLE_LANE_CEILING_FRAMES_PER_SECOND
+                : STAGED_NO_OP_SINGLE_LANE_CEILING_FRAMES_PER_SECOND;
+    }
+
+    /// Immutable derived participation values for one fixed measurement window.
+    record ParticipationMetrics(
+            double[] fractions, double dominance, double throughputFramesPerSecond, double effectiveLanes) {
+
+        /// Protects recorded fractions from later mutation by reporting code or tests.
+        ParticipationMetrics {
+            fractions = fractions.clone();
+        }
+
+        /// Returns an isolated fraction vector for stable diagnostic reporting.
+        @Override
+        public double[] fractions() {
+            return this.fractions.clone();
+        }
+    }
+
     /// Benchmark source-availability fixtures.
     public enum SourceShape {
         PLENTIFUL,
@@ -197,6 +292,7 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(warmedSamples),
                     warmedMedian,
                     Math.abs(startupMedian - warmedMedian) * 100.0 / Math.max(warmedMedian, 1e-9));
+            super.beforeClose();
         }
     }
 
@@ -248,10 +344,31 @@ public class FragmentPathCalibrationBenchmark {
         private DiagnosticLease diagnosticLease;
         private DiagnosticDistributor distributor;
         private RepeatingSink[] sources;
+        /// Logical CPUs in the same stable order as the selected worker cores.
+        private int[] workerCpus;
+        /// Per-worker completion totals accumulated during the current measurement iteration.
+        private long[] iterationWorkerDeltas;
+        /// Sum of fixed completion-window durations during the current measurement iteration.
+        private long iterationElapsedNanos;
+        /// Raw per-worker deltas aligned with the five JMH measurement iterations.
+        private final List<long[]> measurementWorkerDeltas = new ArrayList<>();
+        /// Fixed-window elapsed totals aligned with `measurementWorkerDeltas`.
+        private final List<Long> measurementElapsedNanos = new ArrayList<>();
+        /// True only while JMH is invoking the measured, non-warmup iteration.
+        private boolean measurementIteration;
+        /// Source availability retained for the fork-level diagnostic report.
+        private SourceShape sourceShape;
+        /// Executor work body retained for the fork-level diagnostic report.
+        private Workload workload;
 
         /// Builds and starts the requested pinned fragment graph without the lattice monitor.
         protected final void setupPath(int workerCount, SourceShape sourceShape, Workload workload) {
             try {
+                this.sourceShape = sourceShape;
+                this.workload = workload;
+                this.workerCpus = new int[workerCount];
+                this.measurementWorkerDeltas.clear();
+                this.measurementElapsedNanos.clear();
                 DiagnosticDistributor.resetSharedRoutingState();
                 this.diagnosticLease = new DiagnosticLease(this.mode, FIXED_BATCH_SIZE);
 
@@ -269,10 +386,16 @@ public class FragmentPathCalibrationBenchmark {
                 }
 
                 BaseCloneableObject base = new BaseCloneableObject(new CountingExecutor(-1, this.counters, workload));
+                int workerIndex = 0;
                 for (int core = workerCores.nextSetBit(0); core >= 0; core = workerCores.nextSetBit(core + 1)) {
                     BitSet cpus =
                             (BitSet) SystemInfo.getCoreInfo(core).getCpuSet().clone();
                     cpus.and(SystemInfo.getCpuSet());
+                    int workerCpu = cpus.nextSetBit(0);
+                    if (workerCpu < 0) {
+                        throw new IllegalStateException("Selected worker core has no effective logical CPU");
+                    }
+                    this.workerCpus[workerIndex++] = workerCpu;
                     CloneableObject pipeline = base.clone(new CloneConfig("FragmentPathCalibration", core, cpus));
                     pipeline.input(handles[core]);
                     pipeline.setDrainMode(true);
@@ -300,9 +423,41 @@ public class FragmentPathCalibrationBenchmark {
             }
         }
 
+        /// Opens one measurement-only participation accumulator and ignores warmup iterations.
+        @Setup(Level.Iteration)
+        public final void setupIteration(IterationParams iterationParams) {
+            this.measurementIteration = iterationParams.getType() == IterationType.MEASUREMENT;
+            if (this.measurementIteration) {
+                this.iterationWorkerDeltas = new long[this.workerCpus.length];
+                this.iterationElapsedNanos = 0L;
+            }
+        }
+
+        /// Retains one raw per-worker split aligned with the completed JMH measurement iteration.
+        @TearDown(Level.Iteration)
+        public final void tearDownIteration(IterationParams iterationParams) {
+            if (iterationParams.getType() == IterationType.MEASUREMENT) {
+                this.measurementWorkerDeltas.add(this.iterationWorkerDeltas.clone());
+                this.measurementElapsedNanos.add(this.iterationElapsedNanos);
+            }
+            this.measurementIteration = false;
+            this.iterationWorkerDeltas = null;
+            this.iterationElapsedNanos = 0L;
+        }
+
         /// Waits for one JMH invocation's additional completed frames.
         final void awaitInvocation() {
+            if (!this.measurementIteration) {
+                awaitFrames(INVOCATION_FRAMES);
+                return;
+            }
+            long[] before = workerCounts(this.counters, this.workerCpus);
+            long start = System.nanoTime();
             awaitFrames(INVOCATION_FRAMES);
+            long elapsed = System.nanoTime() - start;
+            long[] after = workerCounts(this.counters, this.workerCpus);
+            accumulateCompletionDeltas(this.iterationWorkerDeltas, before, after);
+            this.iterationElapsedNanos = Math.addExact(this.iterationElapsedNanos, elapsed);
         }
 
         /// Closes all trial-owned graph state and releases the diagnostic override.
@@ -316,7 +471,67 @@ public class FragmentPathCalibrationBenchmark {
         }
 
         /// Allows the single-worker state to sample the warmed graph before common teardown.
-        protected void beforeClose() {}
+        protected void beforeClose() {
+            reportParticipation();
+        }
+
+        /// Reports raw measurement splits and fork-level participation metrics before graph close.
+        private void reportParticipation() {
+            long[][] rawDeltas = this.measurementWorkerDeltas.toArray(long[][]::new);
+            long[] finalWorkerCounts = workerCounts(this.counters, this.workerCpus);
+            if (rawDeltas.length == 0) {
+                LOGGER.info(
+                        "Fragment worker participation mode={} sourceShape={} workload={} batch={} workerCpus={} "
+                                + "rawMeasurementDeltas=[] finalWorkerCounts={} verdict=NO_MEASUREMENT_SAMPLES",
+                        this.mode,
+                        this.sourceShape,
+                        this.workload,
+                        FIXED_BATCH_SIZE,
+                        Arrays.toString(this.workerCpus),
+                        Arrays.toString(finalWorkerCounts));
+                return;
+            }
+            double[][] fractions = new double[rawDeltas.length][];
+            double[] dominance = new double[rawDeltas.length];
+            double[] effectiveLanes = new double[rawDeltas.length];
+            long[] aggregateDeltas = new long[this.workerCpus.length];
+            long aggregateElapsedNanos = 0L;
+            double singleLaneCeilingFramesPerSecond = singleLaneCeiling(this.workload, this.mode);
+            for (int i = 0; i < rawDeltas.length; i++) {
+                ParticipationMetrics metrics = participationMetrics(
+                        rawDeltas[i], this.measurementElapsedNanos.get(i), singleLaneCeilingFramesPerSecond);
+                fractions[i] = metrics.fractions();
+                dominance[i] = metrics.dominance();
+                effectiveLanes[i] = metrics.effectiveLanes();
+                for (int worker = 0; worker < aggregateDeltas.length; worker++) {
+                    aggregateDeltas[worker] = Math.addExact(aggregateDeltas[worker], rawDeltas[i][worker]);
+                }
+                aggregateElapsedNanos = Math.addExact(aggregateElapsedNanos, this.measurementElapsedNanos.get(i));
+            }
+            ParticipationMetrics aggregate =
+                    participationMetrics(aggregateDeltas, aggregateElapsedNanos, singleLaneCeilingFramesPerSecond);
+            LOGGER.info(
+                    "Fragment worker participation mode={} sourceShape={} workload={} batch={} workerCpus={} "
+                            + "rawMeasurementDeltas={} perMeasurementFractions={} perMeasurementDominance={} "
+                            + "perMeasurementEffectiveLanes={} aggregateDeltas={} aggregateFractions={} "
+                            + "aggregateDominance={} aggregateEffectiveLanes={} finalWorkerCounts={} "
+                            + "singleLaneCeilingFramesPerSecond={}",
+                    this.mode,
+                    this.sourceShape,
+                    this.workload,
+                    FIXED_BATCH_SIZE,
+                    Arrays.toString(this.workerCpus),
+                    Arrays.deepToString(rawDeltas),
+                    Arrays.deepToString(fractions),
+                    Arrays.toString(dominance),
+                    Arrays.toString(effectiveLanes),
+                    Arrays.toString(aggregateDeltas),
+                    Arrays.toString(aggregate.fractions()),
+                    aggregate.dominance(),
+                    aggregate.effectiveLanes(),
+                    Arrays.toString(finalWorkerCounts),
+                    singleLaneCeilingFramesPerSecond);
+        }
 
         /// Collects nine fixed-completion samples from the continuously running graph.
         protected final double[] collectSamples() {
