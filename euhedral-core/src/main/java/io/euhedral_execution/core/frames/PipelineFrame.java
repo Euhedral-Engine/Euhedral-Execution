@@ -100,6 +100,44 @@ public final class PipelineFrame<T> extends AbstractFrame {
         }
     }
 
+    private PipelineFrame<T> copy(
+            long idHash,
+            T data,
+            @Nullable FrameManager<T, PipelineFrame<T>> manager,
+            @Nullable AtomicBoolean killSwitch,
+            long routingSeed) {
+        PipelineFrame<T> copiedRoot = null;
+        PipelineFrame<?> copiedPrevious = null;
+        PipelineFrame<?> template = this;
+
+        while (template != null) {
+            PipelineFrame<T> copied = new PipelineFrame<>(
+                    template.sink,
+                    idHash,
+                    copiedRoot == null ? manager : null,
+                    copiedRoot == null ? killSwitch : null,
+                    template.function,
+                    template.consumer,
+                    template.ordered);
+            if (!copied.ordered) {
+                copied.randomizeHash(routingSeed);
+            }
+            routingSeed++;
+
+            if (copiedRoot == null) {
+                copiedRoot = copied;
+                copiedRoot.data = data;
+            } else {
+                copied.rootFrame = copiedRoot;
+                copiedPrevious.nextFrame = copied;
+            }
+            copiedPrevious = copied;
+            template = template.nextFrame;
+        }
+
+        return copiedRoot;
+    }
+
     /// Starts a reusable, compile-time-typed pipeline definition.
     public static <I> Builder<I, I> builder(QueueIngestSink sink) {
         return new Builder<>(Objects.requireNonNull(sink), List.of());
@@ -210,43 +248,35 @@ public final class PipelineFrame<T> extends AbstractFrame {
             Objects.requireNonNull(data);
             Objects.requireNonNull(consumer);
 
-            if (recycler == null) {
-                long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
-                return createPipeline(idHash, data, consumer, terminalOrdered, killSwitch, null, idHash + 1);
+            long prototypeId = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+            PipelineFrame<I> prototype = createPrototype(prototypeId, consumer, terminalOrdered);
+            if (recycler == null && killSwitch == null) {
+                prototype.data = data;
+                routeChain(prototype, prototypeId + 1);
+                return prototype;
             }
 
             long[] routingSeed = {ThreadLocalRandom.current().nextLong()};
-            recycler.setFactory(new FrameFactory<>(
-                    (idHash, input) -> createPipeline(
-                            idHash, input, consumer, terminalOrdered, killSwitch, recycler, routingSeed[0]++),
-                    (input, root) -> root.replace(input, routingSeed[0]++)));
+            if (recycler == null) {
+                return prototype.copy(prototypeId, data, null, killSwitch, routingSeed[0]);
+            }
+
+            FrameFactory<I, PipelineFrame<I>> factory = new FrameFactory<>(
+                    (idHash, input) -> prototype.copy(idHash, input, recycler, killSwitch, routingSeed[0]++),
+                    (input, root) -> root.replace(input, routingSeed[0]++));
+            recycler.setFactory(factory);
             return recycler.getOrCreate(data, password);
         }
 
-        private PipelineFrame<I> createPipeline(
-                long idHash,
-                I data,
-                Consumer<? super O> consumer,
-                boolean terminalOrdered,
-                @Nullable AtomicBoolean killSwitch,
-                @Nullable FrameManager<I, PipelineFrame<I>> recycler,
-                long routingSeed) {
+        private PipelineFrame<I> createPrototype(long idHash, Consumer<? super O> consumer, boolean terminalOrdered) {
             PipelineFrame<I> root = null;
             PipelineFrame<?> previous = null;
 
             for (Stage stage : this.stages) {
-                PipelineFrame<I> current = new PipelineFrame<>(
-                        this.sink,
-                        idHash,
-                        root == null ? recycler : null,
-                        root == null ? killSwitch : null,
-                        stage.function(),
-                        null,
-                        stage.ordered());
-                setRouting(current, stage.ordered(), routingSeed++);
+                PipelineFrame<I> current =
+                        new PipelineFrame<>(this.sink, idHash, null, null, stage.function(), null, stage.ordered());
                 if (root == null) {
                     root = current;
-                    root.data = data;
                 } else {
                     current.rootFrame = root;
                     previous.nextFrame = current;
@@ -255,24 +285,24 @@ public final class PipelineFrame<T> extends AbstractFrame {
             }
 
             Consumer<Object> terminalConsumer = value -> consumer.accept(cast(value));
-            PipelineFrame<I> terminal = new PipelineFrame<>(
-                    this.sink,
-                    idHash,
-                    root == null ? recycler : null,
-                    root == null ? killSwitch : null,
-                    null,
-                    terminalConsumer,
-                    terminalOrdered);
-            setRouting(terminal, terminalOrdered, routingSeed);
+            PipelineFrame<I> terminal =
+                    new PipelineFrame<>(this.sink, idHash, null, null, null, terminalConsumer, terminalOrdered);
 
             if (root == null) {
-                terminal.data = data;
                 return terminal;
             }
 
             terminal.rootFrame = root;
             previous.nextFrame = terminal;
             return root;
+        }
+
+        private static void routeChain(PipelineFrame<?> root, long routingSeed) {
+            PipelineFrame<?> current = root;
+            while (current != null) {
+                setRouting(current, current.ordered, routingSeed++);
+                current = current.nextFrame;
+            }
         }
 
         private static void setRouting(PipelineFrame<?> frame, boolean ordered, long routingSeed) {

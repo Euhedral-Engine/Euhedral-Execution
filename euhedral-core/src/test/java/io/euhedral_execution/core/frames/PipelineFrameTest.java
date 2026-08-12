@@ -90,12 +90,86 @@ class PipelineFrameTest {
 
         PipelineFrame<Integer> first = pipeline.buildOrdered(3, results::add, recycler, 17L);
         executePipeline(first, sink);
-        PipelineFrame<Integer> reused = pipeline.buildOrdered(5, results::add, recycler, 17L);
+        PipelineFrame<Integer> reused = recycler.getOrCreate(5, 17L);
         executePipeline(reused, sink);
 
         assertThat(reused).isSameAs(first);
         assertThat(results).containsExactly(6, 10);
         assertThat(reused.isOrdered()).isTrue();
+    }
+
+    @Test
+    void sameBuilderCreatesIndependentManagedPipelines() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(value -> value * 2);
+        FrameManager<Integer, PipelineFrame<Integer>> firstManager = new FrameManager<>(8, 17L);
+        FrameManager<Integer, PipelineFrame<Integer>> secondManager = new FrameManager<>(8, 29L);
+        AtomicBoolean firstKillSwitch = new AtomicBoolean();
+        AtomicBoolean secondKillSwitch = new AtomicBoolean();
+        List<Integer> firstResults = new ArrayList<>();
+        List<Integer> secondResults = new ArrayList<>();
+
+        PipelineFrame<Integer> first = pipeline.buildParallel(3, firstResults::add, firstKillSwitch, firstManager, 17L);
+        PipelineFrame<Integer> second =
+                pipeline.buildParallel(5, secondResults::add, secondKillSwitch, secondManager, 29L);
+
+        assertThat(first).isNotSameAs(second);
+        assertThat(first.recycler).isSameAs(firstManager);
+        assertThat(second.recycler).isSameAs(secondManager);
+        assertThat(first.killSwitch).isSameAs(firstKillSwitch);
+        assertThat(second.killSwitch).isSameAs(secondKillSwitch);
+
+        first.kill();
+        assertThat(first.isAlive()).isFalse();
+        assertThat(second.isAlive()).isTrue();
+        assertThat(secondKillSwitch).isFalse();
+
+        first.doFinally();
+        assertThat(firstManager.getRecycleQueue().sizeLong()).isOne();
+        assertThat(secondManager.getRecycleQueue().sizeLong()).isZero();
+
+        executePipeline(second, sink);
+        PipelineFrame<Integer> reusedSecond = secondManager.getOrCreate(7, 29L);
+        executePipeline(reusedSecond, sink);
+        assertThat(secondResults).containsExactly(10, 14);
+        assertThat(firstResults).isEmpty();
+    }
+
+    @Test
+    void sharedPrefixBuildsKeepTheirManagerFactoriesIndependent() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        PipelineFrame.Builder<Integer, Integer> prefix =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(value -> value + 1);
+        PipelineFrame.Builder<Integer, Integer> doubled = prefix.mapParallel(value -> value * 2);
+        PipelineFrame.Builder<Integer, String> labeled = prefix.mapOrdered(value -> "value=" + value);
+        FrameManager<Integer, PipelineFrame<Integer>> doubledManager = new FrameManager<>(8, 17L);
+        FrameManager<Integer, PipelineFrame<Integer>> labeledManager = new FrameManager<>(8, 29L);
+        AtomicBoolean doubledKillSwitch = new AtomicBoolean();
+        AtomicBoolean labeledKillSwitch = new AtomicBoolean();
+        List<Integer> doubledResults = new ArrayList<>();
+        List<String> labeledResults = new ArrayList<>();
+
+        PipelineFrame<Integer> doubledRoot =
+                doubled.buildParallel(2, doubledResults::add, doubledKillSwitch, doubledManager, 17L);
+        PipelineFrame<Integer> labeledRoot =
+                labeled.buildOrdered(4, labeledResults::add, labeledKillSwitch, labeledManager, 29L);
+
+        executePipeline(doubledRoot, sink);
+        executePipeline(labeledRoot, sink);
+
+        PipelineFrame<Integer> recycledDoubled = doubledManager.getOrCreate(5, 17L);
+        executePipeline(recycledDoubled, sink);
+
+        assertThat(recycledDoubled).isSameAs(doubledRoot);
+        assertThat(doubledResults).containsExactly(6, 12);
+        assertThat(labeledResults).containsExactly("value=5");
+        assertThat(doubledKillSwitch).isFalse();
+        assertThat(labeledKillSwitch).isFalse();
+        assertThat(doubledRoot.recycler).isSameAs(doubledManager);
+        assertThat(labeledRoot.recycler).isSameAs(labeledManager);
     }
 
     @Test
