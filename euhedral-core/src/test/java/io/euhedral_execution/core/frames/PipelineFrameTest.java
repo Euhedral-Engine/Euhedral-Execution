@@ -331,6 +331,32 @@ class PipelineFrameTest {
                 .hasMessageContaining("incompatible pipeline definition");
     }
 
+    @Test
+    void recycledPipelineInvokesUpdatedTerminalConsumerOnRepeatedBuild() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> resultsA = new ArrayList<>();
+        List<Integer> resultsB = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v * 2);
+
+        PipelineFrame<Integer> first = pipeline.buildParallel(10, resultsA::add, recycler, 17L);
+        executePipeline(first, sink);
+        assertThat(resultsA).containsExactly(20);
+        assertThat(resultsB).isEmpty();
+
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> second = pipeline.buildParallel(30, resultsB::add, recycler, 17L);
+        assertThat(second).isSameAs(first);
+
+        executePipeline(second, sink);
+        assertThat(resultsA).containsExactly(20);
+        assertThat(resultsB).containsExactly(60);
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;

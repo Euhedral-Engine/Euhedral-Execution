@@ -24,7 +24,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     private final QueueIngestSink sink;
     private final @Nullable Function<Object, Object> function;
-    private final @Nullable Consumer<Object> consumer;
+    private @Nullable Consumer<Object> consumer;
     private final boolean ordered;
 
     private PipelineFrame<T> rootFrame;
@@ -45,6 +45,14 @@ public final class PipelineFrame<T> extends AbstractFrame {
         this.consumer = consumer;
         this.ordered = ordered;
         this.rootFrame = this;
+    }
+
+    private void updateTerminalConsumer(Consumer<Object> consumer) {
+        PipelineFrame<?> current = this;
+        while (current.nextFrame != null) {
+            current = current.nextFrame;
+        }
+        current.consumer = consumer;
     }
 
     @Nullable
@@ -238,7 +246,9 @@ public final class PipelineFrame<T> extends AbstractFrame {
                 recycler.setFactory(factory);
             }
 
-            return recycler.getOrCreate(data, password);
+            PipelineFrame<I> root = recycler.getOrCreate(data, password);
+            root.updateTerminalConsumer(value -> consumer.accept(cast(value)));
+            return root;
         }
 
         private PipelineFrame<I> createChain(
