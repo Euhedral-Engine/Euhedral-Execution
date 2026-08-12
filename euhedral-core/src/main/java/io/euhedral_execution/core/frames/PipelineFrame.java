@@ -17,8 +17,8 @@ import org.jspecify.annotations.Nullable;
 /// A frame in a typed, multi-stage pipeline with independently ordered or parallel stages.
 ///
 /// Build pipelines with [#builder(QueueIngestSink)], add transformations with
-/// [Builder#mapParallel] or [Builder#mapOrdered], and bind the pipeline to an input and terminal
-/// consumer with [Builder#buildParallel] or [Builder#buildOrdered]. Each transform and the terminal
+/// [Builder#fanOut] or [Builder#fanIn], and bind the pipeline to an input and terminal
+/// consumer with [Builder#completeFannedOut] or [Builder#completeFannedIn]. Each transform and the terminal
 /// consumer is scheduled as a separate frame.
 @SuppressWarnings("unused")
 public final class PipelineFrame<T> extends AbstractFrame {
@@ -181,12 +181,12 @@ public final class PipelineFrame<T> extends AbstractFrame {
         }
 
         /// Appends a parallel transformation and advances the builder's output type.
-        public <N> Builder<I, N> mapParallel(Function<? super O, ? extends N> function) {
+        public <N> Builder<I, N> fanOut(Function<? super O, ? extends N> function) {
             return append(function, false);
         }
 
-        /// Appends an ordered transformation and advances the builder's output type.
-        public <N> Builder<I, N> mapOrdered(Function<? super O, ? extends N> function) {
+        /// Appends a serialized transformation and advances the builder's output type.
+        public <N> Builder<I, N> fanIn(Function<? super O, ? extends N> function) {
             return append(function, true);
         }
 
@@ -198,23 +198,23 @@ public final class PipelineFrame<T> extends AbstractFrame {
         }
 
         /// Binds an input and parallel terminal consumer to this definition.
-        public PipelineFrame<I> buildParallel(I data, Consumer<? super O> consumer) {
+        public PipelineFrame<I> completeFannedOut(I data, Consumer<? super O> consumer) {
             return create(data, consumer, false, null, null, 0L);
         }
 
         /// Builds a parallel terminal with a root-owned kill switch.
-        public PipelineFrame<I> buildParallel(I data, Consumer<? super O> consumer, AtomicBoolean killSwitch) {
+        public PipelineFrame<I> completeFannedOut(I data, Consumer<? super O> consumer, AtomicBoolean killSwitch) {
             return create(data, consumer, false, Objects.requireNonNull(killSwitch), null, 0L);
         }
 
         /// Builds a parallel terminal through a root-only recycler.
-        public PipelineFrame<I> buildParallel(
+        public PipelineFrame<I> completeFannedOut(
                 I data, Consumer<? super O> consumer, FrameManager<I, PipelineFrame<I>> recycler, long password) {
             return create(data, consumer, false, null, Objects.requireNonNull(recycler), password);
         }
 
         /// Builds a parallel terminal with root-owned cancellation and recycling.
-        public PipelineFrame<I> buildParallel(
+        public PipelineFrame<I> completeFannedOut(
                 I data,
                 Consumer<? super O> consumer,
                 AtomicBoolean killSwitch,
@@ -229,24 +229,24 @@ public final class PipelineFrame<T> extends AbstractFrame {
                     password);
         }
 
-        /// Binds an input and ordered terminal consumer to this definition.
-        public PipelineFrame<I> buildOrdered(I data, Consumer<? super O> consumer) {
+        /// Binds an input and serialized consumer to this definition.
+        public PipelineFrame<I> completeFannedIn(I data, Consumer<? super O> consumer) {
             return create(data, consumer, true, null, null, 0L);
         }
 
-        /// Builds an ordered terminal with a root-owned kill switch.
-        public PipelineFrame<I> buildOrdered(I data, Consumer<? super O> consumer, AtomicBoolean killSwitch) {
+        /// Binds an input and serialized consumer to this definition with a kill switch.
+        public PipelineFrame<I> completeFannedIn(I data, Consumer<? super O> consumer, AtomicBoolean killSwitch) {
             return create(data, consumer, true, Objects.requireNonNull(killSwitch), null, 0L);
         }
 
-        /// Builds an ordered terminal through a root-only recycler.
-        public PipelineFrame<I> buildOrdered(
+        /// Binds an input and serialized consumer to this definition and uses a recycler.
+        public PipelineFrame<I> completeFannedIn(
                 I data, Consumer<? super O> consumer, FrameManager<I, PipelineFrame<I>> recycler, long password) {
             return create(data, consumer, true, null, Objects.requireNonNull(recycler), password);
         }
 
-        /// Builds an ordered terminal with root-owned cancellation and recycling.
-        public PipelineFrame<I> buildOrdered(
+        /// Binds an input and serialized consumer to this definition with a kill switch and recycling.
+        public PipelineFrame<I> completeFannedIn(
                 I data,
                 Consumer<? super O> consumer,
                 AtomicBoolean killSwitch,
