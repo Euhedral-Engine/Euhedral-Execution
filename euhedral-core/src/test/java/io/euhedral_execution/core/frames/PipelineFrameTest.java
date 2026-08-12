@@ -514,6 +514,44 @@ class PipelineFrameTest {
         assertThat(secondTerminal.isOrdered()).isTrue();
     }
 
+    @Test
+    void passwordValidationOnInitialCreation() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(v -> v + 1);
+
+        assertThatThrownBy(() -> pipeline.buildOrdered(10, v -> {}, recycler, 99L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Incorrect password");
+
+        PipelineFrame<Integer> frame = pipeline.buildOrdered(10, v -> {}, recycler, 17L);
+        assertThat(frame).isNotNull();
+    }
+
+    @Test
+    void passwordValidationOnRecycledReuse() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(v -> v + 1);
+
+        PipelineFrame<Integer> first = pipeline.buildOrdered(10, v -> {}, recycler, 17L);
+        executePipeline(first, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        assertThatThrownBy(() -> pipeline.buildOrdered(20, v -> {}, recycler, 99L))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Incorrect password");
+
+        PipelineFrame<Integer> second = pipeline.buildOrdered(20, v -> {}, recycler, 17L);
+        assertThat(second).isSameAs(first);
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;
