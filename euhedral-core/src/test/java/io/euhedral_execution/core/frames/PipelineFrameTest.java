@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import java.util.ArrayList;
@@ -279,6 +280,55 @@ class PipelineFrameTest {
 
         executePipeline(reusedRoot, sink);
         assertThat(results).containsExactly(22, 42);
+    }
+
+    @Test
+    void incompatiblePipelineCannotTakeOverAssociatedManager() {
+        QueueIngestSink sink = new QueueIngestSink();
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> resultsA = new ArrayList<>();
+        List<Integer> resultsB = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Integer> pipelineA =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v + 1);
+        PipelineFrame.Builder<Integer, Integer> pipelineB =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(v -> v * 2);
+
+        pipelineA.buildParallel(10, resultsA::add, recycler, 17L);
+
+        assertThatThrownBy(() -> pipelineB.buildParallel(20, resultsB::add, recycler, 17L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("incompatible pipeline definition");
+    }
+
+    @Test
+    void frameManagerPreventsFactoryOverwrite() {
+        FrameManager<String, AbstractFrame> manager = new FrameManager<>(17L);
+        FrameFactory<String, AbstractFrame> factory1 = new FrameFactory<>((id, d) -> null, (d, f) -> {});
+        FrameFactory<String, AbstractFrame> factory2 = new FrameFactory<>((id, d) -> null, (d, f) -> {});
+
+        manager.setFactory(factory1);
+        manager.setFactory(factory1); // Re-setting the exact same factory instance succeeds
+
+        assertThatThrownBy(() -> manager.setFactory(factory2))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("already set");
+    }
+
+    @Test
+    void differentTerminalTopologyCannotTakeOverAssociatedManager() {
+        QueueIngestSink sink = new QueueIngestSink();
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v + 1);
+
+        pipeline.buildParallel(10, results::add, recycler, 17L);
+
+        assertThatThrownBy(() -> pipeline.buildOrdered(20, results::add, recycler, 17L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("incompatible pipeline definition");
     }
 
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {

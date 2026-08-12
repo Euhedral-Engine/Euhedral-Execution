@@ -221,11 +221,23 @@ public final class PipelineFrame<T> extends AbstractFrame {
                 return createChain(idHash, data, null, killSwitch, consumer, terminalOrdered, routingSeed[0]);
             }
 
-            FrameFactory<I, PipelineFrame<I>> factory = new FrameFactory<>(
-                    (idHash, input) -> createChain(
-                            idHash, input, recycler, killSwitch, consumer, terminalOrdered, routingSeed[0]++),
-                    (input, root) -> root.replace(input, routingSeed[0]++));
-            recycler.setFactory(factory);
+            FrameFactory<I, PipelineFrame<I>> existingFactory = recycler.getFactory();
+            PipelineKey key = new PipelineKey(this.sink, this.stages, terminalOrdered);
+
+            if (existingFactory != null) {
+                if (!key.equals(existingFactory.getOwner())) {
+                    throw new IllegalStateException(
+                            "FrameManager is already associated with an incompatible pipeline definition");
+                }
+            } else {
+                FrameFactory<I, PipelineFrame<I>> factory = new FrameFactory<>(
+                        (idHash, input) -> createChain(
+                                idHash, input, recycler, killSwitch, consumer, terminalOrdered, routingSeed[0]++),
+                        (input, root) -> root.replace(input, routingSeed[0]++),
+                        key);
+                recycler.setFactory(factory);
+            }
+
             return recycler.getOrCreate(data, password);
         }
 
@@ -302,4 +314,6 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
         private record Stage(Function<Object, Object> function, boolean ordered) {}
     }
+
+    private record PipelineKey(QueueIngestSink sink, List<Builder.Stage> stages, boolean terminalOrdered) {}
 }

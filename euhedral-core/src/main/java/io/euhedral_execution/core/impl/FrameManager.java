@@ -5,8 +5,8 @@ import io.euhedral_execution.data_structures.queues.BoundedMpscQueue;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.Arrays;
+import java.util.Objects;
 import lombok.Getter;
-import lombok.Setter;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
@@ -30,8 +30,16 @@ public final class FrameManager<D, F extends AbstractFrame> {
     private final AbstractFrame[] buffer;
     private final int chunkSize;
 
-    @Setter
+    @Getter
     private FrameFactory<D, F> factory;
+
+    public void setFactory(FrameFactory<D, F> factory) {
+        Objects.requireNonNull(factory, "factory cannot be null");
+        if (this.factory != null && this.factory != factory) {
+            throw new IllegalStateException("FrameFactory is already set for this FrameManager");
+        }
+        this.factory = factory;
+    }
 
     @Getter
     private long totalRecycled = 0;

@@ -6,6 +6,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.util.concurrent.ThreadLocalRandom;
+import org.jspecify.annotations.Nullable;
 
 /// A class for automatically creating or updating frames using the passed in functions.
 ///
@@ -19,13 +20,23 @@ public final class FrameFactory<D, F extends AbstractFrame> {
     private final FrameCreate<D, F> frameGenerator;
     private final FrameReplace<D, F> frameReplace;
     private final CpuInfo originLocation;
+    private final @Nullable Object owner;
 
     private long seed = ThreadLocalRandom.current().nextLong();
 
     public FrameFactory(FrameCreate<D, F> frameGenerator, FrameReplace<D, F> frameReplace) {
+        this(frameGenerator, frameReplace, null);
+    }
+
+    public FrameFactory(FrameCreate<D, F> frameGenerator, FrameReplace<D, F> frameReplace, @Nullable Object owner) {
         this.frameGenerator = frameGenerator;
         this.frameReplace = frameReplace;
         this.originLocation = SystemInfo.getCpuInfo(ThreadTools.getCpu());
+        this.owner = owner;
+    }
+
+    public @Nullable Object getOwner() {
+        return this.owner;
     }
 
     /// Creates a frame with the data.
