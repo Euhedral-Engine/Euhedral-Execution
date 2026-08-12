@@ -1,10 +1,11 @@
 package io.euhedral_execution.core.impl;
 
+import java.util.Arrays;
+
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.data_structures.queues.BoundedMpscQueue;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
-import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
@@ -28,6 +29,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
 
     private final long password;
     private final AbstractFrame[] buffer;
+    private final int chunkSize;
 
     @Setter
     private FrameFactory<D, F> factory;
@@ -50,6 +52,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
         this.recycleQueue = new MpscQueue<>(actual, pooledChunks);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
+        this.chunkSize = actual;
     }
 
     /// Creates a FrameManager with a bounded recycler.
@@ -60,6 +63,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
         this.recycleQueue = new BoundedMpscQueue<>(actual);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
+        this.chunkSize = actual;
     }
 
     /// Attempts to reuse an old frame if available. Creates one if not using the passed in data.
@@ -153,5 +157,25 @@ public final class FrameManager<D, F extends AbstractFrame> {
 
     public void close() {
         recycleQueue.clear();
+    }
+
+    /// Performs a shallow copy of this instance.
+    ///
+    /// ***Copies***:
+    /// - Internal queue type
+    /// - Queue capacity
+    /// - Password
+    ///
+    /// ***Does not copy***:
+    /// - Stored frames
+    /// - The create function
+    /// - The replace function
+    public FrameManager<D, F> copy() {
+        if(this.recycleQueue instanceof BoundedMpscQueue<AbstractFrame>) {
+            return new FrameManager<>(this.chunkSize, this.password);
+        } else if(this.recycleQueue instanceof MpscQueue<AbstractFrame> mpsc) {
+            return new FrameManager<>(this.chunkSize, mpsc.getMaxPooledChunks(), this.password);
+        }
+        throw new IllegalStateException("This class does not have a bounded or unbounded MPSC queue.");
     }
 }
