@@ -552,6 +552,150 @@ class PipelineFrameTest {
         assertThat(second).isSameAs(first);
     }
 
+    @Test
+    void filtersElementsAtIntermediateStagePassingAndFailing() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        List<Integer> results = new ArrayList<>();
+        PipelineFrame.Builder<Integer, Integer> builder =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v * 2).filterOutput(v -> v > 10);
+
+        PipelineFrame<Integer> failingRoot = builder.buildParallel(3, results::add);
+        executePipeline(failingRoot, sink);
+        assertThat(results).isEmpty();
+        assertThat(sink.size()).isZero();
+
+        PipelineFrame<Integer> passingRoot = builder.buildParallel(7, results::add);
+        executePipeline(passingRoot, sink);
+        assertThat(results).containsExactly(14);
+    }
+
+    @Test
+    void filtersElementsAtTerminalStage() {
+        QueueIngestSink sink = new QueueIngestSink();
+        List<Integer> results = new ArrayList<>();
+        PipelineFrame.Builder<Integer, Integer> builder =
+                PipelineFrame.<Integer>builder(sink).filterOutput(v -> v % 2 == 0);
+
+        PipelineFrame<Integer> passingFrame = builder.buildParallel(4, results::add);
+        execute(passingFrame);
+        assertThat(results).containsExactly(4);
+
+        results.clear();
+        PipelineFrame<Integer> failingFrame = builder.buildParallel(5, results::add);
+        execute(failingFrame);
+        assertThat(results).isEmpty();
+    }
+
+    @Test
+    void filtersMultipleStagesSequentially() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        List<Integer> results = new ArrayList<>();
+        PipelineFrame.Builder<Integer, Integer> builder = PipelineFrame.<Integer>builder(sink)
+                .mapOrdered(v -> v + 1)
+                .filterOutput(v -> v > 5)
+                .mapParallel(v -> v * 2)
+                .filterOutput(v -> v < 20);
+
+        PipelineFrame<Integer> stage1Failing = builder.buildParallel(3, results::add);
+        executePipeline(stage1Failing, sink);
+        assertThat(results).isEmpty();
+
+        PipelineFrame<Integer> stage2Failing = builder.buildParallel(15, results::add);
+        executePipeline(stage2Failing, sink);
+        assertThat(results).isEmpty();
+
+        PipelineFrame<Integer> passing = builder.buildParallel(6, results::add);
+        executePipeline(passing, sink);
+        assertThat(results).containsExactly(14);
+    }
+
+    @Test
+    void filterRecyclesRootFrameAndClearsFilteredFlagOnReuse() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+        PipelineFrame.Builder<Integer, Integer> builder =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(v -> v * 2).filterOutput(v -> v > 10);
+
+        PipelineFrame<Integer> first = builder.buildOrdered(3, results::add, recycler, 17L);
+        executePipeline(first, sink);
+
+        assertThat(results).isEmpty();
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> reused = recycler.getOrCreate(8, 17L);
+        assertThat(reused).isSameAs(first);
+
+        executePipeline(reused, sink);
+        assertThat(results).containsExactly(16);
+    }
+
+    @Test
+    void filterRejectsNullPredicate() {
+        QueueIngestSink sink = new QueueIngestSink();
+
+        assertThatNullPointerException()
+                .isThrownBy(() -> PipelineFrame.<Integer>builder(sink).filterOutput(null));
+    }
+
+    @Test
+    void filterInBranchedBuilderPreservesIndependence() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        PipelineFrame.Builder<Integer, Integer> base =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v + 1);
+
+        PipelineFrame.Builder<Integer, Integer> filteredPath = base.filterOutput(v -> v > 5);
+        PipelineFrame.Builder<Integer, Integer> unfilteredPath = base.mapParallel(v -> v * 2);
+
+        List<Integer> filteredResults = new ArrayList<>();
+        List<Integer> unfilteredResults = new ArrayList<>();
+
+        PipelineFrame<Integer> filteredFrame = filteredPath.buildParallel(2, filteredResults::add);
+        PipelineFrame<Integer> unfilteredFrame = unfilteredPath.buildParallel(2, unfilteredResults::add);
+
+        executePipeline(filteredFrame, sink);
+        executePipeline(unfilteredFrame, sink);
+
+        assertThat(filteredResults).isEmpty();
+        assertThat(unfilteredResults).containsExactly(6);
+    }
+
+    @Test
+    void filtersMultipleStagesAcrossDifferentObjectTypes() {
+        record UserPayload(String value, int length) {}
+
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        List<Boolean> results = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Boolean> builder = PipelineFrame.<Integer>builder(sink)
+                .mapParallel(Object::toString)
+                .filterOutput(s -> s.length() >= 2)
+                .mapOrdered(s -> new UserPayload(s, s.length()))
+                .filterOutput(payload -> payload.length() % 2 == 0)
+                .mapParallel(payload -> payload.value().startsWith("1"))
+                .filterOutput(b -> b);
+
+        // Filtered at stage 1 (single-digit string length < 2)
+        PipelineFrame<Integer> failingStage1 = builder.buildParallel(5, results::add);
+        executePipeline(failingStage1, sink);
+        assertThat(results).isEmpty();
+
+        // Filtered at stage 3 (does not start with "1")
+        PipelineFrame<Integer> failingStage3 = builder.buildParallel(35, results::add);
+        executePipeline(failingStage3, sink);
+        assertThat(results).isEmpty();
+
+        // Passes all stages (length >= 2, even length 4, starts with "1")
+        PipelineFrame<Integer> passing = builder.buildParallel(1234, results::add);
+        executePipeline(passing, sink);
+        assertThat(results).containsExactly(true);
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;

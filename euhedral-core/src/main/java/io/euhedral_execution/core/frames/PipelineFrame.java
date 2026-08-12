@@ -11,6 +11,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
 /// A frame in a typed, multi-stage pipeline with independently ordered or parallel stages.
@@ -25,12 +26,15 @@ public final class PipelineFrame<T> extends AbstractFrame {
     private final QueueIngestSink sink;
     private final @Nullable Function<Object, Object> function;
     private @Nullable Consumer<Object> consumer;
+    private final @Nullable Predicate<Object> filter;
     private final boolean ordered;
 
     private PipelineFrame<T> rootFrame;
     private @Nullable PipelineFrame<?> nextFrame;
     private Object data;
     private @Nullable AtomicBoolean activeKillSwitch;
+
+    private boolean filtered = false;
 
     private PipelineFrame(
             QueueIngestSink sink,
@@ -39,11 +43,13 @@ public final class PipelineFrame<T> extends AbstractFrame {
             @Nullable AtomicBoolean killSwitch,
             @Nullable Function<Object, Object> function,
             @Nullable Consumer<Object> consumer,
+            @Nullable Predicate<Object> filter,
             boolean ordered) {
         super(idHash, manager, killSwitch);
         this.sink = sink;
         this.function = function;
         this.consumer = consumer;
+        this.filter = filter;
         this.ordered = ordered;
         this.rootFrame = this;
         this.activeKillSwitch = killSwitch;
@@ -72,6 +78,12 @@ public final class PipelineFrame<T> extends AbstractFrame {
     @Override
     public void execute() {
         Object result = this.function == null ? this.data : this.function.apply(this.data);
+
+        if (this.filter != null && !this.filter.test(result)) {
+            this.filtered = true;
+            return;
+        }
+
         if (this.nextFrame != null) {
             this.nextFrame.data = result;
         }
@@ -82,7 +94,8 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     @Override
     public void doFinally() {
-        if (!isAlive() || this.nextFrame == null) {
+        if (!isAlive() || this.nextFrame == null || this.filtered) {
+            this.filtered = false;
             this.rootFrame.recycle();
         } else if (!this.sink.offer(this.nextFrame)) {
             this.rootFrame.recycle();
@@ -92,6 +105,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     @Override
     public void doFinallyWithError(Throwable throwable) {
+        this.filtered = false;
         this.rootFrame.recycle();
     }
 
@@ -114,6 +128,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     private void replace(T data, long routingSeed) {
         this.data = data;
+        this.filtered = false;
         PipelineFrame<?> current = this.nextFrame;
         while (current != null) {
             current.resetHash();
@@ -125,7 +140,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
         }
     }
 
-    /// Starts a reusable, compile-time-typed pipeline definition.
+    /// Starts a reusable pipeline definition.
     public static <I> Builder<I, I> builder(QueueIngestSink sink) {
         return new Builder<>(Objects.requireNonNull(sink), List.of());
     }
@@ -138,10 +153,31 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
         private final QueueIngestSink sink;
         private final List<Stage> stages;
+        private final @Nullable Predicate<Object> filter;
 
         private Builder(QueueIngestSink sink, List<Stage> stages) {
             this.sink = sink;
             this.stages = stages;
+            this.filter = null;
+        }
+
+        private Builder(QueueIngestSink sink, List<Stage> stages, Predicate<Object> filter) {
+            this.sink = sink;
+            this.stages = stages;
+            this.filter = filter;
+        }
+
+        public Builder<I, O> filterOutput(Predicate<? super O> predicate) {
+            Objects.requireNonNull(predicate);
+            if (this.stages.isEmpty()) {
+                return new Builder<>(this.sink, List.of(), cast(predicate));
+            }
+
+            List<Stage> nextStages = new ArrayList<>(this.stages);
+            Stage last = nextStages.getLast().copy();
+            nextStages.set(nextStages.size() - 1, last);
+            last.filter = cast(predicate);
+            return new Builder<>(this.sink, List.copyOf(nextStages));
         }
 
         /// Appends a parallel transformation and advances the builder's output type.
@@ -158,7 +194,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
             Objects.requireNonNull(function);
             List<Stage> nextStages = new ArrayList<>(this.stages);
             nextStages.add(new Stage(value -> function.apply(cast(value)), ordered));
-            return new Builder<>(this.sink, List.copyOf(nextStages));
+            return new Builder<>(this.sink, List.copyOf(nextStages), this.filter);
         }
 
         /// Binds an input and parallel terminal consumer to this definition.
@@ -281,9 +317,10 @@ public final class PipelineFrame<T> extends AbstractFrame {
                         idHash,
                         root == null ? recycler : null,
                         root == null ? killSwitch : null,
-                        stage.function(),
+                        stage.function,
                         null,
-                        stage.ordered());
+                        stage.filter,
+                        stage.ordered);
                 if (root == null) {
                     root = current;
                     root.data = data;
@@ -302,6 +339,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
                     root == null ? killSwitch : null,
                     null,
                     terminalConsumer,
+                    cast(this.filter),
                     terminalOrdered);
 
             if (root == null) {
@@ -333,7 +371,28 @@ public final class PipelineFrame<T> extends AbstractFrame {
             return (V) value;
         }
 
-        private record Stage(Function<Object, Object> function, boolean ordered) {}
+        private static class Stage {
+            final Function<Object, Object> function;
+            final boolean ordered;
+
+            @Nullable
+            Predicate<Object> filter;
+
+            Stage(Function<Object, Object> function, boolean ordered) {
+                this.function = function;
+                this.ordered = ordered;
+            }
+
+            Stage(Function<Object, Object> function, boolean ordered, @Nullable Predicate<Object> filter) {
+                this.function = function;
+                this.ordered = ordered;
+                this.filter = filter;
+            }
+
+            Stage copy() {
+                return new Stage(this.function, this.ordered);
+            }
+        }
     }
 
     private record PipelineKey(QueueIngestSink sink, List<Builder.Stage> stages, boolean terminalOrdered) {}
