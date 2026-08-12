@@ -62,12 +62,13 @@ A normal entry point is deliberately small:
 ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
 lattice.start();
 
-FunctionIngestSink<Integer, Integer> squares =
-        new FunctionIngestSink<>(value -> value * value, result -> handle(result), true);
+PipelineFrame.Builder<Integer, Integer> builder = PipelineFrame.<Integer>builder()
+        .fanOut(value -> value * value);
+PipelineRunner<Integer> runner = new PipelineRunner<>(builder, result -> handle(result), true);
 
-lattice.addUpstream(squares);
-squares.push(List.of(2, 4, 8));
-squares.completeGracefully();
+lattice.addUpstream(runner);
+List.of(2, 4, 8).forEach(runner::run);
+runner.completeGracefully();
 ```
 
 The last constructor argument enables per-item hash randomization in the built-in sink so
@@ -92,8 +93,7 @@ A source supports two ways of satisfying demand:
 The built-in sources live under
 [`core/ingest`](../euhedral-core/src/main/java/io/euhedral_execution/core/ingest/).
 `QueueIngestSink` is useful for a live producer, `ArrayIngestSink` wraps a finite set of frames, and
-`FunctionIngestSink` and `ConsumerIngestSink` add frame creation and recycling around common Java
-functions.
+`PipelineRunner` adds frame creation and recycling around pipeline stages.
 
 When the lattice ingests a source,
 [
@@ -142,8 +142,7 @@ To allow parallel placement, change the routing hash before the frame is visible
 long idHash = HasherApi.mix(customerId);
 long seed = HasherApi.mix(batchId);
 
-FunctionFrame<Input, Output> frame =
-        new FunctionFrame<>(idHash, this::process, this::accept, input);
+RunnableFrame frame = new RunnableFrame(idHash, () -> process(input));
 frame.randomizeHash(seed++);
 ```
 

@@ -6,7 +6,7 @@ metrics, direct frame ingestion, and recycling. For Reactor applications, start 
 
 ## Prerequisites
 
-The full repository uses Java 21.
+euhedral-core uses Java 21.
 
 Add the Core artifact:
 
@@ -27,14 +27,15 @@ Run your application with:
 Thread-priority and affinity behavior still depends on the host operating system and process
 permissions.
 
-## Run a function pipeline
+## Run a pipeline
 
-`FunctionIngestSink` converts input values into recyclable frames, executes a function, and passes
+`PipelineRunner` converts input values into executable frames, runs your pipeline, and passes
 each result to a consumer. The following is a complete example:
 
 ```java
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.core.ingest.FunctionIngestSink;
+import io.euhedral_execution.core.frames.PipelineFrame;
+import io.euhedral_execution.core.ingest.PipelineRunner;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -45,8 +46,11 @@ public final class CoreExample {
         ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
         CountDownLatch finished = new CountDownLatch(4);
 
-        FunctionIngestSink<Integer, Integer> squares = new FunctionIngestSink<>(
-                value -> value * value,
+        PipelineFrame.Builder<Integer, Integer> builder = PipelineFrame.<Integer>builder()
+                .fanIn(value -> value * value);
+
+        PipelineRunner<Integer> runner = new PipelineRunner<>(
+                builder,
                 result -> {
                     System.out.println(result);
                     finished.countDown();
@@ -54,22 +58,22 @@ public final class CoreExample {
                 false);
 
         try {
-            lattice.addUpstream(squares);
-            squares.push(List.of(2, 4, 8, 16));
-            squares.completeGracefully();
+            lattice.addUpstream(runner);
+            List.of(2, 4, 8, 16).forEach(runner::run);
+            runner.completeGracefully();
 
             if (!finished.await(10, TimeUnit.SECONDS)) {
                 throw new IllegalStateException("Timed out waiting for Euhedral");
             }
         } finally {
-            squares.complete();
+            runner.complete();
             lattice.close();
         }
     }
 }
 ```
 
-With `parallel` set to `false`, the results are emitted in input order:
+With `consumeInParallel` set to `false`, the results are emitted in input order:
 
 ```text
 4
@@ -81,16 +85,18 @@ With `parallel` set to `false`, the results are emitted in input order:
 `addUpstream` starts the lattice lazily. Calling `lattice.start()` first is also an option when
 explicit startup is a better fit for your application lifecycle.
 
-`ConsumerIngestSink` provides the same setup for a `Consumer<T>` function that does not produce
-results.
-
 ## Choose ordered or distributed execution
 
-The final `FunctionIngestSink` constructor argument controls routing:
+The final `PipelineRunner` constructor argument controls the routing of the terminal consumer. Transformations use `fanIn` (ordered/serialized) or `fanOut` (distributed) on the `PipelineFrame.Builder`:
 
 ```java
-new FunctionIngestSink<>(function, resultConsumer, false); // ordered lane
-new FunctionIngestSink<>(function, resultConsumer, true);  // distributed work
+PipelineFrame.Builder<Integer, String> builder = PipelineFrame.<Integer>builder()
+        .fanIn(function) // orders frames of this stage
+        .filterOutput(filterFunction) // filters output of the previous stage
+        .fanOut(function2); // parallelizes frames of this stage
+
+new PipelineRunner<>(builder, resultConsumer, false); // seriallized terminal consumer
+new PipelineRunner<>(builder, resultConsumer, true);  // parallel terminal consumer
 ```
 
 - `false` leaves `routingHash` equal to `idHash`. Frames from this source share a stable routing
@@ -132,16 +138,14 @@ Use `QueueIngestSink` when you want to construct frames yourself. Frames with th
 start with the same `routingHash` and use the same ordered lane:
 
 ```java
-import io.euhedral_execution.core.frames.FunctionFrame;
+import io.euhedral_execution.core.frames.RunnableFrame;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.hashing.HasherApi;
 
 long idHash = HasherApi.mix(12345);
 
-FunctionFrame<Integer, Integer> first =
-        new FunctionFrame<>(idHash, value -> value * value, System.out::println, 2);
-FunctionFrame<Integer, Integer> second =
-        new FunctionFrame<>(idHash, value -> value * value, System.out::println, 4);
+RunnableFrame first = new RunnableFrame(idHash, () -> System.out.println("2"));
+RunnableFrame second = new RunnableFrame(idHash, () -> System.out.println("4"));
 
 QueueIngestSink sink = new QueueIngestSink();
 if (!sink.offer(first) || !sink.offer(second)) {
@@ -152,8 +156,7 @@ lattice.addUpstream(sink);
 sink.completeGracefully();
 ```
 
-Built-in frame types include `ArrayFrame`, `CollectionFrame`, `FunctionFrame`, `ConsumerFrame`, and
-`RunnableFrame`.
+Built-in frame types include `ArrayFrame`, `CollectionFrame`, and `RunnableFrame`.
 
 To distribute independent frames, randomize each routing hash before offering the frame:
 
