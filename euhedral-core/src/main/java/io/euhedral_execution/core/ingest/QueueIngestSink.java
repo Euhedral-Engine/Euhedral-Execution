@@ -3,7 +3,7 @@ package io.euhedral_execution.core.ingest;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
-import io.euhedral_execution.data_structures.queues.PartitionedMpmcQueue;
+import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
@@ -13,14 +13,14 @@ import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
 /// Wraps a partitioned queue to allow it to be fed into the
-/// [ControlPlaneLattice][ControlPlaneLattice]
+/// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice]
 @SuppressWarnings("unused")
-public final class QueueIngestSink extends AbstractIngestSink {
+public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineRunner {
 
     private final Delegate delegate;
 
     public QueueIngestSink() {
-        this(new PartitionedMpmcQueue<>(8_192));
+        this(new PartitionedMpscQueue<>(8_192));
     }
 
     public QueueIngestSink(@NonNull ConcurrentPartitionedQueue<AbstractFrame> queue) {
@@ -29,29 +29,44 @@ public final class QueueIngestSink extends AbstractIngestSink {
     }
 
     @Override
-    public LatticeSource getDelegate() {
+    public @NonNull final LatticeSource getDelegate() {
+        if (isComplete()) {
+            throw new IllegalAccessError("Cannot get delegate from completed ingest sink");
+        }
         return this.delegate;
     }
 
-    /// Offers the object to each partition starting from 0 until it succeeds.
+    /// Offers the object to each partition starting from 0 until it finds room. Always succeeds if the queue unbounded.
     ///
     /// @return success
     public boolean offer(AbstractFrame frame) {
+        Objects.requireNonNull(frame);
+        if (isComplete()) {
+            throw new IllegalAccessError("Cannot offer frames to a completed ingest sink");
+        }
         return this.delegate.queue.offer(frame);
     }
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
-    /// same partition will be picked.
+    /// same partition will be picked. Always succeeds if the queue is unbounded.
     ///
     /// @return success
     public boolean offer(long randomSeed, AbstractFrame frame) {
+        Objects.requireNonNull(frame);
+        if (isComplete()) {
+            throw new IllegalAccessError("Cannot offer frames to a completed ingest sink");
+        }
         return this.delegate.queue.offer(randomSeed, frame);
     }
 
-    /// Offers the object to a specific partition
+    /// Offers the object to a specific partition. Always succeeds if the queue is unbounded.
     ///
     /// @return success
     public boolean offer(int partition, AbstractFrame frame) {
+        Objects.requireNonNull(frame);
+        if (isComplete()) {
+            throw new IllegalAccessError("Cannot offer frames to a completed ingest sink");
+        }
         return this.delegate.queue.offer(partition, frame);
     }
 
@@ -68,7 +83,8 @@ public final class QueueIngestSink extends AbstractIngestSink {
         return this.delegate.demand.getAcquire();
     }
 
-    /// Disconnects from the [ControlPlaneLattice] immediately. Does not clear the queue.
+    /// Disconnects from the [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice]
+    /// immediately. Does not clear the queue.
     @Override
     public void complete() {
         this.delegate.complete();
@@ -79,7 +95,8 @@ public final class QueueIngestSink extends AbstractIngestSink {
         return this.delegate.isComplete();
     }
 
-    /// Disconnects from the [ControlPlaneLattice] when the queue is finished being drained.
+    /// Disconnects from the [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice] when
+    /// the queue is finished being drained.
     public void completeGracefully() {
         this.delegate.completeGracefully();
     }

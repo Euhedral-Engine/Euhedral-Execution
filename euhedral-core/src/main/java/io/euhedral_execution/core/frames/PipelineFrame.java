@@ -13,11 +13,11 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import org.jspecify.annotations.Nullable;
 
-/// A frame in a typed, multi-stage pipeline with independently ordered or parallel stages.
+/// A frame in a typed, multi-stage pipeline with independently fan-in or fan-out stages.
 ///
-/// Build pipelines with [#builder(QueueIngestSink)], add transformations with
-/// [Builder#fanOut] or [Builder#fanIn], and bind the pipeline to an input and terminal
-/// consumer with [Builder#composeFannedOut] or [Builder#composeFannedIn]. Each transform and the terminal
+/// Build pipelines with [#builder()], add transformations with
+/// [Builder#fanOut] or [Builder#fanIn], and bind the pipeline to an input and final
+/// consumer with [Builder#composeFannedOut] or [Builder#composeFannedIn]. Each transform and the final
 /// consumer is scheduled as a separate frame.
 @SuppressWarnings("unused")
 public final class PipelineFrame<T> extends AbstractFrame {
@@ -140,8 +140,8 @@ public final class PipelineFrame<T> extends AbstractFrame {
     }
 
     /// Starts a reusable pipeline definition.
-    public static <I> Builder<I, I> builder(QueueIngestSink sink) {
-        return new Builder<>(Objects.requireNonNull(sink), List.of());
+    public static <I> Builder<I, I> builder() {
+        return new Builder<>(List.of());
     }
 
     /// A composable pipeline definition from input type `I` to the current output type `O`.
@@ -150,18 +150,15 @@ public final class PipelineFrame<T> extends AbstractFrame {
     /// shared prefix can safely be used to create several pipelines.
     public static final class Builder<I, O> {
 
-        private final QueueIngestSink sink;
         private final List<Stage> stages;
         private final @Nullable Predicate<Object> filter;
 
-        private Builder(QueueIngestSink sink, List<Stage> stages) {
-            this.sink = sink;
+        private Builder(List<Stage> stages) {
             this.stages = stages;
             this.filter = null;
         }
 
-        private Builder(QueueIngestSink sink, List<Stage> stages, Predicate<Object> filter) {
-            this.sink = sink;
+        private Builder(List<Stage> stages, Predicate<Object> filter) {
             this.stages = stages;
             this.filter = filter;
         }
@@ -169,14 +166,14 @@ public final class PipelineFrame<T> extends AbstractFrame {
         public Builder<I, O> filterOutput(Predicate<? super O> predicate) {
             Objects.requireNonNull(predicate);
             if (this.stages.isEmpty()) {
-                return new Builder<>(this.sink, List.of(), cast(predicate));
+                return new Builder<>(List.of(), cast(predicate));
             }
 
             List<Stage> nextStages = new ArrayList<>(this.stages);
             Stage last = nextStages.getLast().copy();
             nextStages.set(nextStages.size() - 1, last);
             last.filter = cast(predicate);
-            return new Builder<>(this.sink, List.copyOf(nextStages));
+            return new Builder<>(List.copyOf(nextStages));
         }
 
         /// Appends a parallel transformation and advances the builder's output type.
@@ -193,25 +190,29 @@ public final class PipelineFrame<T> extends AbstractFrame {
             Objects.requireNonNull(function);
             List<Stage> nextStages = new ArrayList<>(this.stages);
             nextStages.add(new Stage(value -> function.apply(cast(value)), ordered));
-            return new Builder<>(this.sink, List.copyOf(nextStages), this.filter);
+            return new Builder<>(List.copyOf(nextStages), this.filter);
         }
 
         /// Composes a pipeline with a parallel consumer.
         /// @return FrameManager for the pipeline
         public FrameManager<I, PipelineFrame<I>> composeFannedOut(
-                Consumer<? super O> consumer, long password, AtomicBoolean killSwitch) {
-            return createFactory(consumer, false, password, Objects.requireNonNull(killSwitch));
+                QueueIngestSink sink, Consumer<? super O> consumer, long password, AtomicBoolean killSwitch) {
+            return createFactory(sink, consumer, false, password, Objects.requireNonNull(killSwitch));
         }
 
         /// Composes a pipeline with a serialized consumer.
         /// @return FrameManager for the pipeline
         public FrameManager<I, PipelineFrame<I>> composeFannedIn(
-                Consumer<? super O> consumer, long password, AtomicBoolean killSwitch) {
-            return createFactory(consumer, true, password, Objects.requireNonNull(killSwitch));
+                QueueIngestSink sink, Consumer<? super O> consumer, long password, AtomicBoolean killSwitch) {
+            return createFactory(sink, consumer, true, password, Objects.requireNonNull(killSwitch));
         }
 
         private FrameManager<I, PipelineFrame<I>> createFactory(
-                Consumer<? super O> consumer, boolean terminalOrdered, long password, AtomicBoolean killSwitch) {
+                QueueIngestSink sink,
+                Consumer<? super O> consumer,
+                boolean terminalOrdered,
+                long password,
+                AtomicBoolean killSwitch) {
             Objects.requireNonNull(consumer);
             Objects.requireNonNull(killSwitch);
 
@@ -220,7 +221,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
             FrameManager<I, PipelineFrame<I>> manager = new FrameManager<>(password);
             FrameFactory<I, PipelineFrame<I>> factory = new FrameFactory<>(
                     (idHash, input) -> createChain(
-                            idHash, input, manager, killSwitch, consumer, terminalOrdered, routingSeed[0]++),
+                            idHash, input, manager, killSwitch, consumer, terminalOrdered, routingSeed[0]++, sink),
                     (input, root) -> root.replace(input, routingSeed[0]++));
             manager.setFactory(factory);
             return manager;
@@ -233,13 +234,14 @@ public final class PipelineFrame<T> extends AbstractFrame {
                 @Nullable AtomicBoolean killSwitch,
                 Consumer<? super O> consumer,
                 boolean terminalOrdered,
-                long routingSeed) {
+                long routingSeed,
+                QueueIngestSink sink) {
             PipelineFrame<I> root = null;
             PipelineFrame<?> previous = null;
 
             for (Stage stage : this.stages) {
                 PipelineFrame<I> current = new PipelineFrame<>(
-                        this.sink,
+                        sink,
                         idHash,
                         root == null ? recycler : null,
                         root == null ? killSwitch : null,
@@ -259,7 +261,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
             Consumer<Object> terminalConsumer = value -> consumer.accept(cast(value));
             PipelineFrame<I> terminal = new PipelineFrame<>(
-                    this.sink,
+                    sink,
                     idHash,
                     root == null ? recycler : null,
                     root == null ? killSwitch : null,

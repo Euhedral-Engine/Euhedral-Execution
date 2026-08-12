@@ -20,11 +20,11 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         List<String> results = new ArrayList<>();
-        FrameManager<Integer, PipelineFrame<Integer>> manager = PipelineFrame.<Integer>builder(sink)
+        FrameManager<Integer, PipelineFrame<Integer>> manager = PipelineFrame.<Integer>builder()
                 .fanOut(value -> value * 2)
                 .fanOut(Object::toString)
                 .fanOut(value -> "result=" + value)
-                .composeFannedOut(results::add, 0L, new AtomicBoolean());
+                .composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
         PipelineFrame<Integer> root = manager.getOrCreate(21, 0L);
 
         List<AbstractFrame> stages = executePipeline(root, sink);
@@ -41,11 +41,11 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         List<String> results = new ArrayList<>();
-        FrameManager<Integer, PipelineFrame<Integer>> manager = PipelineFrame.<Integer>builder(sink)
+        FrameManager<Integer, PipelineFrame<Integer>> manager = PipelineFrame.<Integer>builder()
                 .fanIn(value -> value * 2)
                 .fanOut(Object::toString)
                 .fanIn(value -> "result=" + value)
-                .composeFannedOut(results::add, 0L, new AtomicBoolean());
+                .composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
         PipelineFrame<Integer> root = manager.getOrCreate(21, 0L);
 
         List<AbstractFrame> stages = executePipeline(root, sink);
@@ -60,7 +60,7 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         List<Integer> results = new ArrayList<>();
         FrameManager<Integer, PipelineFrame<Integer>> manager =
-                PipelineFrame.<Integer>builder(sink).composeFannedIn(results::add, 0L, new AtomicBoolean());
+                PipelineFrame.<Integer>builder().composeFannedIn(sink, results::add, 0L, new AtomicBoolean());
         PipelineFrame<Integer> terminal = manager.getOrCreate(7, 0L);
 
         execute(terminal);
@@ -74,7 +74,7 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         List<String> results = new ArrayList<>();
         FrameManager<String, PipelineFrame<String>> recycler =
-                PipelineFrame.<String>builder(sink).composeFannedOut(results::add, 17L, new AtomicBoolean());
+                PipelineFrame.<String>builder().composeFannedOut(sink, results::add, 17L, new AtomicBoolean());
         PipelineFrame<String> root = recycler.getOrCreate("value", 17L);
 
         execute(root);
@@ -90,10 +90,10 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Integer> results = new ArrayList<>();
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanIn(value -> value * 2);
+                PipelineFrame.<Integer>builder().fanIn(value -> value * 2);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedIn(results::add, 17L, new AtomicBoolean());
+                pipeline.composeFannedIn(sink, results::add, 17L, new AtomicBoolean());
         PipelineFrame<Integer> first = recycler.getOrCreate(3, 17L);
         executePipeline(first, sink);
         PipelineFrame<Integer> reused = recycler.getOrCreate(5, 17L);
@@ -109,16 +109,16 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanIn(value -> value * 2);
+                PipelineFrame.<Integer>builder().fanIn(value -> value * 2);
         AtomicBoolean firstKillSwitch = new AtomicBoolean();
         AtomicBoolean secondKillSwitch = new AtomicBoolean();
         List<Integer> firstResults = new ArrayList<>();
         List<Integer> secondResults = new ArrayList<>();
 
         FrameManager<Integer, PipelineFrame<Integer>> firstManager =
-                pipeline.composeFannedOut(firstResults::add, 17L, firstKillSwitch);
+                pipeline.composeFannedOut(sink, firstResults::add, 17L, firstKillSwitch);
         FrameManager<Integer, PipelineFrame<Integer>> secondManager =
-                pipeline.composeFannedOut(secondResults::add, 29L, secondKillSwitch);
+                pipeline.composeFannedOut(sink, secondResults::add, 29L, secondKillSwitch);
 
         PipelineFrame<Integer> first = firstManager.getOrCreate(3, 17L);
         PipelineFrame<Integer> second = secondManager.getOrCreate(5, 29L);
@@ -150,7 +150,7 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         PipelineFrame.Builder<Integer, Integer> prefix =
-                PipelineFrame.<Integer>builder(sink).fanIn(value -> value + 1);
+                PipelineFrame.<Integer>builder().fanIn(value -> value + 1);
         PipelineFrame.Builder<Integer, Integer> doubled = prefix.fanOut(value -> value * 2);
         PipelineFrame.Builder<Integer, String> labeled = prefix.fanIn(value -> "value=" + value);
         AtomicBoolean doubledKillSwitch = new AtomicBoolean();
@@ -159,9 +159,9 @@ class PipelineFrameTest {
         List<String> labeledResults = new ArrayList<>();
 
         FrameManager<Integer, PipelineFrame<Integer>> doubledManager =
-                doubled.composeFannedOut(doubledResults::add, 17L, doubledKillSwitch);
+                doubled.composeFannedOut(sink, doubledResults::add, 17L, doubledKillSwitch);
         FrameManager<Integer, PipelineFrame<Integer>> labeledManager =
-                labeled.composeFannedIn(labeledResults::add, 29L, labeledKillSwitch);
+                labeled.composeFannedIn(sink, labeledResults::add, 29L, labeledKillSwitch);
 
         PipelineFrame<Integer> doubledRoot = doubledManager.getOrCreate(2, 17L);
         PipelineFrame<Integer> labeledRoot = labeledManager.getOrCreate(4, 29L);
@@ -186,16 +186,16 @@ class PipelineFrameTest {
         QueueIngestSink firstSink = new QueueIngestSink();
         firstSink.getDelegate().addDownstream(new TestReceiver());
         PipelineFrame.Builder<Integer, Integer> prefix =
-                PipelineFrame.<Integer>builder(firstSink).fanOut(value -> value + 1);
+                PipelineFrame.<Integer>builder().fanOut(value -> value + 1);
         List<Integer> firstResult = new ArrayList<>();
         List<String> secondResult = new ArrayList<>();
 
-        FrameManager<Integer, PipelineFrame<Integer>> firstManager =
-                prefix.fanOut(value -> value * 2).composeFannedOut(firstResult::add, 0L, new AtomicBoolean());
+        FrameManager<Integer, PipelineFrame<Integer>> firstManager = prefix.fanOut(value -> value * 2)
+                .composeFannedOut(firstSink, firstResult::add, 0L, new AtomicBoolean());
         PipelineFrame<Integer> first = firstManager.getOrCreate(4, 0L);
 
         FrameManager<Integer, PipelineFrame<Integer>> secondManager =
-                prefix.fanOut(Object::toString).composeFannedOut(secondResult::add, 0L, new AtomicBoolean());
+                prefix.fanOut(Object::toString).composeFannedOut(firstSink, secondResult::add, 0L, new AtomicBoolean());
         PipelineFrame<Integer> second = secondManager.getOrCreate(7, 0L);
 
         executePipeline(first, firstSink);
@@ -210,9 +210,9 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         AtomicBoolean killSwitch = new AtomicBoolean();
-        FrameManager<Integer, PipelineFrame<Integer>> recycler = PipelineFrame.<Integer>builder(sink)
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = PipelineFrame.<Integer>builder()
                 .fanOut(value -> value + 1)
-                .composeFannedOut(ignored -> {}, 17L, killSwitch);
+                .composeFannedOut(sink, ignored -> {}, 17L, killSwitch);
         PipelineFrame<Integer> root = recycler.getOrCreate(1, 17L);
 
         execute(root);
@@ -236,12 +236,12 @@ class PipelineFrameTest {
     void downstreamErrorRecyclesTheRoot() {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
-        FrameManager<Integer, PipelineFrame<Integer>> recycler = PipelineFrame.<Integer>builder(sink)
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = PipelineFrame.<Integer>builder()
                 .fanOut(value -> value + 1)
                 .fanOut(value -> {
                     throw new IllegalStateException("failed stage");
                 })
-                .composeFannedOut(ignored -> {}, 17L, new AtomicBoolean());
+                .composeFannedOut(sink, ignored -> {}, 17L, new AtomicBoolean());
         PipelineFrame<Integer> root = recycler.getOrCreate(1, 17L);
 
         execute(root);
@@ -256,28 +256,15 @@ class PipelineFrameTest {
     }
 
     @Test
-    void rejectsNullArgumentsAtTheBuilderBoundary() {
-        QueueIngestSink sink = new QueueIngestSink();
-
-        assertThatNullPointerException().isThrownBy(() -> PipelineFrame.builder(null));
-        assertThatNullPointerException()
-                .isThrownBy(() -> PipelineFrame.<String>builder(sink).fanOut(null));
-        assertThatNullPointerException()
-                .isThrownBy(() -> PipelineFrame.<String>builder(sink).composeFannedOut(null, 0L, new AtomicBoolean()));
-        assertThatNullPointerException()
-                .isThrownBy(() -> PipelineFrame.<String>builder(sink).composeFannedOut(ignored -> {}, 0L, null));
-    }
-
-    @Test
     void pooledReuseReusesEntireStageChainWithoutReconstruction() {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Integer> results = new ArrayList<>();
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanOut(v -> v + 1).fanIn(v -> v * 2);
+                PipelineFrame.<Integer>builder().fanOut(v -> v + 1).fanIn(v -> v * 2);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedOut(results::add, 17L, new AtomicBoolean());
+                pipeline.composeFannedOut(sink, results::add, 17L, new AtomicBoolean());
         PipelineFrame<Integer> firstRoot = recycler.getOrCreate(10, 17L);
         PipelineFrame<?> firstStage1 = firstRoot.getNextFrame();
         assertThat(firstStage1).isNotNull();
@@ -317,10 +304,10 @@ class PipelineFrameTest {
         List<Integer> results = new ArrayList<>();
         AtomicBoolean killSwitch = new AtomicBoolean();
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanOut(v -> v * 2);
+                PipelineFrame.<Integer>builder().fanOut(v -> v * 2);
 
         FrameManager<Integer, PipelineFrame<Integer>> manager =
-                pipeline.composeFannedOut(results::add, 17L, killSwitch);
+                pipeline.composeFannedOut(sink, results::add, 17L, killSwitch);
         PipelineFrame<Integer> first = manager.getOrCreate(10, 17L);
         executePipeline(first, sink);
 
@@ -341,10 +328,10 @@ class PipelineFrameTest {
         List<Integer> results = new ArrayList<>();
 
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanIn(v -> v + 1).fanOut(v -> v * 2);
+                PipelineFrame.<Integer>builder().fanIn(v -> v + 1).fanOut(v -> v * 2);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedOut(results::add, 17L, new AtomicBoolean());
+                pipeline.composeFannedOut(sink, results::add, 17L, new AtomicBoolean());
         PipelineFrame<Integer> firstRoot = recycler.getOrCreate(10, 17L);
         assertThat(firstRoot.isOrdered()).isTrue();
         assertThat(firstRoot.getRoutingHash()).isEqualTo(firstRoot.getIdHash());
@@ -365,10 +352,10 @@ class PipelineFrameTest {
         List<Integer> results = new ArrayList<>();
 
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanOut(v -> v + 1).fanIn(v -> v * 2);
+                PipelineFrame.<Integer>builder().fanOut(v -> v + 1).fanIn(v -> v * 2);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedOut(results::add, 17L, new AtomicBoolean());
+                pipeline.composeFannedOut(sink, results::add, 17L, new AtomicBoolean());
         PipelineFrame<Integer> firstRoot = recycler.getOrCreate(10, 17L);
         assertThat(firstRoot.isOrdered()).isFalse();
         assertThat(firstRoot.getRoutingHash()).isNotEqualTo(firstRoot.getIdHash());
@@ -388,13 +375,13 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Integer> results = new ArrayList<>();
 
-        PipelineFrame.Builder<Integer, Integer> pipeline = PipelineFrame.<Integer>builder(sink)
+        PipelineFrame.Builder<Integer, Integer> pipeline = PipelineFrame.<Integer>builder()
                 .fanOut(v -> v + 1)
                 .fanIn(v -> v * 2)
                 .fanOut(v -> v - 3);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedIn(results::add, 17L, new AtomicBoolean());
+                pipeline.composeFannedIn(sink, results::add, 17L, new AtomicBoolean());
         PipelineFrame<Integer> firstRoot = recycler.getOrCreate(10, 17L);
         PipelineFrame<?> stage1 = firstRoot.getNextFrame();
         PipelineFrame<?> stage2 = stage1.getNextFrame();
@@ -426,10 +413,10 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
 
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanIn(v -> v + 1);
+                PipelineFrame.<Integer>builder().fanIn(v -> v + 1);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedIn(v -> {}, 17L, new AtomicBoolean());
+                pipeline.composeFannedIn(sink, v -> {}, 17L, new AtomicBoolean());
 
         assertThatThrownBy(() -> recycler.getOrCreate(10, 99L))
                 .isInstanceOf(RuntimeException.class)
@@ -445,10 +432,10 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
 
         PipelineFrame.Builder<Integer, Integer> pipeline =
-                PipelineFrame.<Integer>builder(sink).fanIn(v -> v + 1);
+                PipelineFrame.<Integer>builder().fanIn(v -> v + 1);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                pipeline.composeFannedIn(v -> {}, 17L, new AtomicBoolean());
+                pipeline.composeFannedIn(sink, v -> {}, 17L, new AtomicBoolean());
 
         PipelineFrame<Integer> first = recycler.getOrCreate(10, 17L);
         executePipeline(first, sink);
@@ -468,9 +455,9 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Integer> results = new ArrayList<>();
         PipelineFrame.Builder<Integer, Integer> builder =
-                PipelineFrame.<Integer>builder(sink).fanOut(v -> v * 2).filterOutput(v -> v > 10);
+                PipelineFrame.<Integer>builder().fanOut(v -> v * 2).filterOutput(v -> v > 10);
         FrameManager<Integer, PipelineFrame<Integer>> manager =
-                builder.composeFannedOut(results::add, 0L, new AtomicBoolean());
+                builder.composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
 
         PipelineFrame<Integer> failingRoot = manager.getOrCreate(3, 0L);
         executePipeline(failingRoot, sink);
@@ -487,9 +474,9 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         List<Integer> results = new ArrayList<>();
         PipelineFrame.Builder<Integer, Integer> builder =
-                PipelineFrame.<Integer>builder(sink).filterOutput(v -> v % 2 == 0);
+                PipelineFrame.<Integer>builder().filterOutput(v -> v % 2 == 0);
         FrameManager<Integer, PipelineFrame<Integer>> manager =
-                builder.composeFannedOut(results::add, 0L, new AtomicBoolean());
+                builder.composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
 
         PipelineFrame<Integer> passingFrame = manager.getOrCreate(4, 0L);
         execute(passingFrame);
@@ -506,13 +493,13 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Integer> results = new ArrayList<>();
-        PipelineFrame.Builder<Integer, Integer> builder = PipelineFrame.<Integer>builder(sink)
+        PipelineFrame.Builder<Integer, Integer> builder = PipelineFrame.<Integer>builder()
                 .fanIn(v -> v + 1)
                 .filterOutput(v -> v > 5)
                 .fanOut(v -> v * 2)
                 .filterOutput(v -> v < 20);
         FrameManager<Integer, PipelineFrame<Integer>> manager =
-                builder.composeFannedOut(results::add, 0L, new AtomicBoolean());
+                builder.composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
 
         PipelineFrame<Integer> stage1Failing = manager.getOrCreate(3, 0L);
         executePipeline(stage1Failing, sink);
@@ -533,10 +520,10 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Integer> results = new ArrayList<>();
         PipelineFrame.Builder<Integer, Integer> builder =
-                PipelineFrame.<Integer>builder(sink).fanIn(v -> v * 2).filterOutput(v -> v > 10);
+                PipelineFrame.<Integer>builder().fanIn(v -> v * 2).filterOutput(v -> v > 10);
 
         FrameManager<Integer, PipelineFrame<Integer>> recycler =
-                builder.composeFannedIn(results::add, 17L, new AtomicBoolean());
+                builder.composeFannedIn(sink, results::add, 17L, new AtomicBoolean());
 
         PipelineFrame<Integer> first = recycler.getOrCreate(3, 17L);
         executePipeline(first, sink);
@@ -556,7 +543,7 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
 
         assertThatNullPointerException()
-                .isThrownBy(() -> PipelineFrame.<Integer>builder(sink).filterOutput(null));
+                .isThrownBy(() -> PipelineFrame.<Integer>builder().filterOutput(null));
     }
 
     @Test
@@ -564,7 +551,7 @@ class PipelineFrameTest {
         QueueIngestSink sink = new QueueIngestSink();
         sink.getDelegate().addDownstream(new TestReceiver());
         PipelineFrame.Builder<Integer, Integer> base =
-                PipelineFrame.<Integer>builder(sink).fanOut(v -> v + 1);
+                PipelineFrame.<Integer>builder().fanOut(v -> v + 1);
 
         PipelineFrame.Builder<Integer, Integer> filteredPath = base.filterOutput(v -> v > 5);
         PipelineFrame.Builder<Integer, Integer> unfilteredPath = base.fanOut(v -> v * 2);
@@ -573,9 +560,9 @@ class PipelineFrameTest {
         List<Integer> unfilteredResults = new ArrayList<>();
 
         FrameManager<Integer, PipelineFrame<Integer>> filteredManager =
-                filteredPath.composeFannedOut(filteredResults::add, 0L, new AtomicBoolean());
+                filteredPath.composeFannedOut(sink, filteredResults::add, 0L, new AtomicBoolean());
         FrameManager<Integer, PipelineFrame<Integer>> unfilteredManager =
-                unfilteredPath.composeFannedOut(unfilteredResults::add, 0L, new AtomicBoolean());
+                unfilteredPath.composeFannedOut(sink, unfilteredResults::add, 0L, new AtomicBoolean());
 
         PipelineFrame<Integer> filteredFrame = filteredManager.getOrCreate(2, 0L);
         PipelineFrame<Integer> unfilteredFrame = unfilteredManager.getOrCreate(2, 0L);
@@ -595,7 +582,7 @@ class PipelineFrameTest {
         sink.getDelegate().addDownstream(new TestReceiver());
         List<Boolean> results = new ArrayList<>();
 
-        PipelineFrame.Builder<Integer, Boolean> builder = PipelineFrame.<Integer>builder(sink)
+        PipelineFrame.Builder<Integer, Boolean> builder = PipelineFrame.<Integer>builder()
                 .fanOut(Object::toString)
                 .filterOutput(s -> s.length() >= 2)
                 .fanIn(s -> new UserPayload(s, s.length()))
@@ -603,7 +590,7 @@ class PipelineFrameTest {
                 .fanOut(payload -> payload.value().startsWith("1"))
                 .filterOutput(b -> b);
         FrameManager<Integer, PipelineFrame<Integer>> manager =
-                builder.composeFannedOut(results::add, 0L, new AtomicBoolean());
+                builder.composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
 
         // Filtered at stage 1 (single-digit string length < 2)
         PipelineFrame<Integer> failingStage1 = manager.getOrCreate(5, 0L);
