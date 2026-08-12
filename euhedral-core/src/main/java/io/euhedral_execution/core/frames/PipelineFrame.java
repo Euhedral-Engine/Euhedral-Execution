@@ -30,6 +30,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
     private PipelineFrame<T> rootFrame;
     private @Nullable PipelineFrame<?> nextFrame;
     private Object data;
+    private @Nullable AtomicBoolean activeKillSwitch;
 
     private PipelineFrame(
             QueueIngestSink sink,
@@ -45,6 +46,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
         this.consumer = consumer;
         this.ordered = ordered;
         this.rootFrame = this;
+        this.activeKillSwitch = killSwitch;
     }
 
     private void updateTerminalConsumer(Consumer<Object> consumer) {
@@ -53,6 +55,10 @@ public final class PipelineFrame<T> extends AbstractFrame {
             current = current.nextFrame;
         }
         current.consumer = consumer;
+    }
+
+    private void updateKillSwitch(@Nullable AtomicBoolean killSwitch) {
+        this.rootFrame.activeKillSwitch = killSwitch;
     }
 
     @Nullable
@@ -88,15 +94,18 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     @Override
     public boolean isAlive() {
-        return this.rootFrame == this ? super.isAlive() : this.rootFrame.isAlive();
+        if (this.rootFrame != this) {
+            return this.rootFrame.isAlive();
+        }
+        return this.activeKillSwitch == null || !this.activeKillSwitch.getAcquire();
     }
 
     @Override
     public void kill() {
-        if (this.rootFrame == this) {
-            super.kill();
-        } else {
+        if (this.rootFrame != this) {
             this.rootFrame.kill();
+        } else if (this.activeKillSwitch != null) {
+            this.activeKillSwitch.setRelease(true);
         }
     }
 
@@ -248,6 +257,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
             PipelineFrame<I> root = recycler.getOrCreate(data, password);
             root.updateTerminalConsumer(value -> consumer.accept(cast(value)));
+            root.updateKillSwitch(killSwitch);
             return root;
         }
 

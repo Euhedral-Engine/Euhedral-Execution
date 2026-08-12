@@ -357,6 +357,80 @@ class PipelineFrameTest {
         assertThat(resultsB).containsExactly(60);
     }
 
+    @Test
+    void recycledPipelineUpdatesKillSwitchOnRepeatedBuild() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+        AtomicBoolean killSwitch1 = new AtomicBoolean();
+        AtomicBoolean killSwitch2 = new AtomicBoolean();
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v * 2);
+
+        PipelineFrame<Integer> first = pipeline.buildParallel(10, results::add, killSwitch1, recycler, 17L);
+        executePipeline(first, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> second = pipeline.buildParallel(20, results::add, killSwitch2, recycler, 17L);
+        assertThat(second).isSameAs(first);
+
+        killSwitch1.set(true);
+        assertThat(second.isAlive()).isTrue();
+
+        killSwitch2.set(true);
+        assertThat(second.isAlive()).isFalse();
+    }
+
+    @Test
+    void recycledPipelineClearsKillSwitchWhenRebuiltWithoutOne() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+        AtomicBoolean killSwitch1 = new AtomicBoolean();
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v * 2);
+
+        PipelineFrame<Integer> first = pipeline.buildParallel(10, results::add, killSwitch1, recycler, 17L);
+        executePipeline(first, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> second = pipeline.buildParallel(20, results::add, recycler, 17L);
+        assertThat(second).isSameAs(first);
+
+        killSwitch1.set(true);
+        assertThat(second.isAlive()).isTrue();
+
+        second.kill();
+        assertThat(second.isAlive()).isTrue();
+    }
+
+    @Test
+    void childFrameCancellationDelegatesToUpdatedKillSwitchAfterReuse() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+        AtomicBoolean killSwitch1 = new AtomicBoolean();
+        AtomicBoolean killSwitch2 = new AtomicBoolean();
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v * 2);
+
+        PipelineFrame<Integer> first = pipeline.buildParallel(10, results::add, killSwitch1, recycler, 17L);
+        executePipeline(first, sink);
+
+        PipelineFrame<Integer> second = pipeline.buildParallel(20, results::add, killSwitch2, recycler, 17L);
+        PipelineFrame<?> child = second.getNextFrame();
+        assertThat(child).isNotNull();
+
+        child.kill();
+        assertThat(killSwitch2.get()).isTrue();
+        assertThat(killSwitch1.get()).isFalse();
+        assertThat(child.isAlive()).isFalse();
+        assertThat(second.isAlive()).isFalse();
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;
