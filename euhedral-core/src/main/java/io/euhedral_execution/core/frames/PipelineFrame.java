@@ -3,7 +3,6 @@ package io.euhedral_execution.core.frames;
 import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameManager;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
-import io.euhedral_execution.hashing.HasherApi;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -18,7 +17,7 @@ import org.jspecify.annotations.Nullable;
 ///
 /// Build pipelines with [#builder(QueueIngestSink)], add transformations with
 /// [Builder#fanOut] or [Builder#fanIn], and bind the pipeline to an input and terminal
-/// consumer with [Builder#completeFannedOut] or [Builder#completeFannedIn]. Each transform and the terminal
+/// consumer with [Builder#composeFannedOut] or [Builder#composeFannedIn]. Each transform and the terminal
 /// consumer is scheduled as a separate frame.
 @SuppressWarnings("unused")
 public final class PipelineFrame<T> extends AbstractFrame {
@@ -197,107 +196,34 @@ public final class PipelineFrame<T> extends AbstractFrame {
             return new Builder<>(this.sink, List.copyOf(nextStages), this.filter);
         }
 
-        /// Binds an input and parallel terminal consumer to this definition.
-        public PipelineFrame<I> completeFannedOut(I data, Consumer<? super O> consumer) {
-            return create(data, consumer, false, null, null, 0L);
+        /// Composes a pipeline with a parallel consumer.
+        /// @return FrameManager for the pipeline
+        public FrameManager<I, PipelineFrame<I>> composeFannedOut(
+                Consumer<? super O> consumer, long password, AtomicBoolean killSwitch) {
+            return createFactory(consumer, false, password, Objects.requireNonNull(killSwitch));
         }
 
-        /// Builds a parallel terminal with a root-owned kill switch.
-        public PipelineFrame<I> completeFannedOut(I data, Consumer<? super O> consumer, AtomicBoolean killSwitch) {
-            return create(data, consumer, false, Objects.requireNonNull(killSwitch), null, 0L);
+        /// Composes a pipeline with a serialized consumer.
+        /// @return FrameManager for the pipeline
+        public FrameManager<I, PipelineFrame<I>> composeFannedIn(
+                Consumer<? super O> consumer, long password, AtomicBoolean killSwitch) {
+            return createFactory(consumer, true, password, Objects.requireNonNull(killSwitch));
         }
 
-        /// Builds a parallel terminal through a root-only recycler.
-        public PipelineFrame<I> completeFannedOut(
-                I data, Consumer<? super O> consumer, FrameManager<I, PipelineFrame<I>> recycler, long password) {
-            return create(data, consumer, false, null, Objects.requireNonNull(recycler), password);
-        }
-
-        /// Builds a parallel terminal with root-owned cancellation and recycling.
-        public PipelineFrame<I> completeFannedOut(
-                I data,
-                Consumer<? super O> consumer,
-                AtomicBoolean killSwitch,
-                FrameManager<I, PipelineFrame<I>> recycler,
-                long password) {
-            return create(
-                    data,
-                    consumer,
-                    false,
-                    Objects.requireNonNull(killSwitch),
-                    Objects.requireNonNull(recycler),
-                    password);
-        }
-
-        /// Binds an input and serialized consumer to this definition.
-        public PipelineFrame<I> completeFannedIn(I data, Consumer<? super O> consumer) {
-            return create(data, consumer, true, null, null, 0L);
-        }
-
-        /// Binds an input and serialized consumer to this definition with a kill switch.
-        public PipelineFrame<I> completeFannedIn(I data, Consumer<? super O> consumer, AtomicBoolean killSwitch) {
-            return create(data, consumer, true, Objects.requireNonNull(killSwitch), null, 0L);
-        }
-
-        /// Binds an input and serialized consumer to this definition and uses a recycler.
-        public PipelineFrame<I> completeFannedIn(
-                I data, Consumer<? super O> consumer, FrameManager<I, PipelineFrame<I>> recycler, long password) {
-            return create(data, consumer, true, null, Objects.requireNonNull(recycler), password);
-        }
-
-        /// Binds an input and serialized consumer to this definition with a kill switch and recycling.
-        public PipelineFrame<I> completeFannedIn(
-                I data,
-                Consumer<? super O> consumer,
-                AtomicBoolean killSwitch,
-                FrameManager<I, PipelineFrame<I>> recycler,
-                long password) {
-            return create(
-                    data,
-                    consumer,
-                    true,
-                    Objects.requireNonNull(killSwitch),
-                    Objects.requireNonNull(recycler),
-                    password);
-        }
-
-        private PipelineFrame<I> create(
-                I data,
-                Consumer<? super O> consumer,
-                boolean terminalOrdered,
-                @Nullable AtomicBoolean killSwitch,
-                @Nullable FrameManager<I, PipelineFrame<I>> recycler,
-                long password) {
-            Objects.requireNonNull(data);
+        private FrameManager<I, PipelineFrame<I>> createFactory(
+                Consumer<? super O> consumer, boolean terminalOrdered, long password, AtomicBoolean killSwitch) {
             Objects.requireNonNull(consumer);
+            Objects.requireNonNull(killSwitch);
 
             long[] routingSeed = {ThreadLocalRandom.current().nextLong()};
-            if (recycler == null) {
-                long idHash = HasherApi.mix(ThreadLocalRandom.current().nextLong());
-                return createChain(idHash, data, null, killSwitch, consumer, terminalOrdered, routingSeed[0]);
-            }
 
-            FrameFactory<I, PipelineFrame<I>> existingFactory = recycler.getFactory();
-            PipelineKey key = new PipelineKey(this.sink, this.stages, terminalOrdered);
-
-            if (existingFactory != null) {
-                if (!key.equals(existingFactory.getOwner())) {
-                    throw new IllegalStateException(
-                            "FrameManager is already associated with an incompatible pipeline definition");
-                }
-            } else {
-                FrameFactory<I, PipelineFrame<I>> factory = new FrameFactory<>(
-                        (idHash, input) -> createChain(
-                                idHash, input, recycler, killSwitch, consumer, terminalOrdered, routingSeed[0]++),
-                        (input, root) -> root.replace(input, routingSeed[0]++),
-                        key);
-                recycler.setFactory(factory);
-            }
-
-            PipelineFrame<I> root = recycler.getOrCreate(data, password);
-            root.updateTerminalConsumer(value -> consumer.accept(cast(value)));
-            root.updateKillSwitch(killSwitch);
-            return root;
+            FrameManager<I, PipelineFrame<I>> manager = new FrameManager<>(password);
+            FrameFactory<I, PipelineFrame<I>> factory = new FrameFactory<>(
+                    (idHash, input) -> createChain(
+                            idHash, input, manager, killSwitch, consumer, terminalOrdered, routingSeed[0]++),
+                    (input, root) -> root.replace(input, routingSeed[0]++));
+            manager.setFactory(factory);
+            return manager;
         }
 
         private PipelineFrame<I> createChain(
@@ -394,6 +320,4 @@ public final class PipelineFrame<T> extends AbstractFrame {
             }
         }
     }
-
-    private record PipelineKey(QueueIngestSink sink, List<Builder.Stage> stages, boolean terminalOrdered) {}
 }

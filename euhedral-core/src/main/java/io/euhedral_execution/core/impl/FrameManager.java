@@ -2,8 +2,6 @@ package io.euhedral_execution.core.impl;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.data_structures.queues.BoundedMpscQueue;
-import io.euhedral_execution.data_structures.queues.MpscQueue;
-import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
 import java.util.Arrays;
 import java.util.Objects;
 import lombok.Getter;
@@ -24,11 +22,13 @@ import org.jspecify.annotations.Nullable;
 public final class FrameManager<D, F extends AbstractFrame> {
 
     @Getter
-    private final BatchableQueue<AbstractFrame> recycleQueue;
+    private final BoundedMpscQueue<AbstractFrame> recycleQueue;
 
     private final long password;
     private final AbstractFrame[] buffer;
-    private final int chunkSize;
+
+    @Getter
+    private final int capacity;
 
     @Getter
     private FrameFactory<D, F> factory;
@@ -48,18 +48,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
 
     /// Creates a FrameManager with a bounded recycler.
     public FrameManager(long password) {
-        this(16_384, password);
-    }
-
-    /// Creates a FrameManager with an unbounded recycler.
-    public FrameManager(int chunkSize, int pooledChunks, long password) {
-        int actual = Integer.highestOneBit((chunkSize - 1) << 1);
-        actual = actual <= 0 ? 1 : actual;
-
-        this.recycleQueue = new MpscQueue<>(actual, pooledChunks);
-        this.password = password;
-        this.buffer = new AbstractFrame[Math.max(actual, 256)];
-        this.chunkSize = actual;
+        this(8_192, password);
     }
 
     /// Creates a FrameManager with a bounded recycler.
@@ -70,7 +59,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
         this.recycleQueue = new BoundedMpscQueue<>(actual);
         this.password = password;
         this.buffer = new AbstractFrame[Math.max(actual, 256)];
-        this.chunkSize = actual;
+        this.capacity = actual;
     }
 
     /// Attempts to reuse an old frame if available. Creates one if not using the passed in data.
@@ -178,11 +167,6 @@ public final class FrameManager<D, F extends AbstractFrame> {
     /// - The create function
     /// - The replace function
     public FrameManager<D, F> copy() {
-        if (this.recycleQueue instanceof BoundedMpscQueue<AbstractFrame>) {
-            return new FrameManager<>(this.chunkSize, this.password);
-        } else if (this.recycleQueue instanceof MpscQueue<AbstractFrame> mpsc) {
-            return new FrameManager<>(this.chunkSize, mpsc.getMaxPooledChunks(), this.password);
-        }
-        throw new IllegalStateException("This class does not have a bounded or unbounded MPSC queue.");
+        return new FrameManager<>(this.capacity, this.password);
     }
 }
