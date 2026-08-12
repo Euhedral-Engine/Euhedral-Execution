@@ -47,6 +47,9 @@ public final class PipelineFrame<T> extends AbstractFrame {
         this.ordered = ordered;
         this.rootFrame = this;
         this.activeKillSwitch = killSwitch;
+        if (!ordered) {
+            randomizeHash(17L);
+        }
     }
 
     private void updateTerminalConsumer(Consumer<Object> consumer) {
@@ -111,7 +114,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     private void replace(T data, long routingSeed) {
         this.data = data;
-        PipelineFrame<?> current = this;
+        PipelineFrame<?> current = this.nextFrame;
         while (current != null) {
             current.resetHash();
             if (!current.ordered) {
@@ -309,21 +312,19 @@ public final class PipelineFrame<T> extends AbstractFrame {
                 previous.nextFrame = terminal;
             }
 
-            routeChain(root, routingSeed);
+            routeChain(root, recycler != null, routingSeed);
             return root;
         }
 
-        private static void routeChain(PipelineFrame<?> root, long routingSeed) {
-            PipelineFrame<?> current = root;
+        private static void routeChain(PipelineFrame<?> root, boolean isRecyclerBacked, long routingSeed) {
+            PipelineFrame<?> current = isRecyclerBacked ? root.nextFrame : root;
             while (current != null) {
-                setRouting(current, current.ordered, routingSeed++);
+                current.resetHash();
+                if (!current.ordered) {
+                    current.randomizeHash(routingSeed);
+                }
+                routingSeed++;
                 current = current.nextFrame;
-            }
-        }
-
-        private static void setRouting(PipelineFrame<?> frame, boolean ordered, long routingSeed) {
-            if (!ordered) {
-                frame.randomizeHash(routingSeed);
             }
         }
 

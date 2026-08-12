@@ -53,10 +53,11 @@ public final class FrameFactory<D, F extends AbstractFrame> {
     ///
     /// @param data Data to give to the frame
     public void replace(D data, F frame) {
+        boolean wasParallel = !frame.isOrdered();
         frame.resetHash();
 
         frameReplace.replace(data, frame);
-        if (!frame.isOrdered()) {
+        if (wasParallel || !frame.isOrdered()) {
             frame.randomizeHash(seed++);
         }
         frame.setOrigin(originLocation);

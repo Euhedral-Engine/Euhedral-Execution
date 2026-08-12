@@ -431,6 +431,89 @@ class PipelineFrameTest {
         assertThat(second.isAlive()).isFalse();
     }
 
+    @Test
+    void orderedRootRoutingStateOnCreationAndRecycling() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapOrdered(v -> v + 1).mapParallel(v -> v * 2);
+
+        PipelineFrame<Integer> firstRoot = pipeline.buildParallel(10, results::add, recycler, 17L);
+        assertThat(firstRoot.isOrdered()).isTrue();
+        assertThat(firstRoot.getRoutingHash()).isEqualTo(firstRoot.getIdHash());
+
+        executePipeline(firstRoot, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> secondRoot = pipeline.buildParallel(20, results::add, recycler, 17L);
+        assertThat(secondRoot).isSameAs(firstRoot);
+        assertThat(secondRoot.isOrdered()).isTrue();
+        assertThat(secondRoot.getRoutingHash()).isEqualTo(secondRoot.getIdHash());
+    }
+
+    @Test
+    void parallelRootRoutingStateOnCreationAndRecycling() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v + 1).mapOrdered(v -> v * 2);
+
+        PipelineFrame<Integer> firstRoot = pipeline.buildParallel(10, results::add, recycler, 17L);
+        assertThat(firstRoot.isOrdered()).isFalse();
+        assertThat(firstRoot.getRoutingHash()).isNotEqualTo(firstRoot.getIdHash());
+
+        executePipeline(firstRoot, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> secondRoot = pipeline.buildParallel(20, results::add, recycler, 17L);
+        assertThat(secondRoot).isSameAs(firstRoot);
+        assertThat(secondRoot.isOrdered()).isFalse();
+        assertThat(secondRoot.getRoutingHash()).isNotEqualTo(secondRoot.getIdHash());
+    }
+
+    @Test
+    void mixedOrderedAndParallelDownstreamStagesRoutingStateOnCreationAndRecycling() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+
+        PipelineFrame.Builder<Integer, Integer> pipeline = PipelineFrame.<Integer>builder(sink)
+                .mapParallel(v -> v + 1)
+                .mapOrdered(v -> v * 2)
+                .mapParallel(v -> v - 3);
+
+        PipelineFrame<Integer> firstRoot = pipeline.buildOrdered(10, results::add, recycler, 17L);
+        PipelineFrame<?> stage1 = firstRoot.getNextFrame();
+        PipelineFrame<?> stage2 = stage1.getNextFrame();
+        PipelineFrame<?> terminal = stage2.getNextFrame();
+
+        assertThat(firstRoot.isOrdered()).isFalse();
+        assertThat(stage1.isOrdered()).isTrue();
+        assertThat(stage2.isOrdered()).isFalse();
+        assertThat(terminal.isOrdered()).isTrue();
+
+        executePipeline(firstRoot, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> secondRoot = pipeline.buildOrdered(20, results::add, recycler, 17L);
+        assertThat(secondRoot).isSameAs(firstRoot);
+        PipelineFrame<?> secondStage1 = secondRoot.getNextFrame();
+        PipelineFrame<?> secondStage2 = secondStage1.getNextFrame();
+        PipelineFrame<?> secondTerminal = secondStage2.getNextFrame();
+
+        assertThat(secondRoot.isOrdered()).isFalse();
+        assertThat(secondStage1.isOrdered()).isTrue();
+        assertThat(secondStage2.isOrdered()).isFalse();
+        assertThat(secondTerminal.isOrdered()).isTrue();
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;
