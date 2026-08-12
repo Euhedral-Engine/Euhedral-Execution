@@ -254,6 +254,33 @@ class PipelineFrameTest {
                 .isThrownBy(() -> PipelineFrame.<String>builder(sink).buildParallel("value", null));
     }
 
+    @Test
+    void pooledReuseReusesEntireStageChainWithoutReconstruction() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        FrameManager<Integer, PipelineFrame<Integer>> recycler = new FrameManager<>(8, 17L);
+        List<Integer> results = new ArrayList<>();
+        PipelineFrame.Builder<Integer, Integer> pipeline =
+                PipelineFrame.<Integer>builder(sink).mapParallel(v -> v + 1).mapOrdered(v -> v * 2);
+
+        PipelineFrame<Integer> firstRoot = pipeline.buildParallel(10, results::add, recycler, 17L);
+        PipelineFrame<?> firstStage1 = firstRoot.getNextFrame();
+        assertThat(firstStage1).isNotNull();
+        PipelineFrame<?> firstTerminal = firstStage1.getNextFrame();
+        assertThat(firstTerminal).isNotNull();
+
+        executePipeline(firstRoot, sink);
+        assertThat(recycler.getRecycleQueue().sizeLong()).isOne();
+
+        PipelineFrame<Integer> reusedRoot = pipeline.buildParallel(20, results::add, recycler, 17L);
+        assertThat(reusedRoot).isSameAs(firstRoot);
+        assertThat(reusedRoot.getNextFrame()).isSameAs(firstStage1);
+        assertThat(reusedRoot.getNextFrame().getNextFrame()).isSameAs(firstTerminal);
+
+        executePipeline(reusedRoot, sink);
+        assertThat(results).containsExactly(22, 42);
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;
