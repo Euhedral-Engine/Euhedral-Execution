@@ -1,11 +1,10 @@
 package io.euhedral_execution.core.impl;
 
-import java.util.Arrays;
-
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.data_structures.queues.BoundedMpscQueue;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.data_structures.queues.common.BatchableQueue;
+import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 import org.jspecify.annotations.NonNull;
@@ -171,9 +170,9 @@ public final class FrameManager<D, F extends AbstractFrame> {
     /// - The create function
     /// - The replace function
     public FrameManager<D, F> copy() {
-        if(this.recycleQueue instanceof BoundedMpscQueue<AbstractFrame>) {
+        if (this.recycleQueue instanceof BoundedMpscQueue<AbstractFrame>) {
             return new FrameManager<>(this.chunkSize, this.password);
-        } else if(this.recycleQueue instanceof MpscQueue<AbstractFrame> mpsc) {
+        } else if (this.recycleQueue instanceof MpscQueue<AbstractFrame> mpsc) {
             return new FrameManager<>(this.chunkSize, mpsc.getMaxPooledChunks(), this.password);
         }
         throw new IllegalStateException("This class does not have a bounded or unbounded MPSC queue.");
