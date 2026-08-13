@@ -1,0 +1,104 @@
+name: JaCoCo Code Coverage
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Code Coverage Verification
+    runs-on: ubuntu-latest
+    concurrency:
+      group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
+          fetch-depth: 0
+
+      - name: Cache macOS SDK
+        id: cache-macos-sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/mise/installs/macos-sdk
+          key: macos-sdk-26.1-v1
+
+      - name: Cache Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION }}
+
+      - name: Cache Zig
+        uses: actions/cache@v4
+        with:
+          path: |
+            euhedral-hardware-utils/zig-cache
+            euhedral-hardware-utils/zig-global-cache
+          key: ${{ runner.os }}-zig-${{ hashFiles('mise.toml', '**/build.zig') }}
+          restore-keys: |
+            ${{ runner.os }}-zig-
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y llvm xz-utils python3-pip
+
+      - name: Download macOS SDK
+        if: steps.cache-macos-sdk.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p ~/.local/share/mise/installs/macos-sdk
+          curl --fail --location --silent --show-error \
+            https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
+            | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
+
+      - name: Install mise tools
+        uses: jdx/mise-action@v2
+        with:
+          install: true
+          cache: true
+
+      - name: Run Tests and Generate JaCoCo Coverage Report
+        run: |
+          mise exec -- gradle test integrationTest jacocoReport
+
+      - name: Install diff-cover
+        run: |
+          python3 -m pip install diff-cover
+
+      - name: Verify Code Coverage on New Changes
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            TARGET_BRANCH="origin/${{ github.base_ref }}"
+          else
+            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+              TARGET_BRANCH="HEAD~1"
+            else
+              TARGET_BRANCH="$(git hash-object -t tree /dev/null)"
+            fi
+          fi
+          echo "Comparing diff coverage against target: $TARGET_BRANCH"
+          
+          diff-cover build/reports/jacoco/jacocoReport/jacocoReport.xml \
+            --compare-branch "$TARGET_BRANCH" \
+            --fail-under 80 \
+            --show-uncovered
+
+      - name: Comment JaCoCo Report on PR
+        if: github.event_name == 'pull_request'
+        uses: madrapps/jacoco-report@v1.3
+        with:
+          paths: ${{ github.workspace }}/build/reports/jacoco/jacocoReport/jacocoReport.xml
+          token: ${{ secrets.GITHUB_TOKEN }}
+          min-coverage-changed-files: 80
+          title: "JaCoCo Coverage Report"
+          update-comment: true

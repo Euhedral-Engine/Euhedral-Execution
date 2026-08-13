@@ -20,6 +20,7 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
@@ -97,7 +98,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.metrics = null;
             this.outputStream = null;
             this.adaptiveBatchCap = 2L;
-            this.lastAcceptedTimestampNs = 0L;
         } else {
             String name = config.cloneConfig().shardName() + "-Worker-"
                     + config.cloneConfig().coreId();
@@ -127,8 +127,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             long maxBatch = config.maxBatchSize();
             long quota = super.getFrameQuota();
             this.adaptiveBatchCap = Math.max(2L, Math.min(maxBatch, quota));
-            this.lastAcceptedTimestampNs = 0L;
         }
+        this.lastAcceptedTimestampNs = 0L;
     }
 
     @Override
@@ -170,6 +170,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
             this.mainExecutor.execute(() -> {
                 CpuInfo origin = ThreadTools.getCpuInfo();
+                Objects.requireNonNull(origin);
                 if (this.core != origin.core()) {
                     this.logger.warn(
                             "Attempted to pin to Core: {} CPU: {} but was assigned: {}", this.core, this.cpu, origin);
@@ -364,7 +365,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             long quota = super.getFrameQuota();
             cap = Math.max(2L, Math.min(maxBatch, quota));
         }
-        return Math.max(2L, cap);
+        return cap;
     }
 
     long getAdaptiveBatchCap() {

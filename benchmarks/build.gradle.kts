@@ -74,4 +74,8 @@ dependencies {
     annotationProcessor(libs.org.openjdk.jmh.jmh.generator.annprocess)
 }
 
+tasks.withType<JacocoReport>().configureEach {
+    enabled = false
+}
+
 description = "Euhedral Benchmarks"

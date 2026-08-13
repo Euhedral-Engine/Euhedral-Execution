@@ -5,7 +5,13 @@ plugins {
     `maven-publish`
     id("com.diffplug.spotless")
     signing
+    jacoco
 }
+
+jacoco {
+    toolVersion = "0.8.12"
+}
+
 
 group = "io.euhedral-execution"
 version = "0.0.7-SNAPSHOT"
@@ -140,6 +146,15 @@ tasks.withType<Test>() {
     systemProperty("junit.jupiter.execution.parallel.enabled", "true")
     systemProperty("junit.jupiter.execution.parallel.mode.default", "concurrent")
     systemProperty("junit.jupiter.execution.parallel.config.strategy", "dynamic")
+
+    finalizedBy(tasks.withType<JacocoReport>())
+}
+
+tasks.withType<JacocoReport>().configureEach {
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+    }
 }
 
 tasks.register<Test>("integrationTest") {
