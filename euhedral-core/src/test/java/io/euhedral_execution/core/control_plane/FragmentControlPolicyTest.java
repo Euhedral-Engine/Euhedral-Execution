@@ -143,6 +143,56 @@ class FragmentControlPolicyTest {
         assertEquals(staged, FragmentControlPolicy.selectMode(1L, 2, history, 92.5, staged));
     }
 
+    /// Verifies only deterministic excess ranks enter the measured extreme-cheap idle branch.
+    @Test
+    void selectsOnlyExtremeCheapExcessWorkerRanksForIdle() {
+        int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
+        double boundary = FragmentControlPolicy.EXTREMELY_CHEAP_BODY_COST_MAX_NS;
+
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, 0, history, boundary));
+        assertTrue(FragmentControlPolicy.selectIdleEligibility(1L, 2, 1, history, boundary));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, 1, history - 1, boundary));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, 1, history, 0.0));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, 1, history, boundary + 0.1));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(2L, 2, 1, history, boundary));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 1, 0, history, boundary));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, -1, history, boundary));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, 2, history, boundary));
+
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(2L, 4, 0, history, boundary));
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(2L, 4, 1, history, boundary));
+        assertTrue(FragmentControlPolicy.selectIdleEligibility(2L, 4, 2, history, boundary));
+        assertTrue(FragmentControlPolicy.selectIdleEligibility(2L, 4, 3, history, boundary));
+    }
+
+    /// Verifies stale zero-productivity observations can never idle the lowest registered rank.
+    @Test
+    void staleProductiveCountsAlwaysLeaveRankZeroPolling() {
+        int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
+        double boundary = FragmentControlPolicy.EXTREMELY_CHEAP_BODY_COST_MAX_NS;
+
+        assertFalse(FragmentControlPolicy.selectIdleEligibility(0L, 4, 0, history, boundary));
+        assertTrue(FragmentControlPolicy.selectIdleEligibility(0L, 4, 1, history, boundary));
+        assertTrue(FragmentControlPolicy.selectIdleEligibility(0L, 4, 2, history, boundary));
+        assertTrue(FragmentControlPolicy.selectIdleEligibility(0L, 4, 3, history, boundary));
+    }
+
+    /// Verifies existing history gates production idling and reset restores active startup.
+    @Test
+    void resetClearsProductionIdleEligibility() {
+        FragmentControlPolicy policy = new FragmentControlPolicy();
+        recordBodySamples(
+                policy,
+                (long) FragmentControlPolicy.EXTREMELY_CHEAP_BODY_COST_MAX_NS,
+                FragmentControlPolicy.BODY_COST_MIN_HISTORY);
+
+        assertTrue(policy.idleEligible(1L, 2, 1));
+
+        policy.reset();
+
+        assertFalse(policy.idleEligible(1L, 2, 1));
+    }
+
     /// Verifies service telemetry still sizes batches but never selects the execution path.
     @Test
     void serviceTimeControlsBatchSizeButNotMode() {
@@ -320,6 +370,7 @@ class FragmentControlPolicyTest {
         assertTrue(policy.bodyCostSamplingEnabled());
         assertTrue(policy.activePollingAllowed(2));
         assertFalse(policy.activePollingAllowed(3));
+        assertFalse(policy.idleEligible(1L, 2, 1));
         assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
 
         pollingCores.set(3);

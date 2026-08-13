@@ -347,6 +347,7 @@ class FragmentPathCalibrationBenchmarkTest {
         assertEquals(3, fixture.liveHandles());
         assertEquals(1, fixture.activePollingWorkers());
         assertThrows(IllegalArgumentException.class, () -> new FragmentPathCalibrationBenchmark.IdleFixture(1, 2, 1));
+        assertThrows(IllegalArgumentException.class, () -> new FragmentPathCalibrationBenchmark.IdleFixture(1, 0, -1));
     }
 
     /// Verifies the five normal rows remain fixed before JMH execution.

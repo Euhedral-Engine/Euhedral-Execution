@@ -13,6 +13,7 @@ final class FragmentControlPolicy {
 
     static final long DIRECT_TARGET_BATCH_WORK_NS = 250_000L;
     static final long STAGED_TARGET_BATCH_WORK_NS = 8_000_000L;
+    static final double EXTREMELY_CHEAP_BODY_COST_MAX_NS = 20.0;
     static final double CHEAP_BODY_COST_MAX_NS = 90.0;
     static final double EXPENSIVE_BODY_COST_MIN_NS = 95.0;
     static final int BODY_COST_WINDOW_SAMPLES = 32;
@@ -209,6 +210,15 @@ final class FragmentControlPolicy {
         return this.diagnosticOverride == null || this.diagnosticOverride.allowsPolling(core);
     }
 
+    /// Selects excess-worker idling without changing the independently settled execution mode.
+    boolean idleEligible(long productiveHandles, int registeredWorkers, int workerRank) {
+        if (this.diagnosticOverride != null) {
+            return false;
+        }
+        return selectIdleEligibility(
+                productiveHandles, registeredWorkers, workerRank, this.bodyCostHistoryCount, this.smoothedBodyCostNs);
+    }
+
     /// Doubles a positive batch limit without signed overflow.
     static long saturatingDouble(long value) {
         return value > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : value * 2L;
@@ -235,6 +245,26 @@ final class FragmentControlPolicy {
             return Mode.STAGED;
         }
         return currentSettledMode;
+    }
+
+    /// Selects only the measured extreme-cheap excess capacity while rank zero always polls.
+    static boolean selectIdleEligibility(
+            long productiveHandles,
+            int registeredWorkers,
+            int workerRank,
+            int bodyCostHistoryCount,
+            double smoothedBodyCostNs) {
+        if (registeredWorkers <= 1 || workerRank < 0 || workerRank >= registeredWorkers) {
+            return false;
+        }
+        if (productiveHandles >= registeredWorkers || bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
+            return false;
+        }
+        if (smoothedBodyCostNs <= 0.0 || smoothedBodyCostNs > EXTREMELY_CHEAP_BODY_COST_MAX_NS) {
+            return false;
+        }
+        long pollingQuota = Math.max(1L, Math.min(productiveHandles, registeredWorkers));
+        return workerRank >= pollingQuota;
     }
 
     /// Updates one non-overlapping second minimum and confirms expensive work across two windows.

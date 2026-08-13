@@ -37,6 +37,8 @@ import org.slf4j.LoggerFactory;
 /// existing action-picker vectors on an independent loop.
 public final class ControlPlaneFragment extends WorkRequester {
 
+    private static final long PRODUCTION_IDLE_RECHECK_NS = 1_000_000L;
+
     private static final VarHandle DRAIN;
     private static final VarHandle SNAPSHOT;
     private static final VarHandle ADAPTIVE_BATCH_CAP;
@@ -214,6 +216,10 @@ public final class ControlPlaneFragment extends WorkRequester {
             while (keepRunning()) {
                 serviceResetRequest();
 
+                if (this.state.idleEligible && super.getLocalCacheCount() == 0L) {
+                    productionIdleLoop(context);
+                }
+
                 long newUpCount = context.upstream.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
                     this.state.upstreamCount = newUpCount;
@@ -332,6 +338,22 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
     }
 
+    /// Parks eligible excess capacity and periodically reevaluates owner-local physical inputs.
+    private void productionIdleLoop(FlowThread.FlowContext context) {
+        this.state.productionParked = true;
+        try {
+            while (keepRunning() && this.state.idleEligible && super.getLocalCacheCount() == 0L) {
+                LockSupport.parkNanos(this, PRODUCTION_IDLE_RECHECK_NS);
+                serviceResetRequest();
+                if (keepRunning()) {
+                    refreshIdleEligibility(context);
+                }
+            }
+        } finally {
+            this.state.productionParked = false;
+        }
+    }
+
     private long localCacheExecute(long limit) {
         return super.drain(this.outputStream, limit);
     }
@@ -362,7 +384,24 @@ public final class ControlPlaneFragment extends WorkRequester {
         this.state.productiveHandleCount = productiveHandles;
         int registeredWorkers = super.getThreadCount();
         this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), productiveHandles, registeredWorkers);
+        refreshIdleEligibility(productiveHandles, registeredWorkers);
         reportMetrics();
+    }
+
+    /// Refreshes availability after an idle wake without advancing path or batch selection.
+    private void refreshIdleEligibility(FlowThread.FlowContext context) {
+        long productiveHandles = context.upstream.getProductiveHandleCount();
+        int registeredWorkers = super.getThreadCount();
+        this.state.productiveHandleCount = productiveHandles;
+        refreshIdleEligibility(productiveHandles, registeredWorkers);
+    }
+
+    /// Applies the owner-local idle predicate using the current registered-core rank.
+    private void refreshIdleEligibility(long productiveHandles, int registeredWorkers) {
+        int workerRank = super.getThreadRank(this.core);
+        this.state.registeredWorkers = registeredWorkers;
+        this.state.workerRank = workerRank;
+        this.state.idleEligible = this.controlPolicy.idleEligible(productiveHandles, registeredWorkers, workerRank);
     }
 
     /// Publishes telemetry from the existing service and throughput recorders when configured.
@@ -407,7 +446,10 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.controlPolicy.serviceTimeNs(),
                 this.controlPolicy.batchSize(),
                 this.state.productiveHandleCount,
-                this.controlPolicy.activePollingAllowed(this.core),
+                this.state.registeredWorkers,
+                this.state.workerRank,
+                this.state.productionParked,
+                this.controlPolicy.activePollingAllowed(this.core) && !this.state.productionParked,
                 recorderSnapshot(this.state.throughputRecorder),
                 recorderSnapshot(this.state.serviceTimeRecorder));
     }
@@ -585,6 +627,10 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         long upstreamCount = 0;
         long productiveHandleCount = 0;
+        int registeredWorkers = 0;
+        int workerRank = -1;
+        boolean idleEligible = false;
+        boolean productionParked = false;
         long totalExecutions = 0;
 
         void reset() {
@@ -598,6 +644,10 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.completed = 0;
             this.upstreamCount = 0;
             this.productiveHandleCount = 0;
+            this.registeredWorkers = 0;
+            this.workerRank = -1;
+            this.idleEligible = false;
+            this.productionParked = false;
             this.totalExecutions = 0;
             if (ControlPlaneFragment.this.controlPolicy != null) {
                 ControlPlaneFragment.this.controlPolicy.reset();
@@ -614,6 +664,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             double serviceTimeNs,
             long batchSize,
             long productiveHandleCount,
+            int registeredWorkers,
+            int workerRank,
+            boolean productionParked,
             boolean activePolling,
             FlowRecorderSnapshot throughput,
             FlowRecorderSnapshot service) {
@@ -633,6 +686,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                     serviceTimeNs,
                     batchSize,
                     productiveHandleCount,
+                    0,
+                    -1,
+                    false,
                     true,
                     null,
                     null);

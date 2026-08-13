@@ -163,6 +163,24 @@ public class LatticeEdge extends UpstreamHandle {
         return THREAD_COUNT.intValue();
     }
 
+    /// Returns this core's current zero-based rank in the existing registered-core bitmap.
+    protected int getThreadRank(int core) {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            return parent.getThreadRank(core);
+        }
+        if (core < 0 || core >= ACTIVE_PARTITIONS.length() || ACTIVE_PARTITIONS.getAcquire(core) == 0L) {
+            return -1;
+        }
+        int rank = 0;
+        for (int registeredCore = 0; registeredCore < core; registeredCore++) {
+            if (ACTIVE_PARTITIONS.getAcquire(registeredCore) != 0L) {
+                rank++;
+            }
+        }
+        return rank;
+    }
+
     /// Sets the parent LatticeEdge.
     public void setParent(LatticeEdge parent) {
         PARENT.setRelease(this, parent);

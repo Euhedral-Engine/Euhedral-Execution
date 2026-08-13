@@ -159,6 +159,12 @@ public class FragmentPathCalibrationBenchmark {
         state.awaitInvocation();
     }
 
+    /// Runs one bounded production park, reset, wake, and resumed-participation transition.
+    @Benchmark
+    public void productionIdleWakeSmoke(IdleWakeSmokeState state) {
+        state.runOnce();
+    }
+
     /// Measures the first production tree at the five predeclared resolved or guard-band rows.
     @Benchmark
     @OperationsPerInvocation(INVOCATION_FRAMES)
@@ -535,11 +541,11 @@ public class FragmentPathCalibrationBenchmark {
             long emptyQueueOfferCount,
             boolean emptyQueueComplete) {}
 
-    /// Exact physical source and polling counts for one Phase 11 row.
+    /// Exact physical source counts and optional fixed polling count for an idle row.
     record IdleFixture(int productiveHandles, int emptyLiveHandles, int activePollingWorkers) {
 
         IdleFixture {
-            if (productiveHandles <= 0 || emptyLiveHandles < 0 || emptyLiveHandles > 1) {
+            if (productiveHandles <= 0 || emptyLiveHandles < 0 || emptyLiveHandles > 1 || activePollingWorkers < 0) {
                 throw new IllegalArgumentException("Idle fixture requires productive handles and at most one empty");
             }
         }
@@ -1194,7 +1200,7 @@ public class FragmentPathCalibrationBenchmark {
         @Override
         void validatePolicySnapshots(
                 IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
-            int expectedActive = this.activePollingWorkers == 0 ? this.workerCount : this.activePollingWorkers;
+            int expectedActive = expectedPollingWorkers();
             FragmentControlPolicy.Mode expectedMode = this.productiveHandles >= this.workerCount || this.workRounds < 96
                     ? FragmentControlPolicy.Mode.DIRECT
                     : FragmentControlPolicy.Mode.STAGED;
@@ -1203,7 +1209,7 @@ public class FragmentPathCalibrationBenchmark {
                 boolean expectedPolling = worker < expectedActive;
                 if (snapshot.activePolling() != expectedPolling) {
                     failPolicyValidation("Idle discovery observed the wrong polling subset: " + snapshot);
-                } else if (!expectedPolling) {
+                } else if (this.activePollingWorkers > 0 && !expectedPolling) {
                     if (snapshot.bodyCostHistoryCount() != 0 || snapshot.productiveHandleCount() != 0L) {
                         failPolicyValidation("Fixed parked worker made unexpected policy progress: " + snapshot);
                     }
@@ -1215,10 +1221,27 @@ public class FragmentPathCalibrationBenchmark {
                 if (snapshot.productiveHandleCount() != this.productiveHandles) {
                     failPolicyValidation("Idle discovery observed the wrong productive count: " + snapshot);
                 }
+                if (snapshot.registeredWorkers() != this.workerCount || snapshot.workerRank() != worker) {
+                    failPolicyValidation("Production idle rank or registration changed: " + snapshot);
+                }
+                if (snapshot.productionParked() == expectedPolling) {
+                    failPolicyValidation("Production parked state disagreed with polling state: " + snapshot);
+                }
                 if (snapshot.mode() != expectedMode) {
                     failPolicyValidation("Idle discovery selected the wrong production mode: " + snapshot);
                 }
             }
+        }
+
+        /// Returns the fixed diagnostic subset or the conservative production polling quota.
+        private int expectedPollingWorkers() {
+            if (this.activePollingWorkers > 0) {
+                return this.activePollingWorkers;
+            }
+            if (this.workRounds != 0 || this.productiveHandles >= this.workerCount) {
+                return this.workerCount;
+            }
+            return Math.max(1, this.productiveHandles);
         }
 
         /// Rejects worker disappearance separately from the intentional parked-worker zeroes.
@@ -1226,6 +1249,129 @@ public class FragmentPathCalibrationBenchmark {
         protected void beforeClose() {
             validateIdleParticipation();
             super.beforeClose();
+        }
+    }
+
+    /// One-shot production lifecycle state for the minimal idle integration.
+    @State(Scope.Benchmark)
+    public static class IdleWakeSmokeState extends PathState {
+
+        private boolean completed;
+        private long resetCleared;
+        private long[] parkedCounts;
+        private long[] resetWakeCounts;
+        private long[] productiveWakeCounts;
+        private ControlPlaneFragment.FragmentPolicySnapshot[] parkedSnapshots;
+        private ControlPlaneFragment.FragmentPolicySnapshot[] resetWakeSnapshots;
+        private ControlPlaneFragment.FragmentPolicySnapshot[] productiveWakeSnapshots;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts the real two-worker, one-productive-handle near-no-op production graph.
+        @Setup(Level.Trial)
+        public void setup() {
+            this.completed = false;
+            setupIdleEligibilityPath(2, 1, 0, 0, 0);
+        }
+
+        /// Proves reset and a newly published productive source wake the production-idle worker.
+        void runOnce() {
+            if (this.completed) {
+                return;
+            }
+
+            awaitParkedScarce();
+            this.parkedSnapshots = policySnapshots();
+            this.parkedCounts = workerCompletionCounts();
+
+            long deadline = System.nanoTime() + TIMEOUT_NS;
+            this.resetCleared = resetPipelines(deadline);
+            awaitSecondWorkerProgress(this.parkedCounts[1]);
+            this.resetWakeSnapshots = policySnapshots();
+            this.resetWakeCounts = workerCompletionCounts();
+
+            awaitParkedScarce();
+            long beforeProductiveWake = workerCompletionCounts()[1];
+            BenchmarkFrame[] frames =
+                    BenchmarkFrame.generate(FRAME_POOL_SIZE, false, HasherApi.mix(12L), HasherApi.mix(13L));
+            publishAdditionalProductiveSource(frames);
+
+            awaitBothWorkersProductive(beforeProductiveWake);
+            this.productiveWakeSnapshots = policySnapshots();
+            this.productiveWakeCounts = workerCompletionCounts();
+            this.completed = true;
+        }
+
+        /// Waits for the stable cheap/scarce polling and parked split.
+        private void awaitParkedScarce() {
+            long deadline = System.nanoTime() + TIMEOUT_NS;
+            while (System.nanoTime() < deadline) {
+                ControlPlaneFragment.FragmentPolicySnapshot[] snapshots = policySnapshots();
+                if (snapshots.length == 2
+                        && snapshots[0].activePolling()
+                        && snapshots[1].productionParked()
+                        && snapshots[0].productiveHandleCount() == 1L
+                        && snapshots[1].productiveHandleCount() == 1L) {
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+            throw new IllegalStateException(
+                    "Timed out waiting for production idle entry: " + Arrays.toString(policySnapshots()));
+        }
+
+        /// Waits for reset to release the parked worker into conservative startup polling.
+        private void awaitSecondWorkerProgress(long priorCount) {
+            long deadline = System.nanoTime() + TIMEOUT_NS;
+            while (System.nanoTime() < deadline) {
+                if (workerCompletionCounts()[1] > priorCount) {
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+            throw new IllegalStateException("Timed out waiting for reset to wake the parked worker");
+        }
+
+        /// Waits for the newly published opportunity to restore both workers to active polling.
+        private void awaitBothWorkersProductive(long priorSecondWorkerCount) {
+            long deadline = System.nanoTime() + TIMEOUT_NS;
+            while (System.nanoTime() < deadline) {
+                ControlPlaneFragment.FragmentPolicySnapshot[] snapshots = policySnapshots();
+                if (snapshots.length == 2
+                        && snapshots[0].activePolling()
+                        && snapshots[1].activePolling()
+                        && snapshots[0].productiveHandleCount() == 2L
+                        && snapshots[1].productiveHandleCount() == 2L
+                        && workerCompletionCounts()[1] > priorSecondWorkerCount) {
+                    return;
+                }
+                Thread.onSpinWait();
+            }
+            throw new IllegalStateException(
+                    "Timed out waiting for productive wake: " + Arrays.toString(policySnapshots()));
+        }
+
+        /// Records the one-shot transition before the common close path tests parked teardown.
+        @Override
+        protected void beforeClose() {
+            if (!this.completed || registeredWorkerCount() != 2) {
+                throw new IllegalStateException("Production idle wake smoke did not complete");
+            }
+            LOGGER.info(
+                    "Fragment production idle wake smoke registeredWorkers={} resetCleared={} parkedCounts={} "
+                            + "parkedSnapshots={} resetWakeCounts={} resetWakeSnapshots={} productiveWakeCounts={} "
+                            + "productiveWakeSnapshots={}",
+                    registeredWorkerCount(),
+                    this.resetCleared,
+                    Arrays.toString(this.parkedCounts),
+                    Arrays.toString(this.parkedSnapshots),
+                    Arrays.toString(this.resetWakeCounts),
+                    Arrays.toString(this.resetWakeSnapshots),
+                    Arrays.toString(this.productiveWakeCounts),
+                    Arrays.toString(this.productiveWakeSnapshots));
         }
     }
 
@@ -1632,7 +1778,7 @@ public class FragmentPathCalibrationBenchmark {
                     null,
                     null,
                     true,
-                    new IdleFixture(productiveHandles, emptyLiveHandles, active));
+                    new IdleFixture(productiveHandles, emptyLiveHandles, activePollingWorkers));
         }
 
         /// Builds one graph with an optional physical opportunity fixture.
@@ -1755,7 +1901,7 @@ public class FragmentPathCalibrationBenchmark {
                 if (idleFixture != null) {
                     requireDistinctWorkerL2Caches(workerCores);
                 }
-                if (idleFixture != null && idleFixture.activePollingWorkers < workerCount) {
+                if (idleFixture != null && idleFixture.activePollingWorkers > 0) {
                     this.diagnosticLease =
                             new DiagnosticLease(firstCores(workerCores, idleFixture.activePollingWorkers));
                 }
@@ -2016,13 +2162,16 @@ public class FragmentPathCalibrationBenchmark {
                     aggregate[worker] = Math.addExact(aggregate[worker], iteration[worker]);
                 }
             }
+            int expectedActive = this.idleFixture.activePollingWorkers == 0
+                    ? this.workRounds == 0 ? Math.max(1, this.idleFixture.productiveHandles) : this.workerCpus.length
+                    : this.idleFixture.activePollingWorkers;
             for (int worker = 0; worker < aggregate.length; worker++) {
-                boolean expectedPolling = worker < this.idleFixture.activePollingWorkers;
+                boolean expectedPolling = worker < expectedActive;
                 if (expectedPolling && aggregate[worker] <= 0L) {
                     failPolicyValidation("Active polling worker disappeared: " + Arrays.toString(aggregate));
                 }
                 if (!expectedPolling && aggregate[worker] != 0L) {
-                    failPolicyValidation("Fixed parked worker completed work: " + Arrays.toString(aggregate));
+                    failPolicyValidation("Intentionally parked worker completed work: " + Arrays.toString(aggregate));
                 }
             }
             if (this.distributor.getThreadCount() != this.workerCpus.length) {
@@ -2344,13 +2493,41 @@ public class FragmentPathCalibrationBenchmark {
         }
 
         /// Reads the retained fragment references for benchmark-only policy diagnostics.
-        private ControlPlaneFragment.FragmentPolicySnapshot[] policySnapshots() {
+        protected final ControlPlaneFragment.FragmentPolicySnapshot[] policySnapshots() {
             ControlPlaneFragment.FragmentPolicySnapshot[] snapshots =
                     new ControlPlaneFragment.FragmentPolicySnapshot[this.observedPipelines.size()];
             for (int i = 0; i < snapshots.length; i++) {
                 snapshots[i] = this.observedPipelines.get(i).policySnapshot();
             }
             return snapshots;
+        }
+
+        /// Returns current per-worker completion totals in stable worker order.
+        protected final long[] workerCompletionCounts() {
+            return workerCounts(this.counters, this.workerCpus);
+        }
+
+        /// Resets all trial-owned pipelines before one shared deadline.
+        protected final long resetPipelines(long deadlineNanos) {
+            long cleared = 0L;
+            for (CloneableObject pipeline : this.pipelines) {
+                cleared = Math.addExact(cleared, pipeline.resetForNextTrial(deadlineNanos));
+            }
+            return cleared;
+        }
+
+        /// Publishes a second repeating source and updates the dynamic smoke's physical fixture.
+        protected final void publishAdditionalProductiveSource(BenchmarkFrame[] frames) {
+            RepeatingSink wakeSource = new RepeatingSink(frames);
+            this.sources = Arrays.copyOf(this.sources, this.sources.length + 1);
+            this.sources[this.sources.length - 1] = wakeSource;
+            this.distributor.ingest(wakeSource.getDelegate());
+            this.idleFixture = new IdleFixture(2, 0, 0);
+        }
+
+        /// Returns the existing registered-worker count for bounded lifecycle validation.
+        protected final int registeredWorkerCount() {
+            return this.distributor.getThreadCount();
         }
 
         /// Waits for the most productive owner-local policy to settle within a completed-work bound.
