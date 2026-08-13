@@ -372,6 +372,24 @@ class FragmentPathCalibrationBenchmarkTest {
         assertEquals(3, FragmentPathCalibrationBenchmark.OpportunityFixture.values().length);
     }
 
+    /// Verifies overhead controls keep productive success and real empty misses separate.
+    @Test
+    void retainsProductiveSensorOverheadCases() {
+        FragmentPathCalibrationBenchmark.ProductiveSensorOverheadCase productive =
+                FragmentPathCalibrationBenchmark.ProductiveSensorOverheadCase.PRODUCTIVE_FAST;
+        FragmentPathCalibrationBenchmark.ProductiveSensorOverheadCase empty =
+                FragmentPathCalibrationBenchmark.ProductiveSensorOverheadCase.EMPTY_MISS;
+
+        assertEquals(
+                FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_PRODUCTIVE_HANDLES,
+                productive.opportunityFixture);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.DIRECT, productive.mode);
+        assertEquals(
+                FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE, empty.opportunityFixture);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.STAGED, empty.mode);
+        assertEquals(2, FragmentPathCalibrationBenchmark.ProductiveObservation.values().length);
+    }
+
     /// Verifies an empty production queue remains live while pulls and requests produce no frames.
     @Test
     void emptyQueueSourceRemainsLiveAndNonproductive() {

@@ -18,6 +18,7 @@ import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.core.metrics.MetricsAggregator;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
@@ -134,6 +135,13 @@ public class FragmentPathCalibrationBenchmark {
     @Benchmark
     @OperationsPerInvocation(INVOCATION_FRAMES)
     public void productivePullOpportunity(ProductivePullOpportunityState state) {
+        state.awaitInvocation();
+    }
+
+    /// Measures productive observation overhead in otherwise identical forced production graphs.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void productiveHandleSensorOverhead(ProductiveHandleSensorOverheadState state) {
         state.awaitInvocation();
     }
 
@@ -835,6 +843,26 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Same-build full-graph controls for successful service and corrected empty misses.
+    public enum ProductiveSensorOverheadCase {
+        PRODUCTIVE_FAST(OpportunityFixture.TWO_PRODUCTIVE_HANDLES, ForcedMode.DIRECT),
+        EMPTY_MISS(OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE, ForcedMode.STAGED);
+
+        final OpportunityFixture opportunityFixture;
+        final ForcedMode mode;
+
+        /// Retains the physical source state and fixed path for one sensor overhead control.
+        ProductiveSensorOverheadCase(OpportunityFixture opportunityFixture, ForcedMode mode) {
+            this.opportunityFixture = opportunityFixture;
+            this.mode = mode;
+        }
+    }
+
+    public enum ProductiveObservation {
+        ENABLED,
+        LIVENESS_ONLY
+    }
+
     /// Forced production-sensor overhead controls selected by the Phase 7 blueprint.
     public enum ProductionEstimatorCase {
         PLENTIFUL_DIRECT(SourceShape.PLENTIFUL, ForcedMode.DIRECT),
@@ -990,6 +1018,29 @@ public class FragmentPathCalibrationBenchmark {
         @Setup(Level.Trial)
         public void setup() {
             setupOpportunityPath(this.opportunityFixture, this.workRounds);
+        }
+    }
+
+    /// Forced full production graphs with worker-local observation enabled or bypassed.
+    @State(Scope.Benchmark)
+    public static class ProductiveHandleSensorOverheadState extends PathState {
+
+        @Param({"PRODUCTIVE_FAST", "EMPTY_MISS"})
+        public ProductiveSensorOverheadCase overheadCase;
+
+        @Param({"ENABLED", "LIVENESS_ONLY"})
+        public ProductiveObservation productiveObservation;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return this.overheadCase.mode;
+        }
+
+        /// Starts one forced rounds-24 graph with only benchmark interception behavior varied.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupSensorOverheadPath(
+                    this.overheadCase.opportunityFixture, this.productiveObservation == ProductiveObservation.ENABLED);
         }
     }
 
@@ -1342,6 +1393,23 @@ public class FragmentPathCalibrationBenchmark {
             setupPath(2, null, Workload.CPU_WORK, workRounds, false, true, false, false, null, opportunityFixture);
         }
 
+        /// Builds a forced full-graph sensor control at the fixed cheap work point.
+        protected final void setupSensorOverheadPath(
+                OpportunityFixture opportunityFixture, boolean productiveObservation) {
+            setupPath(
+                    2,
+                    null,
+                    Workload.CPU_WORK,
+                    24,
+                    false,
+                    false,
+                    false,
+                    false,
+                    null,
+                    opportunityFixture,
+                    productiveObservation);
+        }
+
         /// Builds one graph with an optional physical opportunity fixture.
         private void setupPath(
                 int workerCount,
@@ -1354,6 +1422,33 @@ public class FragmentPathCalibrationBenchmark {
                 boolean observeProductionPolicy,
                 AtomicInteger dynamicWorkRounds,
                 OpportunityFixture opportunityFixture) {
+            setupPath(
+                    workerCount,
+                    sourceShape,
+                    workload,
+                    workRounds,
+                    observeServiceMetric,
+                    observeBodyTiming,
+                    productionBodyTiming,
+                    observeProductionPolicy,
+                    dynamicWorkRounds,
+                    opportunityFixture,
+                    true);
+        }
+
+        /// Builds one graph with an optional benchmark-only productive-observation bypass.
+        private void setupPath(
+                int workerCount,
+                SourceShape sourceShape,
+                Workload workload,
+                int workRounds,
+                boolean observeServiceMetric,
+                boolean observeBodyTiming,
+                boolean productionBodyTiming,
+                boolean observeProductionPolicy,
+                AtomicInteger dynamicWorkRounds,
+                OpportunityFixture opportunityFixture,
+                boolean productiveObservation) {
             try {
                 if (workRounds < 0 || (workload == Workload.NO_OP && workRounds != 0)) {
                     throw new IllegalArgumentException("Work rounds must match a non-negative CPU workload");
@@ -1483,7 +1578,8 @@ public class FragmentPathCalibrationBenchmark {
                     }
                     delegates[i] = this.sources[i].getDelegate();
                     if (this.handleLayout == HandleLayout.NATURAL) {
-                        this.sourceHandleIds[i] = this.distributor.ingestTracked(delegates[i], i, this.handleRecorder);
+                        this.sourceHandleIds[i] = this.distributor.ingestTracked(
+                                delegates[i], i, this.handleRecorder, productiveObservation);
                     }
                 }
                 if (this.handleLayout != HandleLayout.NATURAL) {
@@ -1676,10 +1772,11 @@ public class FragmentPathCalibrationBenchmark {
             }
             if (!hasTimedMeasurement) {
                 LOGGER.info(
-                        "Fragment worker participation mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
+                        "Fragment worker participation mode={} sourceShape={} opportunityFixture={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
                                 + "rawMeasurementDeltas={} finalWorkerCounts={} verdict=NO_TIMED_FRAME_WINDOW",
                         policyLabel(),
                         this.sourceShape,
+                        this.opportunityFixture,
                         this.workload,
                         this.workRounds,
                         this.handleLayout,
@@ -1714,13 +1811,14 @@ public class FragmentPathCalibrationBenchmark {
             ParticipationMetrics aggregate =
                     participationMetrics(aggregateDeltas, aggregateElapsedNanos, singleLaneCeilingFramesPerSecond);
             LOGGER.info(
-                    "Fragment worker participation mode={} sourceShape={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
+                    "Fragment worker participation mode={} sourceShape={} opportunityFixture={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
                             + "rawMeasurementDeltas={} perMeasurementFractions={} perMeasurementDominance={} "
                             + "perMeasurementEffectiveLanes={} aggregateDeltas={} aggregateFractions={} "
                             + "aggregateDominance={} aggregateEffectiveLanes={} finalWorkerCounts={} "
                             + "singleLaneCeilingFramesPerSecond={}",
                     policyLabel(),
                     this.sourceShape,
+                    this.opportunityFixture,
                     this.workload,
                     this.workRounds,
                     this.handleLayout,
@@ -1915,10 +2013,11 @@ public class FragmentPathCalibrationBenchmark {
             }
             ControlPlaneFragment.FragmentPolicySnapshot[] finalSnapshots = policySnapshots();
             LOGGER.info(
-                    "Fragment production policy policy={} sourceShape={} workRounds={} batchCap={} workerCpus={} "
+                    "Fragment production policy policy={} sourceShape={} opportunityFixture={} workRounds={} batchCap={} workerCpus={} "
                             + "liveHandles={} registeredWorkers={} warmupSnapshots={} measurementSnapshots={} finalSnapshots={}",
                     policyLabel(),
                     this.sourceShape,
+                    this.opportunityFixture,
                     this.workRounds,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
@@ -2311,7 +2410,18 @@ public class FragmentPathCalibrationBenchmark {
 
         /// Connects one source through the production interceptor path with batch-level diagnostics.
         long ingestTracked(LatticeSource source, int sourceOrdinal, HandleAcquisitionRecorder recorder) {
-            DiagnosticUpstreamInterceptor interceptor = new DiagnosticUpstreamInterceptor(sourceOrdinal, recorder);
+            return ingestTracked(source, sourceOrdinal, recorder, true);
+        }
+
+        /// Connects one source with production observation or a same-build liveness-only control.
+        long ingestTracked(
+                LatticeSource source,
+                int sourceOrdinal,
+                HandleAcquisitionRecorder recorder,
+                boolean productiveObservation) {
+            UpstreamInterceptor interceptor = productiveObservation
+                    ? new DiagnosticUpstreamInterceptor(sourceOrdinal, recorder)
+                    : new DiagnosticLivenessOnlyInterceptor(sourceOrdinal, recorder);
             source.addDownstream(interceptor);
             interceptor.addUpstream(source);
             return interceptor.getId();
@@ -2393,6 +2503,81 @@ public class FragmentPathCalibrationBenchmark {
                 long frames = super.pull(consumer, stopCondition, demand);
                 this.recorder.recordPullResult(this.sourceOrdinal, worker, frames);
                 return frames;
+            }
+        }
+
+        /// Benchmark-only pre-sensor behavior retaining production locking, routing, and recording.
+        final class DiagnosticLivenessOnlyInterceptor extends UpstreamInterceptor {
+
+            private final int sourceOrdinal;
+            private final HandleAcquisitionRecorder recorder;
+            private final PaddedAtomicLong benchmarkWip = new PaddedAtomicLong();
+
+            /// Retains source identity and accounting while bypassing productive observation.
+            DiagnosticLivenessOnlyInterceptor(int sourceOrdinal, HandleAcquisitionRecorder recorder) {
+                this.sourceOrdinal = sourceOrdinal;
+                this.recorder = recorder;
+            }
+
+            @Override
+            public void push(AbstractFrame frame) {
+                DiagnosticDistributor.this.push(frame);
+            }
+
+            @Override
+            public long pull(
+                    Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+                int worker = this.recorder.currentWorker();
+                long frames = 0L;
+                if (demand > 0
+                        && this.benchmarkWip.getOpaque() != 0L
+                        && !DiagnosticDistributor.this.isClosed()
+                        && !DiagnosticDistributor.this.drain.getOpaque()
+                        && !isComplete()) {
+                    try {
+                        frames = this.upstream.pull(consumer, stopCondition, demand);
+                    } catch (Throwable throwable) {
+                        LOGGER.error("Benchmark liveness-only upstream threw during pull", throwable);
+                        complete();
+                    }
+                }
+                this.recorder.recordPullResult(this.sourceOrdinal, worker, frames);
+                return frames;
+            }
+
+            @Override
+            public void request(long demand) {
+                if (demand <= 0
+                        || this.benchmarkWip.getOpaque() == 0L
+                        || DiagnosticDistributor.this.isClosed()
+                        || DiagnosticDistributor.this.drain.getOpaque()
+                        || isComplete()) {
+                    return;
+                }
+                try {
+                    this.upstream.request(demand);
+                } catch (Throwable throwable) {
+                    LOGGER.error("Benchmark liveness-only upstream threw during request", throwable);
+                    complete();
+                }
+            }
+
+            @Override
+            public boolean isProductive() {
+                return true;
+            }
+
+            @Override
+            public boolean acquireLock() {
+                int worker = this.recorder.currentWorker();
+                boolean acquired = this.benchmarkWip.getAndIncrement() == 0L;
+                this.recorder.recordAcquisition(this.sourceOrdinal, worker, acquired);
+                return acquired;
+            }
+
+            @Override
+            public void releaseLock() {
+                this.benchmarkWip.setRelease(0L);
             }
         }
     }
