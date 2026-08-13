@@ -67,6 +67,45 @@ class FragmentPathCalibrationBenchmarkTest {
                         FragmentPathCalibrationBenchmark.SourceShape.SCARCE, 0));
     }
 
+    /// Verifies CPU-relative labels and explicit counts remain separate physical inputs.
+    @Test
+    void resolvesCrossoverSourceCountWithoutWorkerInference() {
+        assertEquals(32, FragmentPathCalibrationBenchmark.crossoverSourceCount(32, 1, 0));
+        assertEquals(8, FragmentPathCalibrationBenchmark.crossoverSourceCount(32, 4, 0));
+        assertEquals(1, FragmentPathCalibrationBenchmark.crossoverSourceCount(32, 32, 0));
+        assertEquals(1, FragmentPathCalibrationBenchmark.crossoverSourceCount(24, 32, 0));
+        assertEquals(7, FragmentPathCalibrationBenchmark.crossoverSourceCount(32, 0, 7));
+        assertThrows(
+                IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.crossoverSourceCount(32, 0, 0));
+        assertThrows(
+                IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.crossoverSourceCount(32, 4, 1));
+    }
+
+    /// Verifies core zero is reserved and homogeneous selection cannot admit E cores.
+    @Test
+    void selectsCrossoverTopologyAfterCoreZeroReservation() {
+        BitSet active = bits(0, 1, 2, 8, 9);
+        BitSet pCores = bits(0, 1, 2);
+        BitSet eCores = bits(8, 9);
+
+        assertEquals(
+                bits(1, 2),
+                FragmentPathCalibrationBenchmark.crossoverWorkerCores(
+                        FragmentPathCalibrationBenchmark.CrossoverTopology.HOMOGENEOUS_P, active, pCores, eCores));
+        assertEquals(
+                bits(1, 2, 8, 9),
+                FragmentPathCalibrationBenchmark.crossoverWorkerCores(
+                        FragmentPathCalibrationBenchmark.CrossoverTopology.FULL_MACHINE, active, pCores, eCores));
+        assertEquals(bits(0, 1, 2, 8, 9), active);
+        assertThrows(
+                IllegalStateException.class,
+                () -> FragmentPathCalibrationBenchmark.crossoverWorkerCores(
+                        FragmentPathCalibrationBenchmark.CrossoverTopology.FULL_MACHINE,
+                        bits(1, 2),
+                        bits(1, 2),
+                        new BitSet()));
+    }
+
     /// Verifies worker selection is deterministic and does not mutate topology input.
     @Test
     void selectsFirstCandidateCores() {
