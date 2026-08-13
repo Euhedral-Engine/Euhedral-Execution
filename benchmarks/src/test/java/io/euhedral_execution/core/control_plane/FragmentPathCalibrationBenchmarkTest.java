@@ -231,6 +231,22 @@ class FragmentPathCalibrationBenchmarkTest {
         assertEquals(32L, snapshot.pulledFrames()[0][0]);
     }
 
+    /// Verifies fixed-point diagnostics normalize only while constructing benchmark reports.
+    @Test
+    void extractsWorkerLocalAcquisitionContentionDiagnostics() {
+        ControlPlaneFragment.AcquireContentionSnapshot[] snapshots = {
+            new ControlPlaneFragment.AcquireContentionSnapshot(true, true, 125_000L, 0.125),
+            new ControlPlaneFragment.AcquireContentionSnapshot(true, true, 875_000L, 0.875)
+        };
+
+        assertArrayEquals(
+                new long[] {125_000L, 875_000L},
+                FragmentPathCalibrationBenchmark.PathState.acquisitionContentionFixedPoint(snapshots));
+        assertArrayEquals(
+                new double[] {0.125, 0.875},
+                FragmentPathCalibrationBenchmark.PathState.acquisitionContentionNormalized(snapshots));
+    }
+
     /// Verifies lifecycle deltas preserve raw matrix shape and reject counter regression.
     @Test
     void computesMonotonicHandleLifecycleDelta() {

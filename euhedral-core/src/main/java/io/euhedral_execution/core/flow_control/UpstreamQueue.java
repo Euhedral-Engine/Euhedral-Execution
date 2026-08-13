@@ -30,10 +30,18 @@ import java.util.function.Function;
 /// This avoids global contention by keeping scheduling localized per thread.
 public class UpstreamQueue {
 
+    public static final long ACQUIRE_CONTENTION_SCALE = 1_000_000L;
+    public static final String ACQUIRE_CONTENTION_ENABLED_PROPERTY = "euhedral.fragment.acquireContention.enabled";
+
+    private static final long MAX_SCALED_FAILURES = Long.MAX_VALUE / ACQUIRE_CONTENTION_SCALE;
+    private static final boolean ACQUIRE_CONTENTION_ENABLED =
+            Boolean.parseBoolean(System.getProperty(ACQUIRE_CONTENTION_ENABLED_PROPERTY, "true"));
+
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
     public final int core;
     private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
+    private final AcquisitionContentionSmoother acquireContention = new AcquisitionContentionSmoother();
     long cachedUpCount = 0L;
     long nonproductiveCount = 0L;
 
@@ -82,6 +90,33 @@ public class UpstreamQueue {
         return this.cachedUpCount;
     }
 
+    /// Returns whether acquisition-contention recording is enabled for this JVM.
+    public static boolean acquireContentionEnabled() {
+        return ACQUIRE_CONTENTION_ENABLED;
+    }
+
+    /// Returns whether this worker has completed an eligible acquisition cycle since reset.
+    public boolean hasAcquireContention() {
+        return this.acquireContention.initialized();
+    }
+
+    /// Returns this worker's fixed-point acquisition EWMA; validity is reported separately.
+    public long getAcquireContention() {
+        return this.acquireContention.value();
+    }
+
+    /// Normalizes the worker-local fixed-point value only for diagnostics and external reporting.
+    public double getNormalizedAcquireContention() {
+        return this.acquireContention.initialized()
+                ? this.acquireContention.value() / (double) ACQUIRE_CONTENTION_SCALE
+                : Double.NaN;
+    }
+
+    /// Resets acquisition history under the existing worker-owner lifecycle handoff.
+    public void resetAcquireContention() {
+        this.acquireContention.reset();
+    }
+
     /// Returns live handles minus handles this worker last observed as nonproductive.
     ///
     /// New handles are optimistic until this worker services them. Completed handles are reconciled
@@ -108,6 +143,8 @@ public class UpstreamQueue {
         FlowThread.FlowContext context = FlowThread.getContext();
         long totalPull = 0;
         long bucketSize = calculatePullBuckets(demand);
+        long attempts = 0L;
+        long failedAcquires = 0L;
 
         long limit = demand;
         int cycles = 0;
@@ -125,7 +162,13 @@ public class UpstreamQueue {
             }
 
             boolean wasProductive = handle.isProductive();
+            if (ACQUIRE_CONTENTION_ENABLED) {
+                attempts++;
+            }
             if (!handle.acquireLock()) {
+                if (ACQUIRE_CONTENTION_ENABLED) {
+                    failedAcquires++;
+                }
                 this.upstreams.offer(handle);
                 cycles++;
                 continue;
@@ -167,7 +210,50 @@ public class UpstreamQueue {
 
             this.upstreams.offer(handle);
         }
+        if (ACQUIRE_CONTENTION_ENABLED && attempts > 0L) {
+            this.acquireContention.record(scaleAcquireContentionUnchecked(failedAcquires, attempts));
+        }
         return totalPull;
+    }
+
+    /// Scales a valid failed/attempt count for deterministic boundary tests and diagnostics.
+    static long scaleAcquireContention(long failedAcquires, long attempts) {
+        if (attempts <= 0L || failedAcquires < 0L || failedAcquires > attempts) {
+            throw new IllegalArgumentException("Acquisition counts require 0 <= failures <= positive attempts");
+        }
+        return scaleAcquireContentionUnchecked(failedAcquires, attempts);
+    }
+
+    /// Keeps the scheduler-domain multiply/divide fast while handling wider public queue inputs.
+    private static long scaleAcquireContentionUnchecked(long failedAcquires, long attempts) {
+        if (failedAcquires <= MAX_SCALED_FAILURES) {
+            return failedAcquires * ACQUIRE_CONTENTION_SCALE / attempts;
+        }
+        return scaleAcquireContentionLarge(failedAcquires, attempts);
+    }
+
+    /// Produces six exact decimal fraction digits without forming an overflowing product.
+    private static long scaleAcquireContentionLarge(long failedAcquires, long attempts) {
+        if (failedAcquires == attempts) {
+            return ACQUIRE_CONTENTION_SCALE;
+        }
+        long remainder = failedAcquires;
+        long scaled = 0L;
+        for (int place = 0; place < 6; place++) {
+            long nextRemainder = 0L;
+            long digit = 0L;
+            for (int add = 0; add < 10; add++) {
+                if (nextRemainder >= attempts - remainder) {
+                    nextRemainder -= attempts - remainder;
+                    digit++;
+                } else {
+                    nextRemainder += remainder;
+                }
+            }
+            scaled = scaled * 10L + digit;
+            remainder = nextRemainder;
+        }
+        return scaled;
     }
 
     /// Removes completed queue entries when lifecycle changes occur without another pull.

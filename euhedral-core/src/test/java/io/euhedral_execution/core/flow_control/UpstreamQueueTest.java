@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.CountDownLatch;
@@ -204,6 +206,8 @@ class UpstreamQueueTest {
         assertEquals(0L, queue.pull(frame -> {}, frame -> false, 64));
         assertEquals(1L, handles.sizeLong());
         assertEquals(1L, upstream.acquisitionAttempts);
+        assertTrue(queue.hasAcquireContention());
+        assertEquals(UpstreamQueue.ACQUIRE_CONTENTION_SCALE, queue.getAcquireContention());
 
         upstream.available = true;
 
@@ -211,6 +215,87 @@ class UpstreamQueueTest {
         assertEquals(1L, handles.sizeLong());
         assertEquals(2L, upstream.acquisitionAttempts);
         assertEquals(1L, queue.getProductiveHandleCount());
+    }
+
+    @Test
+    void shouldRecordAllSuccessfulAcquisitionsAsZeroContention() {
+        addHandle();
+
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertTrue(queue.hasAcquireContention());
+        assertEquals(0L, queue.getAcquireContention());
+        assertEquals(0.0, queue.getNormalizedAcquireContention());
+    }
+
+    @Test
+    void shouldRecordOneFixedPointFractionForAMixedCycle() {
+        TestUpstreamHandle unavailable = addHandle();
+        unavailable.available = false;
+        addHandle();
+
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertEquals(500_000L, queue.getAcquireContention());
+        assertEquals(0.5, queue.getNormalizedAcquireContention());
+        assertEquals(1L, unavailable.acquisitionAttempts);
+    }
+
+    @Test
+    void shouldNotUpdateContentionWithoutAnAcquisitionAttempt() {
+        assertFalse(queue.hasAcquireContention());
+        assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
+
+        queue.pull(frame -> {}, frame -> false, 0L);
+
+        assertFalse(queue.hasAcquireContention());
+        addHandle();
+        queue.pull(frame -> {}, frame -> false, 64L);
+        queue.pull(frame -> {}, frame -> false, 0L);
+        assertTrue(queue.hasAcquireContention());
+        assertEquals(0L, queue.getAcquireContention());
+    }
+
+    @Test
+    void shouldNotCountCompletedHandlesAsAcquisitionMisses() {
+        TestUpstreamHandle completed = addHandle();
+        completed.complete = true;
+
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertEquals(0L, completed.acquisitionAttempts);
+        assertFalse(queue.hasAcquireContention());
+    }
+
+    @Test
+    void shouldResetContentionValidityAndValue() {
+        TestUpstreamHandle unavailable = addHandle();
+        unavailable.available = false;
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        queue.resetAcquireContention();
+
+        assertFalse(queue.hasAcquireContention());
+        assertEquals(0L, queue.getAcquireContention());
+        assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
+    }
+
+    @Test
+    void shouldScaleRealisticAndOverflowBoundaryFractionsExactly() {
+        assertEquals(0L, UpstreamQueue.scaleAcquireContention(0L, 32L));
+        assertEquals(1_000_000L, UpstreamQueue.scaleAcquireContention(32L, 32L));
+        assertEquals(333_333L, UpstreamQueue.scaleAcquireContention(1L, 3L));
+        assertEquals(666_666L, UpstreamQueue.scaleAcquireContention(2L, 3L));
+
+        long failures = Long.MAX_VALUE - 1L;
+        long attempts = Long.MAX_VALUE;
+        long expected = BigInteger.valueOf(failures)
+                .multiply(BigInteger.valueOf(UpstreamQueue.ACQUIRE_CONTENTION_SCALE))
+                .divide(BigInteger.valueOf(attempts))
+                .longValueExact();
+        assertEquals(expected, UpstreamQueue.scaleAcquireContention(failures, attempts));
+        assertThrows(IllegalArgumentException.class, () -> UpstreamQueue.scaleAcquireContention(1L, 0L));
+        assertThrows(IllegalArgumentException.class, () -> UpstreamQueue.scaleAcquireContention(2L, 1L));
     }
 
     /// Verifies a failed acquisition supplies no new productivity evidence.

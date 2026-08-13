@@ -1386,7 +1386,11 @@ public class FragmentPathCalibrationBenchmark {
                         || snapshot.registeredWorkers() != snapshots.length
                         || snapshot.workerRank() != worker
                         || !snapshot.activePolling()
-                        || snapshot.productionParked()) {
+                        || snapshot.productionParked()
+                        || snapshot.acquireContention() == null
+                        || snapshot.acquireContention().enabled() != UpstreamQueue.acquireContentionEnabled()
+                        || (snapshot.acquireContention().enabled()
+                                && !snapshot.acquireContention().initialized())) {
                     failPolicyValidation("Crossover physical state changed: " + Arrays.toString(snapshots));
                     return;
                 }
@@ -2727,7 +2731,41 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.deepToString(this.measurementPolicySnapshots.toArray(
                             ControlPlaneFragment.FragmentPolicySnapshot[][]::new)),
                     Arrays.toString(finalSnapshots));
+            if (this.crossoverFixture != null) {
+                ControlPlaneFragment.AcquireContentionSnapshot[] contention =
+                        new ControlPlaneFragment.AcquireContentionSnapshot[finalSnapshots.length];
+                for (int worker = 0; worker < finalSnapshots.length; worker++) {
+                    contention[worker] = finalSnapshots[worker].acquireContention();
+                }
+                LOGGER.info(
+                        "Fragment acquisition contention policy={} crossoverFixture={} workRounds={} enabled={} scale={} fixedPoint={} normalized={}",
+                        policyLabel(),
+                        this.crossoverFixture,
+                        this.workRounds,
+                        UpstreamQueue.acquireContentionEnabled(),
+                        UpstreamQueue.ACQUIRE_CONTENTION_SCALE,
+                        Arrays.toString(acquisitionContentionFixedPoint(contention)),
+                        Arrays.toString(acquisitionContentionNormalized(contention)));
+            }
             validatePolicySnapshots(IterationType.MEASUREMENT, finalSnapshots);
+        }
+
+        /// Extracts worker-aligned fixed-point acquisition values for concise retained diagnostics.
+        static long[] acquisitionContentionFixedPoint(ControlPlaneFragment.AcquireContentionSnapshot[] snapshots) {
+            long[] values = new long[snapshots.length];
+            for (int worker = 0; worker < values.length; worker++) {
+                values[worker] = snapshots[worker].fixedPointValue();
+            }
+            return values;
+        }
+
+        /// Extracts worker-aligned normalized acquisition values outside the scheduling hot path.
+        static double[] acquisitionContentionNormalized(ControlPlaneFragment.AcquireContentionSnapshot[] snapshots) {
+            double[] values = new double[snapshots.length];
+            for (int worker = 0; worker < values.length; worker++) {
+                values[worker] = snapshots[worker].normalized();
+            }
+            return values;
         }
 
         /// Reads the retained fragment references for benchmark-only policy diagnostics.

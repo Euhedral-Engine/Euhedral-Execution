@@ -3,6 +3,7 @@ package io.euhedral_execution.core.control_plane;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.LatticeSource;
@@ -77,6 +78,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final PinnedThreadExecutor mainExecutor;
     private final FragmentControlPolicy controlPolicy;
     private final CycleState state;
+    private UpstreamQueue upstreamQueue;
     boolean drainMode = false;
     CoreSnapshot coreSnapshot = null;
     private volatile long adaptiveBatchCap;
@@ -213,6 +215,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             }
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
+            this.upstreamQueue = context.upstream;
             while (keepRunning()) {
                 serviceResetRequest();
 
@@ -451,7 +454,19 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.productionParked,
                 this.controlPolicy.activePollingAllowed(this.core) && !this.state.productionParked,
                 recorderSnapshot(this.state.throughputRecorder),
-                recorderSnapshot(this.state.serviceTimeRecorder));
+                recorderSnapshot(this.state.serviceTimeRecorder),
+                acquireContentionSnapshot());
+    }
+
+    /// Copies the worker-local fixed-point signal for low-frequency benchmark diagnostics only.
+    private AcquireContentionSnapshot acquireContentionSnapshot() {
+        UpstreamQueue queue = this.upstreamQueue;
+        boolean initialized = queue != null && queue.hasAcquireContention();
+        long fixedPointValue = initialized ? queue.getAcquireContention() : 0L;
+        double normalized =
+                initialized ? fixedPointValue / (double) UpstreamQueue.ACQUIRE_CONTENTION_SCALE : Double.NaN;
+        return new AcquireContentionSnapshot(
+                UpstreamQueue.acquireContentionEnabled(), initialized, fixedPointValue, normalized);
     }
 
     /// Copies existing recorder fields for low-frequency benchmark diagnostics only.
@@ -649,6 +664,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.idleEligible = false;
             this.productionParked = false;
             this.totalExecutions = 0;
+            if (ControlPlaneFragment.this.upstreamQueue != null) {
+                ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();
+            }
             if (ControlPlaneFragment.this.controlPolicy != null) {
                 ControlPlaneFragment.this.controlPolicy.reset();
             }
@@ -669,7 +687,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             boolean productionParked,
             boolean activePolling,
             FlowRecorderSnapshot throughput,
-            FlowRecorderSnapshot service) {
+            FlowRecorderSnapshot service,
+            AcquireContentionSnapshot acquireContention) {
 
         /// Preserves the compact constructor used by selector-focused tests.
         FragmentPolicySnapshot(
@@ -691,9 +710,13 @@ public final class ControlPlaneFragment extends WorkRequester {
                     false,
                     true,
                     null,
+                    null,
                     null);
         }
     }
+
+    /// Immutable low-frequency view of the worker-local fixed-point acquisition EWMA.
+    record AcquireContentionSnapshot(boolean enabled, boolean initialized, long fixedPointValue, double normalized) {}
 
     /// Immutable view of existing worker-local recorder state for benchmark interpretation.
     record FlowRecorderSnapshot(

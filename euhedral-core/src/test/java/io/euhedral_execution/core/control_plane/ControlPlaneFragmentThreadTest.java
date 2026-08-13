@@ -224,6 +224,43 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    /// Verifies the fragment's owner-thread trial reset clears acquisition validity after source completion.
+    @Test
+    void trialResetClearsWorkerLocalAcquisitionContention() {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(8, false, 83L, 89L));
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(source);
+
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 8);
+            Awaitility.await()
+                    .atMost(TIMEOUT)
+                    .until(() -> fragment.policySnapshot().acquireContention().initialized());
+            source.complete();
+            Awaitility.await().atMost(TIMEOUT).until(() -> distributor.getUpstreamHandleCount() == 0L);
+
+            fragment.resetForNextTrial(System.nanoTime() + TIMEOUT.toNanos());
+
+            ControlPlaneFragment.AcquireContentionSnapshot reset =
+                    fragment.policySnapshot().acquireContention();
+            assertFalse(reset.initialized());
+            assertEquals(0L, reset.fixedPointValue());
+            assertTrue(Double.isNaN(reset.normalized()));
+        } finally {
+            source.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
     /// Verifies a setup-only parked worker stays registered, services reset, and executes no work.
     @Test
     void diagnosticPollingMaskParksExcludedWorker() {
