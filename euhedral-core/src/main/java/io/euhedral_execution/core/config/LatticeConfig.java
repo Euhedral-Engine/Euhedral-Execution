@@ -11,7 +11,7 @@ import java.util.BitSet;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// ### Configuration for the [ControlPlaneLattice][ControlPlaneLattice]
+/// ### Configuration for the [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice]
 ///
 /// @param name            Top-level name used in logging and thread naming
 /// @param allowedCpus     Which CPUs the lattice can bind to.

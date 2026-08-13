@@ -9,7 +9,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import org.jspecify.annotations.NonNull;
 
-/// Wraps an array to allow it to be ingested by the [ControlPlaneLattice][ControlPlaneLattice]
+/// Wraps an array to allow it to be ingested by the
+/// [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice]
 @SuppressWarnings("unused")
 public final class ArrayIngestSink extends AbstractIngestSink {
 
@@ -30,7 +31,8 @@ public final class ArrayIngestSink extends AbstractIngestSink {
         return this.delegate.array;
     }
 
-    /// Disconnects from the [ControlPlaneLattice] immediately.
+    /// Disconnects from the [ControlPlaneLattice][io.euhedral_execution.core.control_plane.ControlPlaneLattice]
+    /// immediately.
     @Override
     public void complete() {
         delegate.complete();

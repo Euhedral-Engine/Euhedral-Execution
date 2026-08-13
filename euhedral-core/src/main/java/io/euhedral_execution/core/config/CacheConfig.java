@@ -4,9 +4,9 @@ import io.euhedral_execution.core.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.jspecify.annotations.Nullable;
 
-/// ### Configuration for the [ControlPlaneCache][ControlPlaneCache]
+/// ### Configuration for the [ControlPlaneCache][io.euhedral_execution.core.control_plane.ControlPlaneCache]
 ///
-/// @param cloneConfig            See [CloneConfig]
+/// @param cloneConfig            See [CloneConfig][io.euhedral_execution.core.config.CloneConfig]
 /// @param memoryBudget           Percentage of L2 and L1 cache that will be used to size the
 /// queues. (0.0, 1.0]
 /// @param partitions             Number of partitions in the cache.

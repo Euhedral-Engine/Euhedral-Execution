@@ -12,7 +12,8 @@ import org.jspecify.annotations.Nullable;
 /// frame recirculation. This class is thread-safe for multiple producers and a single consumer.
 ///
 /// This class manages a pool of reusable frames to reduce allocation overhead. An instance of this
-/// class can be attached to corresponding instances of [`AbstractFrame`][io.euhedral_execution.core.frames]. At
+/// class can be attached to corresponding instances of
+/// [`AbstractFrame`][io.euhedral_execution.core.frames.AbstractFrame]. At
 /// the end of execution, the frames are returned to this manager for reuse. If none are available,
 /// they are created. Consumption is password protected by the creator.
 ///

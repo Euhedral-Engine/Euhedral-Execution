@@ -375,7 +375,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         }
     }
 
-    /// Wraps the [LatticeSource] in an object that contains the state of the stream. Requests and
+    /// Wraps the [LatticeSource][io.euhedral_execution.core.generics.LatticeSource] in an object that contains the
+    /// state of the stream. Requests and
     /// pulls are guaranteed to be made by 1 thread at a time.
     public class UpstreamInterceptor extends UpstreamHandle {
 

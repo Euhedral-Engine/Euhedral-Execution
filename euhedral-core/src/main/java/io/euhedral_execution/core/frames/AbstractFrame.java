@@ -16,10 +16,11 @@ import org.jspecify.annotations.Nullable;
 /// A frame is the smallest unit of execution in the system.
 ///
 /// It carries execution state, routing hashes, and lifecycle hooks required by an
-/// [`AbstractExecutor`][io.euhedral_execution.core.generics].
+/// [`AbstractExecutor`][io.euhedral_execution.core.generics.AbstractExecutor].
 ///
 /// Frames are designed to be *reusable*. They are not created and discarded like typical tasks.
-/// Instead, they are recycled through a [FrameManager] to avoid GC churn and keep allocation
+/// Instead, they are recycled through a [FrameManager][io.euhedral_execution.core.impl.FrameManager] to avoid GC churn
+/// and keep allocation
 /// pressure near zero.
 ///
 /// Once execution completes, the frame is returned to its origin, reset, and potentially dispatched
@@ -162,8 +163,8 @@ public abstract class AbstractFrame {
 
     /// Throws the internal cancellation error used to stop execution immediately.
     ///
-    /// Handled by [`AbstractExecutor`][AbstractExecutor] and
-    /// [`ControlPlaneFragment`][ControlPlaneFragment].
+    /// Handled by [`AbstractExecutor`][io.euhedral_execution.core.generics.AbstractExecutor] and
+    /// [`ControlPlaneFragment`][io.euhedral_execution.core.control_plane.ControlPlaneFragment].
     public final void throwCancelSignal() {
         throw CANCEL_SIGNAL;
     }
@@ -173,7 +174,8 @@ public abstract class AbstractFrame {
     }
 
     /// This class is thrown as a cancellation signal. This signal is automatically handled by the
-    /// [ControlPlaneFragment][ControlPlaneFragment] and [AbstractExecutor][AbstractExecutor].
+    /// [ControlPlaneFragment][io.euhedral_execution.core.control_plane.ControlPlaneFragment] and
+    /// [AbstractExecutor][io.euhedral_execution.core.generics.AbstractExecutor].
     public static final class CancelSignal extends RuntimeException {
 
         private CancelSignal() {

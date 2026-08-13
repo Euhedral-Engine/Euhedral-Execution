@@ -6,7 +6,7 @@ import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// ### Configuration for the [ControlPlaneFragment][ControlPlaneFragment]
+/// ### Configuration for the [ControlPlaneFragment][io.euhedral_execution.core.control_plane.ControlPlaneFragment]
 ///
 /// @param cloneConfig  See [CloneConfig]
 /// @param cacheConfig  See [CacheConfig]
