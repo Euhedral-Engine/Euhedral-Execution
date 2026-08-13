@@ -97,7 +97,7 @@ public final class FrameManager<D, F extends AbstractFrame> {
         }
         if (idx > 0) {
             F frame = (F) buffer[--idx];
-            buffer[idx + 1] = null;
+            buffer[idx] = null;
             return frame;
         }
         return null;
@@ -126,20 +126,18 @@ public final class FrameManager<D, F extends AbstractFrame> {
         }
 
         long total = 0;
-        final int[] drain = new int[] {(int) Math.max(0, Math.min(idx, max))};
-
-        if (drain[0] > 0 && idx < max) {
-            Arrays.fill(buffer, null);
-        } else if (drain[0] > 0 && idx > 0) {
-            idx = (int) max;
-            Arrays.fill(buffer, idx, buffer.length, null);
+        int bufferDrain = (int) Math.min(idx, max);
+        if (bufferDrain > 0) {
+            int newIdx = idx - bufferDrain;
+            Arrays.fill(buffer, newIdx, idx, null);
+            idx = newIdx;
+            total += bufferDrain;
+            max -= bufferDrain;
         }
-        max -= drain[0];
-        total += drain[0];
 
         while (max > 0) {
-            drain[0] = (int) Math.min(max, Integer.MAX_VALUE);
-            int count = (int) recycleQueue.drain(f -> drain[0]--, drain[0]);
+            int toDrain = (int) Math.min(max, Integer.MAX_VALUE);
+            long count = recycleQueue.drain(f -> {}, toDrain);
 
             if (count == 0) {
                 break;
