@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.lang.reflect.Field;
+import java.util.BitSet;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -303,6 +304,26 @@ class FragmentControlPolicyTest {
         staged.completeBatch(4_096L, 2L, 2);
         assertEquals(FragmentControlPolicy.Mode.STAGED, staged.mode());
         assertTrue(staged.bodyCostSamplingEnabled());
+    }
+
+    /// Verifies fixed diagnostic polling leaves normal selection and sampling intact.
+    @Test
+    void diagnosticPollingMaskDoesNotOverrideProductionPolicy() {
+        BitSet pollingCores = new BitSet();
+        pollingCores.set(2);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticPollingOverride(pollingCores);
+        FragmentControlPolicy policy = new FragmentControlPolicy();
+        recordBodySamples(policy, 100L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
+
+        policy.completeBatch(4_096L, 1L, 2);
+
+        assertTrue(policy.bodyCostSamplingEnabled());
+        assertTrue(policy.activePollingAllowed(2));
+        assertFalse(policy.activePollingAllowed(3));
+        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+
+        pollingCores.set(3);
+        assertFalse(policy.activePollingAllowed(3));
     }
 
     /// Verifies a fixed batch target retains the existing eligible cap and floor.

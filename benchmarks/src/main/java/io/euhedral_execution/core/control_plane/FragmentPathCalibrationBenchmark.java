@@ -152,6 +152,13 @@ public class FragmentPathCalibrationBenchmark {
         state.awaitInvocation();
     }
 
+    /// Maps when registered fragment workers become harmful and tests one fixed parked subset.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void idleEligibilityDiscovery(IdleEligibilityState state) {
+        state.awaitInvocation();
+    }
+
     /// Measures the first production tree at the five predeclared resolved or guard-band rows.
     @Benchmark
     @OperationsPerInvocation(INVOCATION_FRAMES)
@@ -226,6 +233,26 @@ public class FragmentPathCalibrationBenchmark {
             selected.set(core);
         }
         return selected;
+    }
+
+    /// Reports whether every cache-sharing mask is disjoint from every other selected worker mask.
+    static boolean pairwiseDisjoint(BitSet[] masks) {
+        for (int left = 0; left < masks.length; left++) {
+            if (masks[left] == null || masks[left].isEmpty()) {
+                return false;
+            }
+            for (int right = left + 1; right < masks.length; right++) {
+                if (masks[right] == null) {
+                    return false;
+                }
+                BitSet overlap = (BitSet) masks[left].clone();
+                overlap.and(masks[right]);
+                if (!overlap.isEmpty()) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     /// Applies the deterministic arithmetic workload used by both scheduled and work-only cases.
@@ -507,6 +534,21 @@ public class FragmentPathCalibrationBenchmark {
             long emptyQueueDemand,
             long emptyQueueOfferCount,
             boolean emptyQueueComplete) {}
+
+    /// Exact physical source and polling counts for one Phase 11 row.
+    record IdleFixture(int productiveHandles, int emptyLiveHandles, int activePollingWorkers) {
+
+        IdleFixture {
+            if (productiveHandles <= 0 || emptyLiveHandles < 0 || emptyLiveHandles > 1) {
+                throw new IllegalArgumentException("Idle fixture requires productive handles and at most one empty");
+            }
+        }
+
+        /// Returns the complete live-handle count without overflow.
+        int liveHandles() {
+            return Math.addExact(this.productiveHandles, this.emptyLiveHandles);
+        }
+    }
 
     /// Cumulative existing latency-summary state in stable worker order at one lifecycle boundary.
     record ServiceMetricSnapshot(long[] counts, double[] totals) {
@@ -1113,6 +1155,80 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Independently parameterized normal-policy state for the bounded Phase 11 discovery rows.
+    @State(Scope.Benchmark)
+    public static class IdleEligibilityState extends PathState {
+
+        @Param({"1"})
+        public int workerCount;
+
+        @Param({"1"})
+        public int productiveHandles;
+
+        @Param({"0"})
+        public int emptyLiveHandles;
+
+        @Param({"0"})
+        public int workRounds;
+
+        @Param({"0"})
+        public int activePollingWorkers;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts one normal production graph with an optional fixed polling subset.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupIdleEligibilityPath(
+                    this.workerCount,
+                    this.productiveHandles,
+                    this.emptyLiveHandles,
+                    this.workRounds,
+                    this.activePollingWorkers);
+        }
+
+        /// Validates active and intentionally parked owner-local snapshots separately.
+        @Override
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
+            int expectedActive = this.activePollingWorkers == 0 ? this.workerCount : this.activePollingWorkers;
+            FragmentControlPolicy.Mode expectedMode = this.productiveHandles >= this.workerCount || this.workRounds < 96
+                    ? FragmentControlPolicy.Mode.DIRECT
+                    : FragmentControlPolicy.Mode.STAGED;
+            for (int worker = 0; worker < snapshots.length; worker++) {
+                ControlPlaneFragment.FragmentPolicySnapshot snapshot = snapshots[worker];
+                boolean expectedPolling = worker < expectedActive;
+                if (snapshot.activePolling() != expectedPolling) {
+                    failPolicyValidation("Idle discovery observed the wrong polling subset: " + snapshot);
+                } else if (!expectedPolling) {
+                    if (snapshot.bodyCostHistoryCount() != 0 || snapshot.productiveHandleCount() != 0L) {
+                        failPolicyValidation("Fixed parked worker made unexpected policy progress: " + snapshot);
+                    }
+                    continue;
+                }
+                if (snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_MIN_HISTORY) {
+                    failPolicyValidation("Idle discovery body estimator did not initialize: " + snapshot);
+                }
+                if (snapshot.productiveHandleCount() != this.productiveHandles) {
+                    failPolicyValidation("Idle discovery observed the wrong productive count: " + snapshot);
+                }
+                if (snapshot.mode() != expectedMode) {
+                    failPolicyValidation("Idle discovery selected the wrong production mode: " + snapshot);
+                }
+            }
+        }
+
+        /// Rejects worker disappearance separately from the intentional parked-worker zeroes.
+        @Override
+        protected void beforeClose() {
+            validateIdleParticipation();
+            super.beforeClose();
+        }
+    }
+
     /// Same-build forced controls for the complete production estimator's overhead.
     @State(Scope.Benchmark)
     public static class ProductionEstimatorState extends PathState {
@@ -1384,6 +1500,10 @@ public class FragmentPathCalibrationBenchmark {
         private String policyValidationFailure;
         /// Phase 8 physical fixture, or null for all existing calibration states.
         private OpportunityFixture opportunityFixture;
+        /// Phase 11 physical fixture, or null for all earlier calibration states.
+        private IdleFixture idleFixture;
+        /// L2 affinity masks aligned with `workerCpus` for topology evidence.
+        private String[] workerL2Masks;
         /// Fixture state retained immediately after source publication.
         private OpportunitySnapshot setupOpportunitySnapshot;
         /// Fixture state retained at each JMH iteration entry.
@@ -1484,6 +1604,37 @@ public class FragmentPathCalibrationBenchmark {
             setupPath(2, null, Workload.CPU_WORK, workRounds, false, false, false, true, null, opportunityFixture);
         }
 
+        /// Builds one normal-policy Phase 11 graph with an optional fixed polling subset.
+        protected final void setupIdleEligibilityPath(
+                int workerCount,
+                int productiveHandles,
+                int emptyLiveHandles,
+                int workRounds,
+                int activePollingWorkers) {
+            int active = activePollingWorkers == 0 ? workerCount : activePollingWorkers;
+            if (workerCount <= 0
+                    || productiveHandles <= 0
+                    || productiveHandles > workerCount
+                    || active <= 0
+                    || active > workerCount
+                    || workRounds < 0) {
+                throw new IllegalArgumentException("Invalid idle-discovery worker, source, work, or polling count");
+            }
+            setupPath(
+                    workerCount,
+                    null,
+                    Workload.CPU_WORK,
+                    workRounds,
+                    false,
+                    false,
+                    false,
+                    true,
+                    null,
+                    null,
+                    true,
+                    new IdleFixture(productiveHandles, emptyLiveHandles, active));
+        }
+
         /// Builds one graph with an optional physical opportunity fixture.
         private void setupPath(
                 int workerCount,
@@ -1523,16 +1674,47 @@ public class FragmentPathCalibrationBenchmark {
                 AtomicInteger dynamicWorkRounds,
                 OpportunityFixture opportunityFixture,
                 boolean productiveObservation) {
+            setupPath(
+                    workerCount,
+                    sourceShape,
+                    workload,
+                    workRounds,
+                    observeServiceMetric,
+                    observeBodyTiming,
+                    productionBodyTiming,
+                    observeProductionPolicy,
+                    dynamicWorkRounds,
+                    opportunityFixture,
+                    productiveObservation,
+                    null);
+        }
+
+        /// Builds one graph with optional earlier-phase or Phase 11 physical fixtures.
+        private void setupPath(
+                int workerCount,
+                SourceShape sourceShape,
+                Workload workload,
+                int workRounds,
+                boolean observeServiceMetric,
+                boolean observeBodyTiming,
+                boolean productionBodyTiming,
+                boolean observeProductionPolicy,
+                AtomicInteger dynamicWorkRounds,
+                OpportunityFixture opportunityFixture,
+                boolean productiveObservation,
+                IdleFixture idleFixture) {
             try {
                 if (workRounds < 0 || (workload == Workload.NO_OP && workRounds != 0)) {
                     throw new IllegalArgumentException("Work rounds must match a non-negative CPU workload");
                 }
                 this.sourceShape = sourceShape;
                 this.opportunityFixture = opportunityFixture;
+                this.idleFixture = idleFixture;
                 this.workload = workload;
                 this.workRounds = workRounds;
                 this.workerCpus = new int[workerCount];
                 this.workerCores = new int[workerCount];
+                this.workerL2Masks = new String[workerCount];
                 this.measurementWorkerDeltas.clear();
                 this.measurementElapsedNanos.clear();
                 this.preFirstIterationHandles = null;
@@ -1570,6 +1752,13 @@ public class FragmentPathCalibrationBenchmark {
                 }
 
                 BitSet workerCores = selectWorkerCores(workerCount);
+                if (idleFixture != null) {
+                    requireDistinctWorkerL2Caches(workerCores);
+                }
+                if (idleFixture != null && idleFixture.activePollingWorkers < workerCount) {
+                    this.diagnosticLease =
+                            new DiagnosticLease(firstCores(workerCores, idleFixture.activePollingWorkers));
+                }
                 pinHarness(workerCores);
                 this.distributor = new DiagnosticDistributor(workerCores.nextSetBit(0));
 
@@ -1605,7 +1794,9 @@ public class FragmentPathCalibrationBenchmark {
                         throw new IllegalStateException("Selected worker core has no effective logical CPU");
                     }
                     this.workerCpus[workerIndex] = workerCpu;
-                    this.workerCores[workerIndex++] = core;
+                    this.workerCores[workerIndex] = core;
+                    this.workerL2Masks[workerIndex++] =
+                            SystemInfo.getCacheLayout(workerCpu).maskL2();
                     CloneConfig cloneConfig = new CloneConfig("FragmentPathCalibration", core, cpus);
                     CloneableObject pipeline;
                     if (observeProductionPolicy) {
@@ -1629,9 +1820,11 @@ public class FragmentPathCalibrationBenchmark {
                 }
                 this.distributor.setDrain(false);
 
-                int sourceCount = opportunityFixture == null
-                        ? sourceCount(sourceShape, workerCount)
-                        : opportunityFixture.liveHandles;
+                int sourceCount = idleFixture != null
+                        ? idleFixture.liveHandles()
+                        : opportunityFixture == null
+                                ? sourceCount(sourceShape, workerCount)
+                                : opportunityFixture.liveHandles;
                 this.handleRecorder = new HandleAcquisitionRecorder(sourceCount, this.workerCpus, this.workerCores);
                 this.sourceHandleIds = new long[sourceCount];
                 this.sources = new AbstractIngestSink[sourceCount];
@@ -1640,6 +1833,9 @@ public class FragmentPathCalibrationBenchmark {
                 long idHash = HasherApi.mix(HasherApi.BASE_SEED);
                 for (int i = 0; i < sourceCount; i++) {
                     boolean emptyLive = opportunityFixture == OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE && i == 1;
+                    if (idleFixture != null && i >= idleFixture.productiveHandles) {
+                        emptyLive = true;
+                    }
                     if (emptyLive) {
                         this.emptyQueueSource = new QueueIngestSink();
                         this.sources[i] = this.emptyQueueSource;
@@ -1660,7 +1856,7 @@ public class FragmentPathCalibrationBenchmark {
                     this.sourceHandleIds = this.distributor.ingestTracked(
                             delegates, this.workerCores, this.handleLayout, this.handleRecorder);
                 }
-                if (this.opportunityFixture != null) {
+                if (this.opportunityFixture != null || this.idleFixture != null) {
                     this.setupOpportunitySnapshot = captureOpportunitySnapshot();
                     requireValidOpportunitySnapshot(this.setupOpportunitySnapshot, "trial setup");
                 }
@@ -1673,7 +1869,7 @@ public class FragmentPathCalibrationBenchmark {
         /// Opens one measurement-only participation accumulator and ignores warmup iterations.
         @Setup(Level.Iteration)
         public final void setupIteration(IterationParams iterationParams) {
-            if (this.opportunityFixture != null) {
+            if (this.opportunityFixture != null || this.idleFixture != null) {
                 this.iterationOpportunityBefore = captureOpportunitySnapshot();
                 requireValidOpportunitySnapshot(this.iterationOpportunityBefore, "iteration start");
             }
@@ -1698,7 +1894,7 @@ public class FragmentPathCalibrationBenchmark {
         @TearDown(Level.Iteration)
         public final void tearDownIteration(IterationParams iterationParams) {
             OpportunitySnapshot opportunityAfter = null;
-            if (this.opportunityFixture != null) {
+            if (this.opportunityFixture != null || this.idleFixture != null) {
                 opportunityAfter = captureOpportunitySnapshot();
                 requireValidOpportunitySnapshot(opportunityAfter, "iteration end");
             }
@@ -1809,6 +2005,31 @@ public class FragmentPathCalibrationBenchmark {
             }
         }
 
+        /// Validates the expected nonzero/zero completion split for a Phase 11 polling fixture.
+        final void validateIdleParticipation() {
+            if (this.idleFixture == null) {
+                throw new IllegalStateException("Missing idle fixture for participation validation");
+            }
+            long[] aggregate = new long[this.workerCpus.length];
+            for (long[] iteration : this.measurementWorkerDeltas) {
+                for (int worker = 0; worker < aggregate.length; worker++) {
+                    aggregate[worker] = Math.addExact(aggregate[worker], iteration[worker]);
+                }
+            }
+            for (int worker = 0; worker < aggregate.length; worker++) {
+                boolean expectedPolling = worker < this.idleFixture.activePollingWorkers;
+                if (expectedPolling && aggregate[worker] <= 0L) {
+                    failPolicyValidation("Active polling worker disappeared: " + Arrays.toString(aggregate));
+                }
+                if (!expectedPolling && aggregate[worker] != 0L) {
+                    failPolicyValidation("Fixed parked worker completed work: " + Arrays.toString(aggregate));
+                }
+            }
+            if (this.distributor.getThreadCount() != this.workerCpus.length) {
+                failPolicyValidation("Idle discovery changed registered worker count");
+            }
+        }
+
         /// Captures live registration and empty-source state without changing source behavior.
         private OpportunitySnapshot captureOpportunitySnapshot() {
             return new OpportunitySnapshot(
@@ -1822,17 +2043,21 @@ public class FragmentPathCalibrationBenchmark {
 
         /// Enforces the predeclared physical fixture invariants at every lifecycle snapshot.
         private void requireValidOpportunitySnapshot(OpportunitySnapshot snapshot, String phase) {
-            if (snapshot.liveHandles() != this.opportunityFixture.liveHandles
-                    || snapshot.registeredWorkers() != this.workerCpus.length) {
+            int expectedLive =
+                    this.idleFixture == null ? this.opportunityFixture.liveHandles : this.idleFixture.liveHandles();
+            boolean expectsEmpty = this.idleFixture == null
+                    ? this.opportunityFixture == OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE
+                    : this.idleFixture.emptyLiveHandles > 0;
+            if (snapshot.liveHandles() != expectedLive || snapshot.registeredWorkers() != this.workerCpus.length) {
                 throw new IllegalStateException(
-                        "Invalid Phase 8 live handle or worker count at " + phase + ": " + snapshot);
+                        "Invalid diagnostic live handle or worker count at " + phase + ": " + snapshot);
             }
-            if (this.opportunityFixture == OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE
+            if (expectsEmpty
                     && (snapshot.emptyQueueSize() != 0L
                             || snapshot.emptyQueueOfferCount() != 0L
                             || snapshot.emptyQueueComplete())) {
                 throw new IllegalStateException(
-                        "Invalid Phase 8 empty-live source state at " + phase + ": " + snapshot);
+                        "Invalid diagnostic empty-live source state at " + phase + ": " + snapshot);
             }
         }
 
@@ -1846,16 +2071,18 @@ public class FragmentPathCalibrationBenchmark {
             }
             if (!hasTimedMeasurement) {
                 LOGGER.info(
-                        "Fragment worker participation mode={} sourceShape={} opportunityFixture={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
+                        "Fragment worker participation mode={} sourceShape={} opportunityFixture={} idleFixture={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} workerL2Masks={} "
                                 + "rawMeasurementDeltas={} finalWorkerCounts={} verdict=NO_TIMED_FRAME_WINDOW",
                         policyLabel(),
                         this.sourceShape,
                         this.opportunityFixture,
+                        this.idleFixture,
                         this.workload,
                         this.workRounds,
                         this.handleLayout,
                         FIXED_BATCH_SIZE,
                         Arrays.toString(this.workerCpus),
+                        Arrays.toString(this.workerL2Masks),
                         Arrays.deepToString(rawDeltas),
                         Arrays.toString(finalWorkerCounts));
                 return;
@@ -1885,7 +2112,7 @@ public class FragmentPathCalibrationBenchmark {
             ParticipationMetrics aggregate =
                     participationMetrics(aggregateDeltas, aggregateElapsedNanos, singleLaneCeilingFramesPerSecond);
             LOGGER.info(
-                    "Fragment worker participation mode={} sourceShape={} opportunityFixture={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} "
+                    "Fragment worker participation mode={} sourceShape={} opportunityFixture={} idleFixture={} workload={} workRounds={} handleLayout={} batch={} workerCpus={} workerL2Masks={} "
                             + "rawMeasurementDeltas={} perMeasurementFractions={} perMeasurementDominance={} "
                             + "perMeasurementEffectiveLanes={} aggregateDeltas={} aggregateFractions={} "
                             + "aggregateDominance={} aggregateEffectiveLanes={} finalWorkerCounts={} "
@@ -1893,11 +2120,13 @@ public class FragmentPathCalibrationBenchmark {
                     policyLabel(),
                     this.sourceShape,
                     this.opportunityFixture,
+                    this.idleFixture,
                     this.workload,
                     this.workRounds,
                     this.handleLayout,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
+                    Arrays.toString(this.workerL2Masks),
                     Arrays.deepToString(rawDeltas),
                     Arrays.deepToString(fractions),
                     Arrays.toString(dominance),
@@ -1914,8 +2143,8 @@ public class FragmentPathCalibrationBenchmark {
         private void reportHandleAcquisition() {
             HandleSnapshot finalSnapshot = this.handleRecorder.snapshot();
             LOGGER.info(
-                    "Fragment handle acquisition mode={} sourceShape={} opportunityFixture={} workload={} workRounds={} "
-                            + "handleLayout={} batch={} workerCpus={} workerCores={} sourceOrdinals={} sourceTypes={} "
+                    "Fragment handle acquisition mode={} sourceShape={} opportunityFixture={} idleFixture={} workload={} workRounds={} "
+                            + "handleLayout={} batch={} workerCpus={} workerCores={} workerL2Masks={} sourceOrdinals={} sourceTypes={} "
                             + "sourceHandleIds={} preFirstIteration={} "
                             + "warmupDeltas={} measurementDeltas={} aggregateAttempts={} aggregateFailures={} "
                             + "aggregateSuccessfulServiceAttempts={} aggregatePulledFrames={} "
@@ -1923,12 +2152,14 @@ public class FragmentPathCalibrationBenchmark {
                     policyLabel(),
                     this.sourceShape,
                     this.opportunityFixture,
+                    this.idleFixture,
                     this.workload,
                     this.workRounds,
                     this.handleLayout,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
                     Arrays.toString(this.workerCores),
+                    Arrays.toString(this.workerL2Masks),
                     Arrays.toString(sourceOrdinals(this.sourceHandleIds.length)),
                     Arrays.toString(this.sourceTypes),
                     Arrays.toString(this.sourceHandleIds),
@@ -1942,11 +2173,16 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(finalSnapshot.firstProductiveOrder()));
         }
 
-        /// Reports the complete Phase 8 lifecycle state and declared physical source counts.
+        /// Reports lifecycle state and declared physical source counts for availability fixtures.
         private void reportProductiveOpportunity() {
-            if (this.opportunityFixture == null) {
+            if (this.opportunityFixture == null && this.idleFixture == null) {
                 return;
             }
+            int expectedLive =
+                    this.idleFixture == null ? this.opportunityFixture.liveHandles : this.idleFixture.liveHandles();
+            int expectedProductive = this.idleFixture == null
+                    ? this.opportunityFixture.productiveHandles
+                    : this.idleFixture.productiveHandles;
             OpportunitySnapshot finalSnapshot = captureOpportunitySnapshot();
             requireValidOpportunitySnapshot(finalSnapshot, "trial close");
             LOGGER.info(
@@ -1954,9 +2190,9 @@ public class FragmentPathCalibrationBenchmark {
                             + "expectedProductiveHandles={} sourceTypes={} setupSnapshot={} warmupStarts={} "
                             + "warmupEnds={} measurementStarts={} measurementEnds={} finalSnapshot={}",
                     policyLabel(),
-                    this.opportunityFixture,
-                    this.opportunityFixture.liveHandles,
-                    this.opportunityFixture.productiveHandles,
+                    this.opportunityFixture == null ? this.idleFixture : this.opportunityFixture,
+                    expectedLive,
+                    expectedProductive,
                     Arrays.toString(this.sourceTypes),
                     this.setupOpportunitySnapshot,
                     this.warmupOpportunityStarts,
@@ -2087,14 +2323,16 @@ public class FragmentPathCalibrationBenchmark {
             }
             ControlPlaneFragment.FragmentPolicySnapshot[] finalSnapshots = policySnapshots();
             LOGGER.info(
-                    "Fragment production policy policy={} sourceShape={} opportunityFixture={} workRounds={} batchCap={} workerCpus={} "
+                    "Fragment production policy policy={} sourceShape={} opportunityFixture={} idleFixture={} workRounds={} batchCap={} workerCpus={} workerL2Masks={} "
                             + "liveHandles={} registeredWorkers={} warmupSnapshots={} measurementSnapshots={} finalSnapshots={}",
                     policyLabel(),
                     this.sourceShape,
                     this.opportunityFixture,
+                    this.idleFixture,
                     this.workRounds,
                     FIXED_BATCH_SIZE,
                     Arrays.toString(this.workerCpus),
+                    Arrays.toString(this.workerL2Masks),
                     this.distributor.getUpstreamHandleCount(),
                     this.distributor.getThreadCount(),
                     Arrays.deepToString(
@@ -2338,6 +2576,11 @@ public class FragmentPathCalibrationBenchmark {
         DiagnosticLease(ForcedMode mode, long batchSize, boolean productionBodyTiming) {
             this.override = FragmentControlPolicy.installDiagnosticOverride(
                     FragmentControlPolicy.Mode.valueOf(mode.name()), batchSize, productionBodyTiming);
+        }
+
+        /// Publishes a fixed polling subset while leaving normal production selection intact.
+        DiagnosticLease(BitSet pollingCores) {
+            this.override = FragmentControlPolicy.installDiagnosticPollingOverride(pollingCores);
         }
 
         /// Clears the captured override after all owning fragments have closed.
@@ -2704,6 +2947,24 @@ public class FragmentPathCalibrationBenchmark {
             }
         }
         throw new IllegalStateException("The diagnostic requires same-kind workers on one socket");
+    }
+
+    /// Rejects selected workers that share their nearest unified cache with one another.
+    private static void requireDistinctWorkerL2Caches(BitSet workerCores) {
+        BitSet[] masks = new BitSet[workerCores.cardinality()];
+        int index = 0;
+        for (int core = workerCores.nextSetBit(0); core >= 0; core = workerCores.nextSetBit(core + 1)) {
+            BitSet cpus = (BitSet) SystemInfo.getCoreInfo(core).getCpuSet().clone();
+            cpus.and(SystemInfo.getCpuSet());
+            int cpu = cpus.nextSetBit(0);
+            if (cpu < 0 || SystemInfo.getCacheLayout(cpu) == null) {
+                throw new IllegalStateException("Selected worker is missing effective L2 topology");
+            }
+            masks[index++] = SystemInfo.getCacheLayout(cpu).getL2Mask();
+        }
+        if (!pairwiseDisjoint(masks)) {
+            throw new IllegalStateException("The diagnostic requires workers with distinct L2 caches");
+        }
     }
 
     /// Pins the JMH harness to an active physical core outside the worker set.

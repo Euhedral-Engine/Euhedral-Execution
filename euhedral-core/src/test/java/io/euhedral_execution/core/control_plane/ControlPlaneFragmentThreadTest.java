@@ -224,6 +224,40 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    /// Verifies a setup-only parked worker stays registered, services reset, and executes no work.
+    @Test
+    void diagnosticPollingMaskParksExcludedWorker() {
+        int core = cloneConfig().coreId();
+        BitSet pollingCores = new BitSet();
+        pollingCores.set(SystemInfo.MAX_CORE_ID + 1);
+        FragmentControlPolicy.DiagnosticOverride override =
+                FragmentControlPolicy.installDiagnosticPollingOverride(pollingCores);
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        ArrayIngestSink sink = new ArrayIngestSink(BenchmarkFrame.generate(8, false, 73L, 79L));
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(sink.getDelegate());
+
+            assertEquals(0L, fragment.resetForNextTrial(System.nanoTime() + TIMEOUT.toNanos()));
+            assertEquals(1, distributor.getThreadCount());
+            assertFalse(fragment.policySnapshot().activePolling());
+            assertEquals(0, receiver.received.get());
+            assertEquals(core, fragment.core);
+        } finally {
+            sink.complete();
+            fragment.close();
+            distributor.close();
+            FragmentControlPolicy.clearDiagnosticOverride(override);
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
     /// Verifies ordered work that stops direct pulls is requested into the local execution path.
     @Test
     void loopRequestsOrderedWorkAfterDirectPullStops() {

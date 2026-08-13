@@ -1,5 +1,6 @@
 package io.euhedral_execution.core.control_plane;
 
+import java.util.BitSet;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,7 +45,22 @@ final class FragmentControlPolicy {
 
     /// Installs a forced mode with optional production-estimator sampling for diagnostics.
     static DiagnosticOverride installDiagnosticOverride(Mode mode, long batchSize, boolean bodyCostSampling) {
-        DiagnosticOverride next = new DiagnosticOverride(mode, batchSize, bodyCostSampling);
+        DiagnosticOverride next =
+                new DiagnosticOverride(Objects.requireNonNull(mode), batchSize, bodyCostSampling, null);
+        return installDiagnosticOverride(next);
+    }
+
+    /// Installs normal selection with a fixed benchmark-only set of polling cores.
+    static DiagnosticOverride installDiagnosticPollingOverride(BitSet pollingCores) {
+        Objects.requireNonNull(pollingCores);
+        if (pollingCores.isEmpty()) {
+            throw new IllegalArgumentException("At least one diagnostic core must remain active");
+        }
+        return installDiagnosticOverride(new DiagnosticOverride(null, 2L, true, pollingCores));
+    }
+
+    /// Publishes one setup-only override into the process-local slot.
+    private static DiagnosticOverride installDiagnosticOverride(DiagnosticOverride next) {
         DiagnosticOverride witness = DIAGNOSTIC_OVERRIDE.compareAndExchangeRelease(null, next);
         if (witness != null) {
             throw new IllegalStateException("A fragment diagnostic override is already installed");
@@ -104,7 +120,7 @@ final class FragmentControlPolicy {
 
     /// Completes a productive batch and returns the next batch within `eligibleCap`.
     long completeBatch(long eligibleCap, long productiveHandles, int registeredWorkers) {
-        if (this.diagnosticOverride != null) {
+        if (this.diagnosticOverride != null && this.diagnosticOverride.mode() != null) {
             this.mode = this.diagnosticOverride.mode();
             long cap = Math.max(2L, eligibleCap);
             this.batchSize = Math.max(2L, Math.min(this.diagnosticOverride.batchSize(), cap));
@@ -146,7 +162,9 @@ final class FragmentControlPolicy {
 
     /// Restores the captured initial mode, batch two, and empty timing and hysteresis state.
     void reset() {
-        this.mode = this.diagnosticOverride == null ? Mode.DIRECT : this.diagnosticOverride.mode();
+        this.mode = this.diagnosticOverride == null || this.diagnosticOverride.mode() == null
+                ? Mode.DIRECT
+                : this.diagnosticOverride.mode();
         this.batchSize = 2L;
         this.serviceTimeNs = 0.0;
         this.smoothedBodyCostNs = 0.0;
@@ -184,6 +202,11 @@ final class FragmentControlPolicy {
     /// Reports whether this policy should attach the production body-cost sensor during setup.
     boolean bodyCostSamplingEnabled() {
         return this.diagnosticOverride == null || this.diagnosticOverride.bodyCostSampling();
+    }
+
+    /// Reports whether this worker belongs to a setup-only fixed polling subset.
+    boolean activePollingAllowed(int core) {
+        return this.diagnosticOverride == null || this.diagnosticOverride.allowsPolling(core);
     }
 
     /// Doubles a positive batch limit without signed overflow.
@@ -246,18 +269,29 @@ final class FragmentControlPolicy {
     }
 
     /// Immutable setup-only mode and batch target captured by diagnostic benchmark policies.
-    record DiagnosticOverride(Mode mode, long batchSize, boolean bodyCostSampling) {
+    record DiagnosticOverride(Mode mode, long batchSize, boolean bodyCostSampling, BitSet pollingCores) {
 
         DiagnosticOverride {
-            Objects.requireNonNull(mode);
             if (batchSize < 2L) {
                 throw new IllegalArgumentException("Diagnostic batch size must be at least two");
             }
+            pollingCores = pollingCores == null ? null : (BitSet) pollingCores.clone();
         }
 
         /// Creates the compatibility form with production body-cost sampling disabled.
         DiagnosticOverride(Mode mode, long batchSize) {
-            this(mode, batchSize, false);
+            this(Objects.requireNonNull(mode), batchSize, false, null);
+        }
+
+        /// Returns an isolated copy of the optional polling-core mask.
+        @Override
+        public BitSet pollingCores() {
+            return this.pollingCores == null ? null : (BitSet) this.pollingCores.clone();
+        }
+
+        /// Tests one core against the captured polling mask.
+        boolean allowsPolling(int core) {
+            return this.pollingCores == null || this.pollingCores.get(core);
         }
     }
 }

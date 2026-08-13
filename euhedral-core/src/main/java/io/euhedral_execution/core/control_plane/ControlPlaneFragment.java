@@ -205,6 +205,10 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private void cycle() {
         try {
+            if (this.controlPolicy != null && !this.controlPolicy.activePollingAllowed(this.core)) {
+                diagnosticIdleLoop();
+                return;
+            }
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
             while (keepRunning()) {
@@ -320,6 +324,14 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
     }
 
+    /// Keeps a setup-designated benchmark worker registered but outside the active polling loop.
+    private void diagnosticIdleLoop() {
+        while (keepRunning()) {
+            serviceResetRequest();
+            LockSupport.park(this);
+        }
+    }
+
     private long localCacheExecute(long limit) {
         return super.drain(this.outputStream, limit);
     }
@@ -394,7 +406,26 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.controlPolicy.smoothedBodyCostNs(),
                 this.controlPolicy.serviceTimeNs(),
                 this.controlPolicy.batchSize(),
-                this.state.productiveHandleCount);
+                this.state.productiveHandleCount,
+                this.controlPolicy.activePollingAllowed(this.core),
+                recorderSnapshot(this.state.throughputRecorder),
+                recorderSnapshot(this.state.serviceTimeRecorder));
+    }
+
+    /// Copies existing recorder fields for low-frequency benchmark diagnostics only.
+    private static FlowRecorderSnapshot recorderSnapshot(FlowRecorder recorder) {
+        return new FlowRecorderSnapshot(
+                recorder.getLastRecordedUnits(),
+                recorder.getLastInterval(),
+                recorder.averageUnits(),
+                recorder.averageInterval(),
+                recorder.averageUnitsOverTime(),
+                recorder.unitCV(),
+                recorder.intervalCV(),
+                recorder.unitsOverTimeCV(),
+                recorder.unitTrend(),
+                recorder.intervalTrend(),
+                recorder.unitsOverTimeTrend());
     }
 
     /// Waits with the established idle delay while there is no source or cached work.
@@ -582,5 +613,43 @@ public final class ControlPlaneFragment extends WorkRequester {
             double smoothedBodyCostNs,
             double serviceTimeNs,
             long batchSize,
-            long productiveHandleCount) {}
+            long productiveHandleCount,
+            boolean activePolling,
+            FlowRecorderSnapshot throughput,
+            FlowRecorderSnapshot service) {
+
+        /// Preserves the compact constructor used by selector-focused tests.
+        FragmentPolicySnapshot(
+                FragmentControlPolicy.Mode mode,
+                int bodyCostHistoryCount,
+                double smoothedBodyCostNs,
+                double serviceTimeNs,
+                long batchSize,
+                long productiveHandleCount) {
+            this(
+                    mode,
+                    bodyCostHistoryCount,
+                    smoothedBodyCostNs,
+                    serviceTimeNs,
+                    batchSize,
+                    productiveHandleCount,
+                    true,
+                    null,
+                    null);
+        }
+    }
+
+    /// Immutable view of existing worker-local recorder state for benchmark interpretation.
+    record FlowRecorderSnapshot(
+            long lastUnits,
+            long lastIntervalNs,
+            double averageUnits,
+            double averageIntervalNs,
+            double averageUnitsPerNs,
+            double unitCv,
+            double intervalCv,
+            double unitsPerTimeCv,
+            double unitTrend,
+            double intervalTrend,
+            double unitsPerTimeTrend) {}
 }

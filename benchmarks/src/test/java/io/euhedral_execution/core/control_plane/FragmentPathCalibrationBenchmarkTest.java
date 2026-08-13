@@ -77,6 +77,14 @@ class FragmentPathCalibrationBenchmarkTest {
         assertThrows(IllegalArgumentException.class, () -> FragmentPathCalibrationBenchmark.firstCores(candidates, 4));
     }
 
+    /// Verifies shared cache masks are rejected while disjoint worker caches are accepted.
+    @Test
+    void distinguishesPrivateWorkerCaches() {
+        assertTrue(FragmentPathCalibrationBenchmark.pairwiseDisjoint(new BitSet[] {bits(0, 1), bits(2, 3), bits(4)}));
+        assertFalse(FragmentPathCalibrationBenchmark.pairwiseDisjoint(new BitSet[] {bits(0, 1), bits(1, 2)}));
+        assertFalse(FragmentPathCalibrationBenchmark.pairwiseDisjoint(new BitSet[] {new BitSet()}));
+    }
+
     /// Verifies acquire snapshots preserve stable worker order and omit unselected CPU counters.
     @Test
     void readsSelectedWorkerCountersInStableOrder() {
@@ -323,6 +331,22 @@ class FragmentPathCalibrationBenchmarkTest {
         FragmentPathCalibrationBenchmark.DiagnosticLease second = new FragmentPathCalibrationBenchmark.DiagnosticLease(
                 FragmentPathCalibrationBenchmark.ForcedMode.STAGED, 32L);
         second.close();
+
+        FragmentPathCalibrationBenchmark.DiagnosticLease polling =
+                new FragmentPathCalibrationBenchmark.DiagnosticLease(bits(2));
+        polling.close();
+    }
+
+    /// Verifies the generalized idle fixture retains exact productive, live, and polling counts.
+    @Test
+    void retainsIdleDiscoveryFixtureCounts() {
+        FragmentPathCalibrationBenchmark.IdleFixture fixture =
+                new FragmentPathCalibrationBenchmark.IdleFixture(2, 1, 1);
+
+        assertEquals(2, fixture.productiveHandles());
+        assertEquals(3, fixture.liveHandles());
+        assertEquals(1, fixture.activePollingWorkers());
+        assertThrows(IllegalArgumentException.class, () -> new FragmentPathCalibrationBenchmark.IdleFixture(1, 2, 1));
     }
 
     /// Verifies the five normal rows remain fixed before JMH execution.
