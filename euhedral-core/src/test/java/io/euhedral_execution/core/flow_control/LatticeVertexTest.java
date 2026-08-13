@@ -405,6 +405,32 @@ class LatticeVertexTest {
         assertTrue(interceptor.isComplete());
     }
 
+    @Test
+    void shouldStartInterceptorProductiveAndChangeOnlyAfterAcquiredObservation() {
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
+        interceptor.upstream = new RecordingSource();
+
+        assertTrue(interceptor.isProductive());
+        assertTrue(interceptor.acquireLock());
+        assertEquals(0L, interceptor.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
+        interceptor.releaseLock();
+
+        assertFalse(interceptor.isProductive());
+    }
+
+    @Test
+    void shouldRestoreProductivityWhenPullThrowsAndCompletes() {
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
+        interceptor.addUpstream(new ThrowingSource());
+
+        assertTrue(interceptor.acquireLock());
+        assertEquals(0L, interceptor.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
+        interceptor.releaseLock();
+
+        assertTrue(interceptor.isProductive());
+        assertTrue(interceptor.isComplete());
+    }
+
     private static final class RecordingSource implements LatticeSource {
 
         private LatticeReceiver downstream;
@@ -435,6 +461,29 @@ class LatticeVertexTest {
         @Override
         public boolean isComplete() {
             return this.completed;
+        }
+    }
+
+    private static final class ThrowingSource implements LatticeSource {
+
+        @Override
+        public void addDownstream(LatticeReceiver downstream) {}
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            throw new IllegalStateException("expected test failure");
+        }
+
+        @Override
+        public void request(long demand) {}
+
+        @Override
+        public void complete() {}
+
+        @Override
+        public boolean isComplete() {
+            return false;
         }
     }
 }

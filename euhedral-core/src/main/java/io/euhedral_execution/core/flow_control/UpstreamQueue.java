@@ -34,7 +34,7 @@ public class UpstreamQueue {
     private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
     long cachedUpCount = 0L;
-    long productiveCount = 0L;
+    long nonproductiveCount = 0L;
 
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
@@ -71,21 +71,24 @@ public class UpstreamQueue {
 
     public long getCachedUpCount() {
         if (this.cachedUpCount == 0L) {
-            this.productiveCount = getTrueUpstreamCount();
-            return this.productiveCount;
+            return getTrueUpstreamCount();
         }
         return this.cachedUpCount;
     }
 
     public long getTrueUpstreamCount() {
         this.cachedUpCount = this.upstreamCount.getAcquire();
-        this.productiveCount = Math.min(this.cachedUpCount, this.productiveCount);
         return this.cachedUpCount;
     }
 
+    /// Returns live handles minus handles this worker last observed as nonproductive.
+    ///
+    /// New handles are optimistic until this worker services them. Completed handles are reconciled
+    /// from this owner-local queue; no productivity state is published between workers.
     public long getProductiveHandleCount() {
         getTrueUpstreamCount();
-        return this.productiveCount;
+        removeCompletedHandles();
+        return this.cachedUpCount - Math.min(this.cachedUpCount, this.nonproductiveCount);
     }
 
     public void request(long demand) {
@@ -115,10 +118,7 @@ public class UpstreamQueue {
                 continue;
             }
             if (handle.isComplete()) {
-                this.cachedUpCount--;
-                if (handle.isProductive()) {
-                    this.productiveCount = Math.max(0, this.productiveCount - 1);
-                }
+                observeRemoval(handle);
                 continue;
             }
 
@@ -133,15 +133,20 @@ public class UpstreamQueue {
                 long request = Math.min(limit, bucketSize);
                 limit -= request;
 
-                // If the consumer is null, drian() sends a request and returns 0. Using the returned value to indicate
-                // productivity would not be accurate.
+                // A request returning no frames is not evidence of nonproductivity. Synchronous
+                // pushes still mark the handle productive on this worker thread.
                 totalPull += drain(handle, consumer, stopCondition, request);
+                if (consumer == null && wasProductive && !handle.isProductive()) {
+                    handle.restoreProductivity(true);
+                }
 
                 boolean produced = handle.isProductive();
                 if (!wasProductive && produced) {
-                    this.productiveCount++;
+                    if (this.nonproductiveCount > 0L) {
+                        this.nonproductiveCount--;
+                    }
                 } else if (wasProductive && !produced) {
-                    this.productiveCount--;
+                    this.nonproductiveCount++;
                 }
             } finally {
                 handle.releaseLock();
@@ -151,6 +156,31 @@ public class UpstreamQueue {
             this.upstreams.offer(handle);
         }
         return totalPull;
+    }
+
+    /// Removes completed queue entries when lifecycle changes occur without another pull.
+    private void removeCompletedHandles() {
+        long queued = this.upstreams.sizeLong();
+        long surplus = queued - this.cachedUpCount;
+        while (queued > 0L && surplus > 0L) {
+            UpstreamHandle handle = this.upstreams.poll();
+            if (handle == null) {
+                return;
+            }
+            queued--;
+            if (handle.isComplete()) {
+                observeRemoval(handle);
+                surplus--;
+            } else {
+                this.upstreams.offer(handle);
+            }
+        }
+    }
+
+    private void observeRemoval(UpstreamHandle handle) {
+        if (!handle.isProductive() && this.nonproductiveCount > 0L) {
+            this.nonproductiveCount--;
+        }
     }
 
     /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
@@ -185,6 +215,9 @@ public class UpstreamQueue {
         public boolean isProductive() {
             return true;
         }
+
+        /// Restores worker-local productivity when an operation yielded no valid new evidence.
+        public void restoreProductivity(boolean productive) {}
 
         public boolean acquireLock() {
             return true;

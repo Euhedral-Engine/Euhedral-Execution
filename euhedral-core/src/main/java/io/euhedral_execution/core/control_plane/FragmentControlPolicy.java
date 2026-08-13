@@ -103,7 +103,7 @@ final class FragmentControlPolicy {
     }
 
     /// Completes a productive batch and returns the next batch within `eligibleCap`.
-    long completeBatch(long eligibleCap, long productiveHandles, int registeredWorkers) {
+    long completeBatch(long eligibleCap, long liveHandles, int registeredWorkers) {
         if (this.diagnosticOverride != null) {
             this.mode = this.diagnosticOverride.mode();
             long cap = Math.max(2L, eligibleCap);
@@ -112,7 +112,7 @@ final class FragmentControlPolicy {
         }
 
         this.mode = selectMode(
-                productiveHandles, registeredWorkers, this.bodyCostHistoryCount, this.smoothedBodyCostNs, this.mode);
+                liveHandles, registeredWorkers, this.bodyCostHistoryCount, this.smoothedBodyCostNs, this.mode);
 
         long cap = Math.max(2L, eligibleCap);
         long desired = this.batchSize;
@@ -193,13 +193,13 @@ final class FragmentControlPolicy {
 
     /// Selects the explicit fragment path from availability, body history, and settled mode.
     static Mode selectMode(
-            long productiveHandles,
+            long liveHandles,
             int registeredWorkers,
             int bodyCostHistoryCount,
             double smoothedBodyCostNs,
             Mode currentSettledMode) {
         Objects.requireNonNull(currentSettledMode);
-        if (registeredWorkers <= 0 || productiveHandles >= registeredWorkers) {
+        if (registeredWorkers <= 0 || liveHandles >= registeredWorkers) {
             return Mode.DIRECT;
         }
         if (bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {

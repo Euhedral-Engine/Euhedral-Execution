@@ -20,12 +20,12 @@ Can live upstream handles overstate sustained, independently productive pull opp
 ```
 
 Keep the Phase 7 production selector and both execution paths unchanged. This phase may extend only
-benchmark fixtures, benchmark-only observation, their tests, and this completion record. It does
-not design or implement a productive-handle sensor, readiness estimate, source classifier, or new
-policy branch.
+benchmark fixtures, benchmark-only observation, their tests, and this completion record. It does not
+design or implement a productive-handle sensor, readiness estimate, source classifier, or new policy
+branch.
 
-The primary experiment uses one already-mapped expensive executor body and forced DIRECT/STAGED.
-It does not run normal policy, sweep work cost, vary batch size, alter handle publication order, or
+The primary experiment uses one already-mapped expensive executor body and forced DIRECT/STAGED. It
+does not run normal policy, sweep work cost, vary batch size, alter handle publication order, or
 test another availability dimension.
 
 ## Required planning answers
@@ -77,16 +77,16 @@ queue algorithm, routing rule, request rule, or production source implementation
 
 ### 4. What direct evidence proves productive opportunity rather than merely throughput?
 
-Retain the existing source-by-worker acquisition attempts, failures, productive pulled-frame
-totals, and first-productivity order. Derive successful source services as attempts minus failures.
-For the empty queue retain queue size, accumulated demand, completion state, and a fixture assertion
-that no offer occurred. Pair those values with live-handle count, registered worker count, and
-per-worker executor completions.
+Retain the existing source-by-worker acquisition attempts, failures, productive pulled-frame totals,
+and first-productivity order. Derive successful source services as attempts minus failures. For the
+empty queue retain queue size, accumulated demand, completion state, and a fixture assertion that no
+offer occurred. Pair those values with live-handle count, registered worker count, and per-worker
+executor completions.
 
-The candidate is valid only when both handles remain live, both workers remain registered, the
-empty handle is acquired successfully by both workers but has zero pulled frames and no possible
-request production under the asserted empty-queue invariant, and the repeating handle accounts for
-all directly observed production. Throughput alone cannot classify the state.
+The candidate is valid only when both handles remain live, both workers remain registered, the empty
+handle is acquired successfully by both workers but has zero pulled frames and no possible request
+production under the asserted empty-queue invariant, and the repeating handle accounts for all
+directly observed production. Throughput alone cannot classify the state.
 
 ### 5. What forced-path result falsifies the current live-handle proxy?
 
@@ -114,17 +114,17 @@ change do not justify another branch.
   `UpstreamQueue.getTrueUpstreamCount()` only at a completed batch boundary.
 - A handle remains live until the interceptor's completion flag changes through `onComplete`,
   `onError`, or `complete`; source queue occupancy and outstanding demand do not affect the count.
-- A completed handle is not reinserted when an owner-local queue encounters it. The global count
-  has already been decremented by the completion callback.
+- A completed handle is not reinserted when an owner-local queue encounters it. The global count has
+  already been decremented by the completion callback.
 
 ### Acquisition and eligibility
 
 - Every worker has an owner-local queue containing references to the same shared handles.
 - `UpstreamInterceptor.acquireLock` uses `wip` to permit one worker at a time to service one handle.
-- A losing worker records a transient acquisition failure and the corrected `UpstreamQueue` puts
-  the still-live handle back in its local queue.
-- After a successful acquisition, `UpstreamInterceptor.pull` or `request` delegates only when
-  demand is positive, the vertex is open and not draining, and the handle is incomplete.
+- A losing worker records a transient acquisition failure and the corrected `UpstreamQueue` puts the
+  still-live handle back in its local queue.
+- After a successful acquisition, `UpstreamInterceptor.pull` or `request` delegates only when demand
+  is positive, the vertex is open and not draining, and the handle is incomplete.
 - Lock ownership makes a source independently serviceable by at most one worker at an instant. Two
   productive handles can therefore support two simultaneous source-service opportunities; one
   productive handle cannot.
@@ -152,8 +152,7 @@ existing behavior to measure, not a defect or variable to change in this phase.
 
 Under a real sustained empty-live-source state, DIRECT either remains the winner or STAGED's
 advantage is too small or uncertain to justify a root-node distinction. Cache behavior, handle
-migration, or the timescale of source service makes the nominal count adequate for this first
-tree.
+migration, or the timescale of source service makes the nominal count adequate for this first tree.
 
 ### H1: productive opportunity is a distinct branch dimension
 
@@ -186,8 +185,8 @@ explains an unavoidable change:
 - forced DIRECT and forced STAGED with normal selection and production-estimator publication
   disabled.
 
-Use CPU work at `workRounds = 512` for all primary rows. Its isolated body was approximately
-449.914 ns in Phase 4, where the one-handle fixture gave STAGED the largest mapped advantage and the
+Use CPU work at `workRounds = 512` for all primary rows. Its isolated body was approximately 449.914
+ns in Phase 4, where the one-handle fixture gave STAGED the largest mapped advantage and the
 two-productive-handle fixture still gave DIRECT a resolved advantage. Rounds 512 maximizes the
 expected availability signal without adding a work-cost sweep. Do not add another work point unless
 the fixed point is invalidated by a correctness or measurement problem.
@@ -203,11 +202,11 @@ implementation.
 
 Add one benchmark enum whose names describe physical state rather than production policy labels:
 
-| Fixture                       | Sources                                      | Live | Productive | Workers |
-|-------------------------------|----------------------------------------------|-----:|-----------:|--------:|
-| `TWO_PRODUCTIVE_HANDLES`      | two unchanged `RepeatingSink` instances      |    2 |          2 |       2 |
-| `ONE_PRODUCTIVE_HANDLE`       | one unchanged `RepeatingSink`                |    1 |          1 |       2 |
-| `TWO_LIVE_ONE_PRODUCTIVE`     | one `RepeatingSink`, one empty queue sink    |    2 |          1 |       2 |
+| Fixture                   | Sources                                   | Live | Productive | Workers |
+|---------------------------|-------------------------------------------|-----:|-----------:|--------:|
+| `TWO_PRODUCTIVE_HANDLES`  | two unchanged `RepeatingSink` instances   |    2 |          2 |       2 |
+| `ONE_PRODUCTIVE_HANDLE`   | one unchanged `RepeatingSink`             |    1 |          1 |       2 |
+| `TWO_LIVE_ONE_PRODUCTIVE` | one `RepeatingSink`, one empty queue sink |    2 |          1 |       2 |
 
 Run exactly DIRECT and STAGED for each row. Do not add intermittent, correlated, delayed,
 rate-limited, ordered, or differently routed sources to the primary matrix.
@@ -365,25 +364,27 @@ For forced DIRECT and forced STAGED separately, run:
 
 Hold each phase for at least one 1,048,576-completion window after its per-handle evidence reaches
 the requested state. Retain transition timestamps, completion deltas, handle evidence, cache counts
-already exposed by the fixture, and the number of completed batches before the fork reaches a
-stable phase throughput. Do not clear caches, reset workers, switch policy, or infer a controller
-reaction time. If natural cached work masks only the start of a phase, record the drain duration.
+already exposed by the fixture, and the number of completed batches before the fork reaches a stable
+phase throughput. Do not clear caches, reset workers, switch policy, or infer a controller reaction
+time. If natural cached work masks only the start of a phase, record the drain duration.
 
-Stop the dynamic diagnostic if the gate requires per-frame coordination, changes frame semantics,
-or produces a state inconsistent with the actual static queue candidate.
+Stop the dynamic diagnostic if the gate requires per-frame coordination, changes frame semantics, or
+produces a state inconsistent with the actual static queue candidate.
 
 ## Files and implementation boundary
 
 Expected experimental changes are limited to:
 
-- `benchmarks/src/main/java/io/euhedral_execution/core/control_plane/FragmentPathCalibrationBenchmark.java`
-  - add the three physical fixtures, the forced benchmark state, snapshot fields, reporting, and
-    optional dynamic diagnostic;
+-
+`benchmarks/src/main/java/io/euhedral_execution/core/control_plane/FragmentPathCalibrationBenchmark.java`
+    - add the three physical fixtures, the forced benchmark state, snapshot fields, reporting, and
+      optional dynamic diagnostic;
 - `benchmarks/src/main/java/io/euhedral_execution/benchmarks/utils/RepeatingSink.java`
-  - add only the optional one-callback-per-request result observer while preserving the existing
-    constructor and source behavior;
-- `benchmarks/src/test/java/io/euhedral_execution/core/control_plane/FragmentPathCalibrationBenchmarkTest.java`
-  - test fixture semantics, recorder deltas, reporting helpers, lifecycle, and teardown; and
+    - add only the optional one-callback-per-request result observer while preserving the existing
+      constructor and source behavior;
+-
+`benchmarks/src/test/java/io/euhedral_execution/core/control_plane/FragmentPathCalibrationBenchmarkTest.java`
+    - test fixture semantics, recorder deltas, reporting helpers, lifecycle, and teardown; and
 - this blueprint's completion record.
 
 Do not modify `ControlPlaneFragment`, `FragmentControlPolicy`, `AbstractExecutor`, `UpstreamQueue`,
@@ -441,8 +442,8 @@ Stop and return to design when:
 - any worker disappears or participation becomes inconsistent without a proven cause;
 - a live-handle count changes unexpectedly;
 - the empty source produces work despite the no-offer invariant;
-- forced-path differences are within uncertainty or below materiality, in which case stop
-  expansion and classify the valid candidate as Outcome 1;
+- forced-path differences are within uncertainty or below materiality, in which case stop expansion
+  and classify the valid candidate as Outcome 1;
 - a correctness defect is found and has not yet been fixed and rerun;
 - a second source property must change to create the candidate; or
 - the work starts expanding into readiness, rate, ordering, batch-size, or source-shape discovery.
@@ -562,14 +563,14 @@ raw executor timing cadence: 256 calls
 
 ### Clean forced-path results
 
-| Fixture | Mode | Mean frames/s | JMH error | 99.9% confidence interval | Fork means |
-|---|---|---:|---:|---|---|
-| two productive handles | DIRECT | 4,290,928 | 3,297 | `[4287631,4294224]` | `[4289929,4288152,4294701]` |
-| two productive handles | STAGED | 3,996,873 | 23,020 | `[3973853,4019893]` | `[3971156,4006804,4012659]` |
-| one productive handle | DIRECT | 2,691,208 | 34,760 | `[2656448,2725968]` | `[2676176,2719529,2677920]` |
-| one productive handle | STAGED | 4,074,980 | 6,961 | `[4068019,4081941]` | `[4066598,4080595,4077749]` |
-| two live, one productive | DIRECT | 3,818,428 | 61,242 | `[3757186,3879671]` | `[3855364,3859602,3740319]` |
-| two live, one productive | STAGED | 4,034,865 | 59,484 | `[3975381,4094349]` | `[4055115,4042521,4006959]` |
+| Fixture                  | Mode   | Mean frames/s | JMH error | 99.9% confidence interval | Fork means                  |
+|--------------------------|--------|--------------:|----------:|---------------------------|-----------------------------|
+| two productive handles   | DIRECT |     4,290,928 |     3,297 | `[4287631,4294224]`       | `[4289929,4288152,4294701]` |
+| two productive handles   | STAGED |     3,996,873 |    23,020 | `[3973853,4019893]`       | `[3971156,4006804,4012659]` |
+| one productive handle    | DIRECT |     2,691,208 |    34,760 | `[2656448,2725968]`       | `[2676176,2719529,2677920]` |
+| one productive handle    | STAGED |     4,074,980 |     6,961 | `[4068019,4081941]`       | `[4066598,4080595,4077749]` |
+| two live, one productive | DIRECT |     3,818,428 |    61,242 | `[3757186,3879671]`       | `[3855364,3859602,3740319]` |
+| two live, one productive | STAGED |     4,034,865 |    59,484 | `[3975381,4094349]`       | `[4055115,4042521,4006959]` |
 
 The controls reproduce the mapped surface:
 
@@ -597,22 +598,22 @@ empty queue offers = 0
 empty queue complete = false
 ```
 
-Final accumulated demand on the empty queue was 3.064-4.070 billion in DIRECT forks and
-1.218-1.283 billion in STAGED forks. The source therefore remained live and accepted sustained
-demand for the entire fork rather than exhausting or disappearing.
+Final accumulated demand on the empty queue was 3.064-4.070 billion in DIRECT forks and 1.218-1.283
+billion in STAGED forks. The source therefore remained live and accepted sustained demand for the
+entire fork rather than exhausting or disappearing.
 
 The following values are fork aggregates across warmup and measurement. Successful service is
 derived from acquisition attempts minus failures. Source ordinal 0 is the repeating source; source
 ordinal 1 is the empty queue.
 
 | Mode/fork | Repeating successful services | Empty successful services | Repeating pulled frames | Empty pulled frames | Aggregate D |
-|---|---:|---:|---:|---:|---:|
-| DIRECT 1 | 3,182,352 | 24,981,612 | 32,469,411 | 0 | 0.50109 |
-| DIRECT 2 | 3,214,176 | 27,246,451 | 33,293,404 | 0 | 0.50152 |
-| DIRECT 3 | 3,049,398 | 31,715,508 | 33,268,558 | 0 | 0.50167 |
-| STAGED 1 | 5,354,037 | 6,890,649 | 36,848,773 | 0 | 0.50014 |
-| STAGED 2 | 5,307,866 | 6,864,156 | 36,680,653 | 0 | 0.50005 |
-| STAGED 3 | 5,193,953 | 6,710,800 | 36,444,187 | 0 | 0.50014 |
+|-----------|------------------------------:|--------------------------:|------------------------:|--------------------:|------------:|
+| DIRECT 1  |                     3,182,352 |                24,981,612 |              32,469,411 |                   0 |     0.50109 |
+| DIRECT 2  |                     3,214,176 |                27,246,451 |              33,293,404 |                   0 |     0.50152 |
+| DIRECT 3  |                     3,049,398 |                31,715,508 |              33,268,558 |                   0 |     0.50167 |
+| STAGED 1  |                     5,354,037 |                 6,890,649 |              36,848,773 |                   0 |     0.50014 |
+| STAGED 2  |                     5,307,866 |                 6,864,156 |              36,680,653 |                   0 |     0.50005 |
+| STAGED 3  |                     5,193,953 |                 6,710,800 |              36,444,187 |                   0 |     0.50014 |
 
 Both workers successfully acquired the empty handle millions of times in every fork. It produced no
 pulled frames, could not produce requested frames while its production queue remained empty, and
@@ -685,3 +686,91 @@ Direct inspection must also confirm:
 - normal selection, safe batch-boundary application, and forced modes are unchanged;
 - no production availability state, generic controller, or cross-core coordination was added; and
 - all changed source and documentation text is ASCII.
+
+## Productive-handle conformance pass
+
+Completed: 2026-08-13
+
+This post-Phase-8 pass reviewed the manually added runtime sensor against the completed experiment
+and the Phase 7 production-tree contract. It does not change Phase 8's experimental outcome or
+expand that phase's original scope.
+
+### Conformance assessment
+
+| Requirement                                           | Assessment       | Result                                                                                                                                  |
+|-------------------------------------------------------|------------------|-----------------------------------------------------------------------------------------------------------------------------------------|
+| Worker-local, observational, deliberately stale state | conforms         | Plain per-thread handle observations remain unpublished; deterministic tests prove workers may disagree.                                |
+| Initial state                                         | needs refinement | Newly visible live handles are now explicitly optimistic/productive until the owner worker disproves them.                              |
+| Four productive/nonproductive transitions             | needs refinement | Transition-only accounting now covers all four cases without double increment or decrement.                                             |
+| Failed acquisition                                    | conforms         | It retains the live handle and changes neither its observation nor the local count.                                                     |
+| Completion and removal                                | needs refinement | Completed entries are reconciled by identity from the owner queue, including removal without another pull.                              |
+| Empty live queue and later producer activity          | conforms         | A real incomplete `QueueIngestSink` becomes locally nonproductive after an empty pull; offers publish no productivity.                  |
+| Request, stop, cancellation, and exception evidence   | needs refinement | Request-only misses, stop-predicate rejections, invalid service, and exceptions no longer create false empty-pull evidence.             |
+| Live-count accessor semantics                         | needs refinement | `getCachedUpCount()` and `getTrueUpstreamCount()` now always return live counts.                                                        |
+| Trial reset and ordinary count refresh                | conforms         | Neither resets upstream observations; each worker retains its last evidence until it services the handle again.                         |
+| Production-root integration                           | contradicts plan | The manual root replacement exceeded Phase 8 authorization and was reverted; the validated Phase 7 live-handle selector remains active. |
+
+### Issues and refinements
+
+The original scalar productive count could not identify whether a removed handle was the productive
+or nonproductive member of a mixed pair. It also initialized differently depending on whether a
+true-count refresh happened before a cached read, and `getCachedUpCount()` could return productivity
+instead of liveness. Accounting now stores only the worker's observed nonproductive count and
+reports `live - nonproductive`, while completed handles are removed from the owner-local queue by
+identity. This makes new handles naturally optimistic and keeps the result in `[0, live]`.
+
+The original request path reset a productive observation before an operation whose zero return was
+not evidence, falsely decrementing the count. The interceptor now restores the prior observation
+when request, lifecycle, cancellation, exception, or a rejecting stop predicate prevents valid
+empty-source evidence. A zero-result pull uses a one-item miss-path probe to distinguish a stopped
+frame from an empty source; productive pulls do not gain another per-frame predicate layer.
+
+No shared productivity counter, atomic productivity field, producer readiness publication, lock,
+registry, background refresh, timer read, logging, or cross-worker reconciliation was added. A
+producer-thread push touches only that producer thread's otherwise unused observation; it cannot
+publish readiness into a worker's state.
+
+### Tests and regression evidence
+
+Focused Core tests cover optimistic initialization; all four state transitions; failed acquisition
+and reinsertion; productive and nonproductive completion, repeated lifecycle calls, zero-live and
+replacement bounds; live accessor meaning; count-refresh/reset retention; request-only behavior;
+stop and exception behavior; and deterministic two-worker disagreement.
+
+Real `QueueIngestSink` tests prove all three Phase 8 signals: two productive handles report two
+opportunities, one productive handle reports one, and two live handles with one empty incomplete
+source retain live count two while reporting productive count one after observation. They also prove
+that offers do not asynchronously update a worker, a later pull or synchronous requested push does,
+and a productive observation remains stale after its source becomes empty until the next empty
+service.
+
+### Integration and performance boundary
+
+The sensor is compatible with existing owner-local `UpstreamQueue` instances, shared interceptor
+locking, clone wiring, source lifecycle, and trial reset. It is ready to replace the live count at
+the existing completed-batch boundary, but that production integration was deliberately deferred
+because no post-Phase-8 blueprint authorizes it. Forced DIRECT/STAGED behavior is unchanged.
+
+No new JMH claim is made in this pass. The successful pull path retains one source pull and
+state-transition-only plain accounting; the correctness probe is restricted to zero-result pulls.
+The previously retained Phase 8 forced-path evidence remains the policy basis, while production-root
+overhead and normal-policy selection belong to the deferred integration validation.
+
+### Verification
+
+```text
+mise exec -- gradle :euhedral-core:test --no-daemon                     PASS
+mise exec -- gradle :benchmarks:test --no-daemon                        PASS
+mise exec -- gradle :euhedral-core:spotlessCheck :benchmarks:spotlessCheck --no-daemon
+                                                                         PASS
+mise exec -- gradle build --no-daemon                                   PASS
+git diff --check                                                         PASS
+```
+
+The worker-local observed productive-handle count conforms to the intended physical branch and
+preserves deliberate stale/local semantics. Deterministic lifecycle and real-source tests pass. The
+sensor is ready for the smallest possible production-root integration; this pass makes no unmeasured
+hot-path-cost claim.
+
+Next action: write the bounded production-root integration blueprint using this observed
+productive-handle count.

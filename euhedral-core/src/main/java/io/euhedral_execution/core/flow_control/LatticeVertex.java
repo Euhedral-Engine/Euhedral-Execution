@@ -385,7 +385,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
 
-        private final ThreadLocal<Boolean> productive = new ThreadLocal<>();
+        private final ThreadLocal<ProductivityObservation> productivity = new ThreadLocal<>();
 
         private final PaddedAtomicLong wip = new PaddedAtomicLong(0);
         public LatticeSource upstream;
@@ -404,47 +404,67 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void push(AbstractFrame frame) {
-            this.productive.set(Boolean.TRUE);
+            observation().productive = true;
             LatticeVertex.this.push(frame);
         }
 
         @Override
         public long pull(
                 Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            ProductivityObservation observation = observation();
             if (demand <= 0
                     || this.wip.getOpaque() == 0
                     || LatticeVertex.this.isClosed()
                     || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
+                observation.restore();
                 return 0;
             }
 
             try {
                 long pulled = this.upstream.pull(consumer, stopCondition, demand);
                 if (pulled > 0) {
-                    this.productive.set(Boolean.TRUE);
+                    observation.productive = true;
+                    return pulled;
+                }
+
+                // A zero may mean the stop predicate rejected the next frame rather than that the
+                // source was empty. Probe one item only on this miss path so productive pulls do
+                // not pay another predicate layer per frame.
+                observation.stopCondition = stopCondition;
+                pulled = this.upstream.pull(consumer, observation, 1L);
+                if (pulled > 0) {
+                    observation.productive = true;
+                } else if (observation.stopped) {
+                    observation.restore();
                 }
                 return pulled;
             } catch (Throwable t) {
+                observation.restore();
                 logger.error("Upstream threw an exception during a pull", t);
                 this.complete();
+            } finally {
+                observation.stopCondition = null;
             }
             return 0;
         }
 
         @Override
         public void request(long num) {
+            ProductivityObservation observation = observation();
             if (num <= 0
                     || this.wip.getOpaque() == 0
                     || LatticeVertex.this.isClosed()
                     || LatticeVertex.this.drain.getOpaque()
                     || isComplete()) {
+                observation.restore();
                 return;
             }
 
             try {
                 this.upstream.request(num);
             } catch (Throwable t) {
+                observation.restore();
                 logger.error("Upstream threw an exception during request", t);
                 this.complete();
             }
@@ -482,19 +502,19 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public boolean isProductive() {
-            Boolean prod = this.productive.get();
-            if (prod == null) {
-                this.productive.set(Boolean.TRUE);
-                return true;
-            }
-            return prod;
+            return observation().productive;
+        }
+
+        @Override
+        public void restoreProductivity(boolean productive) {
+            observation().productive = productive;
         }
 
         @Override
         public boolean acquireLock() {
             boolean acquired = this.wip.getAndIncrement() == 0;
             if (acquired) {
-                this.productive.set(Boolean.FALSE);
+                observation().begin();
             }
             return acquired;
         }
@@ -502,6 +522,42 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         @Override
         public void releaseLock() {
             this.wip.setRelease(0);
+        }
+
+        /// Returns this thread's deliberately stale observation for the shared handle.
+        private ProductivityObservation observation() {
+            ProductivityObservation observation = this.productivity.get();
+            if (observation == null) {
+                observation = new ProductivityObservation();
+                this.productivity.set(observation);
+            }
+            return observation;
+        }
+
+        /// Plain worker-local state; producers and other workers receive independent observations.
+        private static final class ProductivityObservation implements Function<AbstractFrame, Boolean> {
+
+            private Function<AbstractFrame, Boolean> stopCondition;
+            private boolean productive = true;
+            private boolean previousProductive = true;
+            private boolean stopped;
+
+            private void begin() {
+                this.previousProductive = this.productive;
+                this.productive = false;
+                this.stopped = false;
+            }
+
+            private void restore() {
+                this.productive = this.previousProductive;
+            }
+
+            @Override
+            public Boolean apply(AbstractFrame frame) {
+                boolean stop = this.stopCondition.apply(frame);
+                this.stopped |= stop;
+                return stop;
+            }
         }
     }
 }
