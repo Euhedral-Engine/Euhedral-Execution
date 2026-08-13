@@ -4,6 +4,7 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
@@ -104,6 +105,7 @@ public class UpstreamQueue {
             return 0;
         }
 
+        FlowThread.FlowContext context = FlowThread.getContext();
         long totalPull = 0;
         long bucketSize = calculatePullBuckets(demand);
 
@@ -130,14 +132,24 @@ public class UpstreamQueue {
             }
 
             try {
+                long requestBefore = context == null || consumer != null ? 0L : context.satisfiedRequest;
                 long request = Math.min(limit, bucketSize);
                 limit -= request;
 
-                // A request returning no frames is not evidence of nonproductivity. Synchronous
-                // pushes still mark the handle productive on this worker thread.
-                totalPull += drain(handle, consumer, stopCondition, request);
-                if (consumer == null && wasProductive && !handle.isProductive()) {
-                    handle.restoreProductivity(true);
+                long drainCount = drain(handle, consumer, stopCondition, request);
+                totalPull += drainCount;
+                if (context != null) {
+                    context.satisfiedPull += drainCount;
+                }
+
+                if (consumer == null) {
+                    if (context != null && context.satisfiedRequest != requestBefore) {
+                        handle.setProductivity(true);
+                    } else if (!handle.isProductive()) {
+                        // Request has no empty-source result. Without a synchronous push, it
+                        // supplies no new evidence and retains the worker's prior observation.
+                        handle.setProductivity(wasProductive);
+                    }
                 }
 
                 boolean produced = handle.isProductive();
@@ -216,8 +228,8 @@ public class UpstreamQueue {
             return true;
         }
 
-        /// Restores worker-local productivity when an operation yielded no valid new evidence.
-        public void restoreProductivity(boolean productive) {}
+        /// Sets this worker's plain observation after classifying one acquired service.
+        public void setProductivity(boolean productive) {}
 
         public boolean acquireLock() {
             return true;

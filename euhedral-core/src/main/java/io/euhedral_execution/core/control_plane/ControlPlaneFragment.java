@@ -346,9 +346,10 @@ public final class ControlPlaneFragment extends WorkRequester {
             return;
         }
         this.state.completed = 0L;
-        long liveHandles = context.upstream.getTrueUpstreamCount();
+        long productiveHandles = context.upstream.getProductiveHandleCount();
+        this.state.productiveHandleCount = productiveHandles;
         int registeredWorkers = super.getThreadCount();
-        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), liveHandles, registeredWorkers);
+        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), productiveHandles, registeredWorkers);
         reportMetrics();
     }
 
@@ -392,7 +393,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.controlPolicy.bodyCostHistoryCount(),
                 this.controlPolicy.smoothedBodyCostNs(),
                 this.controlPolicy.serviceTimeNs(),
-                this.controlPolicy.batchSize());
+                this.controlPolicy.batchSize(),
+                this.state.productiveHandleCount);
     }
 
     /// Waits with the established idle delay while there is no source or cached work.
@@ -551,6 +553,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         long completed = 0;
 
         long upstreamCount = 0;
+        long productiveHandleCount = 0;
         long totalExecutions = 0;
 
         void reset() {
@@ -563,6 +566,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.batchSize = 2;
             this.completed = 0;
             this.upstreamCount = 0;
+            this.productiveHandleCount = 0;
             this.totalExecutions = 0;
             if (ControlPlaneFragment.this.controlPolicy != null) {
                 ControlPlaneFragment.this.controlPolicy.reset();
@@ -577,5 +581,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             int bodyCostHistoryCount,
             double smoothedBodyCostNs,
             double serviceTimeNs,
-            long batchSize) {}
+            long batchSize,
+            long productiveHandleCount) {}
 }

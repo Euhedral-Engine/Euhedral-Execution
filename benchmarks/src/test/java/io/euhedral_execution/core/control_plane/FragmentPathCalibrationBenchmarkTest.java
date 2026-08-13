@@ -390,6 +390,32 @@ class FragmentPathCalibrationBenchmarkTest {
         assertEquals(2, FragmentPathCalibrationBenchmark.ProductiveObservation.values().length);
     }
 
+    /// Verifies the accepted integration confirmation remains limited to the four declared rows.
+    @Test
+    void retainsProductiveNormalPolicyCases() {
+        FragmentPathCalibrationBenchmark.ProductivePolicyCase plentiful =
+                FragmentPathCalibrationBenchmark.ProductivePolicyCase.TWO_PRODUCTIVE_EXPENSIVE;
+        FragmentPathCalibrationBenchmark.ProductivePolicyCase scarce =
+                FragmentPathCalibrationBenchmark.ProductivePolicyCase.ONE_PRODUCTIVE_EXPENSIVE;
+        FragmentPathCalibrationBenchmark.ProductivePolicyCase mixedExpensive =
+                FragmentPathCalibrationBenchmark.ProductivePolicyCase.TWO_LIVE_ONE_PRODUCTIVE_EXPENSIVE;
+        FragmentPathCalibrationBenchmark.ProductivePolicyCase mixedCheap =
+                FragmentPathCalibrationBenchmark.ProductivePolicyCase.TWO_LIVE_ONE_PRODUCTIVE_CHEAP;
+
+        assertEquals(
+                FragmentPathCalibrationBenchmark.OpportunityFixture.TWO_PRODUCTIVE_HANDLES,
+                plentiful.opportunityFixture);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.DIRECT, plentiful.expectedMode);
+        assertEquals(
+                FragmentPathCalibrationBenchmark.OpportunityFixture.ONE_PRODUCTIVE_HANDLE, scarce.opportunityFixture);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.STAGED, scarce.expectedMode);
+        assertEquals(512, mixedExpensive.workRounds);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.STAGED, mixedExpensive.expectedMode);
+        assertEquals(24, mixedCheap.workRounds);
+        assertEquals(FragmentPathCalibrationBenchmark.ForcedMode.DIRECT, mixedCheap.expectedMode);
+        assertEquals(4, FragmentPathCalibrationBenchmark.ProductivePolicyCase.values().length);
+    }
+
     /// Verifies an empty production queue remains live while pulls and requests produce no frames.
     @Test
     void emptyQueueSourceRemainsLiveAndNonproductive() {
@@ -417,14 +443,14 @@ class FragmentPathCalibrationBenchmarkTest {
                 new FragmentPathCalibrationBenchmark.NormalPolicyState();
         state.policyCase = FragmentPathCalibrationBenchmark.NormalPolicyCase.SCARCE_88;
         ControlPlaneFragment.FragmentPolicySnapshot guarded = new ControlPlaneFragment.FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode.DIRECT, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L);
+                FragmentControlPolicy.Mode.DIRECT, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L, 1L);
 
         state.validatePolicySnapshots(
                 org.openjdk.jmh.runner.IterationType.MEASUREMENT,
                 new ControlPlaneFragment.FragmentPolicySnapshot[] {guarded});
 
         ControlPlaneFragment.FragmentPolicySnapshot staged = new ControlPlaneFragment.FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode.STAGED, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L);
+                FragmentControlPolicy.Mode.STAGED, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L, 1L);
         state.validatePolicySnapshots(
                 org.openjdk.jmh.runner.IterationType.MEASUREMENT,
                 new ControlPlaneFragment.FragmentPolicySnapshot[] {staged});

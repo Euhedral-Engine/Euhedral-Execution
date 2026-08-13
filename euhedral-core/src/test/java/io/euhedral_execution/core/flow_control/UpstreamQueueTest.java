@@ -13,10 +13,12 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
+import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import java.util.Arrays;
+import java.util.BitSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,10 +38,13 @@ class UpstreamQueueTest {
     private UpstreamQueue queue;
     private PaddedAtomicLong count = new PaddedAtomicLong();
     private MpscQueue<UpstreamHandle> handles = new MpscQueue<>(64);
+    private FlowThread.FlowContext flowContext;
 
     @BeforeEach
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
+        FlowThread.clearContext();
+        this.flowContext = FlowThread.initializeContext();
 
         queue = new UpstreamQueue(0, handles, count);
     }
@@ -47,6 +52,7 @@ class UpstreamQueueTest {
     @AfterEach
     void cleanup() {
         UpstreamQueue.UP_QUEUE.remove();
+        FlowThread.clearContext();
     }
 
     @Test
@@ -131,6 +137,7 @@ class UpstreamQueueTest {
 
         assertEquals(64L, queue.pull(frame -> {}, frame -> false, 64L));
 
+        assertEquals(64L, this.flowContext.satisfiedPull);
         assertEquals(1L, queue.getProductiveHandleCount());
         assertEquals(0L, queue.nonproductiveCount);
     }
@@ -142,6 +149,8 @@ class UpstreamQueueTest {
 
         assertEquals(0L, queue.pull(frame -> {}, frame -> false, 64L));
 
+        assertEquals(0L, this.flowContext.satisfiedPull);
+        assertEquals(1L, upstream.pullCalls);
         assertEquals(0L, queue.getProductiveHandleCount());
         assertEquals(1L, queue.nonproductiveCount);
     }
@@ -330,6 +339,7 @@ class UpstreamQueueTest {
         TestUpstreamHandle upstream = addHandle();
 
         queue.request(64L);
+        assertEquals(0L, this.flowContext.satisfiedRequest);
         assertEquals(1L, queue.getProductiveHandleCount());
 
         upstream.pullResult = 0L;
@@ -337,6 +347,40 @@ class UpstreamQueueTest {
         queue.request(64L);
 
         assertEquals(0L, queue.getProductiveHandleCount());
+    }
+
+    /// Verifies a void request is productive when its synchronous routing changes FlowThread evidence.
+    @Test
+    void shouldUseFlowThreadEvidenceForSynchronousRequestProduction() {
+        CachedQueueFixture fixture = cachedQueueFixture();
+        TestFrame frame = new TestFrame("requested");
+        frame.randomizeHash(1L);
+        fixture.sink.offer(frame);
+
+        try {
+            fixture.queue.request(64L);
+
+            assertEquals(1L, this.flowContext.satisfiedRequest);
+            assertEquals(0L, fixture.sink.size());
+            assertEquals(1L, fixture.queue.getProductiveHandleCount());
+        } finally {
+            fixture.vertex.close();
+        }
+    }
+
+    /// Verifies changed-value evidence remains valid when a cumulative counter crosses signed overflow.
+    @Test
+    void shouldRecognizePullProductionAcrossSignedCounterOverflow() {
+        TestUpstreamHandle upstream = addHandle();
+        upstream.pullResult = 0L;
+        queue.pull(frame -> {}, frame -> false, 1L);
+        this.flowContext.satisfiedPull = Long.MAX_VALUE;
+        upstream.pullResult = 1L;
+
+        assertEquals(1L, queue.pull(frame -> {}, frame -> false, 1L));
+
+        assertEquals(Long.MIN_VALUE, this.flowContext.satisfiedPull);
+        assertEquals(1L, queue.getProductiveHandleCount());
     }
 
     @Test
@@ -392,6 +436,7 @@ class UpstreamQueueTest {
 
         assertEquals(0L, fixture.queue.pull(frame -> {}, frame -> true, 64L));
 
+        assertEquals(0L, this.flowContext.satisfiedPull);
         assertEquals(1L, fixture.sink.size());
         assertEquals(1L, fixture.queue.getProductiveHandleCount());
     }
@@ -560,7 +605,26 @@ class UpstreamQueueTest {
         return new QueueFixture(sink, handle, queueWith(handle, count));
     }
 
+    private static CachedQueueFixture cachedQueueFixture() {
+        QueueIngestSink sink = new QueueIngestSink();
+        LatticeVertex vertex = new LatticeVertex(
+                "productive-request-test", 2, LatticeVertex.RoutingFunction.DEFAULT, 32, RoutingPolicy.ANYWHERE);
+        BitSet active = new BitSet(2);
+        active.set(0, 2);
+        LatticeEdge[] downstreams = {new LatticeEdge(vertex.getDrainFlag()), new LatticeEdge(vertex.getDrainFlag())};
+        vertex.setDrain(true);
+        vertex.setDownstreamMapping(active, downstreams);
+        vertex.setDrain(false);
+        LatticeVertex.UpstreamInterceptor handle = vertex.new UpstreamInterceptor();
+        handle.upstream = sink.getDelegate();
+        sink.getDelegate().addDownstream(handle);
+        PaddedAtomicLong count = new PaddedAtomicLong(1L);
+        return new CachedQueueFixture(sink, vertex, queueWith(handle, count));
+    }
+
     private record QueueFixture(QueueIngestSink sink, LatticeVertex.UpstreamInterceptor handle, UpstreamQueue queue) {}
+
+    private record CachedQueueFixture(QueueIngestSink sink, LatticeVertex vertex, UpstreamQueue queue) {}
 
     static class TestUpstreamHandle extends UpstreamQueue.UpstreamHandle {
 
@@ -569,6 +633,7 @@ class UpstreamQueueTest {
 
         long requested;
         long pulled;
+        long pullCalls;
         long acquisitionAttempts;
         boolean complete;
         boolean available = true;
@@ -589,6 +654,7 @@ class UpstreamQueueTest {
         @Override
         public long pull(
                 Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            this.pullCalls++;
             this.pulled += demand;
             long result = this.pullResult < 0L ? demand : Math.min(this.pullResult, demand);
             if (result > 0L) {
@@ -613,7 +679,7 @@ class UpstreamQueueTest {
         }
 
         @Override
-        public void restoreProductivity(boolean productive) {
+        public void setProductivity(boolean productive) {
             this.productive = productive;
         }
 

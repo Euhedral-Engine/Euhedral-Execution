@@ -145,6 +145,13 @@ public class FragmentPathCalibrationBenchmark {
         state.awaitInvocation();
     }
 
+    /// Confirms the productive-count production root at the four bounded physical rows.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void productiveHandleNormalPolicy(ProductiveHandleNormalPolicyState state) {
+        state.awaitInvocation();
+    }
+
     /// Measures the first production tree at the five predeclared resolved or guard-band rows.
     @Benchmark
     @OperationsPerInvocation(INVOCATION_FRAMES)
@@ -843,6 +850,25 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Bounded physical rows for productive-count production-root confirmation.
+    public enum ProductivePolicyCase {
+        TWO_PRODUCTIVE_EXPENSIVE(OpportunityFixture.TWO_PRODUCTIVE_HANDLES, 512, ForcedMode.DIRECT),
+        ONE_PRODUCTIVE_EXPENSIVE(OpportunityFixture.ONE_PRODUCTIVE_HANDLE, 512, ForcedMode.STAGED),
+        TWO_LIVE_ONE_PRODUCTIVE_EXPENSIVE(OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE, 512, ForcedMode.STAGED),
+        TWO_LIVE_ONE_PRODUCTIVE_CHEAP(OpportunityFixture.TWO_LIVE_ONE_PRODUCTIVE, 24, ForcedMode.DIRECT);
+
+        final OpportunityFixture opportunityFixture;
+        final int workRounds;
+        final ForcedMode expectedMode;
+
+        /// Retains one predeclared physical fixture, work point, and expected normal mode.
+        ProductivePolicyCase(OpportunityFixture opportunityFixture, int workRounds, ForcedMode expectedMode) {
+            this.opportunityFixture = opportunityFixture;
+            this.workRounds = workRounds;
+            this.expectedMode = expectedMode;
+        }
+    }
+
     /// Same-build full-graph controls for successful service and corrected empty misses.
     public enum ProductiveSensorOverheadCase {
         PRODUCTIVE_FAST(OpportunityFixture.TWO_PRODUCTIVE_HANDLES, ForcedMode.DIRECT),
@@ -1041,6 +1067,49 @@ public class FragmentPathCalibrationBenchmark {
         public void setup() {
             setupSensorOverheadPath(
                     this.overheadCase.opportunityFixture, this.productiveObservation == ProductiveObservation.ENABLED);
+        }
+    }
+
+    /// Normal production policy over the four bounded productive-opportunity rows.
+    @State(Scope.Benchmark)
+    public static class ProductiveHandleNormalPolicyState extends PathState {
+
+        @Param({
+            "TWO_PRODUCTIVE_EXPENSIVE",
+            "ONE_PRODUCTIVE_EXPENSIVE",
+            "TWO_LIVE_ONE_PRODUCTIVE_EXPENSIVE",
+            "TWO_LIVE_ONE_PRODUCTIVE_CHEAP"
+        })
+        public ProductivePolicyCase policyCase;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts the normal tree with the retained real source fixture and batch cap 32.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupProductivePolicyPath(this.policyCase.opportunityFixture, this.policyCase.workRounds);
+        }
+
+        /// Requires every worker's completed-batch snapshot to match its resolved local observation.
+        @Override
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
+            FragmentControlPolicy.Mode expected =
+                    FragmentControlPolicy.Mode.valueOf(this.policyCase.expectedMode.name());
+            for (ControlPlaneFragment.FragmentPolicySnapshot snapshot : snapshots) {
+                if (snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_MIN_HISTORY) {
+                    failPolicyValidation("Productive normal policy estimator did not initialize: " + snapshot);
+                }
+                if (snapshot.productiveHandleCount() != this.policyCase.opportunityFixture.productiveHandles) {
+                    failPolicyValidation("Productive normal policy observed the wrong owner-local count: " + snapshot);
+                }
+                if (snapshot.mode() != expected) {
+                    failPolicyValidation("Productive normal policy selected the wrong mode: " + snapshot);
+                }
+            }
         }
     }
 
@@ -1408,6 +1477,11 @@ public class FragmentPathCalibrationBenchmark {
                     null,
                     opportunityFixture,
                     productiveObservation);
+        }
+
+        /// Builds one normal-policy graph over a retained productive-opportunity fixture.
+        protected final void setupProductivePolicyPath(OpportunityFixture opportunityFixture, int workRounds) {
+            setupPath(2, null, Workload.CPU_WORK, workRounds, false, false, false, true, null, opportunityFixture);
         }
 
         /// Builds one graph with an optional physical opportunity fixture.

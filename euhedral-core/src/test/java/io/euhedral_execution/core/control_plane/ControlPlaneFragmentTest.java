@@ -144,6 +144,7 @@ class ControlPlaneFragmentTest {
             ControlPlaneFragment.FragmentPolicySnapshot sampled = fragment.policySnapshot();
             assertEquals(FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES, sampled.bodyCostHistoryCount());
             assertEquals(100.0, sampled.smoothedBodyCostNs());
+            assertEquals(0L, sampled.productiveHandleCount());
             assertThrows(IllegalStateException.class, () -> executor.attachProductionBodyTimingRecorder(ignored -> {}));
 
             fragment.resetForNextTrial(System.nanoTime());
@@ -152,6 +153,7 @@ class ControlPlaneFragmentTest {
             assertEquals(FragmentControlPolicy.Mode.DIRECT, reset.mode());
             assertEquals(0, reset.bodyCostHistoryCount());
             assertEquals(0.0, reset.smoothedBodyCostNs());
+            assertEquals(0L, reset.productiveHandleCount());
         }
     }
 

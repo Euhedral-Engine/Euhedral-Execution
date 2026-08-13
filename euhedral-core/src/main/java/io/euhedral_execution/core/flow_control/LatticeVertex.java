@@ -422,20 +422,14 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
 
             try {
-                long pulled = this.upstream.pull(consumer, stopCondition, demand);
+                observation.stopCondition = stopCondition;
+                long pulled = this.upstream.pull(consumer, observation, demand);
                 if (pulled > 0) {
                     observation.productive = true;
                     return pulled;
                 }
 
-                // A zero may mean the stop predicate rejected the next frame rather than that the
-                // source was empty. Probe one item only on this miss path so productive pulls do
-                // not pay another predicate layer per frame.
-                observation.stopCondition = stopCondition;
-                pulled = this.upstream.pull(consumer, observation, 1L);
-                if (pulled > 0) {
-                    observation.productive = true;
-                } else if (observation.stopped) {
+                if (observation.stopped) {
                     observation.restore();
                 }
                 return pulled;
@@ -505,8 +499,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             return observation().productive;
         }
 
+        /// Sets only the calling worker's deliberately stale observation.
         @Override
-        public void restoreProductivity(boolean productive) {
+        public void setProductivity(boolean productive) {
             observation().productive = productive;
         }
 
@@ -554,8 +549,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
             @Override
             public Boolean apply(AbstractFrame frame) {
-                boolean stop = this.stopCondition.apply(frame);
-                this.stopped |= stop;
+                Boolean stop = this.stopCondition.apply(frame);
+                if (stop) {
+                    this.stopped = true;
+                }
                 return stop;
             }
         }

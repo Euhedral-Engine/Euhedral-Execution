@@ -16,6 +16,8 @@ import io.euhedral_execution.core.flow_control.LatticeVertex.RoutingFunction;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -422,13 +424,32 @@ class LatticeVertexTest {
     void shouldRestoreProductivityWhenPullThrowsAndCompletes() {
         LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
         interceptor.addUpstream(new ThrowingSource());
+        UpstreamQueue queue = queueWith(interceptor);
 
-        assertTrue(interceptor.acquireLock());
-        assertEquals(0L, interceptor.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
-        interceptor.releaseLock();
+        assertEquals(0L, queue.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
 
         assertTrue(interceptor.isProductive());
+        assertEquals(0L, queue.nonproductiveCount);
         assertTrue(interceptor.isComplete());
+    }
+
+    @Test
+    void shouldRestoreProductivityWhenPullIsCancelledAndCompletes() {
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
+        interceptor.addUpstream(new CancellingSource());
+        UpstreamQueue queue = queueWith(interceptor);
+
+        assertEquals(0L, queue.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
+
+        assertTrue(interceptor.isProductive());
+        assertEquals(0L, queue.nonproductiveCount);
+        assertTrue(interceptor.isComplete());
+    }
+
+    private static UpstreamQueue queueWith(LatticeVertex.UpstreamInterceptor interceptor) {
+        MpscQueue<UpstreamQueue.UpstreamHandle> handles = new MpscQueue<>(4);
+        handles.offer(interceptor);
+        return new UpstreamQueue(0, handles, new PaddedAtomicLong(1L));
     }
 
     private static final class RecordingSource implements LatticeSource {
@@ -473,6 +494,29 @@ class LatticeVertexTest {
         public long pull(
                 Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
             throw new IllegalStateException("expected test failure");
+        }
+
+        @Override
+        public void request(long demand) {}
+
+        @Override
+        public void complete() {}
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
+    }
+
+    private static final class CancellingSource implements LatticeSource {
+
+        @Override
+        public void addDownstream(LatticeReceiver downstream) {}
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            throw AbstractFrame.CANCEL_SIGNAL;
         }
 
         @Override
