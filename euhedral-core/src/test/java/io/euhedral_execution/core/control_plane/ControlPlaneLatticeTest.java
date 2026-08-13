@@ -3,18 +3,29 @@ package io.euhedral_execution.core.control_plane;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.LatticeConfig;
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice.CacheReset;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
+import io.euhedral_execution.core.flow_control.LatticeVertex;
+import io.euhedral_execution.core.flow_control.RoutingPolicy;
+import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.ingest.AbstractIngestSink;
 import io.euhedral_execution.hardware_utils.ResourceMonitor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -276,6 +287,263 @@ class ControlPlaneLatticeTest {
             Assertions.assertNotNull(lattice.resourceMonitor);
         } finally {
             lattice.close();
+        }
+    }
+
+    @Test
+    void testFactoryMethodsAndSingletonSemantics() {
+        controlPlane = ControlPlaneLattice.getOrCreate();
+        assertNotNull(controlPlane);
+        assertEquals("EuhedralLattice", controlPlane.name);
+
+        ControlPlaneLattice same = ControlPlaneLattice.getOrCreate("OtherName", "OtherShard");
+        assertSame(controlPlane, same);
+
+        assertThrows(NullPointerException.class, () -> ControlPlaneLattice.getOrCreate((LatticeConfig) null));
+
+        controlPlane.close();
+
+        controlPlane = ControlPlaneLattice.getOrCreate("CustomLattice", "CustomShard");
+        assertNotNull(controlPlane);
+        assertEquals("CustomLattice", controlPlane.name);
+
+        controlPlane.close();
+
+        LatticeConfig blankNameConfig = new LatticeConfig("   ", new BitSet(), Duration.ZERO, baseShard);
+        controlPlane = ControlPlaneLattice.getOrCreate(blankNameConfig);
+        assertEquals("ControlPlaneLattice", controlPlane.name);
+    }
+
+    @Test
+    void testIdempotentStartAndClose() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+
+        controlPlane.start();
+        assertTrue(controlPlane.started.get());
+        assertTrue(controlPlane.ready.get());
+
+        controlPlane.start();
+        verify(baseShard, times(1)).clone(eq(0), any(), any());
+        verify(baseShard, times(1)).clone(eq(1), any(), any());
+
+        controlPlane.close();
+        assertTrue(controlPlane.closed.get());
+
+        controlPlane.close();
+    }
+
+    @Test
+    void testAddUpstreamValidationAndBehavior() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+
+        assertThrows(NullPointerException.class, () -> controlPlane.addUpstream((LatticeSource) null));
+        assertThrows(NullPointerException.class, () -> controlPlane.addUpstream((AbstractIngestSink) null));
+
+        AbstractIngestSink mockSink = mock(AbstractIngestSink.class);
+        LatticeSource mockSource = mock(LatticeSource.class);
+        when(mockSink.getDelegate()).thenReturn(mockSource);
+
+        assertFalse(controlPlane.started.get());
+        controlPlane.addUpstream(mockSink);
+        assertTrue(controlPlane.started.get());
+        verify(mockSink).getDelegate();
+
+        controlPlane.close();
+        LatticeSource sourceAfterClose = mock(LatticeSource.class);
+        RuntimeException ex = assertThrows(RuntimeException.class, () -> controlPlane.addUpstream(sourceAfterClose));
+        assertTrue(ex.getMessage().contains("permanently closed"));
+    }
+
+    @Test
+    void testRoutingPolicyAndFallback() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
+
+        LatticeVertex controller = controlPlane.ingestController.get();
+
+        LatticeEdge edge0 = mock(LatticeEdge.class);
+        LatticeEdge edge1 = mock(LatticeEdge.class);
+        controlPlane.shardHandles[0] = edge0;
+        controlPlane.shardHandles[1] = edge1;
+
+        controller.setDrain(true);
+        controller.setDownstreamMapping(effectiveSystemTopology.effectiveSockets(), controlPlane.shardHandles);
+        controller.setDrain(false);
+
+        // SOCKET_LOCAL policy with origin socket 1 -> routes to socket 1 (edge1)
+        TestFrame socket1Frame = new TestFrame(100L);
+        socket1Frame.setRoutingPolicy(RoutingPolicy.SOCKET_LOCAL);
+        socket1Frame.setOrigin(new CpuInfo(4, 2, 1)); // CPU 4 -> socket 1
+        controller.push(socket1Frame);
+        verify(edge1).push(socket1Frame);
+
+        // SOCKET_LOCAL policy with null origin -> falls back to default hash routing
+        TestFrame nullOriginFrame = new TestFrame(12345L);
+        nullOriginFrame.setRoutingPolicy(RoutingPolicy.SOCKET_LOCAL);
+        nullOriginFrame.setOrigin(null);
+        controller.push(nullOriginFrame);
+
+        // SOCKET_LOCAL policy with origin socket 0, but handle at socket 0 is null -> falls back to default hash
+        // routing
+        controlPlane.shardHandles[0] = null;
+        TestFrame missingHandleFrame = new TestFrame(999L);
+        missingHandleFrame.setRoutingPolicy(RoutingPolicy.SOCKET_LOCAL);
+        missingHandleFrame.setOrigin(new CpuInfo(0, 0, 0)); // Socket 0
+        controller.push(missingHandleFrame);
+
+        // ANYWHERE policy -> uses default hash routing
+        TestFrame anywhereFrame = new TestFrame(555L);
+        anywhereFrame.setRoutingPolicy(RoutingPolicy.ANYWHERE);
+        controller.push(anywhereFrame);
+    }
+
+    @Test
+    void testClearValidationAndExecution() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+
+        // Null and non-positive timeout checks
+        assertThrows(NullPointerException.class, () -> controlPlane.clear(null));
+        assertThrows(IllegalArgumentException.class, () -> controlPlane.clear(Duration.ZERO));
+        assertThrows(IllegalArgumentException.class, () -> controlPlane.clear(Duration.ofMillis(-10)));
+
+        // Unstarted lattice returns CacheReset(0, 0)
+        CacheReset unstartedReset = controlPlane.clear(Duration.ofSeconds(1));
+        assertEquals(0, unstartedReset.clearedFrames());
+        assertEquals(0, unstartedReset.activeWorkers());
+
+        // Start lattice
+        controlPlane.start();
+
+        // Closed lattice throws IllegalStateException
+        controlPlane.closed.set(true);
+        assertThrows(IllegalStateException.class, () -> controlPlane.clear(Duration.ofSeconds(1)));
+        controlPlane.closed.set(false);
+
+        // Reset already in progress throws IllegalStateException
+        controlPlane.resetting.set(true);
+        assertThrows(IllegalStateException.class, () -> controlPlane.clear(Duration.ofSeconds(1)));
+        controlPlane.resetting.set(false);
+
+        // Rebalance timeout throws IllegalStateException
+        controlPlane.rebalancing.set(true);
+        assertThrows(IllegalStateException.class, () -> controlPlane.clear(Duration.ofMillis(10)));
+        controlPlane.rebalancing.set(false);
+
+        // Successful reset
+        when(mockShards[0].resetForNextTrial(anyLong())).thenReturn(50L);
+        when(mockShards[1].resetForNextTrial(anyLong())).thenReturn(30L);
+        when(mockShards[0].getActiveCores()).thenReturn(4);
+        when(mockShards[1].getActiveCores()).thenReturn(2);
+
+        CacheReset reset = controlPlane.clear(Duration.ofSeconds(1));
+        assertEquals(80L, reset.clearedFrames());
+        assertEquals(6, reset.activeWorkers());
+
+        verify(mockShards[0]).resetForNextTrial(anyLong());
+        verify(mockShards[1]).resetForNextTrial(anyLong());
+    }
+
+    @Test
+    void testGetActiveWorkers() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
+
+        when(mockShards[0].getActiveCores()).thenReturn(4);
+        when(mockShards[1].getActiveCores()).thenReturn(2);
+
+        assertEquals(6, controlPlane.getActiveWorkers());
+
+        // Test with a null entry in shards array
+        controlPlane.shards[1] = null;
+        assertEquals(4, controlPlane.getActiveWorkers());
+    }
+
+    @Test
+    void testIsDrained() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
+
+        LatticeVertex mockController = mock(LatticeVertex.class);
+        controlPlane.ingestController.set(mockController);
+
+        // Ingest controller is not drained
+        when(mockController.isDrained()).thenReturn(false);
+        assertFalse(controlPlane.isDrained());
+
+        // Ingest controller is drained, but shard 0 is not drained
+        when(mockController.isDrained()).thenReturn(true);
+        when(mockShards[0].isDrained()).thenReturn(false);
+        when(mockShards[1].isDrained()).thenReturn(true);
+        assertFalse(controlPlane.isDrained());
+
+        // Both ingest controller and all shards are drained
+        when(mockShards[0].isDrained()).thenReturn(true);
+        assertTrue(controlPlane.isDrained());
+
+        // Null controller or null shard handled safely
+        controlPlane.ingestController.set(null);
+        controlPlane.shards[0] = null;
+        assertTrue(controlPlane.isDrained());
+    }
+
+    @Test
+    void testUpdateWhenResettingOrZeroCpus() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
+
+        // When resetting is true, update returns early
+        controlPlane.resetting.set(true);
+        controlPlane.update(mockUtilization);
+        verify(mockShards[0], never()).update(any(), any());
+        controlPlane.resetting.set(false);
+
+        // Topology change with 0 effective CPUs
+        version = 10;
+        BitSet emptySockets = new BitSet();
+        BitSet emptyCores = new BitSet();
+        BitSet emptyCpus = new BitSet();
+        effectiveSystemTopology = new EffectiveSystemTopology(emptySockets, emptyCores, emptyCpus, List.of(), version);
+
+        controlPlane.update(mockUtilization);
+        assertEquals(10, controlPlane.currentGlobalVersion);
+        assertEquals(0, controlPlane.activeShardIds.get().length);
+    }
+
+    @Test
+    void testUpdateProportionalQuotaAllocation() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
+
+        when(mockUtilization.quotaCpus()).thenReturn(4.0);
+
+        // Call update with same version
+        controlPlane.update(mockUtilization);
+
+        // Total effective CPUs = 8. Socket 0 has 4 cpus, Socket 1 has 4 cpus.
+        // Proportional quota = (4/8) * 4.0 = 2.0 for each socket
+        verify(mockUtilization).getSocketSnapshot(eq(0), any(), eq(2.0));
+        verify(mockUtilization).getSocketSnapshot(eq(1), any(), eq(2.0));
+    }
+
+    static class TestFrame extends AbstractFrame {
+        TestFrame(long idHash) {
+            super(idHash);
         }
     }
 }
