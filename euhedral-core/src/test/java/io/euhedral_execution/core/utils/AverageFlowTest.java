@@ -1,17 +1,18 @@
-package io.euhedral_execution.core.flow_control;
+package io.euhedral_execution.core.utils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import org.junit.jupiter.api.Test;
 
-class AcquisitionContentionSmootherTest {
+class AverageFlowTest {
 
     @Test
     void firstValidSampleBootstrapsExactly() {
-        AcquisitionContentionSmoother smoother = new AcquisitionContentionSmoother();
+        AverageFlow smoother = new AverageFlow();
 
         smoother.record(375_000L);
 
@@ -21,7 +22,7 @@ class AcquisitionContentionSmootherTest {
 
     @Test
     void repeatedEqualSamplesRemainStable() {
-        AcquisitionContentionSmoother smoother = new AcquisitionContentionSmoother();
+        AverageFlow smoother = new AverageFlow();
         smoother.record(625_000L);
 
         for (int sample = 0; sample < 1_000; sample++) {
@@ -33,7 +34,7 @@ class AcquisitionContentionSmootherTest {
 
     @Test
     void lowHighLowStepsMoveMonotonicallyAndStayBounded() {
-        AcquisitionContentionSmoother smoother = new AcquisitionContentionSmoother();
+        AverageFlow smoother = new AverageFlow();
         smoother.record(0L);
 
         long previous = smoother.value();
@@ -43,7 +44,7 @@ class AcquisitionContentionSmootherTest {
             assertTrue(smoother.value() <= UpstreamQueue.ACQUIRE_CONTENTION_SCALE);
             previous = smoother.value();
         }
-        assertTrue(smoother.value() >= UpstreamQueue.ACQUIRE_CONTENTION_SCALE - AcquisitionContentionSmoother.DIVISOR);
+        assertTrue(smoother.value() >= UpstreamQueue.ACQUIRE_CONTENTION_SCALE - AverageFlow.DIVISOR);
 
         for (int sample = 0; sample < 256; sample++) {
             smoother.record(0L);
@@ -51,12 +52,12 @@ class AcquisitionContentionSmootherTest {
             assertTrue(smoother.value() >= 0L);
             previous = smoother.value();
         }
-        assertTrue(smoother.value() < AcquisitionContentionSmoother.DIVISOR);
+        assertTrue(smoother.value() < AverageFlow.DIVISOR);
     }
 
     @Test
     void resetReturnsToUninitializedState() {
-        AcquisitionContentionSmoother smoother = new AcquisitionContentionSmoother();
+        AverageFlow smoother = new AverageFlow();
         smoother.record(500_000L);
 
         smoother.reset();
@@ -67,7 +68,7 @@ class AcquisitionContentionSmootherTest {
 
     @Test
     void samplesMustRemainWithinTheFixedPointRange() {
-        AcquisitionContentionSmoother smoother = new AcquisitionContentionSmoother();
+        AverageFlow smoother = new AverageFlow();
 
         assertThrows(IllegalArgumentException.class, () -> smoother.record(-1L));
         assertThrows(

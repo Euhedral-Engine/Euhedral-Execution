@@ -5,6 +5,7 @@ import static io.euhedral_execution.core.utils.MathFunctions.unsignedMultiplyHig
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionPath;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
@@ -1248,8 +1249,7 @@ public class FragmentPathCalibrationBenchmark {
         @Override
         void validatePolicySnapshots(
                 IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
-            FragmentControlPolicy.Mode expected =
-                    FragmentControlPolicy.Mode.valueOf(this.policyCase.expectedMode.name());
+            ExecutionPath expected = ExecutionPath.valueOf(this.policyCase.expectedMode.name());
             for (ControlPlaneFragment.FragmentPolicySnapshot snapshot : snapshots) {
                 if (snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_MIN_HISTORY) {
                     failPolicyValidation("Productive normal policy estimator did not initialize: " + snapshot);
@@ -1257,7 +1257,7 @@ public class FragmentPathCalibrationBenchmark {
                 if (snapshot.productiveHandleCount() != this.policyCase.opportunityFixture.productiveHandles) {
                     failPolicyValidation("Productive normal policy observed the wrong owner-local count: " + snapshot);
                 }
-                if (snapshot.mode() != expected) {
+                if (snapshot.executionPath() != expected) {
                     failPolicyValidation("Productive normal policy selected the wrong mode: " + snapshot);
                 }
             }
@@ -1304,9 +1304,9 @@ public class FragmentPathCalibrationBenchmark {
         void validatePolicySnapshots(
                 IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
             int expectedActive = expectedPollingWorkers();
-            FragmentControlPolicy.Mode expectedMode = this.productiveHandles >= this.workerCount || this.workRounds < 96
-                    ? FragmentControlPolicy.Mode.DIRECT
-                    : FragmentControlPolicy.Mode.STAGED;
+            ExecutionPath expectedExecutionPath = this.productiveHandles >= this.workerCount || this.workRounds < 96
+                    ? ExecutionPath.DIRECT
+                    : ExecutionPath.STAGED;
             for (int worker = 0; worker < snapshots.length; worker++) {
                 ControlPlaneFragment.FragmentPolicySnapshot snapshot = snapshots[worker];
                 boolean expectedPolling = worker < expectedActive;
@@ -1330,7 +1330,7 @@ public class FragmentPathCalibrationBenchmark {
                 if (snapshot.productionParked() == expectedPolling) {
                     failPolicyValidation("Production parked state disagreed with polling state: " + snapshot);
                 }
-                if (snapshot.mode() != expectedMode) {
+                if (snapshot.executionPath() != expectedExecutionPath) {
                     failPolicyValidation("Idle discovery selected the wrong production mode: " + snapshot);
                 }
             }
@@ -1389,12 +1389,12 @@ public class FragmentPathCalibrationBenchmark {
         @Override
         void validatePolicySnapshots(
                 IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
-            FragmentControlPolicy.Mode expected = FragmentControlPolicy.Mode.valueOf(this.mode.name());
+            ExecutionPath expected = ExecutionPath.valueOf(this.mode.name());
             int expectedSources = crossoverProductiveSources();
             for (int worker = 0; worker < snapshots.length; worker++) {
                 ControlPlaneFragment.FragmentPolicySnapshot snapshot = snapshots[worker];
                 if (snapshot == null
-                        || snapshot.mode() != expected
+                        || snapshot.executionPath() != expected
                         || snapshot.productiveHandleCount() != expectedSources
                         || snapshot.registeredWorkers() != snapshots.length
                         || snapshot.workerRank() != worker
@@ -1637,9 +1637,9 @@ public class FragmentPathCalibrationBenchmark {
         @Override
         void validatePolicySnapshots(
                 IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
-            FragmentControlPolicy.Mode expected = FragmentControlPolicy.Mode.valueOf(this.estimatorCase.mode.name());
+            ExecutionPath expected = ExecutionPath.valueOf(this.estimatorCase.mode.name());
             for (ControlPlaneFragment.FragmentPolicySnapshot snapshot : snapshots) {
-                if (snapshot.mode() != expected) {
+                if (snapshot.executionPath() != expected) {
                     failPolicyValidation("Forced production estimator changed mode: " + snapshot);
                 }
                 if (this.samplingEnabled
@@ -1684,14 +1684,13 @@ public class FragmentPathCalibrationBenchmark {
         @Override
         void validatePolicySnapshots(
                 IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
-            FragmentControlPolicy.Mode expected = this.policyCase == NormalPolicyCase.SCARCE_96
-                    ? FragmentControlPolicy.Mode.STAGED
-                    : FragmentControlPolicy.Mode.DIRECT;
+            ExecutionPath expected =
+                    this.policyCase == NormalPolicyCase.SCARCE_96 ? ExecutionPath.STAGED : ExecutionPath.DIRECT;
             for (ControlPlaneFragment.FragmentPolicySnapshot snapshot : snapshots) {
                 if (snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_MIN_HISTORY) {
                     failPolicyValidation("Normal production estimator did not initialize: " + snapshot);
                 }
-                if (snapshot.mode() != expected) {
+                if (snapshot.executionPath() != expected) {
                     failPolicyValidation(
                             "Normal production policy selected the wrong resolved or guard mode: " + snapshot);
                 }
@@ -1722,7 +1721,7 @@ public class FragmentPathCalibrationBenchmark {
             awaitSettledMode(
                     0,
                     "startup-cheap",
-                    FragmentControlPolicy.Mode.DIRECT,
+                    ExecutionPath.DIRECT,
                     FragmentControlPolicy.BODY_COST_MIN_HISTORY,
                     0,
                     DYNAMIC_RESPONSE_MAX_FRAMES);
@@ -1737,7 +1736,7 @@ public class FragmentPathCalibrationBenchmark {
             awaitSettledMode(
                     1,
                     "cheap-to-expensive",
-                    FragmentControlPolicy.Mode.STAGED,
+                    ExecutionPath.STAGED,
                     FragmentControlPolicy.BODY_COST_MIN_HISTORY,
                     FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES,
                     DYNAMIC_RESPONSE_MAX_FRAMES);
@@ -1748,7 +1747,7 @@ public class FragmentPathCalibrationBenchmark {
             awaitSettledMode(
                     2,
                     "expensive-to-cheap",
-                    FragmentControlPolicy.Mode.DIRECT,
+                    ExecutionPath.DIRECT,
                     FragmentControlPolicy.BODY_COST_MIN_HISTORY,
                     FragmentControlPolicy.BODY_COST_WINDOW_SAMPLES,
                     DYNAMIC_RESPONSE_MAX_FRAMES);
@@ -1805,21 +1804,21 @@ public class FragmentPathCalibrationBenchmark {
             if (this.completed || policyValidationFailure() != null) {
                 return;
             }
-            this.phaseSnapshots[0] = awaitContentionPhase(2, FragmentControlPolicy.Mode.DIRECT, false);
+            this.phaseSnapshots[0] = awaitContentionPhase(2, ExecutionPath.DIRECT, false);
 
             completeProductiveSource(1);
-            this.phaseSnapshots[1] = awaitContentionPhase(1, FragmentControlPolicy.Mode.STAGED, true);
+            this.phaseSnapshots[1] = awaitContentionPhase(1, ExecutionPath.STAGED, true);
 
             BenchmarkFrame[] frames =
                     BenchmarkFrame.generate(FRAME_POOL_SIZE, false, HasherApi.mix(31L), HasherApi.mix(32L));
             publishProductiveSource(frames);
-            this.phaseSnapshots[2] = awaitContentionPhase(2, FragmentControlPolicy.Mode.DIRECT, false);
+            this.phaseSnapshots[2] = awaitContentionPhase(2, ExecutionPath.DIRECT, false);
             this.completed = true;
         }
 
         /// Waits for every lane's physical count and the expected worker-local mode response.
         private ControlPlaneFragment.FragmentPolicySnapshot[] awaitContentionPhase(
-                long productiveSources, FragmentControlPolicy.Mode expectedMode, boolean highContention) {
+                long productiveSources, ExecutionPath expectedExecutionPath, boolean highContention) {
             long startFrames = completedFrames();
             long deadline = System.nanoTime() + TIMEOUT_NS;
             while (System.nanoTime() < deadline && completedFrames() - startFrames <= DYNAMIC_RESPONSE_MAX_FRAMES) {
@@ -1836,7 +1835,7 @@ public class FragmentPathCalibrationBenchmark {
                             && snapshot.acquireContention() != null
                             && snapshot.acquireContention().initialized();
                     if (settled) {
-                        if (snapshot.mode() == expectedMode) {
+                        if (snapshot.executionPath() == expectedExecutionPath) {
                             expectedModeCount++;
                         }
                         contention[worker] = snapshot.acquireContention().fixedPointValue();
@@ -1848,8 +1847,8 @@ public class FragmentPathCalibrationBenchmark {
                     boolean modeSettled =
                             highContention ? expectedModeCount > 0 : expectedModeCount == snapshots.length;
                     boolean contentionSettled = highContention
-                            ? median > FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX
-                            : median <= FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX;
+                            ? median > FragmentControlPolicy.LOW_CONTENTION_MAX
+                            : median <= FragmentControlPolicy.LOW_CONTENTION_MAX;
                     if (modeSettled && contentionSettled) {
                         return snapshots;
                     }
@@ -1857,7 +1856,7 @@ public class FragmentPathCalibrationBenchmark {
                 Thread.onSpinWait();
             }
             failPolicyValidation("Dynamic contention phase did not settle sources=" + productiveSources + " mode="
-                    + expectedMode + " snapshots=" + Arrays.toString(policySnapshots()));
+                    + expectedExecutionPath + " snapshots=" + Arrays.toString(policySnapshots()));
             return policySnapshots();
         }
 
@@ -2922,9 +2921,9 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(this.workerL2Masks),
                     this.distributor.getUpstreamHandleCount(),
                     this.distributor.getThreadCount(),
-                    FragmentControlPolicy.HIGH_CONTENTION_IDLE_THRESHOLD,
+                    FragmentControlPolicy.HIGH_CONTENTION_THRESHOLD,
                     FragmentControlPolicy.HIGH_CONTENTION_PARK_NANOS,
-                    FragmentControlPolicy.HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS,
+                    FragmentControlPolicy.HIGH_CONTENTION_BODY_COST_NS,
                     Arrays.toString(highContentionParkCounts(finalSnapshots)),
                     Arrays.deepToString(
                             this.warmupPolicySnapshots.toArray(ControlPlaneFragment.FragmentPolicySnapshot[][]::new)),
@@ -3050,7 +3049,7 @@ public class FragmentPathCalibrationBenchmark {
         final void awaitSettledMode(
                 int phaseIndex,
                 String phase,
-                FragmentControlPolicy.Mode expectedMode,
+                ExecutionPath expectedExecutionPath,
                 int minimumHistory,
                 int minimumNewSamples,
                 long maximumCompletedFrames) {
@@ -3082,13 +3081,14 @@ public class FragmentPathCalibrationBenchmark {
                 if (selectedWorker >= 0
                         && snapshots[selectedWorker].bodyCostHistoryCount() >= minimumHistory
                         && selectedProgress >= minimumNewSamples
-                        && snapshots[selectedWorker].mode() == expectedMode) {
+                        && snapshots[selectedWorker].executionPath() == expectedExecutionPath) {
                     recordDynamicResponse(phaseIndex, this.counters.sum() - startFrames, selectedProgress);
                     return;
                 }
                 Thread.onSpinWait();
             }
-            failPolicyValidation("Production policy phase " + phase + " did not settle " + expectedMode + " within "
+            failPolicyValidation("Production policy phase " + phase + " did not settle " + expectedExecutionPath
+                    + " within "
                     + maximumCompletedFrames + " completed frames; snapshots=" + Arrays.toString(policySnapshots()));
         }
 
@@ -3268,7 +3268,7 @@ public class FragmentPathCalibrationBenchmark {
         /// Publishes a fixed mode with optional production estimator sampling.
         DiagnosticLease(ForcedMode mode, long batchSize, boolean productionBodyTiming) {
             this.override = FragmentControlPolicy.installDiagnosticOverride(
-                    FragmentControlPolicy.Mode.valueOf(mode.name()), batchSize, productionBodyTiming);
+                    ExecutionPath.valueOf(mode.name()), batchSize, productionBodyTiming);
         }
 
         /// Publishes a fixed polling subset while leaving normal production selection intact.

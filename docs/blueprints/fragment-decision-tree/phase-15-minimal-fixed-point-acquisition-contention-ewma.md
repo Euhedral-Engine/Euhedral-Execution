@@ -108,7 +108,7 @@ acceptance exception rather than describing the original predeclared severe gate
 
 ### 1. Exact smoother implementation
 
-`AcquisitionContentionSmoother` is a package-local final class containing one plain `long value` and
+`AverageFlow` is a package-local final class containing one plain `long value` and
 one plain `boolean initialized`. The first valid sample assigns `value` and sets validity. Later
 updates execute:
 

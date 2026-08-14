@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionPath;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -170,7 +171,7 @@ class ControlPlaneFragmentTest {
             fragment.resetForNextTrial(System.nanoTime());
 
             ControlPlaneFragment.FragmentPolicySnapshot reset = fragment.policySnapshot();
-            assertEquals(FragmentControlPolicy.Mode.DIRECT, reset.mode());
+            assertEquals(ExecutionPath.DIRECT, reset.executionPath());
             assertEquals(0, reset.bodyCostHistoryCount());
             assertEquals(0.0, reset.smoothedBodyCostNs());
             assertEquals(0L, reset.productiveHandleCount());
@@ -179,8 +180,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void standardForcedModeLeavesProductionSamplingDisabled() {
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.STAGED, 32L);
         try (ControlPlaneFragment fragment = create(workerConfig())) {
             TimedExecutor executor = new TimedExecutor(100L);
 
@@ -192,8 +192,7 @@ class ControlPlaneFragmentTest {
 
     @Test
     void explicitlySampledForcedModeConnectsTheProductionEstimator() {
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L, true);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.STAGED, 32L, true);
         try (ControlPlaneFragment fragment = create(workerConfig())) {
             TimedExecutor executor = new TimedExecutor(100L);
 

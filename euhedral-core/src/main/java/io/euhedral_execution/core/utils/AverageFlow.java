@@ -1,15 +1,17 @@
-package io.euhedral_execution.core.flow_control;
+package io.euhedral_execution.core.utils;
 
-/// Maintains one worker-owned, update-based fixed-point acquisition-contention EWMA.
-final class AcquisitionContentionSmoother {
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
+
+/// Maintains an average flow measurement using fixed-point EWMA.
+public final class AverageFlow {
 
     static final int DIVISOR = 16;
 
     private long value;
     private boolean initialized;
 
-    /// Records one bounded pull-cycle contention fraction without clocks or floating-point work.
-    void record(long sample) {
+    /// Records one bounded value without clocks or floating-point work.
+    public void record(long sample) {
         if (sample < 0L || sample > UpstreamQueue.ACQUIRE_CONTENTION_SCALE) {
             throw new IllegalArgumentException("Acquisition contention sample is outside the fixed-point range");
         }
@@ -21,18 +23,18 @@ final class AcquisitionContentionSmoother {
         this.value += (sample - this.value) / DIVISOR;
     }
 
-    /// Returns whether at least one eligible pull cycle has been observed since reset.
-    boolean initialized() {
+    /// Returns whether at least one recording has been made since reset.
+    public boolean initialized() {
         return this.initialized;
     }
 
     /// Returns the current fixed-point EWMA; callers must check [initialized()] before interpretation.
-    long value() {
+    public long value() {
         return this.value;
     }
 
-    /// Clears both the fixed-point value and its validity for the next worker lifecycle trial.
-    void reset() {
+    /// Clears both the fixed-point value and its validity.
+    public void reset() {
         this.value = 0L;
         this.initialized = false;
     }

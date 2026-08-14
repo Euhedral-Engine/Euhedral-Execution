@@ -11,7 +11,7 @@ Implementation intensity: high
 
 ## Production data flow and ownership
 
-Keep `AcquisitionContentionSmoother` and all `UpstreamQueue.pull` accounting unchanged. Add one
+Keep `AverageFlow` and all `UpstreamQueue.pull` accounting unchanged. Add one
 allocation-free queue read returning the fixed-point EWMA or `-1` when uninitialized. At each
 completed productive fragment batch, read that scalar once and pass it to
 `FragmentControlPolicy.completeBatch`. No contention read occurs per frame, in the idle predicate,
@@ -135,7 +135,7 @@ the bug-first checks before changing the tree.
 
 ## Completion record
 
-1. **Exact production smoother implementation.** `AcquisitionContentionSmoother` remains one
+1. **Exact production smoother implementation.** `AverageFlow` remains one
    worker-owned `long value` plus one `boolean initialized`. The first valid sample bootstraps
    `value` directly. Later samples execute `value += (sample - value) / 16`. The implementation has
    no clock, rate, interval, extrema, variance, allocation, atomic, or shared aggregation.

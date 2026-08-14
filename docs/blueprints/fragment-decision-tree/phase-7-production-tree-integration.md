@@ -214,7 +214,7 @@ At a completed boundary:
    growth limit, and eligible cap.
 
 The selector runs before the existing next-batch calculation so batch sizing uses the selected mode
-for that next batch. Do not change `DIRECT_TARGET_BATCH_WORK_NS`, `STAGED_TARGET_BATCH_WORK_NS`, the
+for that next batch. Do not change `DIRECT_BATCH_WORK_TARGET_NS`, `STAGED_BATCH_WORK_TARGET_NS`, the
 two-times batch growth limit, the pressure-derived cap, or the batch floor in this phase.
 
 Remove the current normal-mode `STAGED_THRESHOLD_NS`, `DIRECT_THRESHOLD_NS`, completed-batch

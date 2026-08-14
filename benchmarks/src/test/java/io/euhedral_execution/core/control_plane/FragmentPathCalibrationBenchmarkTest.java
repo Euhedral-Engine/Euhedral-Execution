@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionPath;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -252,7 +253,7 @@ class FragmentPathCalibrationBenchmarkTest {
     @Test
     void extractsWorkerLocalHighContentionParkCounts() {
         ControlPlaneFragment.FragmentPolicySnapshot first = new ControlPlaneFragment.FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode.STAGED,
+                ExecutionPath.STAGED,
                 FragmentControlPolicy.BODY_COST_MIN_HISTORY,
                 100.0,
                 120.0,
@@ -268,7 +269,7 @@ class FragmentPathCalibrationBenchmarkTest {
                 null,
                 null);
         ControlPlaneFragment.FragmentPolicySnapshot second = new ControlPlaneFragment.FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode.STAGED,
+                ExecutionPath.STAGED,
                 FragmentControlPolicy.BODY_COST_MIN_HISTORY,
                 100.0,
                 120.0,
@@ -566,14 +567,14 @@ class FragmentPathCalibrationBenchmarkTest {
                 new FragmentPathCalibrationBenchmark.NormalPolicyState();
         state.policyCase = FragmentPathCalibrationBenchmark.NormalPolicyCase.SCARCE_88;
         ControlPlaneFragment.FragmentPolicySnapshot guarded = new ControlPlaneFragment.FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode.DIRECT, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L, 1L);
+                ExecutionPath.DIRECT, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L, 1L);
 
         state.validatePolicySnapshots(
                 org.openjdk.jmh.runner.IterationType.MEASUREMENT,
                 new ControlPlaneFragment.FragmentPolicySnapshot[] {guarded});
 
         ControlPlaneFragment.FragmentPolicySnapshot staged = new ControlPlaneFragment.FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode.STAGED, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L, 1L);
+                ExecutionPath.STAGED, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 92.0, 100.0, 32L, 1L);
         state.validatePolicySnapshots(
                 org.openjdk.jmh.runner.IterationType.MEASUREMENT,
                 new ControlPlaneFragment.FragmentPolicySnapshot[] {staged});

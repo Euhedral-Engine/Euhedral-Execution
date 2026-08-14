@@ -11,36 +11,49 @@ final class FragmentControlPolicy {
 
     private static final AtomicReference<DiagnosticOverride> DIAGNOSTIC_OVERRIDE = new AtomicReference<>();
 
-    static final long DIRECT_TARGET_BATCH_WORK_NS = 250_000L;
-    static final long STAGED_TARGET_BATCH_WORK_NS = 8_000_000L;
-    static final double EXTREMELY_CHEAP_BODY_COST_MAX_NS = 20.0;
-    static final double CHEAP_BODY_COST_MAX_NS = 90.0;
-    static final double EXPENSIVE_BODY_COST_MIN_NS = 95.0;
-    // Calibration-host candidate: Phase 14 left a gap between 582k DIRECT and 705k high contention.
-    static final long LOW_ACQUIRE_CONTENTION_MAX = 650_000L;
-    static final String ACQUIRE_CONTENTION_SELECTION_ENABLED_PROPERTY =
-            "euhedral.fragment.acquireContention.selection.enabled";
+    // Benchmark Properties
+    static final String CONTENTION_SELECTION_ENABLED_PROPERTY = "euhedral.fragment.acquireContention.selection.enabled";
     static final String HIGH_CONTENTION_IDLE_THRESHOLD_PROPERTY = "euhedral.fragment.highContentionIdle.threshold";
     static final String HIGH_CONTENTION_PARK_NANOS_PROPERTY = "euhedral.fragment.highContentionIdle.parkNanos";
     static final String HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY =
             "euhedral.fragment.highContentionIdle.bodyCostMaxNs";
-    static final long DEFAULT_HIGH_CONTENTION_IDLE_THRESHOLD = 980_000L;
-    static final long DEFAULT_HIGH_CONTENTION_PARK_NANOS = 15_000L;
-    static final double DEFAULT_HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS = 200.0;
+
+    static final long DIRECT_BATCH_WORK_TARGET_NS = 250_000L;
+    static final long STAGED_BATCH_WORK_TARGET_NS = 8_000_000L;
+
+    // Body Cost Thresholds (Small, Medium, High)
+    static final double S_BODY_COST_NS = 20.0;
+    static final double M_BODY_COST_NS = 90.0;
+    static final double H_BODY_COST_NS = 95.0;
+
+    // Contention Thresholds
+    // Calibration-host candidate: Phase 14 left a gap between 582k DIRECT and 705k high contention.
+    static final long LOW_CONTENTION_MAX = 650_000L; // 65%
+
+    // Measurement Variables
     static final int BODY_COST_WINDOW_SAMPLES = 32;
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
     static final int EXPENSIVE_CONFIRMATION_SAMPLES = BODY_COST_WINDOW_SAMPLES * EXPENSIVE_CONFIRMATION_WINDOWS;
     static final int SPIN_MISSES = 64;
 
-    private static final boolean ACQUIRE_CONTENTION_SELECTION_ENABLED = Boolean.parseBoolean(
-            System.getProperty(ACQUIRE_CONTENTION_SELECTION_ENABLED_PROPERTY, Boolean.TRUE.toString()));
-    static final long HIGH_CONTENTION_IDLE_THRESHOLD = readHighContentionIdleThreshold();
+    private static final boolean CONTENTION_SELECTION_ENABLED =
+            Boolean.parseBoolean(System.getProperty(CONTENTION_SELECTION_ENABLED_PROPERTY, Boolean.TRUE.toString()));
+
+    // Contention Thresholds
+    static final long DEFAULT_HIGH_CONTENTION_THRESHOLD = 980_000L; // 98%
+    static final long HIGH_CONTENTION_THRESHOLD = readHighContentionIdleThreshold();
+
+    // Contention Park Time
+    static final long DEFAULT_HIGH_CONTENTION_PARK_NANOS = 15_000L;
     static final long HIGH_CONTENTION_PARK_NANOS = readHighContentionParkNanos();
-    static final double HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS = readHighContentionIdleBodyCostMaxNs();
+
+    // Contention Body Cost Thresholds
+    static final double DEFAULT_HIGH_CONTENTION_BODY_COST_NS = 200.0;
+    static final double HIGH_CONTENTION_BODY_COST_NS = readHighContentionIdleBodyCostMaxNs();
 
     private final DiagnosticOverride diagnosticOverride;
-    private Mode mode;
+    private ExecutionPath executionPath;
     private long batchSize;
     private double serviceTimeNs;
     private final double[] bodyCostWindow = new double[BODY_COST_WINDOW_SAMPLES];
@@ -57,14 +70,15 @@ final class FragmentControlPolicy {
     }
 
     /// Installs one process-local diagnostic override before benchmark fragments are constructed.
-    static DiagnosticOverride installDiagnosticOverride(Mode mode, long batchSize) {
-        return installDiagnosticOverride(mode, batchSize, false);
+    static DiagnosticOverride installDiagnosticOverride(ExecutionPath executionPath, long batchSize) {
+        return installDiagnosticOverride(executionPath, batchSize, false);
     }
 
     /// Installs a forced mode with optional production-estimator sampling for diagnostics.
-    static DiagnosticOverride installDiagnosticOverride(Mode mode, long batchSize, boolean bodyCostSampling) {
+    static DiagnosticOverride installDiagnosticOverride(
+            ExecutionPath executionPath, long batchSize, boolean bodyCostSampling) {
         DiagnosticOverride next =
-                new DiagnosticOverride(Objects.requireNonNull(mode), batchSize, bodyCostSampling, null);
+                new DiagnosticOverride(Objects.requireNonNull(executionPath), batchSize, bodyCostSampling, null);
         return installDiagnosticOverride(next);
     }
 
@@ -143,26 +157,28 @@ final class FragmentControlPolicy {
 
     /// Completes a batch using one owner-local fixed-point contention read or `-1` before bootstrap.
     long completeBatch(long eligibleCap, long productiveHandles, int registeredWorkers, long acquisitionContention) {
-        if (this.diagnosticOverride != null && this.diagnosticOverride.mode() != null) {
-            this.mode = this.diagnosticOverride.mode();
+        if (this.diagnosticOverride != null && this.diagnosticOverride.executionPath() != null) {
+            this.executionPath = this.diagnosticOverride.executionPath();
             long cap = Math.max(2L, eligibleCap);
             this.batchSize = Math.max(2L, Math.min(this.diagnosticOverride.batchSize(), cap));
             return this.batchSize;
         }
 
-        this.mode = selectMode(
+        this.executionPath = selectExecutionPath(
                 productiveHandles,
                 registeredWorkers,
                 this.bodyCostHistoryCount,
                 this.smoothedBodyCostNs,
                 acquisitionContention,
-                this.mode,
-                ACQUIRE_CONTENTION_SELECTION_ENABLED);
+                this.executionPath,
+                CONTENTION_SELECTION_ENABLED);
 
         long cap = Math.max(2L, eligibleCap);
         long desired = this.batchSize;
         if (this.serviceTimeNs > 0.0) {
-            long workTarget = this.mode == Mode.DIRECT ? DIRECT_TARGET_BATCH_WORK_NS : STAGED_TARGET_BATCH_WORK_NS;
+            long workTarget = this.executionPath == ExecutionPath.DIRECT
+                    ? DIRECT_BATCH_WORK_TARGET_NS
+                    : STAGED_BATCH_WORK_TARGET_NS;
             long raw = (long) Math.floor(workTarget / Math.max(this.serviceTimeNs, 1.0));
             raw = Math.max(2L, raw);
             desired = Math.max(2L, Long.highestOneBit(raw));
@@ -191,9 +207,9 @@ final class FragmentControlPolicy {
 
     /// Restores the captured initial mode, batch two, and empty timing and hysteresis state.
     void reset() {
-        this.mode = this.diagnosticOverride == null || this.diagnosticOverride.mode() == null
-                ? Mode.DIRECT
-                : this.diagnosticOverride.mode();
+        this.executionPath = this.diagnosticOverride == null || this.diagnosticOverride.executionPath() == null
+                ? ExecutionPath.DIRECT
+                : this.diagnosticOverride.executionPath();
         this.batchSize = 2L;
         this.serviceTimeNs = 0.0;
         this.smoothedBodyCostNs = 0.0;
@@ -204,8 +220,8 @@ final class FragmentControlPolicy {
     }
 
     /// Returns the current owner-thread execution mode.
-    Mode mode() {
-        return this.mode;
+    ExecutionPath mode() {
+        return this.executionPath;
     }
 
     /// Returns the current owner-thread batch size.
@@ -235,7 +251,7 @@ final class FragmentControlPolicy {
 
     /// Reports the startup-fixed comparison setting used by normal production selection.
     static boolean acquireContentionSelectionEnabled() {
-        return ACQUIRE_CONTENTION_SELECTION_ENABLED;
+        return CONTENTION_SELECTION_ENABLED;
     }
 
     /// Reports whether this worker belongs to a setup-only fixed polling subset.
@@ -253,18 +269,18 @@ final class FragmentControlPolicy {
     }
 
     /// Selects one finite contention park while rank zero remains a deterministic poller.
-    boolean highContentionIdleEligible(long acquisitionContention, int registeredWorkers, int workerRank) {
-        if (this.diagnosticOverride != null || HIGH_CONTENTION_IDLE_THRESHOLD < 0L) {
+    boolean contentionIdleEligible(long contention, int registeredWorkers, int workerRank) {
+        if (this.diagnosticOverride != null || HIGH_CONTENTION_THRESHOLD < 0L) {
             return false;
         }
-        return selectHighContentionIdleEligibility(
-                acquisitionContention,
+        return selectContentionIdleEligibility(
+                contention,
                 registeredWorkers,
                 workerRank,
                 this.bodyCostHistoryCount,
                 this.smoothedBodyCostNs,
-                HIGH_CONTENTION_IDLE_THRESHOLD,
-                HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS);
+                HIGH_CONTENTION_THRESHOLD,
+                HIGH_CONTENTION_BODY_COST_NS);
     }
 
     /// Doubles a positive batch limit without signed overflow.
@@ -272,59 +288,63 @@ final class FragmentControlPolicy {
         return value > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : value * 2L;
     }
 
-    /// Selects the explicit fragment path from availability, body history, and settled mode.
-    static Mode selectMode(
+    /// Selects the explicit execution path from availability, body history, and settled mode.
+    static ExecutionPath selectExecutionPath(
             long productiveHandles,
             int registeredWorkers,
             int bodyCostHistoryCount,
             double smoothedBodyCostNs,
-            Mode currentSettledMode) {
-        Objects.requireNonNull(currentSettledMode);
+            ExecutionPath currentSettledExecutionPath) {
+        Objects.requireNonNull(currentSettledExecutionPath);
         if (registeredWorkers <= 0 || productiveHandles >= registeredWorkers) {
-            return Mode.DIRECT;
+            return ExecutionPath.DIRECT;
         }
         if (bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
-            return Mode.DIRECT;
+            return ExecutionPath.DIRECT;
         }
-        if (smoothedBodyCostNs <= CHEAP_BODY_COST_MAX_NS) {
-            return Mode.DIRECT;
+        if (smoothedBodyCostNs <= M_BODY_COST_NS) {
+            return ExecutionPath.DIRECT;
         }
-        if (smoothedBodyCostNs >= EXPENSIVE_BODY_COST_MIN_NS) {
-            return Mode.STAGED;
+        if (smoothedBodyCostNs >= H_BODY_COST_NS) {
+            return ExecutionPath.STAGED;
         }
-        return currentSettledMode;
+        return currentSettledExecutionPath;
     }
 
-    /// Selects the production path from availability, body cost, and fixed-point contention.
-    static Mode selectMode(
+    /// Selects the execution path from availability, body cost, and fixed-point contention.
+    static ExecutionPath selectExecutionPath(
             long productiveHandles,
             int registeredWorkers,
             int bodyCostHistoryCount,
             double smoothedBodyCostNs,
             long acquisitionContention,
-            Mode currentSettledMode,
-            boolean acquisitionContentionSelectionEnabled) {
-        if (!acquisitionContentionSelectionEnabled || acquisitionContention < 0L) {
-            return selectMode(
-                    productiveHandles, registeredWorkers, bodyCostHistoryCount, smoothedBodyCostNs, currentSettledMode);
+            ExecutionPath currentSettledExecutionPath,
+            boolean contentionSelectionEnabled) {
+        if (!contentionSelectionEnabled || acquisitionContention < 0L) {
+            return selectExecutionPath(
+                    productiveHandles,
+                    registeredWorkers,
+                    bodyCostHistoryCount,
+                    smoothedBodyCostNs,
+                    currentSettledExecutionPath);
         }
-        Objects.requireNonNull(currentSettledMode);
+        Objects.requireNonNull(currentSettledExecutionPath);
         if (registeredWorkers <= 0 || productiveHandles >= registeredWorkers) {
-            return Mode.DIRECT;
+            return ExecutionPath.DIRECT;
         }
         if (bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
-            return Mode.DIRECT;
+            return ExecutionPath.DIRECT;
         }
-        if (smoothedBodyCostNs <= CHEAP_BODY_COST_MAX_NS) {
-            return Mode.DIRECT;
+        if (smoothedBodyCostNs <= M_BODY_COST_NS) {
+            return ExecutionPath.DIRECT;
         }
-        if (acquisitionContention <= LOW_ACQUIRE_CONTENTION_MAX) {
-            return Mode.DIRECT;
+        if (acquisitionContention <= LOW_CONTENTION_MAX) {
+            return ExecutionPath.DIRECT;
         }
-        if (smoothedBodyCostNs >= EXPENSIVE_BODY_COST_MIN_NS) {
-            return Mode.STAGED;
+        if (smoothedBodyCostNs >= H_BODY_COST_NS) {
+            return ExecutionPath.STAGED;
         }
-        return currentSettledMode;
+        return currentSettledExecutionPath;
     }
 
     /// Selects only the measured extreme-cheap excess capacity while rank zero always polls.
@@ -340,7 +360,7 @@ final class FragmentControlPolicy {
         if (productiveHandles >= registeredWorkers || bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
             return false;
         }
-        if (smoothedBodyCostNs <= 0.0 || smoothedBodyCostNs > EXTREMELY_CHEAP_BODY_COST_MAX_NS) {
+        if (smoothedBodyCostNs <= 0.0 || smoothedBodyCostNs > S_BODY_COST_NS) {
             return false;
         }
         long pollingQuota = Math.max(1L, Math.min(productiveHandles, registeredWorkers));
@@ -348,8 +368,8 @@ final class FragmentControlPolicy {
     }
 
     /// Tests the independent high-contention branch inside one configured light-body range.
-    static boolean selectHighContentionIdleEligibility(
-            long acquisitionContention,
+    static boolean selectContentionIdleEligibility(
+            long contention,
             int registeredWorkers,
             int workerRank,
             int bodyCostHistoryCount,
@@ -360,14 +380,14 @@ final class FragmentControlPolicy {
                 || threshold > 1_000_000L
                 || !Double.isFinite(bodyCostNs)
                 || !Double.isFinite(bodyCostMaxNs)
-                || bodyCostMaxNs <= EXTREMELY_CHEAP_BODY_COST_MAX_NS) {
+                || bodyCostMaxNs <= S_BODY_COST_NS) {
             return false;
         }
-        if (acquisitionContention < 0L || acquisitionContention < threshold) {
+        if (contention < 0L || contention < threshold) {
             return false;
         }
         if (bodyCostHistoryCount < BODY_COST_MIN_HISTORY
-                || bodyCostNs <= EXTREMELY_CHEAP_BODY_COST_MAX_NS
+                || bodyCostNs <= S_BODY_COST_NS
                 || bodyCostNs > bodyCostMaxNs) {
             return false;
         }
@@ -377,7 +397,7 @@ final class FragmentControlPolicy {
     /// Reads the startup-fixed fixed-point threshold, accepting `disabled` for comparison forks.
     private static long readHighContentionIdleThreshold() {
         String raw = System.getProperty(
-                HIGH_CONTENTION_IDLE_THRESHOLD_PROPERTY, Long.toString(DEFAULT_HIGH_CONTENTION_IDLE_THRESHOLD));
+                HIGH_CONTENTION_IDLE_THRESHOLD_PROPERTY, Long.toString(DEFAULT_HIGH_CONTENTION_THRESHOLD));
         if ("disabled".equalsIgnoreCase(raw)) {
             return -1L;
         }
@@ -401,9 +421,8 @@ final class FragmentControlPolicy {
     /// Reads the startup-fixed light-body ceiling used by the developer policy override.
     private static double readHighContentionIdleBodyCostMaxNs() {
         double value = Double.parseDouble(System.getProperty(
-                HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY,
-                Double.toString(DEFAULT_HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS)));
-        if (!Double.isFinite(value) || value <= EXTREMELY_CHEAP_BODY_COST_MAX_NS) {
+                HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY, Double.toString(DEFAULT_HIGH_CONTENTION_BODY_COST_NS)));
+        if (!Double.isFinite(value) || value <= S_BODY_COST_NS) {
             throw new IllegalArgumentException("High-contention idle body-cost maximum must exceed 20 ns");
         }
         return value;
@@ -421,7 +440,7 @@ final class FragmentControlPolicy {
                 secondMinimum = sample;
             }
         }
-        if (secondMinimum >= EXPENSIVE_BODY_COST_MIN_NS) {
+        if (secondMinimum >= H_BODY_COST_NS) {
             if (this.expensiveConfirmationWindows < EXPENSIVE_CONFIRMATION_WINDOWS) {
                 this.expensiveConfirmationWindows++;
             }
@@ -435,13 +454,14 @@ final class FragmentControlPolicy {
     }
 
     /// Execution strategies selected only at completed-batch boundaries.
-    enum Mode {
+    enum ExecutionPath {
         DIRECT,
         STAGED
     }
 
     /// Immutable setup-only mode and batch target captured by diagnostic benchmark policies.
-    record DiagnosticOverride(Mode mode, long batchSize, boolean bodyCostSampling, BitSet pollingCores) {
+    record DiagnosticOverride(
+            ExecutionPath executionPath, long batchSize, boolean bodyCostSampling, BitSet pollingCores) {
 
         DiagnosticOverride {
             if (batchSize < 2L) {
@@ -451,8 +471,8 @@ final class FragmentControlPolicy {
         }
 
         /// Creates the compatibility form with production body-cost sampling disabled.
-        DiagnosticOverride(Mode mode, long batchSize) {
-            this(Objects.requireNonNull(mode), batchSize, false, null);
+        DiagnosticOverride(ExecutionPath executionPath, long batchSize) {
+            this(Objects.requireNonNull(executionPath), batchSize, false, null);
         }
 
         /// Returns an isolated copy of the optional polling-core mask.

@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionPath;
 import java.lang.reflect.Field;
 import java.util.BitSet;
 import org.junit.jupiter.api.AfterEach;
@@ -36,7 +37,7 @@ class FragmentControlPolicyTest {
 
         policy.reset();
 
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
         assertEquals(2L, policy.batchSize());
         assertEquals(0.0, policy.serviceTimeNs());
         assertEquals(0, policy.bodyCostHistoryCount());
@@ -130,26 +131,26 @@ class FragmentControlPolicyTest {
     /// Verifies the complete explicit tree, including exact guard boundaries and retained mode.
     @Test
     void selectsModeFromAvailabilityHistoryAndGuardBand() {
-        FragmentControlPolicy.Mode direct = FragmentControlPolicy.Mode.DIRECT;
-        FragmentControlPolicy.Mode staged = FragmentControlPolicy.Mode.STAGED;
+        ExecutionPath direct = ExecutionPath.DIRECT;
+        ExecutionPath staged = ExecutionPath.STAGED;
 
         int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
-        assertEquals(direct, FragmentControlPolicy.selectMode(0L, 0, history, 100.0, staged));
-        assertEquals(direct, FragmentControlPolicy.selectMode(2L, 2, history, 100.0, staged));
-        assertEquals(direct, FragmentControlPolicy.selectMode(1L, 2, history - 1, 100.0, staged));
-        assertEquals(direct, FragmentControlPolicy.selectMode(1L, 2, history, 90.0, staged));
-        assertEquals(staged, FragmentControlPolicy.selectMode(1L, 2, history, 95.0, direct));
-        assertEquals(direct, FragmentControlPolicy.selectMode(1L, 2, history, 92.5, direct));
-        assertEquals(staged, FragmentControlPolicy.selectMode(1L, 2, history, 92.5, staged));
+        assertEquals(direct, FragmentControlPolicy.selectExecutionPath(0L, 0, history, 100.0, staged));
+        assertEquals(direct, FragmentControlPolicy.selectExecutionPath(2L, 2, history, 100.0, staged));
+        assertEquals(direct, FragmentControlPolicy.selectExecutionPath(1L, 2, history - 1, 100.0, staged));
+        assertEquals(direct, FragmentControlPolicy.selectExecutionPath(1L, 2, history, 90.0, staged));
+        assertEquals(staged, FragmentControlPolicy.selectExecutionPath(1L, 2, history, 95.0, direct));
+        assertEquals(direct, FragmentControlPolicy.selectExecutionPath(1L, 2, history, 92.5, direct));
+        assertEquals(staged, FragmentControlPolicy.selectExecutionPath(1L, 2, history, 92.5, staged));
     }
 
     /// Verifies the conservative contention branch and its exact host-calibration boundary.
     @Test
     void selectsModeFromAcquisitionContentionAndBodyCost() {
-        FragmentControlPolicy.Mode direct = FragmentControlPolicy.Mode.DIRECT;
-        FragmentControlPolicy.Mode staged = FragmentControlPolicy.Mode.STAGED;
+        ExecutionPath direct = ExecutionPath.DIRECT;
+        ExecutionPath staged = ExecutionPath.STAGED;
         int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
-        long boundary = FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX;
+        long boundary = FragmentControlPolicy.LOW_CONTENTION_MAX;
 
         assertEquals(direct, selectMode(2L, 2, history, 200.0, 1_000_000L, staged, true));
         assertEquals(direct, selectMode(1L, 2, history - 1, 200.0, 1_000_000L, staged, true));
@@ -163,8 +164,8 @@ class FragmentControlPolicyTest {
     /// Verifies missing contention and the same-build comparison control preserve today's tree.
     @Test
     void contentionBootstrapAndComparisonControlUseExistingTree() {
-        FragmentControlPolicy.Mode direct = FragmentControlPolicy.Mode.DIRECT;
-        FragmentControlPolicy.Mode staged = FragmentControlPolicy.Mode.STAGED;
+        ExecutionPath direct = ExecutionPath.DIRECT;
+        ExecutionPath staged = ExecutionPath.STAGED;
         int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
 
         assertEquals(staged, selectMode(1L, 2, history, 100.0, -1L, direct, true));
@@ -178,34 +179,40 @@ class FragmentControlPolicyTest {
         FragmentControlPolicy policy = new FragmentControlPolicy();
         recordBodySamples(policy, 200L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
 
-        policy.completeBatch(4_096L, 1L, 2, FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX);
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        policy.completeBatch(4_096L, 1L, 2, FragmentControlPolicy.LOW_CONTENTION_MAX);
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
 
-        policy.completeBatch(4_096L, 1L, 2, FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX + 1L);
-        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+        policy.completeBatch(4_096L, 1L, 2, FragmentControlPolicy.LOW_CONTENTION_MAX + 1L);
+        assertEquals(ExecutionPath.STAGED, policy.mode());
 
         policy.reset();
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
         assertEquals(0, policy.bodyCostHistoryCount());
     }
 
-    private static FragmentControlPolicy.Mode selectMode(
+    private static ExecutionPath selectMode(
             long productiveHandles,
             int registeredWorkers,
             int history,
             double bodyCostNs,
             long contention,
-            FragmentControlPolicy.Mode currentMode,
+            ExecutionPath currentExecutionPath,
             boolean integrationEnabled) {
-        return FragmentControlPolicy.selectMode(
-                productiveHandles, registeredWorkers, history, bodyCostNs, contention, currentMode, integrationEnabled);
+        return FragmentControlPolicy.selectExecutionPath(
+                productiveHandles,
+                registeredWorkers,
+                history,
+                bodyCostNs,
+                contention,
+                currentExecutionPath,
+                integrationEnabled);
     }
 
     /// Verifies only deterministic excess ranks enter the measured extreme-cheap idle branch.
     @Test
     void selectsOnlyExtremeCheapExcessWorkerRanksForIdle() {
         int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
-        double boundary = FragmentControlPolicy.EXTREMELY_CHEAP_BODY_COST_MAX_NS;
+        double boundary = FragmentControlPolicy.S_BODY_COST_NS;
 
         assertFalse(FragmentControlPolicy.selectIdleEligibility(1L, 2, 0, history, boundary));
         assertTrue(FragmentControlPolicy.selectIdleEligibility(1L, 2, 1, history, boundary));
@@ -227,7 +234,7 @@ class FragmentControlPolicyTest {
     @Test
     void staleProductiveCountsAlwaysLeaveRankZeroPolling() {
         int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
-        double boundary = FragmentControlPolicy.EXTREMELY_CHEAP_BODY_COST_MAX_NS;
+        double boundary = FragmentControlPolicy.S_BODY_COST_NS;
 
         assertFalse(FragmentControlPolicy.selectIdleEligibility(0L, 4, 0, history, boundary));
         assertTrue(FragmentControlPolicy.selectIdleEligibility(0L, 4, 1, history, boundary));
@@ -240,9 +247,7 @@ class FragmentControlPolicyTest {
     void resetClearsProductionIdleEligibility() {
         FragmentControlPolicy policy = new FragmentControlPolicy();
         recordBodySamples(
-                policy,
-                (long) FragmentControlPolicy.EXTREMELY_CHEAP_BODY_COST_MAX_NS,
-                FragmentControlPolicy.BODY_COST_MIN_HISTORY);
+                policy, (long) FragmentControlPolicy.S_BODY_COST_NS, FragmentControlPolicy.BODY_COST_MIN_HISTORY);
 
         assertTrue(policy.idleEligible(1L, 2, 1));
 
@@ -282,16 +287,15 @@ class FragmentControlPolicyTest {
     void highContentionIdleUsesIndependentLightBodyRangeWithoutChangingMode() {
         FragmentControlPolicy policy = new FragmentControlPolicy();
 
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
         assertEquals(0, policy.bodyCostHistoryCount());
-        assertFalse(policy.highContentionIdleEligible(1_000_000L, 2, 1));
+        assertFalse(policy.contentionIdleEligible(1_000_000L, 2, 1));
 
         recordBodySamples(policy, 100L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
         assertEquals(
-                FragmentControlPolicy.HIGH_CONTENTION_IDLE_THRESHOLD >= 0L,
-                policy.highContentionIdleEligible(1_000_000L, 2, 1));
-        assertFalse(policy.highContentionIdleEligible(1_000_000L, 2, 0));
+                FragmentControlPolicy.HIGH_CONTENTION_THRESHOLD >= 0L, policy.contentionIdleEligible(1_000_000L, 2, 1));
+        assertFalse(policy.contentionIdleEligible(1_000_000L, 2, 0));
     }
 
     /// Verifies the light-body ceiling excludes both the cheap-idle range and heavy work.
@@ -319,7 +323,7 @@ class FragmentControlPolicyTest {
             double bodyCostNs,
             long threshold,
             double bodyCostMaxNs) {
-        return FragmentControlPolicy.selectHighContentionIdleEligibility(
+        return FragmentControlPolicy.selectContentionIdleEligibility(
                 contention, registeredWorkers, workerRank, history, bodyCostNs, threshold, bodyCostMaxNs);
     }
 
@@ -333,7 +337,7 @@ class FragmentControlPolicyTest {
             policy.completeBatch(4_096L, 1L, 2);
         }
 
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
         assertEquals(16L, policy.batchSize());
     }
 
@@ -344,14 +348,14 @@ class FragmentControlPolicyTest {
         recordBodySamples(policy, 100L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
 
         policy.completeBatch(4_096L, 1L, 2);
-        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+        assertEquals(ExecutionPath.STAGED, policy.mode());
 
         policy.completeBatch(4_096L, 2L, 2);
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
         assertEquals(FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES, policy.bodyCostHistoryCount());
 
         policy.completeBatch(4_096L, 1L, 2);
-        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+        assertEquals(ExecutionPath.STAGED, policy.mode());
     }
 
     /// Verifies estimator updates alone cannot switch the mode inside an active batch.
@@ -360,11 +364,11 @@ class FragmentControlPolicyTest {
         FragmentControlPolicy policy = new FragmentControlPolicy();
         recordBodySamples(policy, 100L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
 
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(ExecutionPath.DIRECT, policy.mode());
 
         policy.completeBatch(4_096L, 1L, 2);
 
-        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+        assertEquals(ExecutionPath.STAGED, policy.mode());
     }
 
     /// Verifies repeated guard-band samples retain either already-settled execution path.
@@ -374,18 +378,18 @@ class FragmentControlPolicyTest {
         recordBodySamples(direct, 92L, FragmentControlPolicy.BODY_COST_MIN_HISTORY);
         for (int i = 0; i < 16; i++) {
             direct.completeBatch(4_096L, 1L, 2);
-            assertEquals(FragmentControlPolicy.Mode.DIRECT, direct.mode());
+            assertEquals(ExecutionPath.DIRECT, direct.mode());
         }
 
         FragmentControlPolicy staged = new FragmentControlPolicy();
         recordBodySamples(staged, 100L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
         staged.completeBatch(4_096L, 1L, 2);
         recordBodySamples(staged, 92L, FragmentControlPolicy.BODY_COST_WINDOW_SAMPLES);
-        assertTrue(staged.smoothedBodyCostNs() > FragmentControlPolicy.CHEAP_BODY_COST_MAX_NS);
-        assertTrue(staged.smoothedBodyCostNs() < FragmentControlPolicy.EXPENSIVE_BODY_COST_MIN_NS);
+        assertTrue(staged.smoothedBodyCostNs() > FragmentControlPolicy.M_BODY_COST_NS);
+        assertTrue(staged.smoothedBodyCostNs() < FragmentControlPolicy.H_BODY_COST_NS);
         for (int i = 0; i < 16; i++) {
             staged.completeBatch(4_096L, 1L, 2);
-            assertEquals(FragmentControlPolicy.Mode.STAGED, staged.mode());
+            assertEquals(ExecutionPath.STAGED, staged.mode());
         }
     }
 
@@ -423,7 +427,7 @@ class FragmentControlPolicyTest {
         policy.recordExecution(8_000L, 1L);
 
         assertEquals(4L, policy.completeBatch(4_096L, 1L, 2));
-        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+        assertEquals(ExecutionPath.STAGED, policy.mode());
         assertEquals(8L, policy.completeBatch(4_096L, 1L, 2));
         assertEquals(16L, policy.completeBatch(4_096L, 1L, 2));
         assertEquals(32L, policy.completeBatch(4_096L, 1L, 2));
@@ -455,34 +459,31 @@ class FragmentControlPolicyTest {
     @Test
     void diagnosticOverrideIsCapturedOnlyAtConstruction() {
         FragmentControlPolicy existing = new FragmentControlPolicy();
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.STAGED, 32L);
 
         FragmentControlPolicy captured = new FragmentControlPolicy();
 
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, existing.mode());
-        assertEquals(FragmentControlPolicy.Mode.STAGED, captured.mode());
+        assertEquals(ExecutionPath.DIRECT, existing.mode());
+        assertEquals(ExecutionPath.STAGED, captured.mode());
         assertFalse(captured.bodyCostSamplingEnabled());
     }
 
     /// Verifies forced modes bypass normal selection with sampling disabled or explicitly enabled.
     @Test
     void diagnosticModesRemainFixedAndSamplingIsExplicit() {
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.DIRECT, 32L);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.DIRECT, 32L);
         FragmentControlPolicy direct = new FragmentControlPolicy();
         recordBodySamples(direct, 100L, FragmentControlPolicy.BODY_COST_WINDOW_SAMPLES);
         direct.completeBatch(4_096L, 1L, 2);
-        assertEquals(FragmentControlPolicy.Mode.DIRECT, direct.mode());
+        assertEquals(ExecutionPath.DIRECT, direct.mode());
         assertFalse(direct.bodyCostSamplingEnabled());
 
         FragmentControlPolicy.clearDiagnosticOverride(this.diagnosticOverride);
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L, true);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.STAGED, 32L, true);
         FragmentControlPolicy staged = new FragmentControlPolicy();
         recordBodySamples(staged, 10L, FragmentControlPolicy.BODY_COST_WINDOW_SAMPLES);
         staged.completeBatch(4_096L, 2L, 2);
-        assertEquals(FragmentControlPolicy.Mode.STAGED, staged.mode());
+        assertEquals(ExecutionPath.STAGED, staged.mode());
         assertTrue(staged.bodyCostSamplingEnabled());
     }
 
@@ -501,7 +502,7 @@ class FragmentControlPolicyTest {
         assertTrue(policy.activePollingAllowed(2));
         assertFalse(policy.activePollingAllowed(3));
         assertFalse(policy.idleEligible(1L, 2, 1));
-        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+        assertEquals(ExecutionPath.STAGED, policy.mode());
 
         pollingCores.set(3);
         assertFalse(policy.activePollingAllowed(3));
@@ -510,8 +511,7 @@ class FragmentControlPolicyTest {
     /// Verifies a fixed batch target retains the existing eligible cap and floor.
     @Test
     void diagnosticBatchRemainsWithinEligibleBounds() {
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.DIRECT, 32L);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.DIRECT, 32L);
         FragmentControlPolicy policy = new FragmentControlPolicy();
 
         assertEquals(32L, policy.completeBatch(64L, 0L, 0));
@@ -522,15 +522,14 @@ class FragmentControlPolicyTest {
     /// Verifies setup cannot silently replace an override owned by another diagnostic trial.
     @Test
     void rejectsConcurrentDiagnosticOverride() {
-        this.diagnosticOverride =
-                FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.DIRECT, 32L);
+        this.diagnosticOverride = FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.DIRECT, 32L);
 
         assertThrows(
                 IllegalStateException.class,
-                () -> FragmentControlPolicy.installDiagnosticOverride(FragmentControlPolicy.Mode.STAGED, 32L));
+                () -> FragmentControlPolicy.installDiagnosticOverride(ExecutionPath.STAGED, 32L));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new FragmentControlPolicy.DiagnosticOverride(FragmentControlPolicy.Mode.DIRECT, 1L));
+                () -> new FragmentControlPolicy.DiagnosticOverride(ExecutionPath.DIRECT, 1L));
     }
 
     /// Adds the same valid sample repeatedly without exposing estimator setup outside the package.

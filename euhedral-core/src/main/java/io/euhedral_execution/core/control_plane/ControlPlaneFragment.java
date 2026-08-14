@@ -2,6 +2,7 @@ package io.euhedral_execution.core.control_plane;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionPath;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
@@ -222,7 +223,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 if (this.state.idleEligible && super.getLocalCacheCount() == 0L) {
                     productionIdleLoop(context);
                 }
-                if (this.state.highContentionIdleEligible && super.getLocalCacheCount() == 0L) {
+                if (this.state.contentionIdleEligible && super.getLocalCacheCount() == 0L) {
                     highContentionIdleOnce();
                 }
 
@@ -253,7 +254,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                 }
 
-                if (this.controlPolicy.mode() == FragmentControlPolicy.Mode.DIRECT) {
+                if (this.controlPolicy.mode() == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
                         long start = System.nanoTime();
                         long count = remoteCacheExecute(limit);
@@ -362,14 +363,14 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     /// Consumes one batch-boundary decision and re-enters competition after one finite wait.
     void highContentionIdleOnce() {
-        this.state.highContentionIdleEligible = false;
-        this.state.highContentionParked = true;
-        this.state.highContentionParkCount++;
+        this.state.contentionIdleEligible = false;
+        this.state.contentionParked = true;
+        this.state.contentionParkCount++;
         try {
             LockSupport.parkNanos(this, FragmentControlPolicy.HIGH_CONTENTION_PARK_NANOS);
             serviceResetRequest();
         } finally {
-            this.state.highContentionParked = false;
+            this.state.contentionParked = false;
         }
     }
 
@@ -428,8 +429,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         this.state.registeredWorkers = registeredWorkers;
         this.state.workerRank = workerRank;
         this.state.idleEligible = this.controlPolicy.idleEligible(productiveHandles, registeredWorkers, workerRank);
-        this.state.highContentionIdleEligible =
-                this.controlPolicy.highContentionIdleEligible(acquisitionContention, registeredWorkers, workerRank);
+        this.state.contentionIdleEligible =
+                this.controlPolicy.contentionIdleEligible(acquisitionContention, registeredWorkers, workerRank);
     }
 
     /// Publishes telemetry from the existing service and throughput recorders when configured.
@@ -468,7 +469,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             return null;
         }
         boolean productionParked = this.state.productionParked;
-        boolean highContentionParked = this.state.highContentionParked;
+        boolean highContentionParked = this.state.contentionParked;
         return new FragmentPolicySnapshot(
                 this.controlPolicy.mode(),
                 this.controlPolicy.bodyCostHistoryCount(),
@@ -480,7 +481,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.workerRank,
                 productionParked,
                 highContentionParked,
-                this.state.highContentionParkCount,
+                this.state.contentionParkCount,
                 this.controlPolicy.activePollingAllowed(this.core) && !productionParked && !highContentionParked,
                 recorderSnapshot(this.state.throughputRecorder),
                 recorderSnapshot(this.state.serviceTimeRecorder),
@@ -677,11 +678,12 @@ public final class ControlPlaneFragment extends WorkRequester {
         long productiveHandleCount = 0;
         int registeredWorkers = 0;
         int workerRank = -1;
+
         boolean idleEligible = false;
         boolean productionParked = false;
-        boolean highContentionIdleEligible = false;
-        boolean highContentionParked = false;
-        long highContentionParkCount = 0L;
+        boolean contentionIdleEligible = false;
+        boolean contentionParked = false;
+        long contentionParkCount = 0L;
         long totalExecutions = 0;
 
         void reset() {
@@ -699,9 +701,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.workerRank = -1;
             this.idleEligible = false;
             this.productionParked = false;
-            this.highContentionIdleEligible = false;
-            this.highContentionParked = false;
-            this.highContentionParkCount = 0L;
+            this.contentionIdleEligible = false;
+            this.contentionParked = false;
+            this.contentionParkCount = 0L;
             this.totalExecutions = 0;
             if (ControlPlaneFragment.this.upstreamQueue != null) {
                 ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();
@@ -715,7 +717,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     /// Benchmark-only snapshot whose plain fields remain owned by the fragment worker.
     record FragmentPolicySnapshot(
-            FragmentControlPolicy.Mode mode,
+            ExecutionPath executionPath,
             int bodyCostHistoryCount,
             double smoothedBodyCostNs,
             double serviceTimeNs,
@@ -733,14 +735,14 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         /// Preserves the compact constructor used by selector-focused tests.
         FragmentPolicySnapshot(
-                FragmentControlPolicy.Mode mode,
+                ExecutionPath executionPath,
                 int bodyCostHistoryCount,
                 double smoothedBodyCostNs,
                 double serviceTimeNs,
                 long batchSize,
                 long productiveHandleCount) {
             this(
-                    mode,
+                    executionPath,
                     bodyCostHistoryCount,
                     smoothedBodyCostNs,
                     serviceTimeNs,

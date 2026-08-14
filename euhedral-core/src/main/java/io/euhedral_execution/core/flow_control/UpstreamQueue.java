@@ -4,6 +4,7 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.utils.AverageFlow;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
@@ -41,7 +42,7 @@ public class UpstreamQueue {
     public final int core;
     private final MpscQueue<UpstreamHandle> upstreams;
     private final PaddedAtomicLong upstreamCount;
-    private final AcquisitionContentionSmoother acquireContention = new AcquisitionContentionSmoother();
+    private final AverageFlow acquireContention = new AverageFlow();
     long cachedUpCount = 0L;
     long nonproductiveCount = 0L;
 
