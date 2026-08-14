@@ -245,6 +245,7 @@ class FragmentPathCalibrationBenchmarkTest {
         assertArrayEquals(
                 new double[] {0.125, 0.875},
                 FragmentPathCalibrationBenchmark.PathState.acquisitionContentionNormalized(snapshots));
+        assertTrue(snapshots[0].selectionEnabled());
     }
 
     /// Verifies lifecycle deltas preserve raw matrix shape and reject counter regression.

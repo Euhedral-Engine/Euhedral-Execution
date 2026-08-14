@@ -143,6 +143,64 @@ class FragmentControlPolicyTest {
         assertEquals(staged, FragmentControlPolicy.selectMode(1L, 2, history, 92.5, staged));
     }
 
+    /// Verifies the conservative contention branch and its exact host-calibration boundary.
+    @Test
+    void selectsModeFromAcquisitionContentionAndBodyCost() {
+        FragmentControlPolicy.Mode direct = FragmentControlPolicy.Mode.DIRECT;
+        FragmentControlPolicy.Mode staged = FragmentControlPolicy.Mode.STAGED;
+        int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
+        long boundary = FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX;
+
+        assertEquals(direct, selectMode(2L, 2, history, 200.0, 1_000_000L, staged, true));
+        assertEquals(direct, selectMode(1L, 2, history - 1, 200.0, 1_000_000L, staged, true));
+        assertEquals(direct, selectMode(1L, 2, history, 90.0, 1_000_000L, staged, true));
+        assertEquals(direct, selectMode(1L, 2, history, 200.0, boundary, staged, true));
+        assertEquals(staged, selectMode(1L, 2, history, 200.0, boundary + 1L, direct, true));
+        assertEquals(direct, selectMode(1L, 2, history, 92.5, boundary + 1L, direct, true));
+        assertEquals(staged, selectMode(1L, 2, history, 92.5, boundary + 1L, staged, true));
+    }
+
+    /// Verifies missing contention and the same-build comparison control preserve today's tree.
+    @Test
+    void contentionBootstrapAndComparisonControlUseExistingTree() {
+        FragmentControlPolicy.Mode direct = FragmentControlPolicy.Mode.DIRECT;
+        FragmentControlPolicy.Mode staged = FragmentControlPolicy.Mode.STAGED;
+        int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
+
+        assertEquals(staged, selectMode(1L, 2, history, 100.0, -1L, direct, true));
+        assertEquals(staged, selectMode(1L, 2, history, 100.0, 0L, direct, false));
+        assertEquals(direct, selectMode(1L, 2, history, 90.0, 1_000_000L, staged, false));
+    }
+
+    /// Verifies the completed-batch boundary passes the scalar into normal policy state.
+    @Test
+    void completeBatchConsumesAcquisitionContention() {
+        FragmentControlPolicy policy = new FragmentControlPolicy();
+        recordBodySamples(policy, 200L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
+
+        policy.completeBatch(4_096L, 1L, 2, FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX);
+        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+
+        policy.completeBatch(4_096L, 1L, 2, FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX + 1L);
+        assertEquals(FragmentControlPolicy.Mode.STAGED, policy.mode());
+
+        policy.reset();
+        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(0, policy.bodyCostHistoryCount());
+    }
+
+    private static FragmentControlPolicy.Mode selectMode(
+            long productiveHandles,
+            int registeredWorkers,
+            int history,
+            double bodyCostNs,
+            long contention,
+            FragmentControlPolicy.Mode currentMode,
+            boolean integrationEnabled) {
+        return FragmentControlPolicy.selectMode(
+                productiveHandles, registeredWorkers, history, bodyCostNs, contention, currentMode, integrationEnabled);
+    }
+
     /// Verifies only deterministic excess ranks enter the measured extreme-cheap idle branch.
     @Test
     void selectsOnlyExtremeCheapExcessWorkerRanksForIdle() {

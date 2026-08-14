@@ -105,6 +105,11 @@ public class UpstreamQueue {
         return this.acquireContention.value();
     }
 
+    /// Returns the fixed-point EWMA or `-1` when no eligible acquisition cycle has been observed.
+    public long getAcquireContentionOrUninitialized() {
+        return this.acquireContention.initialized() ? this.acquireContention.value() : -1L;
+    }
+
     /// Normalizes the worker-local fixed-point value only for diagnostics and external reporting.
     public double getNormalizedAcquireContention() {
         return this.acquireContention.initialized()

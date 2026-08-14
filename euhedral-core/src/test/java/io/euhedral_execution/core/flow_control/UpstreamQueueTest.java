@@ -244,6 +244,7 @@ class UpstreamQueueTest {
     @Test
     void shouldNotUpdateContentionWithoutAnAcquisitionAttempt() {
         assertFalse(queue.hasAcquireContention());
+        assertEquals(-1L, queue.getAcquireContentionOrUninitialized());
         assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
 
         queue.pull(frame -> {}, frame -> false, 0L);
@@ -254,6 +255,7 @@ class UpstreamQueueTest {
         queue.pull(frame -> {}, frame -> false, 0L);
         assertTrue(queue.hasAcquireContention());
         assertEquals(0L, queue.getAcquireContention());
+        assertEquals(0L, queue.getAcquireContentionOrUninitialized());
     }
 
     @Test
@@ -277,6 +279,7 @@ class UpstreamQueueTest {
 
         assertFalse(queue.hasAcquireContention());
         assertEquals(0L, queue.getAcquireContention());
+        assertEquals(-1L, queue.getAcquireContentionOrUninitialized());
         assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
     }
 

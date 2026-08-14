@@ -16,11 +16,18 @@ final class FragmentControlPolicy {
     static final double EXTREMELY_CHEAP_BODY_COST_MAX_NS = 20.0;
     static final double CHEAP_BODY_COST_MAX_NS = 90.0;
     static final double EXPENSIVE_BODY_COST_MIN_NS = 95.0;
+    // Calibration-host candidate: Phase 14 left a gap between 582k DIRECT and 705k high contention.
+    static final long LOW_ACQUIRE_CONTENTION_MAX = 650_000L;
+    static final String ACQUIRE_CONTENTION_SELECTION_ENABLED_PROPERTY =
+            "euhedral.fragment.acquireContention.selection.enabled";
     static final int BODY_COST_WINDOW_SAMPLES = 32;
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
     static final int EXPENSIVE_CONFIRMATION_SAMPLES = BODY_COST_WINDOW_SAMPLES * EXPENSIVE_CONFIRMATION_WINDOWS;
     static final int SPIN_MISSES = 64;
+
+    private static final boolean ACQUIRE_CONTENTION_SELECTION_ENABLED = Boolean.parseBoolean(
+            System.getProperty(ACQUIRE_CONTENTION_SELECTION_ENABLED_PROPERTY, Boolean.TRUE.toString()));
 
     private final DiagnosticOverride diagnosticOverride;
     private Mode mode;
@@ -121,6 +128,11 @@ final class FragmentControlPolicy {
 
     /// Completes a productive batch and returns the next batch within `eligibleCap`.
     long completeBatch(long eligibleCap, long productiveHandles, int registeredWorkers) {
+        return completeBatch(eligibleCap, productiveHandles, registeredWorkers, -1L);
+    }
+
+    /// Completes a batch using one owner-local fixed-point contention read or `-1` before bootstrap.
+    long completeBatch(long eligibleCap, long productiveHandles, int registeredWorkers, long acquisitionContention) {
         if (this.diagnosticOverride != null && this.diagnosticOverride.mode() != null) {
             this.mode = this.diagnosticOverride.mode();
             long cap = Math.max(2L, eligibleCap);
@@ -129,7 +141,13 @@ final class FragmentControlPolicy {
         }
 
         this.mode = selectMode(
-                productiveHandles, registeredWorkers, this.bodyCostHistoryCount, this.smoothedBodyCostNs, this.mode);
+                productiveHandles,
+                registeredWorkers,
+                this.bodyCostHistoryCount,
+                this.smoothedBodyCostNs,
+                acquisitionContention,
+                this.mode,
+                ACQUIRE_CONTENTION_SELECTION_ENABLED);
 
         long cap = Math.max(2L, eligibleCap);
         long desired = this.batchSize;
@@ -205,6 +223,11 @@ final class FragmentControlPolicy {
         return this.diagnosticOverride == null || this.diagnosticOverride.bodyCostSampling();
     }
 
+    /// Reports the startup-fixed comparison setting used by normal production selection.
+    static boolean acquireContentionSelectionEnabled() {
+        return ACQUIRE_CONTENTION_SELECTION_ENABLED;
+    }
+
     /// Reports whether this worker belongs to a setup-only fixed polling subset.
     boolean activePollingAllowed(int core) {
         return this.diagnosticOverride == null || this.diagnosticOverride.allowsPolling(core);
@@ -239,6 +262,38 @@ final class FragmentControlPolicy {
             return Mode.DIRECT;
         }
         if (smoothedBodyCostNs <= CHEAP_BODY_COST_MAX_NS) {
+            return Mode.DIRECT;
+        }
+        if (smoothedBodyCostNs >= EXPENSIVE_BODY_COST_MIN_NS) {
+            return Mode.STAGED;
+        }
+        return currentSettledMode;
+    }
+
+    /// Selects the production path from availability, body cost, and fixed-point contention.
+    static Mode selectMode(
+            long productiveHandles,
+            int registeredWorkers,
+            int bodyCostHistoryCount,
+            double smoothedBodyCostNs,
+            long acquisitionContention,
+            Mode currentSettledMode,
+            boolean acquisitionContentionSelectionEnabled) {
+        if (!acquisitionContentionSelectionEnabled || acquisitionContention < 0L) {
+            return selectMode(
+                    productiveHandles, registeredWorkers, bodyCostHistoryCount, smoothedBodyCostNs, currentSettledMode);
+        }
+        Objects.requireNonNull(currentSettledMode);
+        if (registeredWorkers <= 0 || productiveHandles >= registeredWorkers) {
+            return Mode.DIRECT;
+        }
+        if (bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
+            return Mode.DIRECT;
+        }
+        if (smoothedBodyCostNs <= CHEAP_BODY_COST_MAX_NS) {
+            return Mode.DIRECT;
+        }
+        if (acquisitionContention <= LOW_ACQUIRE_CONTENTION_MAX) {
             return Mode.DIRECT;
         }
         if (smoothedBodyCostNs >= EXPENSIVE_BODY_COST_MIN_NS) {

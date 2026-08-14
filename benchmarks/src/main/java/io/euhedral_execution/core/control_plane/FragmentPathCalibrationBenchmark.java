@@ -166,6 +166,13 @@ public class FragmentPathCalibrationBenchmark {
         state.awaitInvocation();
     }
 
+    /// Measures normal contention-aware selection on the exact Phase 13 source/topology fixture.
+    @Benchmark
+    @OperationsPerInvocation(INVOCATION_FRAMES)
+    public void acquisitionContentionNormalPolicy(AcquisitionContentionNormalPolicyState state) {
+        state.awaitInvocation();
+    }
+
     /// Runs one bounded production park, reset, wake, and resumed-participation transition.
     @Benchmark
     public void productionIdleWakeSmoke(IdleWakeSmokeState state) {
@@ -182,6 +189,12 @@ public class FragmentPathCalibrationBenchmark {
     /// Executes one bounded cheap-expensive-cheap response sequence under normal scarce policy.
     @Benchmark
     public void dynamicPolicyResponse(DynamicPolicyState state) {
+        state.runSequence();
+    }
+
+    /// Executes one bounded abundant-scarce-abundant contention and selector response sequence.
+    @Benchmark
+    public void dynamicAcquisitionContentionResponse(DynamicAcquisitionContentionState state) {
         state.runSequence();
     }
 
@@ -1405,6 +1418,67 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// Normal production selector over the Phase 13 physical source-to-core fixture.
+    @State(Scope.Benchmark)
+    public static class AcquisitionContentionNormalPolicyState extends PathState {
+
+        @Param({"FULL_MACHINE"})
+        public CrossoverTopology topology;
+
+        @Param({"0"})
+        public int ratioDivisor;
+
+        @Param({"1"})
+        public int productiveSources;
+
+        @Param({"96"})
+        public int workRounds;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts one exact source/topology row with production body and policy observation active.
+        @Setup(Level.Trial)
+        public void setup() {
+            setupCrossoverPath(this.topology, this.ratioDivisor, this.productiveSources, this.workRounds);
+        }
+
+        /// Requires exact physical inputs while allowing the production selector to choose each lane.
+        @Override
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
+            int expectedSources = crossoverProductiveSources();
+            for (int worker = 0; worker < snapshots.length; worker++) {
+                ControlPlaneFragment.FragmentPolicySnapshot snapshot = snapshots[worker];
+                if (snapshot == null
+                        || snapshot.bodyCostHistoryCount() < FragmentControlPolicy.BODY_COST_MIN_HISTORY
+                        || snapshot.productiveHandleCount() != expectedSources
+                        || snapshot.registeredWorkers() != snapshots.length
+                        || snapshot.workerRank() != worker
+                        || snapshot.productionParked() == snapshot.activePolling()
+                        || snapshot.acquireContention() == null
+                        || snapshot.acquireContention().enabled() != UpstreamQueue.acquireContentionEnabled()
+                        || snapshot.acquireContention().selectionEnabled()
+                                != FragmentControlPolicy.acquireContentionSelectionEnabled()
+                        || (snapshot.activePolling()
+                                && snapshot.acquireContention().enabled()
+                                && !snapshot.acquireContention().initialized())) {
+                    failPolicyValidation("Normal crossover physical state changed: " + Arrays.toString(snapshots));
+                    return;
+                }
+            }
+        }
+
+        /// Rejects a non-parked registered worker that never participates during the retained fork.
+        @Override
+        protected void beforeClose() {
+            validateNormalCrossoverParticipation();
+            super.beforeClose();
+        }
+    }
+
     /// One-shot production lifecycle state for the minimal idle integration.
     @State(Scope.Benchmark)
     public static class IdleWakeSmokeState extends PathState {
@@ -1706,6 +1780,104 @@ public class FragmentPathCalibrationBenchmark {
         }
     }
 
+    /// One long-lived graph validating source-count, contention, and path adaptation together.
+    @State(Scope.Benchmark)
+    public static class DynamicAcquisitionContentionState extends PathState {
+
+        private boolean completed;
+        private ControlPlaneFragment.FragmentPolicySnapshot[][] phaseSnapshots;
+
+        @Override
+        final ForcedMode forcedMode() {
+            return null;
+        }
+
+        /// Starts the known two-worker 96-round path-reversal fixture with two live sources.
+        @Setup(Level.Trial)
+        public void setup() {
+            this.completed = false;
+            this.phaseSnapshots = new ControlPlaneFragment.FragmentPolicySnapshot[3][];
+            setupPath(2, SourceShape.PLENTIFUL, Workload.CPU_WORK, 96, false, false, true, true, null);
+        }
+
+        /// Changes only live repeating-source count and waits for bounded EWMA/policy convergence.
+        void runSequence() {
+            if (this.completed || policyValidationFailure() != null) {
+                return;
+            }
+            this.phaseSnapshots[0] = awaitContentionPhase(2, FragmentControlPolicy.Mode.DIRECT, false);
+
+            completeProductiveSource(1);
+            this.phaseSnapshots[1] = awaitContentionPhase(1, FragmentControlPolicy.Mode.STAGED, true);
+
+            BenchmarkFrame[] frames =
+                    BenchmarkFrame.generate(FRAME_POOL_SIZE, false, HasherApi.mix(31L), HasherApi.mix(32L));
+            publishProductiveSource(frames);
+            this.phaseSnapshots[2] = awaitContentionPhase(2, FragmentControlPolicy.Mode.DIRECT, false);
+            this.completed = true;
+        }
+
+        /// Waits for every lane's physical count and the expected worker-local mode response.
+        private ControlPlaneFragment.FragmentPolicySnapshot[] awaitContentionPhase(
+                long productiveSources, FragmentControlPolicy.Mode expectedMode, boolean highContention) {
+            long startFrames = completedFrames();
+            long deadline = System.nanoTime() + TIMEOUT_NS;
+            while (System.nanoTime() < deadline && completedFrames() - startFrames <= DYNAMIC_RESPONSE_MAX_FRAMES) {
+                ControlPlaneFragment.FragmentPolicySnapshot[] snapshots = policySnapshots();
+                long[] contention = new long[snapshots.length];
+                boolean settled = snapshots.length == 2;
+                int expectedModeCount = 0;
+                for (int worker = 0; worker < snapshots.length && settled; worker++) {
+                    ControlPlaneFragment.FragmentPolicySnapshot snapshot = snapshots[worker];
+                    settled = snapshot != null
+                            && snapshot.productiveHandleCount() == productiveSources
+                            && snapshot.registeredWorkers() == 2
+                            && snapshot.bodyCostHistoryCount() >= FragmentControlPolicy.BODY_COST_MIN_HISTORY
+                            && snapshot.acquireContention() != null
+                            && snapshot.acquireContention().initialized();
+                    if (settled) {
+                        if (snapshot.mode() == expectedMode) {
+                            expectedModeCount++;
+                        }
+                        contention[worker] = snapshot.acquireContention().fixedPointValue();
+                    }
+                }
+                if (settled) {
+                    Arrays.sort(contention);
+                    long median = contention[contention.length / 2];
+                    boolean modeSettled =
+                            highContention ? expectedModeCount > 0 : expectedModeCount == snapshots.length;
+                    boolean contentionSettled = highContention
+                            ? median > FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX
+                            : median <= FragmentControlPolicy.LOW_ACQUIRE_CONTENTION_MAX;
+                    if (modeSettled && contentionSettled) {
+                        return snapshots;
+                    }
+                }
+                Thread.onSpinWait();
+            }
+            failPolicyValidation("Dynamic contention phase did not settle sources=" + productiveSources + " mode="
+                    + expectedMode + " snapshots=" + Arrays.toString(policySnapshots()));
+            return policySnapshots();
+        }
+
+        @Override
+        void validatePolicySnapshots(
+                IterationType iterationType, ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {}
+
+        /// Reports all three low-frequency phase snapshots after the one-shot transition.
+        @Override
+        protected void beforeClose() {
+            if (!this.completed) {
+                failPolicyValidation("Dynamic contention response did not complete");
+            }
+            LOGGER.info(
+                    "Fragment dynamic acquisition contention phases=[abundant, scarce, abundant] snapshots={}",
+                    Arrays.deepToString(this.phaseSnapshots));
+            super.beforeClose();
+        }
+    }
+
     /// Owner-local state for the scheduler-free work-body measurements.
     @State(Scope.Thread)
     public static class WorkOnlyState {
@@ -1958,8 +2130,8 @@ public class FragmentPathCalibrationBenchmark {
                     Workload.CPU_WORK,
                     workRounds,
                     false,
-                    true,
-                    false,
+                    forcedMode() != null,
+                    forcedMode() == null,
                     true,
                     null,
                     null,
@@ -2398,6 +2570,29 @@ public class FragmentPathCalibrationBenchmark {
             }
         }
 
+        /// Rejects registration loss or a currently active production worker with no retained work.
+        final void validateNormalCrossoverParticipation() {
+            if (this.crossoverFixture == null) {
+                throw new IllegalStateException("Missing crossover fixture for participation validation");
+            }
+            long[] aggregate = new long[this.workerCpus.length];
+            for (long[] iteration : this.measurementWorkerDeltas) {
+                for (int worker = 0; worker < aggregate.length; worker++) {
+                    aggregate[worker] = Math.addExact(aggregate[worker], iteration[worker]);
+                }
+            }
+            ControlPlaneFragment.FragmentPolicySnapshot[] snapshots = policySnapshots();
+            for (int worker = 0; worker < aggregate.length; worker++) {
+                if (snapshots[worker].activePolling() && aggregate[worker] <= 0L) {
+                    failPolicyValidation("Active crossover worker disappeared: " + Arrays.toString(aggregate));
+                    break;
+                }
+            }
+            if (this.distributor.getThreadCount() != this.workerCpus.length) {
+                failPolicyValidation("Crossover changed registered worker count");
+            }
+        }
+
         /// Captures live registration and empty-source state without changing source behavior.
         private OpportunitySnapshot captureOpportunitySnapshot() {
             return new OpportunitySnapshot(
@@ -2738,11 +2933,13 @@ public class FragmentPathCalibrationBenchmark {
                     contention[worker] = finalSnapshots[worker].acquireContention();
                 }
                 LOGGER.info(
-                        "Fragment acquisition contention policy={} crossoverFixture={} workRounds={} enabled={} scale={} fixedPoint={} normalized={}",
+                        "Fragment acquisition contention policy={} crossoverFixture={} workRounds={} enabled={} "
+                                + "selectionEnabled={} scale={} fixedPoint={} normalized={}",
                         policyLabel(),
                         this.crossoverFixture,
                         this.workRounds,
                         UpstreamQueue.acquireContentionEnabled(),
+                        FragmentControlPolicy.acquireContentionSelectionEnabled(),
                         UpstreamQueue.ACQUIRE_CONTENTION_SCALE,
                         Arrays.toString(acquisitionContentionFixedPoint(contention)),
                         Arrays.toString(acquisitionContentionNormalized(contention)));
@@ -2799,6 +2996,27 @@ public class FragmentPathCalibrationBenchmark {
             this.sources[this.sources.length - 1] = wakeSource;
             this.distributor.ingest(wakeSource.getDelegate());
             this.idleFixture = new IdleFixture(2, 0, 0);
+        }
+
+        /// Completes one trial-owned repeating source without changing any other graph input.
+        protected final void completeProductiveSource(int sourceIndex) {
+            if (sourceIndex < 0 || sourceIndex >= this.sources.length) {
+                throw new IllegalArgumentException("Source index is outside the trial-owned source array");
+            }
+            this.sources[sourceIndex].complete();
+        }
+
+        /// Publishes one replacement repeating source for a bounded dynamic physical transition.
+        protected final void publishProductiveSource(BenchmarkFrame[] frames) {
+            RepeatingSink source = new RepeatingSink(frames);
+            this.sources = Arrays.copyOf(this.sources, this.sources.length + 1);
+            this.sources[this.sources.length - 1] = source;
+            this.distributor.ingest(source.getDelegate());
+        }
+
+        /// Returns the monotonic completed-frame total for bounded dynamic waits.
+        protected final long completedFrames() {
+            return this.counters.sum();
         }
 
         /// Returns the existing registered-worker count for bounded lifecycle validation.

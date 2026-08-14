@@ -386,7 +386,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         long productiveHandles = context.upstream.getProductiveHandleCount();
         this.state.productiveHandleCount = productiveHandles;
         int registeredWorkers = super.getThreadCount();
-        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit(), productiveHandles, registeredWorkers);
+        long acquisitionContention = context.upstream.getAcquireContentionOrUninitialized();
+        this.state.batchSize = this.controlPolicy.completeBatch(
+                getBatchLimit(), productiveHandles, registeredWorkers, acquisitionContention);
         refreshIdleEligibility(productiveHandles, registeredWorkers);
         reportMetrics();
     }
@@ -466,7 +468,11 @@ public final class ControlPlaneFragment extends WorkRequester {
         double normalized =
                 initialized ? fixedPointValue / (double) UpstreamQueue.ACQUIRE_CONTENTION_SCALE : Double.NaN;
         return new AcquireContentionSnapshot(
-                UpstreamQueue.acquireContentionEnabled(), initialized, fixedPointValue, normalized);
+                UpstreamQueue.acquireContentionEnabled(),
+                FragmentControlPolicy.acquireContentionSelectionEnabled(),
+                initialized,
+                fixedPointValue,
+                normalized);
     }
 
     /// Copies existing recorder fields for low-frequency benchmark diagnostics only.
@@ -716,7 +722,14 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     /// Immutable low-frequency view of the worker-local fixed-point acquisition EWMA.
-    record AcquireContentionSnapshot(boolean enabled, boolean initialized, long fixedPointValue, double normalized) {}
+    record AcquireContentionSnapshot(
+            boolean enabled, boolean selectionEnabled, boolean initialized, long fixedPointValue, double normalized) {
+
+        /// Preserves the Phase 15 diagnostic constructor used by benchmark helper tests.
+        AcquireContentionSnapshot(boolean enabled, boolean initialized, long fixedPointValue, double normalized) {
+            this(enabled, true, initialized, fixedPointValue, normalized);
+        }
+    }
 
     /// Immutable view of existing worker-local recorder state for benchmark interpretation.
     record FlowRecorderSnapshot(
