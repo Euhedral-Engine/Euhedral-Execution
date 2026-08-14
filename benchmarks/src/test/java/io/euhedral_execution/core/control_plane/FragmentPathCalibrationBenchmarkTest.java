@@ -248,6 +248,48 @@ class FragmentPathCalibrationBenchmarkTest {
         assertTrue(snapshots[0].selectionEnabled());
     }
 
+    /// Verifies benchmark-only park diagnostics retain stable worker alignment.
+    @Test
+    void extractsWorkerLocalHighContentionParkCounts() {
+        ControlPlaneFragment.FragmentPolicySnapshot first = new ControlPlaneFragment.FragmentPolicySnapshot(
+                FragmentControlPolicy.Mode.STAGED,
+                FragmentControlPolicy.BODY_COST_MIN_HISTORY,
+                100.0,
+                120.0,
+                32L,
+                1L,
+                2,
+                0,
+                false,
+                false,
+                0L,
+                true,
+                null,
+                null,
+                null);
+        ControlPlaneFragment.FragmentPolicySnapshot second = new ControlPlaneFragment.FragmentPolicySnapshot(
+                FragmentControlPolicy.Mode.STAGED,
+                FragmentControlPolicy.BODY_COST_MIN_HISTORY,
+                100.0,
+                120.0,
+                32L,
+                1L,
+                2,
+                1,
+                false,
+                false,
+                37L,
+                true,
+                null,
+                null,
+                null);
+
+        assertArrayEquals(
+                new long[] {0L, 37L},
+                FragmentPathCalibrationBenchmark.PathState.highContentionParkCounts(
+                        new ControlPlaneFragment.FragmentPolicySnapshot[] {first, second}));
+    }
+
     /// Verifies lifecycle deltas preserve raw matrix shape and reject counter regression.
     @Test
     void computesMonotonicHandleLifecycleDelta() {

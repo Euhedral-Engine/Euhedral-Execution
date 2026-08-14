@@ -20,6 +20,13 @@ final class FragmentControlPolicy {
     static final long LOW_ACQUIRE_CONTENTION_MAX = 650_000L;
     static final String ACQUIRE_CONTENTION_SELECTION_ENABLED_PROPERTY =
             "euhedral.fragment.acquireContention.selection.enabled";
+    static final String HIGH_CONTENTION_IDLE_THRESHOLD_PROPERTY = "euhedral.fragment.highContentionIdle.threshold";
+    static final String HIGH_CONTENTION_PARK_NANOS_PROPERTY = "euhedral.fragment.highContentionIdle.parkNanos";
+    static final String HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY =
+            "euhedral.fragment.highContentionIdle.bodyCostMaxNs";
+    static final long DEFAULT_HIGH_CONTENTION_IDLE_THRESHOLD = 980_000L;
+    static final long DEFAULT_HIGH_CONTENTION_PARK_NANOS = 15_000L;
+    static final double DEFAULT_HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS = 200.0;
     static final int BODY_COST_WINDOW_SAMPLES = 32;
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
@@ -28,6 +35,9 @@ final class FragmentControlPolicy {
 
     private static final boolean ACQUIRE_CONTENTION_SELECTION_ENABLED = Boolean.parseBoolean(
             System.getProperty(ACQUIRE_CONTENTION_SELECTION_ENABLED_PROPERTY, Boolean.TRUE.toString()));
+    static final long HIGH_CONTENTION_IDLE_THRESHOLD = readHighContentionIdleThreshold();
+    static final long HIGH_CONTENTION_PARK_NANOS = readHighContentionParkNanos();
+    static final double HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS = readHighContentionIdleBodyCostMaxNs();
 
     private final DiagnosticOverride diagnosticOverride;
     private Mode mode;
@@ -242,6 +252,21 @@ final class FragmentControlPolicy {
                 productiveHandles, registeredWorkers, workerRank, this.bodyCostHistoryCount, this.smoothedBodyCostNs);
     }
 
+    /// Selects one finite contention park while rank zero remains a deterministic poller.
+    boolean highContentionIdleEligible(long acquisitionContention, int registeredWorkers, int workerRank) {
+        if (this.diagnosticOverride != null || HIGH_CONTENTION_IDLE_THRESHOLD < 0L) {
+            return false;
+        }
+        return selectHighContentionIdleEligibility(
+                acquisitionContention,
+                registeredWorkers,
+                workerRank,
+                this.bodyCostHistoryCount,
+                this.smoothedBodyCostNs,
+                HIGH_CONTENTION_IDLE_THRESHOLD,
+                HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS);
+    }
+
     /// Doubles a positive batch limit without signed overflow.
     static long saturatingDouble(long value) {
         return value > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : value * 2L;
@@ -320,6 +345,68 @@ final class FragmentControlPolicy {
         }
         long pollingQuota = Math.max(1L, Math.min(productiveHandles, registeredWorkers));
         return workerRank >= pollingQuota;
+    }
+
+    /// Tests the independent high-contention branch inside one configured light-body range.
+    static boolean selectHighContentionIdleEligibility(
+            long acquisitionContention,
+            int registeredWorkers,
+            int workerRank,
+            int bodyCostHistoryCount,
+            double bodyCostNs,
+            long threshold,
+            double bodyCostMaxNs) {
+        if (threshold < 0L
+                || threshold > 1_000_000L
+                || !Double.isFinite(bodyCostNs)
+                || !Double.isFinite(bodyCostMaxNs)
+                || bodyCostMaxNs <= EXTREMELY_CHEAP_BODY_COST_MAX_NS) {
+            return false;
+        }
+        if (acquisitionContention < 0L || acquisitionContention < threshold) {
+            return false;
+        }
+        if (bodyCostHistoryCount < BODY_COST_MIN_HISTORY
+                || bodyCostNs <= EXTREMELY_CHEAP_BODY_COST_MAX_NS
+                || bodyCostNs > bodyCostMaxNs) {
+            return false;
+        }
+        return registeredWorkers > 1 && workerRank > 0 && workerRank < registeredWorkers;
+    }
+
+    /// Reads the startup-fixed fixed-point threshold, accepting `disabled` for comparison forks.
+    private static long readHighContentionIdleThreshold() {
+        String raw = System.getProperty(
+                HIGH_CONTENTION_IDLE_THRESHOLD_PROPERTY, Long.toString(DEFAULT_HIGH_CONTENTION_IDLE_THRESHOLD));
+        if ("disabled".equalsIgnoreCase(raw)) {
+            return -1L;
+        }
+        long value = Long.parseLong(raw);
+        if (value < 0L || value > 1_000_000L) {
+            throw new IllegalArgumentException("High-contention idle threshold must be disabled or in [0, 1000000]");
+        }
+        return value;
+    }
+
+    /// Reads the startup-fixed finite park duration used only by eligible worker ranks.
+    private static long readHighContentionParkNanos() {
+        long value = Long.parseLong(System.getProperty(
+                HIGH_CONTENTION_PARK_NANOS_PROPERTY, Long.toString(DEFAULT_HIGH_CONTENTION_PARK_NANOS)));
+        if (value <= 0L) {
+            throw new IllegalArgumentException("High-contention park duration must be positive");
+        }
+        return value;
+    }
+
+    /// Reads the startup-fixed light-body ceiling used by the developer policy override.
+    private static double readHighContentionIdleBodyCostMaxNs() {
+        double value = Double.parseDouble(System.getProperty(
+                HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY,
+                Double.toString(DEFAULT_HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS)));
+        if (!Double.isFinite(value) || value <= EXTREMELY_CHEAP_BODY_COST_MAX_NS) {
+            throw new IllegalArgumentException("High-contention idle body-cost maximum must exceed 20 ns");
+        }
+        return value;
     }
 
     /// Updates one non-overlapping second minimum and confirms expensive work across two windows.

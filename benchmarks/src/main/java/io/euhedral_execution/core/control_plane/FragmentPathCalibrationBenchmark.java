@@ -1457,7 +1457,7 @@ public class FragmentPathCalibrationBenchmark {
                         || snapshot.productiveHandleCount() != expectedSources
                         || snapshot.registeredWorkers() != snapshots.length
                         || snapshot.workerRank() != worker
-                        || snapshot.productionParked() == snapshot.activePolling()
+                        || (snapshot.productionParked() || snapshot.highContentionParked()) == snapshot.activePolling()
                         || snapshot.acquireContention() == null
                         || snapshot.acquireContention().enabled() != UpstreamQueue.acquireContentionEnabled()
                         || snapshot.acquireContention().selectionEnabled()
@@ -2907,7 +2907,8 @@ public class FragmentPathCalibrationBenchmark {
             ControlPlaneFragment.FragmentPolicySnapshot[] finalSnapshots = policySnapshots();
             LOGGER.info(
                     "Fragment production policy policy={} sourceShape={} opportunityFixture={} idleFixture={} crossoverFixture={} workRounds={} batchCap={} workerCpus={} workerCores={} workerCoreClasses={} workerL2Masks={} "
-                            + "liveHandles={} registeredWorkers={} warmupSnapshots={} measurementSnapshots={} finalSnapshots={}",
+                            + "liveHandles={} registeredWorkers={} highContentionIdleThreshold={} highContentionParkNanos={} highContentionIdleBodyCostMaxNs={} "
+                            + "finalHighContentionParkCounts={} warmupSnapshots={} measurementSnapshots={} finalSnapshots={}",
                     policyLabel(),
                     this.sourceShape,
                     this.opportunityFixture,
@@ -2921,6 +2922,10 @@ public class FragmentPathCalibrationBenchmark {
                     Arrays.toString(this.workerL2Masks),
                     this.distributor.getUpstreamHandleCount(),
                     this.distributor.getThreadCount(),
+                    FragmentControlPolicy.HIGH_CONTENTION_IDLE_THRESHOLD,
+                    FragmentControlPolicy.HIGH_CONTENTION_PARK_NANOS,
+                    FragmentControlPolicy.HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS,
+                    Arrays.toString(highContentionParkCounts(finalSnapshots)),
                     Arrays.deepToString(
                             this.warmupPolicySnapshots.toArray(ControlPlaneFragment.FragmentPolicySnapshot[][]::new)),
                     Arrays.deepToString(this.measurementPolicySnapshots.toArray(
@@ -2961,6 +2966,15 @@ public class FragmentPathCalibrationBenchmark {
             double[] values = new double[snapshots.length];
             for (int worker = 0; worker < values.length; worker++) {
                 values[worker] = snapshots[worker].normalized();
+            }
+            return values;
+        }
+
+        /// Extracts worker-aligned contention park counts from low-frequency policy snapshots.
+        static long[] highContentionParkCounts(ControlPlaneFragment.FragmentPolicySnapshot[] snapshots) {
+            long[] values = new long[snapshots.length];
+            for (int worker = 0; worker < values.length; worker++) {
+                values[worker] = snapshots[worker].highContentionParkCount();
             }
             return values;
         }

@@ -251,6 +251,78 @@ class FragmentControlPolicyTest {
         assertFalse(policy.idleEligible(1L, 2, 1));
     }
 
+    /// Verifies the independent threshold edge and deterministic protected-poller invariant.
+    @Test
+    void selectsHighContentionIdleOnlyAtOrAboveThresholdForNonzeroRanks() {
+        long threshold = 900_000L;
+
+        int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
+        double bodyCost = 100.0;
+        double maxBodyCost = 200.0;
+
+        assertFalse(selectHighContentionIdle(threshold - 1L, 4, 1, history, bodyCost, threshold, maxBodyCost));
+        assertTrue(selectHighContentionIdle(threshold, 4, 1, history, bodyCost, threshold, maxBodyCost));
+        assertTrue(selectHighContentionIdle(1_000_000L, 4, 3, history, bodyCost, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 4, 0, history, bodyCost, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(-1L, 4, 1, history, bodyCost, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 1, 0, history, bodyCost, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 4, -1, history, bodyCost, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 4, 4, history, bodyCost, threshold, maxBodyCost));
+    }
+
+    /// Verifies the disabled comparison sentinel never enters the contention-idle branch.
+    @Test
+    void disabledHighContentionThresholdNeverParks() {
+        assertFalse(selectHighContentionIdle(
+                1_000_000L, 4, 1, FragmentControlPolicy.BODY_COST_MIN_HISTORY, 100.0, -1L, 200.0));
+    }
+
+    /// Verifies light-body contention idling does not change DIRECT/STAGED selection.
+    @Test
+    void highContentionIdleUsesIndependentLightBodyRangeWithoutChangingMode() {
+        FragmentControlPolicy policy = new FragmentControlPolicy();
+
+        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(0, policy.bodyCostHistoryCount());
+        assertFalse(policy.highContentionIdleEligible(1_000_000L, 2, 1));
+
+        recordBodySamples(policy, 100L, FragmentControlPolicy.EXPENSIVE_CONFIRMATION_SAMPLES);
+        assertEquals(FragmentControlPolicy.Mode.DIRECT, policy.mode());
+        assertEquals(
+                FragmentControlPolicy.HIGH_CONTENTION_IDLE_THRESHOLD >= 0L,
+                policy.highContentionIdleEligible(1_000_000L, 2, 1));
+        assertFalse(policy.highContentionIdleEligible(1_000_000L, 2, 0));
+    }
+
+    /// Verifies the light-body ceiling excludes both the cheap-idle range and heavy work.
+    @Test
+    void highContentionIdleBodyRangeHasExactIndependentEdges() {
+        int history = FragmentControlPolicy.BODY_COST_MIN_HISTORY;
+        long threshold = 980_000L;
+        double maxBodyCost = 200.0;
+
+        assertFalse(selectHighContentionIdle(1_000_000L, 2, 1, history - 1, 100.0, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 2, 1, history, 20.0, threshold, maxBodyCost));
+        assertTrue(selectHighContentionIdle(1_000_000L, 2, 1, history, 20.1, threshold, maxBodyCost));
+        assertTrue(selectHighContentionIdle(1_000_000L, 2, 1, history, maxBodyCost, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 2, 1, history, 200.1, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 2, 1, history, Double.NaN, threshold, maxBodyCost));
+        assertFalse(selectHighContentionIdle(1_000_000L, 2, 1, history, 100.0, threshold, Double.NaN));
+        assertFalse(selectHighContentionIdle(1_000_000L, 2, 1, history, 100.0, threshold, 20.0));
+    }
+
+    private static boolean selectHighContentionIdle(
+            long contention,
+            int registeredWorkers,
+            int workerRank,
+            int history,
+            double bodyCostNs,
+            long threshold,
+            double bodyCostMaxNs) {
+        return FragmentControlPolicy.selectHighContentionIdleEligibility(
+                contention, registeredWorkers, workerRank, history, bodyCostNs, threshold, bodyCostMaxNs);
+    }
+
     /// Verifies service telemetry still sizes batches but never selects the execution path.
     @Test
     void serviceTimeControlsBatchSizeButNotMode() {

@@ -142,7 +142,7 @@ public class HighContentionThroughput {
         long idHash = HasherApi.mix(HasherApi.BASE_SEED);
 
         for (int i = 0; i < sinks.length; i++) {
-            this.sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, 250_000, this.counters));
+            this.sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, 2_048, this.counters));
         }
 
         BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));

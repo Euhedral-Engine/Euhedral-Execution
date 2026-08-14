@@ -131,6 +131,26 @@ class ControlPlaneFragmentTest {
         }
     }
 
+    /// Verifies a contention wait is finite, consumed once, and its diagnostics reset owner-locally.
+    @Test
+    void highContentionParkReturnsAndResetClearsBranchState() {
+        try (ControlPlaneFragment fragment = create(workerConfig())) {
+            fragment.highContentionIdleOnce();
+
+            ControlPlaneFragment.FragmentPolicySnapshot parked = fragment.policySnapshot();
+            assertFalse(parked.highContentionParked());
+            assertEquals(1L, parked.highContentionParkCount());
+
+            fragment.highContentionIdleOnce();
+            assertEquals(2L, fragment.policySnapshot().highContentionParkCount());
+
+            fragment.resetForNextTrial(System.nanoTime());
+            ControlPlaneFragment.FragmentPolicySnapshot reset = fragment.policySnapshot();
+            assertFalse(reset.highContentionParked());
+            assertEquals(0L, reset.highContentionParkCount());
+        }
+    }
+
     @Test
     void normalFragmentConnectsAndResetsItsProductionBodyEstimator() {
         try (ControlPlaneFragment fragment = create(workerConfig())) {

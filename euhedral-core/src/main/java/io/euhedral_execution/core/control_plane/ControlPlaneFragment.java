@@ -222,6 +222,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                 if (this.state.idleEligible && super.getLocalCacheCount() == 0L) {
                     productionIdleLoop(context);
                 }
+                if (this.state.highContentionIdleEligible && super.getLocalCacheCount() == 0L) {
+                    highContentionIdleOnce();
+                }
 
                 long newUpCount = context.upstream.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
@@ -357,6 +360,19 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
     }
 
+    /// Consumes one batch-boundary decision and re-enters competition after one finite wait.
+    void highContentionIdleOnce() {
+        this.state.highContentionIdleEligible = false;
+        this.state.highContentionParked = true;
+        this.state.highContentionParkCount++;
+        try {
+            LockSupport.parkNanos(this, FragmentControlPolicy.HIGH_CONTENTION_PARK_NANOS);
+            serviceResetRequest();
+        } finally {
+            this.state.highContentionParked = false;
+        }
+    }
+
     private long localCacheExecute(long limit) {
         return super.drain(this.outputStream, limit);
     }
@@ -389,7 +405,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         long acquisitionContention = context.upstream.getAcquireContentionOrUninitialized();
         this.state.batchSize = this.controlPolicy.completeBatch(
                 getBatchLimit(), productiveHandles, registeredWorkers, acquisitionContention);
-        refreshIdleEligibility(productiveHandles, registeredWorkers);
+        refreshIdleEligibility(productiveHandles, registeredWorkers, acquisitionContention);
         reportMetrics();
     }
 
@@ -403,10 +419,17 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     /// Applies the owner-local idle predicate using the current registered-core rank.
     private void refreshIdleEligibility(long productiveHandles, int registeredWorkers) {
+        refreshIdleEligibility(productiveHandles, registeredWorkers, -1L);
+    }
+
+    /// Applies both independent idle predicates from one completed-batch contention observation.
+    private void refreshIdleEligibility(long productiveHandles, int registeredWorkers, long acquisitionContention) {
         int workerRank = super.getThreadRank(this.core);
         this.state.registeredWorkers = registeredWorkers;
         this.state.workerRank = workerRank;
         this.state.idleEligible = this.controlPolicy.idleEligible(productiveHandles, registeredWorkers, workerRank);
+        this.state.highContentionIdleEligible =
+                this.controlPolicy.highContentionIdleEligible(acquisitionContention, registeredWorkers, workerRank);
     }
 
     /// Publishes telemetry from the existing service and throughput recorders when configured.
@@ -444,6 +467,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (this.controlPolicy == null) {
             return null;
         }
+        boolean productionParked = this.state.productionParked;
+        boolean highContentionParked = this.state.highContentionParked;
         return new FragmentPolicySnapshot(
                 this.controlPolicy.mode(),
                 this.controlPolicy.bodyCostHistoryCount(),
@@ -453,8 +478,10 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.productiveHandleCount,
                 this.state.registeredWorkers,
                 this.state.workerRank,
-                this.state.productionParked,
-                this.controlPolicy.activePollingAllowed(this.core) && !this.state.productionParked,
+                productionParked,
+                highContentionParked,
+                this.state.highContentionParkCount,
+                this.controlPolicy.activePollingAllowed(this.core) && !productionParked && !highContentionParked,
                 recorderSnapshot(this.state.throughputRecorder),
                 recorderSnapshot(this.state.serviceTimeRecorder),
                 acquireContentionSnapshot());
@@ -652,6 +679,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         int workerRank = -1;
         boolean idleEligible = false;
         boolean productionParked = false;
+        boolean highContentionIdleEligible = false;
+        boolean highContentionParked = false;
+        long highContentionParkCount = 0L;
         long totalExecutions = 0;
 
         void reset() {
@@ -669,6 +699,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.workerRank = -1;
             this.idleEligible = false;
             this.productionParked = false;
+            this.highContentionIdleEligible = false;
+            this.highContentionParked = false;
+            this.highContentionParkCount = 0L;
             this.totalExecutions = 0;
             if (ControlPlaneFragment.this.upstreamQueue != null) {
                 ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();
@@ -691,6 +724,8 @@ public final class ControlPlaneFragment extends WorkRequester {
             int registeredWorkers,
             int workerRank,
             boolean productionParked,
+            boolean highContentionParked,
+            long highContentionParkCount,
             boolean activePolling,
             FlowRecorderSnapshot throughput,
             FlowRecorderSnapshot service,
@@ -714,6 +749,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                     0,
                     -1,
                     false,
+                    false,
+                    0L,
                     true,
                     null,
                     null,
