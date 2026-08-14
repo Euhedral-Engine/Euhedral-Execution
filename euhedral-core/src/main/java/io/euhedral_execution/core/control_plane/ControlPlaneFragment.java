@@ -193,6 +193,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ThreadTools.setTimerResolution(1);
                 super.register();
                 this.mainThread = Thread.currentThread();
+                this.controlPolicy.calibrate();
 
                 try {
                     cycle();

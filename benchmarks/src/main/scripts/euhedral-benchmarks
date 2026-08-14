@@ -10,7 +10,22 @@ else
   JAVA_COMMAND=java
 fi
 
-exec "$JAVA_COMMAND" \
-  -Dlogback.configurationFile=benchmark-logback.xml \
-  -cp "$BENCHMARK_DIR/euhedral-benchmark.jar:$BENCHMARK_DIR/lib/*" \
-  io.euhedral_execution.benchmarks.BenchRunner "$@"
+USE_MINIMAL=0
+
+if [ "${1:-}" = "--minimal" ]; then
+  USE_MINIMAL=1
+  shift
+fi
+
+if [ "$USE_MINIMAL" -eq 1 ]; then
+  exec "$JAVA_COMMAND" \
+    ${JAVA_OPTS:-} \
+    -cp "$BENCHMARK_DIR/euhedral-benchmark.jar:$BENCHMARK_DIR/lib/*" \
+    io.euhedral_execution.benchmarks.BenchRunner "$@"
+else
+  exec "$JAVA_COMMAND" \
+    ${JAVA_OPTS:-} \
+    -Dlogback.configurationFile=benchmark-logback.xml \
+    -cp "$BENCHMARK_DIR/euhedral-benchmark.jar:$BENCHMARK_DIR/lib/*" \
+    io.euhedral_execution.benchmarks.BenchRunner "$@"
+fi

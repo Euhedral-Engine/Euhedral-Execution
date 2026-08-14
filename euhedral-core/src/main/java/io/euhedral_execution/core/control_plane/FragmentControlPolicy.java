@@ -1,5 +1,6 @@
 package io.euhedral_execution.core.control_plane;
 
+import io.euhedral_execution.core.utils.MicroCalibrator;
 import java.util.BitSet;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
@@ -22,9 +23,9 @@ final class FragmentControlPolicy {
     static final long STAGED_BATCH_WORK_TARGET_NS = 8_000_000L;
 
     // Body Cost Thresholds (Small, Medium, High)
-    static final double S_BODY_COST_NS = 20.0;
-    static final double M_BODY_COST_NS = 90.0;
-    static final double H_BODY_COST_NS = 95.0;
+    double S_BODY_COST_NS = 20.0;
+    double M_BODY_COST_NS = 90.0;
+    double H_BODY_COST_NS = 95.0;
 
     // Contention Thresholds
     // Calibration-host candidate: Phase 14 left a gap between 582k DIRECT and 705k high contention.
@@ -50,7 +51,7 @@ final class FragmentControlPolicy {
 
     // Contention Body Cost Thresholds
     static final double DEFAULT_HIGH_CONTENTION_BODY_COST_NS = 200.0;
-    static final double HIGH_CONTENTION_BODY_COST_NS = readHighContentionIdleBodyCostMaxNs();
+    double HIGH_CONTENTION_BODY_COST_NS = readHighContentionIdleBodyCostMaxNs();
 
     private final DiagnosticOverride diagnosticOverride;
     private ExecutionPath executionPath;
@@ -107,6 +108,15 @@ final class FragmentControlPolicy {
         if (witness != expected) {
             throw new IllegalStateException("The fragment diagnostic override changed before cleanup");
         }
+    }
+
+    void calibrate() {
+        MicroCalibrator calibrator = new MicroCalibrator();
+        calibrator.warmup();
+        S_BODY_COST_NS = calibrator.benchmark(24);
+        M_BODY_COST_NS = calibrator.benchmark(96);
+        H_BODY_COST_NS = calibrator.benchmark(102);
+        HIGH_CONTENTION_BODY_COST_NS = calibrator.benchmark(256);
     }
 
     /// Records one aggregate execution sample in nanoseconds across `frames` completed frames.
@@ -289,7 +299,7 @@ final class FragmentControlPolicy {
     }
 
     /// Selects the explicit execution path from availability, body history, and settled mode.
-    static ExecutionPath selectExecutionPath(
+    ExecutionPath selectExecutionPath(
             long productiveHandles,
             int registeredWorkers,
             int bodyCostHistoryCount,
@@ -312,7 +322,7 @@ final class FragmentControlPolicy {
     }
 
     /// Selects the execution path from availability, body cost, and fixed-point contention.
-    static ExecutionPath selectExecutionPath(
+    ExecutionPath selectExecutionPath(
             long productiveHandles,
             int registeredWorkers,
             int bodyCostHistoryCount,
@@ -348,7 +358,7 @@ final class FragmentControlPolicy {
     }
 
     /// Selects only the measured extreme-cheap excess capacity while rank zero always polls.
-    static boolean selectIdleEligibility(
+    boolean selectIdleEligibility(
             long productiveHandles,
             int registeredWorkers,
             int workerRank,
@@ -368,7 +378,7 @@ final class FragmentControlPolicy {
     }
 
     /// Tests the independent high-contention branch inside one configured light-body range.
-    static boolean selectContentionIdleEligibility(
+    boolean selectContentionIdleEligibility(
             long contention,
             int registeredWorkers,
             int workerRank,
@@ -419,7 +429,7 @@ final class FragmentControlPolicy {
     }
 
     /// Reads the startup-fixed light-body ceiling used by the developer policy override.
-    private static double readHighContentionIdleBodyCostMaxNs() {
+    private double readHighContentionIdleBodyCostMaxNs() {
         double value = Double.parseDouble(System.getProperty(
                 HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY, Double.toString(DEFAULT_HIGH_CONTENTION_BODY_COST_NS)));
         if (!Double.isFinite(value) || value <= S_BODY_COST_NS) {

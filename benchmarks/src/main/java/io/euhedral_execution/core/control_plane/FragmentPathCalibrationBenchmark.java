@@ -1,5 +1,7 @@
 package io.euhedral_execution.core.control_plane;
 
+import static io.euhedral_execution.core.control_plane.FragmentControlPolicy.DEFAULT_HIGH_CONTENTION_BODY_COST_NS;
+import static io.euhedral_execution.core.control_plane.FragmentControlPolicy.HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY;
 import static io.euhedral_execution.core.utils.MathFunctions.unsignedMultiplyHigh;
 
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
@@ -2923,7 +2925,9 @@ public class FragmentPathCalibrationBenchmark {
                     this.distributor.getThreadCount(),
                     FragmentControlPolicy.HIGH_CONTENTION_THRESHOLD,
                     FragmentControlPolicy.HIGH_CONTENTION_PARK_NANOS,
-                    FragmentControlPolicy.HIGH_CONTENTION_BODY_COST_NS,
+                    Double.parseDouble(System.getProperty(
+                            HIGH_CONTENTION_IDLE_BODY_COST_MAX_NS_PROPERTY,
+                            Double.toString(DEFAULT_HIGH_CONTENTION_BODY_COST_NS))),
                     Arrays.toString(highContentionParkCounts(finalSnapshots)),
                     Arrays.deepToString(
                             this.warmupPolicySnapshots.toArray(ControlPlaneFragment.FragmentPolicySnapshot[][]::new)),
