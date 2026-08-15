@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -393,6 +394,148 @@ class HarnessConfigTest {
         assertNull(artifacts.retainObserverData());
         assertNull(artifacts.retainPerForkResults());
         assertNull(artifacts.retainPerIterationResults());
+    }
+
+    /// Verifies calibrationProfiles JSON parsing and round-trip equivalence.
+    @Test
+    void parseCalibrationProfilesAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "calibrationProfiles": {
+                "profile-a": {
+                  "parallelSources": 4,
+                  "orderedSources": 2,
+                  "workUnits": 100,
+                  "randomizeWork": true,
+                  "totalRequiredExecutions": 1000000,
+                  "invocationTimeoutMillis": 60000,
+                  "decisionWeights": {
+                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                    "idleBodyCostWeights": [],
+                    "idleTimeNs": [],
+                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                    "execBodyCostWeights": [],
+                    "executionPolicies": []
+                  },
+                  "observeCycleStart": false,
+                  "observeBatchProgress": false,
+                  "observeBatchComplete": false,
+                  "observeRawBodyCost": false,
+                  "observeIdleDecision": false,
+                  "observeExecDecision": false
+                }
+              },
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNotNull(config.calibrationProfiles());
+        assertEquals(1, config.calibrationProfiles().size());
+        assertTrue(config.calibrationProfiles().containsKey("profile-a"));
+        assertEquals(4, config.calibrationProfiles().get("profile-a").parallelSources());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies blank calibrationProfile names are rejected.
+    @Test
+    void rejectBlankCalibrationProfileName() {
+        String jsonBlankProfileName = """
+            {
+              "calibrationProfiles": {
+                "   ": {
+                  "parallelSources": 4,
+                  "orderedSources": 2,
+                  "workUnits": 100,
+                  "randomizeWork": true,
+                  "totalRequiredExecutions": 1000000,
+                  "invocationTimeoutMillis": 60000,
+                  "decisionWeights": {
+                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                    "idleBodyCostWeights": [],
+                    "idleTimeNs": [],
+                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                    "execBodyCostWeights": [],
+                    "executionPolicies": []
+                  },
+                  "observeCycleStart": false,
+                  "observeBatchProgress": false,
+                  "observeBatchComplete": false,
+                  "observeRawBodyCost": false,
+                  "observeIdleDecision": false,
+                  "observeExecDecision": false
+                }
+              },
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonBlankProfileName, HarnessConfig.class));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of("  ", dummyCalibrationConfig()),
+                        List.of(dummyTrialConfig())));
+    }
+
+    /// Verifies null calibrationProfile values are rejected and profiles map is defensively copied.
+    @Test
+    void rejectNullCalibrationProfileValueAndDefensivelyCopy() {
+        Map<String, CalibrationBenchmarkConfig> mutableProfiles = new HashMap<>();
+        mutableProfiles.put("profile-1", dummyCalibrationConfig());
+        mutableProfiles.put("profile-2", null);
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new HarnessConfig(
+                        null, null, null, null, null, null, null, mutableProfiles, List.of(dummyTrialConfig())));
+
+        Map<String, CalibrationBenchmarkConfig> validProfiles = Map.of("profile-1", dummyCalibrationConfig());
+        HarnessConfig config =
+                new HarnessConfig(null, null, null, null, null, null, null, validProfiles, List.of(dummyTrialConfig()));
+
+        assertNotNull(config.calibrationProfiles());
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> config.calibrationProfiles().put("profile-2", dummyCalibrationConfig()));
     }
 
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.

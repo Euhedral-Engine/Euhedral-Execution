@@ -10,7 +10,8 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /// Configuration for benchmark calibration harness execution.
-/// Holds optional metadata, run options, artifact retention settings, and non-empty trial specifications.
+/// Holds optional metadata, run options, artifact retention settings, reusable calibration profiles, and non-empty
+/// trial specifications.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
         @Nullable String id,
@@ -19,16 +20,17 @@ public record HarnessConfig(
         @Nullable Map<String, String> labels,
         @Nullable HarnessRunOptions runOptions,
         @Nullable ArtifactConfig artifacts,
+        @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
         @NonNull List<TrialConfig> trials) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     /// Convenience constructor for harness configs containing only trials.
     public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, null, null, trials);
+        this(null, null, null, null, null, null, null, null, trials);
     }
 
-    /// Convenience constructor for harness configs without runOptions and artifacts.
+    /// Convenience constructor for harness configs without runOptions, artifacts, and profiles.
     public HarnessConfig(
             @Nullable Integer schemaVersion,
             @Nullable String id,
@@ -36,10 +38,10 @@ public record HarnessConfig(
             @Nullable String description,
             @Nullable Map<String, String> labels,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, null, trials);
+        this(schemaVersion, id, name, description, labels, null, null, null, trials);
     }
 
-    /// Convenience constructor for harness configs without artifacts.
+    /// Convenience constructor for harness configs without profiles.
     public HarnessConfig(
             @Nullable Integer schemaVersion,
             @Nullable String id,
@@ -47,16 +49,18 @@ public record HarnessConfig(
             @Nullable String description,
             @Nullable Map<String, String> labels,
             @Nullable HarnessRunOptions runOptions,
+            @Nullable ArtifactConfig artifacts,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, runOptions, null, trials);
+        this(schemaVersion, id, name, description, labels, runOptions, artifacts, null, trials);
     }
 
     /// Creates and validates a HarnessConfig instance.
     ///
     /// @throws IllegalArgumentException if schemaVersion is non-positive, id or name is blank,
     ///                                  trials is empty, non-null trial IDs are duplicated,
-    ///                                  or referenced baselineTrialIds are invalid/self-referential
-    /// @throws NullPointerException     if trials is null
+    ///                                  referenced baselineTrialIds are invalid/self-referential,
+    ///                                  or calibrationProfiles keys are blank
+    /// @throws NullPointerException     if trials is null or calibrationProfiles contains null values
     @JsonCreator
     public HarnessConfig {
         if (schemaVersion != null && schemaVersion <= 0) {
@@ -69,6 +73,17 @@ public record HarnessConfig(
             throw new IllegalArgumentException("name cannot be blank if present");
         }
         labels = labels != null ? Map.copyOf(labels) : null;
+        if (calibrationProfiles != null) {
+            for (Map.Entry<String, CalibrationBenchmarkConfig> entry : calibrationProfiles.entrySet()) {
+                String profileName = entry.getKey();
+                if (profileName == null || profileName.isBlank()) {
+                    throw new IllegalArgumentException("calibrationProfiles profile name cannot be blank");
+                }
+                Objects.requireNonNull(
+                        entry.getValue(), "calibrationProfiles profile value cannot be null for: " + profileName);
+            }
+            calibrationProfiles = Map.copyOf(calibrationProfiles);
+        }
         Objects.requireNonNull(trials, "trials cannot be null");
         if (trials.isEmpty()) {
             throw new IllegalArgumentException("Trial configurations can not be empty");
