@@ -1,10 +1,16 @@
 package calibration;
 
+import static calibration.infra.Constants.CPU_SET_PROP;
+import static calibration.infra.Constants.REPEAT_INDEX_PROP;
+import static calibration.infra.Constants.TRIAL_CONFIG_PROP;
+import static calibration.infra.Constants.TRIAL_ID_PROP;
+import static calibration.infra.Constants.TRIAL_INDEX_PROP;
+import static calibration.infra.Constants.TRIAL_NAME_PROP;
+
 import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessConfig.HarnessRunOptions;
 import calibration.config.HarnessConfig.TrialConfig;
-import calibration.infra.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.util.ArrayList;
@@ -16,13 +22,14 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class CalibrationRunner {
+    private static final Logger LOGGER = LoggerFactory.getLogger(CalibrationRunner.class.getSimpleName());
+
     private static final String CONFIG_PATH_ARG = "config_path";
     private static final Map<String, Integer> ARGUMENTS = Map.of(CONFIG_PATH_ARG, 0);
-
-    private static final String TRIAL_CONFIG_PATH_PROP = Constants.TRIAL_CONFIG_PROP;
-    private static final String CPU_SET_PROP = Constants.CPU_SET_PROP;
 
     private static final List<String> DEFAULT_FLAGS = List.of(
             "-XX:+UseThreadPriorities",
@@ -59,21 +66,23 @@ public class CalibrationRunner {
         boolean randomize = runOptions != null && Boolean.TRUE.equals(runOptions.randomizeTrialOrder());
         if (randomize) {
             long seed = (runOptions.randomSeed() != null) ? runOptions.randomSeed() : new Random().nextLong();
-            System.out.println("Randomized trial order with seed: " + seed);
+            LOGGER.info("Randomized trial order with seed: {}", seed);
             Collections.shuffle(activeTrials, new Random(seed));
         }
 
         List<String> failures = new ArrayList<>();
 
         for (int r = 0; r < repeatCount; r++) {
-            for (TrialConfig trial : activeTrials) {
+            for (int t = 0; t < activeTrials.size(); t++) {
+                TrialConfig trial = activeTrials.get(t);
                 if (failFast) {
-                    runTrial(trial, mapper);
+                    runTrial(trial, t, r, mapper);
                 } else {
                     try {
-                        runTrial(trial, mapper);
+                        runTrial(trial, t, r, mapper);
                     } catch (Exception e) {
                         String idStr = getTrialIdentifier(trial);
+                        LOGGER.error("[Failed trial] repeat={} trial={} {}", r, t, idStr, e);
                         failures.add(idStr + " (repeat " + (r + 1) + "): " + e.getMessage());
                     }
                 }
@@ -101,7 +110,30 @@ public class CalibrationRunner {
         return "<unnamed trial>";
     }
 
-    private static void runTrial(TrialConfig trial, ObjectMapper mapper) throws Exception {
+    private static void runTrial(TrialConfig trial, int trialIndex, int repeatIndex, ObjectMapper mapper)
+            throws Exception {
+        StringBuilder startMsg = new StringBuilder();
+        startMsg.append("[Running trial] repeat=")
+                .append(repeatIndex)
+                .append(" trial=")
+                .append(trialIndex);
+        if (trial.id() != null && !trial.id().isBlank()) {
+            startMsg.append(" id=").append(trial.id());
+        }
+        if (trial.name() != null && !trial.name().isBlank()) {
+            startMsg.append(" name=").append(trial.name());
+        }
+        if (trial.group() != null && !trial.group().isBlank()) {
+            startMsg.append(" group=").append(trial.group());
+        }
+        startMsg.append(" forks=")
+                .append(trial.forks())
+                .append(" warmups=")
+                .append(trial.warmups())
+                .append(" iterations=")
+                .append(trial.iterations());
+        LOGGER.info(startMsg.toString());
+
         File tempConfigFile = File.createTempFile("trial_config_", ".json");
         tempConfigFile.deleteOnExit();
         try {
@@ -109,12 +141,12 @@ public class CalibrationRunner {
             String canonicalPath = tempConfigFile.getCanonicalPath();
 
             List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
-            jvmArgs.add("-D" + TRIAL_CONFIG_PATH_PROP + "=" + canonicalPath);
-
-            String cpuSet = System.getProperty(CPU_SET_PROP);
-            if (cpuSet != null && !cpuSet.isBlank()) {
-                jvmArgs.add("-D" + CPU_SET_PROP + "=" + cpuSet);
-            }
+            addJVMProperty(jvmArgs, TRIAL_CONFIG_PROP, canonicalPath);
+            addJVMProperty(jvmArgs, TRIAL_INDEX_PROP, Integer.toString(trialIndex));
+            addJVMProperty(jvmArgs, REPEAT_INDEX_PROP, Integer.toString(repeatIndex));
+            addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
+            addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
+            addJVMProperty(jvmArgs, CPU_SET_PROP);
 
             if (trial.jvmArgs() != null) {
                 jvmArgs.addAll(trial.jvmArgs());
@@ -129,9 +161,36 @@ public class CalibrationRunner {
 
             Options options = opt.build();
             new Runner(options).run();
+
+            StringBuilder completeMsg = new StringBuilder();
+            completeMsg
+                    .append("[Completed trial] repeat=")
+                    .append(repeatIndex)
+                    .append(" trial=")
+                    .append(trialIndex);
+            if (trial.id() != null && !trial.id().isBlank()) {
+                completeMsg.append(" id=").append(trial.id());
+            }
+            if (trial.name() != null && !trial.name().isBlank()) {
+                completeMsg.append(" name=").append(trial.name());
+            }
+            LOGGER.info(completeMsg.toString());
         } finally {
             //noinspection ResultOfMethodCallIgnored
             tempConfigFile.delete();
+        }
+    }
+
+    private static void addJVMProperty(List<String> jvmArgs, String property) {
+        String value = System.getProperty(property);
+        if (value != null && !value.isBlank()) {
+            jvmArgs.add("-D" + property + "=" + value);
+        }
+    }
+
+    private static void addJVMProperty(List<String> jvmArgs, String property, String value) {
+        if (value != null && !value.isBlank()) {
+            jvmArgs.add("-D" + property + "=" + value);
         }
     }
 
