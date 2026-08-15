@@ -1,15 +1,17 @@
 package calibration;
 
+import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessConfig.TrialConfig;
+import calibration.infra.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
+import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 public class CalibrationRunner {
@@ -37,21 +39,26 @@ public class CalibrationRunner {
         ObjectMapper mapper = new ObjectMapper();
         HarnessConfig harnessConfig = mapper.readValue(configFile, HarnessConfig.class);
         for (TrialConfig trial : harnessConfig.trials()) {
-            ChainedOptionsBuilder opt = new OptionsBuilder();
-
-            Set<String> flags = new HashSet<>();
-            if (trial.jvmArgs() != null) {
-                flags.addAll(trial.jvmArgs());
-            }
-            flags.addAll(DEFAULT_FLAGS);
-
-            opt = opt.jvmArgsAppend(flags.toArray(new String[0]));
-            opt = opt.forks(trial.forks());
-            opt = opt.warmupForks(trial.warmups());
-            opt = opt.measurementIterations(trial.iterations());
-
-            new Runner(opt.build());
+            runTrial(trial);
         }
+    }
+
+    private static void runTrial(TrialConfig trial) throws Exception {
+        List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
+        if (trial.jvmArgs() != null) {
+            jvmArgs.addAll(trial.jvmArgs());
+        }
+        jvmArgs.add(String.format("-D%s=\"%s\"", Constants.TRIAL_CONFIG_PROP, "insert_path_here"));
+
+        ChainedOptionsBuilder opt = new OptionsBuilder();
+        opt = opt.include(CalibrationBenchmark.class.getName());
+        opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
+        opt = opt.forks(trial.forks());
+        opt = opt.warmupForks(trial.warmups());
+        opt = opt.measurementIterations(trial.iterations());
+
+        Options options = opt.build();
+        new Runner(options).run();
     }
 
     private static final class MainError extends RuntimeException {

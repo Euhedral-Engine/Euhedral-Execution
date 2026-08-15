@@ -42,7 +42,7 @@ public class CalibrationBenchmark {
     private RepeatingSink[] sinks;
 
     private static CalibrationBenchmarkConfig getConfig() {
-        String configPath = getRequiredPropertyValue(Constants.CALIBRATION_CONFIG_PROP);
+        String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
         ObjectMapper mapper = new ObjectMapper();
         try {
             return mapper.readValue(new File(configPath), CalibrationBenchmarkConfig.class);
