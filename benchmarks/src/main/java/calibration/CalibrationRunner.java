@@ -12,14 +12,19 @@ import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessConfig.ArtifactConfig;
 import calibration.config.HarnessConfig.HarnessRunOptions;
+import calibration.config.HarnessConfig.SweepConfig;
 import calibration.config.HarnessConfig.TrialConfig;
+import calibration.config.TrialSweepExpander;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
@@ -50,7 +55,7 @@ public class CalibrationRunner {
         ObjectMapper mapper = new ObjectMapper();
         HarnessConfig harnessConfig = loadConfig(path, mapper);
 
-        List<TrialConfig> activeTrials = resolveTrials(harnessConfig);
+        List<TrialConfig> activeTrials = resolveTrials(harnessConfig, mapper);
         File baseOutputDir = resolveOutputDirectory(harnessConfig.artifacts());
 
         runHarness(harnessConfig, activeTrials, baseOutputDir, mapper);
@@ -62,23 +67,87 @@ public class CalibrationRunner {
         return mapper.readValue(configFile, HarnessConfig.class);
     }
 
-    static List<TrialConfig> resolveTrials(HarnessConfig harnessConfig) {
-        List<TrialConfig> activeTrials = new ArrayList<>();
-        for (TrialConfig trial : harnessConfig.trials()) {
-            if (!Boolean.FALSE.equals(trial.enabled())) {
-                activeTrials.add(trial);
+    static List<TrialConfig> resolveTrials(HarnessConfig harnessConfig, ObjectMapper mapper) {
+        if (harnessConfig == null) {
+            return List.of();
+        }
+
+        List<TrialConfig> explicitTrials = harnessConfig.trials();
+        int explicitCount = explicitTrials.size();
+
+        Map<String, TrialConfig> explicitTrialMap = new HashMap<>();
+        for (TrialConfig trial : explicitTrials) {
+            if (trial.id() != null) {
+                explicitTrialMap.put(trial.id(), trial);
             }
         }
+
+        List<SweepConfig> sweeps = harnessConfig.sweeps() != null ? harnessConfig.sweeps() : List.of();
+        TrialSweepExpander expander = new TrialSweepExpander(mapper != null ? mapper : new ObjectMapper());
+
+        List<TrialConfig> generatedSweepTrials = new ArrayList<>();
+        int enabledSweepCount = 0;
+
+        for (SweepConfig sweep : sweeps) {
+            if (!sweep.isEnabled()) {
+                continue;
+            }
+            enabledSweepCount++;
+            TrialConfig baseTrial = explicitTrialMap.get(sweep.baseTrialId());
+            if (baseTrial == null) {
+                throw new IllegalArgumentException("Referenced baseTrialId '" + sweep.baseTrialId() + "' in sweep '"
+                        + sweep.id() + "' was not found in trials");
+            }
+            List<TrialConfig> expanded = expander.expandSweep(baseTrial, sweep);
+            int paramCount = sweep.parameters().size();
+            LOGGER.info(
+                    "Enabled sweep: id={}, baseTrialId={}, parameterCount={}, generatedCandidateCount={}",
+                    sweep.id(),
+                    sweep.baseTrialId(),
+                    paramCount,
+                    expanded.size());
+            generatedSweepTrials.addAll(expanded);
+        }
+
+        List<TrialConfig> resolvedTrials = new ArrayList<>();
+        int enabledExplicitCount = 0;
+        for (TrialConfig trial : explicitTrials) {
+            if (!Boolean.FALSE.equals(trial.enabled())) {
+                enabledExplicitCount++;
+                resolvedTrials.add(trial);
+            }
+        }
+
+        resolvedTrials.addAll(generatedSweepTrials);
+        int generatedSweepCount = generatedSweepTrials.size();
+        int totalResolvedCount = resolvedTrials.size();
+
+        Set<String> seenIds = new HashSet<>();
+        for (TrialConfig trial : resolvedTrials) {
+            if (trial.id() != null && !trial.id().isBlank()) {
+                if (!seenIds.add(trial.id())) {
+                    throw new IllegalArgumentException("Duplicate trial ID found in resolved trials: " + trial.id());
+                }
+            }
+        }
+
+        LOGGER.info(
+                "Trial resolution summary: explicitTrials={}, enabledExplicitTrials={}, enabledSweeps={}, generatedSweepTrials={}, totalResolvedTrials={}",
+                explicitCount,
+                enabledExplicitCount,
+                enabledSweepCount,
+                generatedSweepCount,
+                totalResolvedCount);
 
         HarnessRunOptions runOptions = harnessConfig.runOptions();
         boolean randomize = runOptions != null && Boolean.TRUE.equals(runOptions.randomizeTrialOrder());
         if (randomize) {
             long seed = (runOptions.randomSeed() != null) ? runOptions.randomSeed() : new Random().nextLong();
             LOGGER.info("Randomized trial order with seed: {}", seed);
-            Collections.shuffle(activeTrials, new Random(seed));
+            Collections.shuffle(resolvedTrials, new Random(seed));
         }
 
-        return activeTrials;
+        return resolvedTrials;
     }
 
     static File resolveOutputDirectory(ArtifactConfig artifacts) throws Exception {
