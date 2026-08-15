@@ -1,6 +1,7 @@
 package calibration;
 
 import static calibration.infra.Constants.CPU_SET_PROP;
+import static calibration.infra.Constants.OUTPUT_DIRECTORY_PROP;
 import static calibration.infra.Constants.REPEAT_INDEX_PROP;
 import static calibration.infra.Constants.TRIAL_CONFIG_PROP;
 import static calibration.infra.Constants.TRIAL_ID_PROP;
@@ -9,6 +10,7 @@ import static calibration.infra.Constants.TRIAL_NAME_PROP;
 
 import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.HarnessConfig;
+import calibration.config.HarnessConfig.ArtifactConfig;
 import calibration.config.HarnessConfig.HarnessRunOptions;
 import calibration.config.HarnessConfig.TrialConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -70,16 +72,28 @@ public class CalibrationRunner {
             Collections.shuffle(activeTrials, new Random(seed));
         }
 
+        HarnessConfig.ArtifactConfig artifacts = harnessConfig.artifacts();
+        File baseOutputDir = null;
+        if (artifacts != null
+                && artifacts.outputDirectory() != null
+                && !artifacts.outputDirectory().isBlank()) {
+            baseOutputDir = new File(artifacts.outputDirectory()).getCanonicalFile();
+            if (!baseOutputDir.exists()) {
+                //noinspection ResultOfMethodCallIgnored
+                baseOutputDir.mkdirs();
+            }
+        }
+
         List<String> failures = new ArrayList<>();
 
         for (int r = 0; r < repeatCount; r++) {
             for (int t = 0; t < activeTrials.size(); t++) {
                 TrialConfig trial = activeTrials.get(t);
                 if (failFast) {
-                    runTrial(trial, t, r, mapper);
+                    runTrial(trial, t, r, mapper, artifacts, baseOutputDir);
                 } else {
                     try {
-                        runTrial(trial, t, r, mapper);
+                        runTrial(trial, t, r, mapper, artifacts, baseOutputDir);
                     } catch (Exception e) {
                         String idStr = getTrialIdentifier(trial);
                         LOGGER.error("[Failed trial] repeat={} trial={} {}", r, t, idStr, e);
@@ -110,7 +124,13 @@ public class CalibrationRunner {
         return "<unnamed trial>";
     }
 
-    private static void runTrial(TrialConfig trial, int trialIndex, int repeatIndex, ObjectMapper mapper)
+    private static void runTrial(
+            TrialConfig trial,
+            int trialIndex,
+            int repeatIndex,
+            ObjectMapper mapper,
+            ArtifactConfig artifacts,
+            File baseOutputDir)
             throws Exception {
         StringBuilder startMsg = new StringBuilder();
         startMsg.append("[Running trial] repeat=")
@@ -147,6 +167,8 @@ public class CalibrationRunner {
             addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
             addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
             addJVMProperty(jvmArgs, CPU_SET_PROP);
+
+            prepareInvocationDirectory(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir, jvmArgs);
 
             if (trial.jvmArgs() != null) {
                 jvmArgs.addAll(trial.jvmArgs());
@@ -192,6 +214,32 @@ public class CalibrationRunner {
         if (value != null && !value.isBlank()) {
             jvmArgs.add("-D" + property + "=" + value);
         }
+    }
+
+    static File prepareInvocationDirectory(
+            TrialConfig trial,
+            int trialIndex,
+            int repeatIndex,
+            ObjectMapper mapper,
+            ArtifactConfig artifacts,
+            File baseOutputDir,
+            List<String> jvmArgs)
+            throws Exception {
+        if (baseOutputDir == null) {
+            return null;
+        }
+        String trialKey = (trial.id() != null && !trial.id().isBlank()) ? trial.id() : Integer.toString(trialIndex);
+        File invocationDir = new File(baseOutputDir, trialKey + "_repeat_" + repeatIndex).getCanonicalFile();
+        if (!invocationDir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            invocationDir.mkdirs();
+        }
+        addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getCanonicalPath());
+        if (artifacts != null && Boolean.TRUE.equals(artifacts.retainExpandedConfig())) {
+            File expandedConfigFile = new File(invocationDir, "trial_config.json");
+            mapper.writeValue(expandedConfigFile, trial);
+        }
+        return invocationDir;
     }
 
     private static final class MainError extends RuntimeException {
