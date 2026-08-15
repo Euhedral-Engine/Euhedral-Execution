@@ -872,6 +872,206 @@ class HarnessConfigTest {
         assertThrows(Exception.class, () -> mapper.readValue(jsonNullValue, HarnessConfig.class));
     }
 
+    /// Verifies searches JSON parsing and round-trip equivalence across all strategy types.
+    @Test
+    void parseSearchesAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "sweeps": [
+                {
+                  "id": "sweep-1",
+                  "parameters": [
+                    {
+                      "path": "parallelSources",
+                      "values": [2, 4]
+                    }
+                  ]
+                }
+              ],
+              "searches": [
+                {
+                  "id": "search-grid",
+                  "strategy": "GRID",
+                  "maxTrials": 10,
+                  "seed": 42,
+                  "objective": "maximize_throughput",
+                  "sweepIds": ["sweep-1"],
+                  "metadata": { "optimizer": "internal" }
+                },
+                {
+                  "id": "search-ext",
+                  "strategy": "EXTERNAL",
+                  "maxTrials": 50,
+                  "objective": "minimize_latency",
+                  "metadata": { "source": "sol" }
+                },
+                {
+                  "id": "search-sobol",
+                  "strategy": "SOBOL",
+                  "maxTrials": 20
+                },
+                {
+                  "id": "search-random",
+                  "strategy": "RANDOM",
+                  "maxTrials": 30
+                }
+              ],
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNotNull(config.searches());
+        assertEquals(4, config.searches().size());
+
+        HarnessConfig.SearchConfig search1 = config.searches().get(0);
+        assertEquals("search-grid", search1.id());
+        assertEquals(HarnessConfig.SearchStrategy.GRID, search1.strategy());
+        assertEquals(10, search1.maxTrials());
+        assertEquals(Long.valueOf(42L), search1.seed());
+        assertEquals("maximize_throughput", search1.objective());
+        assertEquals(List.of("sweep-1"), search1.sweepIds());
+        assertEquals(Map.of("optimizer", "internal"), search1.metadata());
+
+        HarnessConfig.SearchConfig search2 = config.searches().get(1);
+        assertEquals("search-ext", search2.id());
+        assertEquals(HarnessConfig.SearchStrategy.EXTERNAL, search2.strategy());
+        assertEquals(50, search2.maxTrials());
+
+        HarnessConfig.SearchConfig search3 = config.searches().get(2);
+        assertEquals(HarnessConfig.SearchStrategy.SOBOL, search3.strategy());
+
+        HarnessConfig.SearchConfig search4 = config.searches().get(3);
+        assertEquals(HarnessConfig.SearchStrategy.RANDOM, search4.strategy());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies maxTrials <= 0 is rejected.
+    @Test
+    void rejectInvalidMaxTrials() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SearchConfig(
+                        "id", HarnessConfig.SearchStrategy.GRID, 0, null, null, null, null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SearchConfig(
+                        "id", HarnessConfig.SearchStrategy.GRID, -5, null, null, null, null));
+    }
+
+    /// Verifies blank search id or objective are rejected.
+    @Test
+    void rejectBlankSearchIdAndObjective() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SearchConfig(
+                        "  ", HarnessConfig.SearchStrategy.GRID, 10, null, null, null, null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SearchConfig(
+                        "id", HarnessConfig.SearchStrategy.GRID, 10, null, "   ", null, null));
+    }
+
+    /// Verifies duplicate search IDs across searches list are rejected.
+    @Test
+    void rejectDuplicateSearchId() {
+        HarnessConfig.SearchConfig search1 = new HarnessConfig.SearchConfig(
+                "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, null, null);
+        HarnessConfig.SearchConfig search2 = new HarnessConfig.SearchConfig(
+                "search-1", HarnessConfig.SearchStrategy.RANDOM, 10, null, null, null, null);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(search1, search2),
+                        List.of(dummyTrialConfig())));
+    }
+
+    /// Verifies referenced sweepIds in search must exist in declared sweeps.
+    @Test
+    void rejectUnreferencedSweepId() {
+        HarnessConfig.SweepConfig sweep1 = new HarnessConfig.SweepConfig(
+                "sweep-1", null, List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1)))));
+        HarnessConfig.SearchConfig search = new HarnessConfig.SearchConfig(
+                "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, List.of("sweep-missing"), null);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(sweep1),
+                        List.of(search),
+                        List.of(dummyTrialConfig())));
+    }
+
+    /// Verifies defensive copying of search collections.
+    @Test
+    void defensivelyCopySearchCollections() {
+        List<String> mutableSweepIds = Arrays.asList("sweep-1");
+        Map<String, String> mutableMetadata = new HashMap<>();
+        mutableMetadata.put("key", "val");
+
+        HarnessConfig.SearchConfig search = new HarnessConfig.SearchConfig(
+                "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, mutableSweepIds, mutableMetadata);
+
+        assertNotNull(search.sweepIds());
+        assertThrows(
+                UnsupportedOperationException.class, () -> search.sweepIds().add("sweep-2"));
+
+        assertNotNull(search.metadata());
+        assertThrows(
+                UnsupportedOperationException.class, () -> search.metadata().put("k2", "v2"));
+    }
+
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {
