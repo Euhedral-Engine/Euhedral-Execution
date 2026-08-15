@@ -29,7 +29,8 @@ public record HarnessConfig(
     /// Creates and validates a HarnessConfig instance.
     ///
     /// @throws IllegalArgumentException if schemaVersion is non-positive, id or name is blank,
-    ///                                  trials is empty, or non-null trial IDs are duplicated
+    ///                                  trials is empty, non-null trial IDs are duplicated,
+    ///                                  or referenced baselineTrialIds are invalid/self-referential
     /// @throws NullPointerException     if trials is null
     @JsonCreator
     public HarnessConfig {
@@ -56,6 +57,43 @@ public record HarnessConfig(
                 }
             }
         }
+
+        for (TrialConfig trial : trials) {
+            if (trial != null
+                    && trial.comparison() != null
+                    && trial.comparison().baselineTrialId() != null) {
+                String baselineId = trial.comparison().baselineTrialId();
+                if (trial.id() != null && trial.id().equals(baselineId)) {
+                    throw new IllegalArgumentException("Trial cannot reference itself as baseline: " + trial.id());
+                }
+                if (!trialIds.contains(baselineId)) {
+                    throw new IllegalArgumentException("Referenced baselineTrialId not found: " + baselineId);
+                }
+            }
+        }
+    }
+
+    /// Configuration for describing comparison relationships between trials.
+    public record ComparisonConfig(
+            @Nullable String baselineTrialId,
+            @Nullable String comparisonGroup,
+            @Nullable String purpose) {
+
+        /// Creates and validates a ComparisonConfig instance.
+        ///
+        /// @throws IllegalArgumentException if any non-null field is blank
+        @JsonCreator
+        public ComparisonConfig {
+            if (baselineTrialId != null && baselineTrialId.isBlank()) {
+                throw new IllegalArgumentException("baselineTrialId cannot be blank if present");
+            }
+            if (comparisonGroup != null && comparisonGroup.isBlank()) {
+                throw new IllegalArgumentException("comparisonGroup cannot be blank if present");
+            }
+            if (purpose != null && purpose.isBlank()) {
+                throw new IllegalArgumentException("purpose cannot be blank if present");
+            }
+        }
     }
 
     /// Configuration for an individual calibration trial run.
@@ -65,7 +103,7 @@ public record HarnessConfig(
             @Nullable String group,
             @Nullable String description,
             @Nullable String hypothesis,
-            @Nullable String baselineTrialId,
+            @Nullable ComparisonConfig comparison,
             @Nullable List<String> tags,
             @Nullable Boolean enabled,
             int forks,
@@ -111,9 +149,6 @@ public record HarnessConfig(
             }
             if (group != null && group.isBlank()) {
                 throw new IllegalArgumentException("trial group cannot be blank if present");
-            }
-            if (baselineTrialId != null && baselineTrialId.isBlank()) {
-                throw new IllegalArgumentException("trial baselineTrialId cannot be blank if present");
             }
             if (tags != null) {
                 for (String tag : tags) {

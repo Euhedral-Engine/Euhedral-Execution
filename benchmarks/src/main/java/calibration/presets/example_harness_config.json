@@ -12,8 +12,10 @@
       "name": "Default Calibration Trial",
       "group": "baseline-calibration",
       "description": "Baseline calibration trial run with standard decision weights",
-      "hypothesis": "STAGED execution policy optimizes throughput under high body cost",
-      "baselineTrialId": "trial-000",
+      "comparison": {
+        "comparisonGroup": "baseline-calibration",
+        "purpose": "Baseline benchmark comparison"
+      },
       "tags": [
         "example",
         "baseline"

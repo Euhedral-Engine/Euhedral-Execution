@@ -2,6 +2,7 @@ package calibration.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -27,15 +28,15 @@ class HarnessConfigTest {
                 id, "name", "group", null, null, null, null, true, 1, 1, 1, null, dummyCalibrationConfig());
     }
 
-    private static HarnessConfig.TrialConfig dummyTrialConfigWithMeta(
-            String id, String name, String group, String baselineTrialId) {
+    private static HarnessConfig.TrialConfig dummyTrialConfigWithComparison(
+            String id, HarnessConfig.ComparisonConfig comparison) {
         return new HarnessConfig.TrialConfig(
                 id,
-                name,
-                group,
+                "name",
+                "group",
                 "desc",
                 "hypothesis",
-                baselineTrialId,
+                comparison,
                 null,
                 true,
                 1,
@@ -200,7 +201,7 @@ class HarnessConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(1, "id", "name", null, null, List.of()));
     }
 
-    /// Verifies trial metadata deserialization and round-trip equivalence.
+    /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {
         String json = """
@@ -212,7 +213,11 @@ class HarnessConfigTest {
                   "group": "group-a",
                   "description": "First trial",
                   "hypothesis": "Hypothesis A",
-                  "baselineTrialId": "baseline-0",
+                  "comparison": {
+                    "baselineTrialId": null,
+                    "comparisonGroup": "group-a",
+                    "purpose": "Baseline comparison"
+                  },
                   "tags": ["tag1", "tag2"],
                   "enabled": true,
                   "forks": 1,
@@ -254,7 +259,10 @@ class HarnessConfigTest {
         assertEquals("group-a", trial.group());
         assertEquals("First trial", trial.description());
         assertEquals("Hypothesis A", trial.hypothesis());
-        assertEquals("baseline-0", trial.baselineTrialId());
+        assertNotNull(trial.comparison());
+        assertNull(trial.comparison().baselineTrialId());
+        assertEquals("group-a", trial.comparison().comparisonGroup());
+        assertEquals("Baseline comparison", trial.comparison().purpose());
         assertEquals(List.of("tag1", "tag2"), trial.tags());
         assertEquals(Boolean.TRUE, trial.enabled());
 
@@ -263,13 +271,89 @@ class HarnessConfigTest {
         assertEquals(config, roundTrip);
     }
 
-    /// Verifies blank trial id, name, group, or baselineTrialId are rejected.
+    /// Verifies blank fields in ComparisonConfig are rejected.
+    @Test
+    void rejectBlankComparisonConfigFields() {
+        assertThrows(
+                IllegalArgumentException.class, () -> new HarnessConfig.ComparisonConfig("  ", "group", "purpose"));
+        assertThrows(
+                IllegalArgumentException.class, () -> new HarnessConfig.ComparisonConfig("baseline", "  ", "purpose"));
+        assertThrows(
+                IllegalArgumentException.class, () -> new HarnessConfig.ComparisonConfig("baseline", "group", "  "));
+    }
+
+    /// Verifies valid baseline reference between trials.
+    @Test
+    void validBaselineReference() {
+        HarnessConfig.TrialConfig baselineTrial = dummyTrialConfigWithId("trial-1");
+        HarnessConfig.TrialConfig comparingTrial = dummyTrialConfigWithComparison(
+                "trial-2", new HarnessConfig.ComparisonConfig("trial-1", "contention-group", "Compare throughput"));
+
+        HarnessConfig config = new HarnessConfig(List.of(baselineTrial, comparingTrial));
+        assertEquals(2, config.trials().size());
+        assertEquals("trial-1", config.trials().get(1).comparison().baselineTrialId());
+    }
+
+    /// Verifies error when trial references a missing baseline ID.
+    @Test
+    void missingBaselineReference() {
+        HarnessConfig.TrialConfig trial = dummyTrialConfigWithComparison(
+                "trial-2",
+                new HarnessConfig.ComparisonConfig("non-existent-id", "contention-group", "Compare throughput"));
+
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
+    }
+
+    /// Verifies error when trial references itself as baseline.
+    @Test
+    void selfReferenceBaseline() {
+        HarnessConfig.TrialConfig trial = dummyTrialConfigWithComparison(
+                "trial-1", new HarnessConfig.ComparisonConfig("trial-1", "contention-group", "Self comparison"));
+
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
+    }
+
+    /// Verifies comparison group without a baseline ID is valid.
+    @Test
+    void comparisonGroupsWithoutABaseline() {
+        HarnessConfig.TrialConfig trial1 = dummyTrialConfigWithComparison(
+                "trial-1", new HarnessConfig.ComparisonConfig(null, "group-alpha", "Group member 1"));
+        HarnessConfig.TrialConfig trial2 = dummyTrialConfigWithComparison(
+                "trial-2", new HarnessConfig.ComparisonConfig(null, "group-alpha", "Group member 2"));
+
+        HarnessConfig config = new HarnessConfig(List.of(trial1, trial2));
+        assertEquals(2, config.trials().size());
+        assertNull(config.trials().get(0).comparison().baselineTrialId());
+        assertEquals("group-alpha", config.trials().get(0).comparison().comparisonGroup());
+    }
+
+    /// Verifies blank trial id, name, or group are rejected.
     @Test
     void rejectBlankTrialMetadataFields() {
-        assertThrows(IllegalArgumentException.class, () -> dummyTrialConfigWithMeta("  ", "name", "group", "baseline"));
-        assertThrows(IllegalArgumentException.class, () -> dummyTrialConfigWithMeta("id", "  ", "group", "baseline"));
-        assertThrows(IllegalArgumentException.class, () -> dummyTrialConfigWithMeta("id", "name", "  ", "baseline"));
-        assertThrows(IllegalArgumentException.class, () -> dummyTrialConfigWithMeta("id", "name", "group", "  "));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialConfig(
+                        "  ",
+                        "name",
+                        "group",
+                        "desc",
+                        "hyp",
+                        null,
+                        null,
+                        true,
+                        1,
+                        1,
+                        1,
+                        null,
+                        dummyCalibrationConfig()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialConfig(
+                        "id", "  ", "group", "desc", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialConfig(
+                        "id", "name", "  ", "desc", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
     }
 
     /// Verifies tags are defensively copied and blank or null tags are rejected.
@@ -336,6 +420,8 @@ class HarnessConfigTest {
         assertNotNull(config.trials());
         assertEquals(1, config.trials().size());
         assertEquals("trial-001", config.trials().get(0).id());
+        assertNotNull(config.trials().get(0).comparison());
+        assertEquals("baseline-calibration", config.trials().get(0).comparison().comparisonGroup());
     }
 
     /// Verifies preset JSON file exec_contention_band_calibration.json parses correctly.
