@@ -1,4 +1,11 @@
 {
+  "schemaVersion": 1,
+  "id": "exec-contention-band-calibration",
+  "name": "Execution Contention Band Calibration",
+  "description": "Calibration configuration for execution contention bands",
+  "labels": {
+    "preset": "contention"
+  },
   "trials": [
     {
       "forks": 1,

@@ -1,4 +1,11 @@
 {
+  "schemaVersion": 1,
+  "id": "example-harness-config",
+  "name": "Example Calibration Harness Configuration",
+  "description": "Example harness configuration with single trial for calibration benchmarking",
+  "labels": {
+    "preset": "example"
+  },
   "trials": [
     {
       "forks": 1,
