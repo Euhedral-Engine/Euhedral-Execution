@@ -6,13 +6,13 @@ import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionP
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
-import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.ExecutionMetrics;
 import io.euhedral_execution.core.utils.FlowRecorder;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
+import io.euhedral_execution.core.utils.StopWatch;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
@@ -22,7 +22,6 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapsho
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -38,8 +37,6 @@ import org.slf4j.LoggerFactory;
 /// uses a deterministic availability/body-cost direct/staged policy, while benchmark mode evaluates the
 /// existing action-picker vectors on an independent loop.
 public final class ControlPlaneFragment extends WorkRequester {
-
-    private static final long PRODUCTION_IDLE_RECHECK_NS = 1_000_000L;
 
     private static final VarHandle DRAIN;
     private static final VarHandle SNAPSHOT;
@@ -116,7 +113,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = info.socket();
             this.core = info.core();
 
-            this.controlPolicy = this.benchmarkMode ? null : new FragmentControlPolicy();
+            this.controlPolicy = new FragmentControlPolicy();
             this.state = new CycleState();
 
             this.mainExecutor = PinnedThreadExecutor.getOrSetIfAbsent(
@@ -127,7 +124,17 @@ public final class ControlPlaneFragment extends WorkRequester {
                             SystemInfo.getCpuInfo(layout.cpu()).core())
                     .pCore();
 
-            this.outputStream = new LatticeHotSource();
+            StopWatch stopWatch = new StopWatch();
+            this.outputStream = new LatticeHotSource(
+                    ignored -> {
+                        stopWatch.start();
+                    },
+                    () -> {
+                        long elapsed = stopWatch.stop();
+                        if (elapsed > 0) {
+                            this.controlPolicy.recordBodyCost(elapsed);
+                        }
+                    });
 
             this.metrics = new ExecutionMetrics(config);
             long maxBatch = config.maxBatchSize();
@@ -150,13 +157,6 @@ public final class ControlPlaneFragment extends WorkRequester {
     @Override
     public LatticeSource output() {
         return this.outputStream;
-    }
-
-    /// Connects the paired cloned executor's setup-only body-cost callback before worker start.
-    public void connectBodyCostRecorder(AbstractExecutor executor) {
-        if (this.controlPolicy != null && this.controlPolicy.bodyCostSamplingEnabled()) {
-            executor.attachProductionBodyTimingRecorder(this.controlPolicy::recordBodyCost);
-        }
     }
 
     @Override
@@ -193,7 +193,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ThreadTools.setTimerResolution(1);
                 super.register();
                 this.mainThread = Thread.currentThread();
-                this.controlPolicy.calibrate();
 
                 try {
                     cycle();
@@ -211,31 +210,27 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private void cycle() {
         try {
-            if (this.controlPolicy != null && !this.controlPolicy.activePollingAllowed(this.core)) {
-                diagnosticIdleLoop();
-                return;
-            }
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
             this.upstreamQueue = context.upstream;
             while (keepRunning()) {
                 serviceResetRequest();
 
-                if (this.state.idleEligible && super.getLocalCacheCount() == 0L) {
-                    productionIdleLoop(context);
-                }
-                if (this.state.contentionIdleEligible && super.getLocalCacheCount() == 0L) {
-                    highContentionIdleOnce();
+                if (super.getLocalCacheCount() == 0L) {
+                    this.controlPolicy.idle(
+                            this.state.upstreamCount,
+                            this.state.registeredWorkers,
+                            this.state.workerRank,
+                            context.upstream.getContention());
                 }
 
                 long newUpCount = context.upstream.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
                     this.state.upstreamCount = newUpCount;
                 }
-                if (this.state.upstreamCount == 0
-                        && super.getLocalCacheCount() == 0
-                        && super.getUpstreamCacheCount() == 0) {
-                    this.state.upstreamCount = idleSpin(context);
+                if (newUpCount == 0 && super.getLocalCacheCount() == 0 && super.getUpstreamCacheCount() == 0) {
+                    this.state.upstreamCount = context.upstream.getTrueUpstreamCount();
+                    continue;
                 }
 
                 long limit = this.state.batchSize - this.state.completed;
@@ -255,7 +250,11 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                 }
 
-                if (this.controlPolicy.mode() == ExecutionPath.DIRECT) {
+                ExecutionPath path = this.controlPolicy.selectExecutionPath(
+                        context.upstream.getCachedUpCount(),
+                        this.state.registeredWorkers,
+                        context.upstream.getContention());
+                if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
                         long start = System.nanoTime();
                         long count = remoteCacheExecute(limit);
@@ -280,7 +279,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     if (processed == 0L) {
                         super.requestAndPull(context, this.state.batchSize);
                     }
-                } else {
+                } else if (path == ExecutionPath.STAGED) {
                     if (limit > 0L) {
                         super.request(context);
                     }
@@ -316,13 +315,14 @@ public final class ControlPlaneFragment extends WorkRequester {
                             processed += count;
                         }
                     }
+                } else {
+                    continue;
                 }
 
                 this.state.completed += processed;
-                this.state.totalExecutions += processed;
                 long nowNs = System.nanoTime();
                 if (processed > 0L) {
-                    recordProgress(context, nowNs, executionElapsedNs, executionFrames, processed);
+                    recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
                     this.controlPolicy.recordProgress();
                     Thread.onSpinWait();
                 } else if (this.controlPolicy.missRequiresPark()) {
@@ -335,43 +335,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.logger.error("[CRITICAL] Terminal error encountered in the main loop. Exiting.", e);
         } finally {
             this.running.set(false);
-        }
-    }
-
-    /// Keeps a setup-designated benchmark worker registered but outside the active polling loop.
-    private void diagnosticIdleLoop() {
-        while (keepRunning()) {
-            serviceResetRequest();
-            LockSupport.park(this);
-        }
-    }
-
-    /// Parks eligible excess capacity and periodically reevaluates owner-local physical inputs.
-    private void productionIdleLoop(FlowThread.FlowContext context) {
-        this.state.productionParked = true;
-        try {
-            while (keepRunning() && this.state.idleEligible && super.getLocalCacheCount() == 0L) {
-                LockSupport.parkNanos(this, PRODUCTION_IDLE_RECHECK_NS);
-                serviceResetRequest();
-                if (keepRunning()) {
-                    refreshIdleEligibility(context);
-                }
-            }
-        } finally {
-            this.state.productionParked = false;
-        }
-    }
-
-    /// Consumes one batch-boundary decision and re-enters competition after one finite wait.
-    void highContentionIdleOnce() {
-        this.state.contentionIdleEligible = false;
-        this.state.contentionParked = true;
-        this.state.contentionParkCount++;
-        try {
-            LockSupport.parkNanos(this, FragmentControlPolicy.HIGH_CONTENTION_PARK_NANOS);
-            serviceResetRequest();
-        } finally {
-            this.state.contentionParked = false;
         }
     }
 
@@ -388,8 +351,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     /// Records loop execution telemetry and advances policy only at a batch boundary.
-    private void recordProgress(
-            FlowThread.FlowContext context, long nowNs, long executionElapsedNs, long executionFrames, long processed) {
+    private void recordProgress(long nowNs, long executionElapsedNs, long executionFrames, long processed) {
         this.controlPolicy.recordExecution(executionElapsedNs, executionFrames);
         if (executionElapsedNs > 0L && executionFrames > 0L) {
             long serviceTime = Math.max(1L, executionElapsedNs / executionFrames);
@@ -400,38 +362,15 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (this.state.completed < this.state.batchSize) {
             return;
         }
-        this.state.completed = 0L;
-        long productiveHandles = context.upstream.getProductiveHandleCount();
-        this.state.productiveHandleCount = productiveHandles;
+
         int registeredWorkers = super.getThreadCount();
-        long acquisitionContention = context.upstream.getAcquireContentionOrUninitialized();
-        this.state.batchSize = this.controlPolicy.completeBatch(
-                getBatchLimit(), productiveHandles, registeredWorkers, acquisitionContention);
-        refreshIdleEligibility(productiveHandles, registeredWorkers, acquisitionContention);
-        reportMetrics();
-    }
-
-    /// Refreshes availability after an idle wake without advancing path or batch selection.
-    private void refreshIdleEligibility(FlowThread.FlowContext context) {
-        long productiveHandles = context.upstream.getProductiveHandleCount();
-        int registeredWorkers = super.getThreadCount();
-        this.state.productiveHandleCount = productiveHandles;
-        refreshIdleEligibility(productiveHandles, registeredWorkers);
-    }
-
-    /// Applies the owner-local idle predicate using the current registered-core rank.
-    private void refreshIdleEligibility(long productiveHandles, int registeredWorkers) {
-        refreshIdleEligibility(productiveHandles, registeredWorkers, -1L);
-    }
-
-    /// Applies both independent idle predicates from one completed-batch contention observation.
-    private void refreshIdleEligibility(long productiveHandles, int registeredWorkers, long acquisitionContention) {
         int workerRank = super.getThreadRank(this.core);
+
+        this.state.completed = 0L;
+        this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit());
         this.state.registeredWorkers = registeredWorkers;
         this.state.workerRank = workerRank;
-        this.state.idleEligible = this.controlPolicy.idleEligible(productiveHandles, registeredWorkers, workerRank);
-        this.state.contentionIdleEligible =
-                this.controlPolicy.contentionIdleEligible(acquisitionContention, registeredWorkers, workerRank);
+        reportMetrics();
     }
 
     /// Publishes telemetry from the existing service and throughput recorders when configured.
@@ -462,78 +401,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     long getAdaptiveBatchCap() {
         return (long) ADAPTIVE_BATCH_CAP.getOpaque(this);
-    }
-
-    /// Returns a best-effort diagnostic view of owner-local policy state without publication.
-    FragmentPolicySnapshot policySnapshot() {
-        if (this.controlPolicy == null) {
-            return null;
-        }
-        boolean productionParked = this.state.productionParked;
-        boolean highContentionParked = this.state.contentionParked;
-        return new FragmentPolicySnapshot(
-                this.controlPolicy.mode(),
-                this.controlPolicy.bodyCostHistoryCount(),
-                this.controlPolicy.smoothedBodyCostNs(),
-                this.controlPolicy.serviceTimeNs(),
-                this.controlPolicy.batchSize(),
-                this.state.productiveHandleCount,
-                this.state.registeredWorkers,
-                this.state.workerRank,
-                productionParked,
-                highContentionParked,
-                this.state.contentionParkCount,
-                this.controlPolicy.activePollingAllowed(this.core) && !productionParked && !highContentionParked,
-                recorderSnapshot(this.state.throughputRecorder),
-                recorderSnapshot(this.state.serviceTimeRecorder),
-                acquireContentionSnapshot());
-    }
-
-    /// Copies the worker-local fixed-point signal for low-frequency benchmark diagnostics only.
-    private AcquireContentionSnapshot acquireContentionSnapshot() {
-        UpstreamQueue queue = this.upstreamQueue;
-        boolean initialized = queue != null && queue.hasAcquireContention();
-        long fixedPointValue = initialized ? queue.getAcquireContention() : 0L;
-        double normalized =
-                initialized ? fixedPointValue / (double) UpstreamQueue.ACQUIRE_CONTENTION_SCALE : Double.NaN;
-        return new AcquireContentionSnapshot(
-                UpstreamQueue.acquireContentionEnabled(),
-                FragmentControlPolicy.acquireContentionSelectionEnabled(),
-                initialized,
-                fixedPointValue,
-                normalized);
-    }
-
-    /// Copies existing recorder fields for low-frequency benchmark diagnostics only.
-    private static FlowRecorderSnapshot recorderSnapshot(FlowRecorder recorder) {
-        return new FlowRecorderSnapshot(
-                recorder.getLastRecordedUnits(),
-                recorder.getLastInterval(),
-                recorder.averageUnits(),
-                recorder.averageInterval(),
-                recorder.averageUnitsOverTime(),
-                recorder.unitCV(),
-                recorder.intervalCV(),
-                recorder.unitsOverTimeCV(),
-                recorder.unitTrend(),
-                recorder.intervalTrend(),
-                recorder.unitsOverTimeTrend());
-    }
-
-    /// Waits with the established idle delay while there is no source or cached work.
-    private long idleSpin(FlowThread.FlowContext threadContext) {
-        while (keepRunning()) {
-            serviceResetRequest();
-            long upCount = threadContext.upstream.getTrueUpstreamCount();
-            if (upCount > 0) {
-                return upCount;
-            }
-            if (super.getLocalCacheCount() > 0 || super.getUpstreamCacheCount() > 0) {
-                break;
-            }
-            LockSupport.parkNanos(20_000L);
-        }
-        return 0;
     }
 
     @Override
@@ -594,7 +461,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     @Override
-    public long resetForNextTrial(long deadlineNanos) {
+    public long reset(long deadlineNanos) {
         if (this.state == null) {
             return 0;
         }
@@ -669,23 +536,13 @@ public final class ControlPlaneFragment extends WorkRequester {
         final FlowRecorder batchRecorder = new FlowRecorder();
         final FlowRecorder serviceTimeRecorder = new FlowRecorder();
         final FlowRecorder throughputRecorder = new FlowRecorder();
-        final double[] actionInputs = new double[6];
 
-        long batchStart = 0;
         long batchSize = 2;
         long completed = 0;
 
         long upstreamCount = 0;
-        long productiveHandleCount = 0;
         int registeredWorkers = 0;
         int workerRank = -1;
-
-        boolean idleEligible = false;
-        boolean productionParked = false;
-        boolean contentionIdleEligible = false;
-        boolean contentionParked = false;
-        long contentionParkCount = 0L;
-        long totalExecutions = 0;
 
         void reset() {
             GlobalState.resetThroughput(ControlPlaneFragment.this.socket, ControlPlaneFragment.this.cpu);
@@ -693,95 +550,17 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.serviceTimeRecorder.reset();
             this.throughputRecorder.reset();
 
-            this.batchStart = 0;
             this.batchSize = 2;
             this.completed = 0;
             this.upstreamCount = 0;
-            this.productiveHandleCount = 0;
             this.registeredWorkers = 0;
             this.workerRank = -1;
-            this.idleEligible = false;
-            this.productionParked = false;
-            this.contentionIdleEligible = false;
-            this.contentionParked = false;
-            this.contentionParkCount = 0L;
-            this.totalExecutions = 0;
             if (ControlPlaneFragment.this.upstreamQueue != null) {
                 ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();
             }
             if (ControlPlaneFragment.this.controlPolicy != null) {
                 ControlPlaneFragment.this.controlPolicy.reset();
             }
-            Arrays.fill(this.actionInputs, 0.0);
         }
     }
-
-    /// Benchmark-only snapshot whose plain fields remain owned by the fragment worker.
-    record FragmentPolicySnapshot(
-            ExecutionPath executionPath,
-            int bodyCostHistoryCount,
-            double smoothedBodyCostNs,
-            double serviceTimeNs,
-            long batchSize,
-            long productiveHandleCount,
-            int registeredWorkers,
-            int workerRank,
-            boolean productionParked,
-            boolean highContentionParked,
-            long highContentionParkCount,
-            boolean activePolling,
-            FlowRecorderSnapshot throughput,
-            FlowRecorderSnapshot service,
-            AcquireContentionSnapshot acquireContention) {
-
-        /// Preserves the compact constructor used by selector-focused tests.
-        FragmentPolicySnapshot(
-                ExecutionPath executionPath,
-                int bodyCostHistoryCount,
-                double smoothedBodyCostNs,
-                double serviceTimeNs,
-                long batchSize,
-                long productiveHandleCount) {
-            this(
-                    executionPath,
-                    bodyCostHistoryCount,
-                    smoothedBodyCostNs,
-                    serviceTimeNs,
-                    batchSize,
-                    productiveHandleCount,
-                    0,
-                    -1,
-                    false,
-                    false,
-                    0L,
-                    true,
-                    null,
-                    null,
-                    null);
-        }
-    }
-
-    /// Immutable low-frequency view of the worker-local fixed-point acquisition EWMA.
-    record AcquireContentionSnapshot(
-            boolean enabled, boolean selectionEnabled, boolean initialized, long fixedPointValue, double normalized) {
-
-        /// Preserves the Phase 15 diagnostic constructor used by benchmark helper tests.
-        AcquireContentionSnapshot(boolean enabled, boolean initialized, long fixedPointValue, double normalized) {
-            this(enabled, true, initialized, fixedPointValue, normalized);
-        }
-    }
-
-    /// Immutable view of existing worker-local recorder state for benchmark interpretation.
-    record FlowRecorderSnapshot(
-            long lastUnits,
-            long lastIntervalNs,
-            double averageUnits,
-            double averageIntervalNs,
-            double averageUnitsPerNs,
-            double unitCv,
-            double intervalCv,
-            double unitsPerTimeCv,
-            double unitTrend,
-            double intervalTrend,
-            double unitsPerTimeTrend) {}
 }

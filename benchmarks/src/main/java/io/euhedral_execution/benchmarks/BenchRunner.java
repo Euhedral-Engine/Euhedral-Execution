@@ -9,7 +9,6 @@ import io.euhedral_execution.benchmarks.core_benchmarks.MandelbrotBenchmark;
 import io.euhedral_execution.benchmarks.queue_benchmarks.MPMCBenchmarks;
 import io.euhedral_execution.benchmarks.queue_benchmarks.MPSCBenchmarks;
 import io.euhedral_execution.benchmarks.queue_benchmarks.SPSCBenchmarks;
-import io.euhedral_execution.core.control_plane.FragmentPathCalibrationBenchmark;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -30,7 +29,6 @@ public class BenchRunner {
             "all",
             "core-high-scale",
             "core-latency",
-            "core-fragment-path-calibration",
             "core-hc-throughput",
             "core-lc-throughput",
             "batched-mandelbrot",
@@ -140,7 +138,6 @@ public class BenchRunner {
                     flags.add("-DXmx100g");
                 }
                 case "core-latency" -> benchmark = EndToEndLatencyBenchmark.class;
-                case "core-fragment-path-calibration" -> benchmark = FragmentPathCalibrationBenchmark.class;
                 case "core-hc-throughput" -> benchmark = HighContentionThroughput.class;
                 case "core-lc-throughput" -> benchmark = LightContentionThroughput.class;
                 case "queues-spsc" -> benchmark = SPSCBenchmarks.class;

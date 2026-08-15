@@ -17,6 +17,10 @@ public final class MicroCalibrator {
     /// @param cycles amount of work
     /// @return latency in nanoseconds
     public long benchmark(int cycles) {
+        if (cycles <= 0) {
+            return 0;
+        }
+
         long[] times = new long[1001];
 
         for (int i = 0; i < times.length; i++) {

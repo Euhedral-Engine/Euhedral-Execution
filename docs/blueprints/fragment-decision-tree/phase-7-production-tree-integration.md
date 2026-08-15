@@ -270,7 +270,7 @@ Apply the following exact lifecycle rules:
 | Drain on a surviving clone         | Retain             | Retain; do not change mode during drain               |
 | Rebalance, surviving clone         | Retain             | Retain across drain/resume                            |
 | Rebalance, new clone               | Empty              | DIRECT startup                                        |
-| `resetForNextTrial`                | Clear              | DIRECT or captured forced mode                        |
+| `reset`                | Clear              | DIRECT or captured forced mode                        |
 | Close/removal                      | Discard with clone | No successor inheritance                              |
 
 The executor object and override define the work boundary for the clone lifetime. A source-count

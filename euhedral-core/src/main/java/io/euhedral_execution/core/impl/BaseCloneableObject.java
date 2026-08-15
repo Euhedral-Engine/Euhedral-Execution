@@ -63,9 +63,6 @@ public final class BaseCloneableObject implements CloneableObject {
         this.config = config;
         this.fragment = fragment;
         this.executor = executor;
-        if (config != null && fragment != null && executor != null) {
-            fragment.connectBodyCostRecorder(executor);
-        }
     }
 
     @Override
@@ -122,13 +119,13 @@ public final class BaseCloneableObject implements CloneableObject {
     }
 
     @Override
-    public long resetForNextTrial(long deadlineNanos) {
+    public long reset(long deadlineNanos) {
         long cleared = 0;
         if (this.fragment != null) {
-            cleared += this.fragment.resetForNextTrial(deadlineNanos);
+            cleared += this.fragment.reset(deadlineNanos);
         }
         if (this.executor != null) {
-            cleared += this.executor.resetForNextTrial(deadlineNanos);
+            cleared += this.executor.reset(deadlineNanos);
         }
         return cleared;
     }

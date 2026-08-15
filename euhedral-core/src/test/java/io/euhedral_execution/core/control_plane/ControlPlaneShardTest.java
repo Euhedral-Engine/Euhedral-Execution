@@ -474,7 +474,7 @@ class ControlPlaneShardTest {
         }
 
         @Override
-        public long resetForNextTrial(long deadlineNanos) {
+        public long reset(long deadlineNanos) {
             return this.resetClearedFramesValue;
         }
 

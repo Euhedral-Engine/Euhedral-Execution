@@ -207,7 +207,7 @@ class UpstreamQueueTest {
         assertEquals(1L, handles.sizeLong());
         assertEquals(1L, upstream.acquisitionAttempts);
         assertTrue(queue.hasAcquireContention());
-        assertEquals(UpstreamQueue.ACQUIRE_CONTENTION_SCALE, queue.getAcquireContention());
+        assertEquals(UpstreamQueue.ACQUIRE_CONTENTION_SCALE, queue.getContention());
 
         upstream.available = true;
 
@@ -224,7 +224,7 @@ class UpstreamQueueTest {
         queue.pull(frame -> {}, frame -> false, 64L);
 
         assertTrue(queue.hasAcquireContention());
-        assertEquals(0L, queue.getAcquireContention());
+        assertEquals(0L, queue.getContention());
         assertEquals(0.0, queue.getNormalizedAcquireContention());
     }
 
@@ -236,7 +236,7 @@ class UpstreamQueueTest {
 
         queue.pull(frame -> {}, frame -> false, 64L);
 
-        assertEquals(500_000L, queue.getAcquireContention());
+        assertEquals(500_000L, queue.getContention());
         assertEquals(0.5, queue.getNormalizedAcquireContention());
         assertEquals(1L, unavailable.acquisitionAttempts);
     }
@@ -254,7 +254,7 @@ class UpstreamQueueTest {
         queue.pull(frame -> {}, frame -> false, 64L);
         queue.pull(frame -> {}, frame -> false, 0L);
         assertTrue(queue.hasAcquireContention());
-        assertEquals(0L, queue.getAcquireContention());
+        assertEquals(0L, queue.getContention());
         assertEquals(0L, queue.getAcquireContentionOrUninitialized());
     }
 
@@ -278,7 +278,7 @@ class UpstreamQueueTest {
         queue.resetAcquireContention();
 
         assertFalse(queue.hasAcquireContention());
-        assertEquals(0L, queue.getAcquireContention());
+        assertEquals(0L, queue.getContention());
         assertEquals(-1L, queue.getAcquireContentionOrUninitialized());
         assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
     }

@@ -7,6 +7,7 @@ import io.euhedral_execution.core.utils.CommonVarHandles;
 import java.lang.invoke.VarHandle;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.jspecify.annotations.Nullable;
 
 /// Used for pushing frames from one stage to the next. Assumes that only one thread will control
 /// the push side. This class can only have one downstream.
@@ -16,17 +17,20 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
     private static final VarHandle COMPLETE = CommonVarHandles.complete(LatticeHotSource.class);
     private static final VarHandle DOWNSTREAM = CommonVarHandles.downstream(LatticeHotSource.class);
 
-    private final Consumer<AbstractFrame> applyToEach;
+    private final Consumer<AbstractFrame> beforeEach;
+    private final Runnable afterEach;
 
     boolean complete = false;
     LatticeReceiver downstream = null;
 
     public LatticeHotSource() {
-        this.applyToEach = null;
+        this.beforeEach = null;
+        this.afterEach = null;
     }
 
-    public LatticeHotSource(Consumer<AbstractFrame> applyToEach) {
-        this.applyToEach = applyToEach;
+    public LatticeHotSource(@Nullable Consumer<AbstractFrame> beforeEach, @Nullable Runnable afterEach) {
+        this.beforeEach = beforeEach;
+        this.afterEach = afterEach;
     }
 
     @Override
@@ -40,13 +44,17 @@ public final class LatticeHotSource implements LatticeSource, Consumer<AbstractF
             return;
         }
 
-        if (this.applyToEach != null) {
-            this.applyToEach.accept(frame);
+        if (this.beforeEach != null) {
+            this.beforeEach.accept(frame);
         }
 
         LatticeReceiver terminal = (LatticeReceiver) DOWNSTREAM.getOpaque(this);
         if (terminal != null) {
             terminal.push(frame);
+        }
+
+        if (this.afterEach != null) {
+            this.afterEach.run();
         }
     }
 

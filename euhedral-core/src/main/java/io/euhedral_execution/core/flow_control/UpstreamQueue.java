@@ -102,7 +102,10 @@ public class UpstreamQueue {
     }
 
     /// Returns this worker's fixed-point acquisition EWMA; validity is reported separately.
-    public long getAcquireContention() {
+    public long getContention() {
+        if (!this.acquireContention.initialized()) {
+            return 0L;
+        }
         return this.acquireContention.value();
     }
 
