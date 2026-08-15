@@ -8,6 +8,17 @@
   },
   "trials": [
     {
+      "id": "trial-001",
+      "name": "Default Calibration Trial",
+      "group": "baseline-calibration",
+      "description": "Baseline calibration trial run with standard decision weights",
+      "hypothesis": "STAGED execution policy optimizes throughput under high body cost",
+      "baselineTrialId": "trial-000",
+      "tags": [
+        "example",
+        "baseline"
+      ],
+      "enabled": true,
       "forks": 1,
       "warmups": 1,
       "iterations": 5,
