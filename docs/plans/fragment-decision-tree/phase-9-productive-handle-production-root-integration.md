@@ -42,7 +42,7 @@ Success requires:
 `UpstreamQueue` already owns the conformance-tested `live - observedNonproductive` count. Its live
 accessors retain liveness semantics. `ControlPlaneFragment.recordProgress` currently reads the same
 owner queue's true live count only after a completed batch, then passes it to
-`FragmentControlPolicy`. `FragmentControlPolicy` already implements the complete Phase 7 body-cost
+`FragmentDecisionTree`. `FragmentDecisionTree` already implements the complete Phase 7 body-cost
 tree and isolates diagnostic overrides from normal selection.
 
 The owning code is in `euhedral-core`; bounded fixtures and JMH reporting are in `benchmarks`.

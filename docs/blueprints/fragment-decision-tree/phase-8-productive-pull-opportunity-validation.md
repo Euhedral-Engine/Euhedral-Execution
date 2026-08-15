@@ -387,7 +387,7 @@ Expected experimental changes are limited to:
     - test fixture semantics, recorder deltas, reporting helpers, lifecycle, and teardown; and
 - this blueprint's completion record.
 
-Do not modify `ControlPlaneFragment`, `FragmentControlPolicy`, `AbstractExecutor`, `UpstreamQueue`,
+Do not modify `ControlPlaneFragment`, `FragmentDecisionTree`, `AbstractExecutor`, `UpstreamQueue`,
 `LatticeVertex`, `LatticeEdge`, `QueueIngestSink`, module descriptors, or public production
 constructors during the experiment. A proven correctness defect is the only exception: stop the
 benchmark interpretation, record the defect here, make the smallest separately reviewable fix with
@@ -464,7 +464,7 @@ git diff --check
 
 Also verify by direct diff that:
 
-- `FragmentControlPolicy` retains the 90/95 ns guard and existing root comparison;
+- `FragmentDecisionTree` retains the 90/95 ns guard and existing root comparison;
 - `AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL` remains 256;
 - the non-overlapping 32-sample second-minimum and two-window expensive confirmation are unchanged;
 - normal mode and safe batch-boundary selection are unchanged;
@@ -680,7 +680,7 @@ git diff --check                                                        PASS
 
 Direct inspection must also confirm:
 
-- `FragmentControlPolicy` retains the 90/95 ns guard, 32-sample non-overlapping second-minimum
+- `FragmentDecisionTree` retains the 90/95 ns guard, 32-sample non-overlapping second-minimum
   windows, two-window expensive confirmation, and `liveHandles >= registeredWorkers` root;
 - `AbstractExecutor.PRODUCTION_BODY_TIMING_INTERVAL` remains 256;
 - normal selection, safe batch-boundary application, and forced modes are unchanged;

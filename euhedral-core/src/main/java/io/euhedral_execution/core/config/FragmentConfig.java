@@ -1,5 +1,6 @@
 package io.euhedral_execution.core.config;
 
+import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Objects;
@@ -17,7 +18,8 @@ import org.jspecify.annotations.Nullable;
 public record FragmentConfig(
         @Nullable CloneConfig cloneConfig,
         @NonNull CacheConfig cacheConfig,
-        @NonNull FragmentActionPicker actionPicker,
+        @NonNull FragmentDecisionWeights decisionWeights,
+        @Nullable FragmentObserver observer,
         long maxBatchSize,
         boolean benchmarkMode,
         @Nullable String metricPrefix,
@@ -26,9 +28,12 @@ public record FragmentConfig(
 
     public FragmentConfig {
         Objects.requireNonNull(cacheConfig);
-        Objects.requireNonNull(actionPicker);
+        Objects.requireNonNull(decisionWeights);
         if (maxBatchSize <= 0) {
             throw new IllegalArgumentException("maxBatchSize must be greater than 0. Provided: " + maxBatchSize);
+        }
+        if (benchmarkMode && observer == null) {
+            throw new IllegalArgumentException("FragmentObserver cannot be null in benchmark mode");
         }
     }
 
@@ -40,15 +45,18 @@ public record FragmentConfig(
         return new FragmentConfig(
                 null,
                 CacheConfig.ofDefaults(metricPrefix, meterRegistry),
-                FragmentActionPicker.ofDefaults(),
+                FragmentDecisionWeights.DEFAULT,
+                null,
                 4_096,
                 false,
                 metricPrefix,
                 meterRegistry);
     }
 
-    public static FragmentConfig ofBenchmark(FragmentActionPicker actionPicker) {
-        return new FragmentConfig(null, CacheConfig.ofDefaults(), actionPicker, 4_096, true, null, null);
+    public static FragmentConfig ofBenchmark(@NonNull FragmentObserver observer) {
+        Objects.requireNonNull(observer);
+        return new FragmentConfig(
+                null, CacheConfig.ofDefaults(), FragmentDecisionWeights.DEFAULT, observer, 4_096, true, null, null);
     }
 
     @Override
@@ -56,7 +64,8 @@ public record FragmentConfig(
         return new FragmentConfig(
                 cloneConfig,
                 this.cacheConfig.clone(cloneConfig),
-                this.actionPicker,
+                this.decisionWeights,
+                this.observer,
                 this.maxBatchSize,
                 this.benchmarkMode,
                 this.metricPrefix,

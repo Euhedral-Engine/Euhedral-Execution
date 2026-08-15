@@ -1,13 +1,11 @@
 package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
-import io.euhedral_execution.core.config.FragmentActionPicker;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
@@ -19,14 +17,12 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.ingest.ArrayIngestSink;
 import io.euhedral_execution.core.metrics.MetricsAggregator;
-import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -47,39 +43,6 @@ import org.mockito.Mockito;
 class ControlPlaneFragmentThreadTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
-
-    @Test
-    void shouldRunWhenTheCpuExecutorWasCreatedWithRegularThreads() throws Exception {
-        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
-        int core = SystemInfo.getCpuInfo(cpu).core();
-
-        PinnedThreadExecutor previous = PinnedThreadExecutor.get(cpu);
-        if (previous != null) {
-            previous.close();
-        }
-
-        PinnedThreadExecutor executor =
-                PinnedThreadExecutor.getOrSetIfAbsent(cpu, "regular-thread-owner", Thread.NORM_PRIORITY, true);
-        assertFalse(executor.submit(() -> Thread.currentThread() instanceof FlowThread)
-                .get(1, TimeUnit.SECONDS));
-
-        BitSet cpus = new BitSet();
-        cpus.set(cpu);
-        CloneConfig cloneConfig = new CloneConfig("test", core, cpus);
-        FragmentActionPicker halted = new FragmentActionPicker(new double[28]);
-        ControlPlaneFragment fragment =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(halted).clone(cloneConfig));
-
-        try {
-            fragment.start();
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
-
-            assertTrue(fragment.isStarted());
-        } finally {
-            fragment.close();
-            executor.close();
-        }
-    }
 
     @Test
     void shouldLinearizeConcurrentSnapshotUpdatesLockFree() throws Exception {
@@ -125,45 +88,6 @@ class ControlPlaneFragmentThreadTest {
             assertTrue(done.await(5, TimeUnit.SECONDS));
             assertTrue(fragment.getAdaptiveBatchCap() >= 2L);
             executor.close();
-        }
-    }
-
-    @Test
-    void normalModeDoesNotConsultTheActionPicker() {
-        FailOnUseActionPicker actionPicker = new FailOnUseActionPicker();
-        FragmentConfig defaults = FragmentConfig.ofDefaults();
-        FragmentConfig config = new FragmentConfig(
-                        null,
-                        defaults.cacheConfig(),
-                        actionPicker,
-                        defaults.maxBatchSize(),
-                        false,
-                        defaults.metricPrefix(),
-                        defaults.registry())
-                .clone(cloneConfig());
-
-        BenchmarkFrame ordered = new BenchmarkFrame(1L);
-        BenchmarkFrame unordered = new BenchmarkFrame(2L);
-        unordered.randomizeHash(3L);
-        ArrayIngestSink sink = new ArrayIngestSink(new AbstractFrame[] {ordered, unordered});
-        CountingReceiver receiver = new CountingReceiver();
-        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
-        LatticeVertex distributor = connect(fragment);
-
-        try {
-            fragment.output().addDownstream(receiver);
-            fragment.start();
-            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
-
-            distributor.ingest(sink.getDelegate());
-
-            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 2);
-            assertNull(receiver.error.get());
-        } finally {
-            sink.complete();
-            fragment.close();
-            distributor.close();
-            PinnedThreadExecutor.closeAll();
         }
     }
 
@@ -362,34 +286,6 @@ class ControlPlaneFragmentThreadTest {
                 }
                 ACTIVE_PARTITIONS.set(i, 0L);
             }
-        }
-    }
-
-    private static final class FailOnUseActionPicker extends FragmentActionPicker {
-
-        private FailOnUseActionPicker() {
-            super(rejectingWeights());
-        }
-
-        @Override
-        public boolean halted() {
-            throw new IllegalStateException("Normal mode consulted the action picker");
-        }
-
-        @Override
-        public void normalize(double[] inputs) {
-            throw new IllegalStateException("Normal mode consulted the action picker");
-        }
-
-        @Override
-        public boolean performAction(Action action, double[] inputs) {
-            throw new IllegalStateException("Normal mode consulted the action picker");
-        }
-
-        private static double[] rejectingWeights() {
-            double[] weights = new double[28];
-            Arrays.fill(weights, -1.0);
-            return weights;
         }
     }
 

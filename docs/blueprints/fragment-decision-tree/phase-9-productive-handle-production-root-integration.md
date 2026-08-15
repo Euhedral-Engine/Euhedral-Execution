@@ -27,7 +27,7 @@ productiveHandles >= registeredWorkers
 ```
 
 where `productiveHandles` is read from the `UpstreamQueue` owned by the same fragment worker that
-evaluates `FragmentControlPolicy`. Keep the selector's remaining body-history, cheap, guard-band,
+evaluates `FragmentDecisionTree`. Keep the selector's remaining body-history, cheap, guard-band,
 and expensive branches byte-for-byte equivalent except for availability-oriented parameter names.
 
 Do not aggregate across workers, publish producer readiness, synchronize observations, add a ratio

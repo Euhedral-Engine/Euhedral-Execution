@@ -40,7 +40,7 @@ Success requires:
 `FragmentPathCalibrationBenchmark` already owns the real forced DIRECT/STAGED paths, fixed batch size,
 repeating sources, source-by-worker acquisition/service evidence, per-worker completions, sparse executor-body
 timing, production policy snapshots, and pinned topology construction. Its existing selector is intentionally
-same-kind and bounded to earlier two-worker/idle work. `FragmentControlPolicy` exempts forced mode from the
+same-kind and bounded to earlier two-worker/idle work. `FragmentDecisionTree` exempts forced mode from the
 production idle branch, so forced discovery rows keep every registered worker polling. This is an explicit
 forced-path semantic, not a change to the idle mechanic.
 

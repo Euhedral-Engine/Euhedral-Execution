@@ -48,7 +48,7 @@ work-only JMH method measures that body without the scheduler.
 
 ## Diagnostic Mode Pin
 
-Add one package-private, setup-only override to `FragmentControlPolicy`:
+Add one package-private, setup-only override to `FragmentDecisionTree`:
 
 - The override contains a fixed `Mode` and fixed batch size.
 - Benchmark setup publishes it before constructing any fragments.

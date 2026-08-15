@@ -30,7 +30,7 @@ evidence for no-op, controlled useful work, and maintained representative worklo
 ## Current state and selected direction
 
 `UpstreamQueue` already owns the accepted scalar smoother and resets it through the fragment's
-owner-thread reset path. `FragmentControlPolicy` currently selects DIRECT for sufficient productive
+owner-thread reset path. `FragmentDecisionTree` currently selects DIRECT for sufficient productive
 availability or body cost at most 90 ns, STAGED at least 95 ns under scarcity, and retains its mode
 inside the guard band. `ControlPlaneFragment` already exposes contention in benchmark-only policy
 snapshots but does not pass it into selection.

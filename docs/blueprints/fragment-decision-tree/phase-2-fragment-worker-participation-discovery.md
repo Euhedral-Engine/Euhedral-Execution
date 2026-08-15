@@ -85,7 +85,7 @@ state. It changes only what the benchmark reads and reports:
 
 All new fields and methods are confined to the benchmark module and carry `///` declaration comments,
 consistent with the phase 1 fixture. Nothing is added to `ControlPlaneFragment`,
-`FragmentControlPolicy`, or any production hot path.
+`FragmentDecisionTree`, or any production hot path.
 
 ## Exact hypotheses
 

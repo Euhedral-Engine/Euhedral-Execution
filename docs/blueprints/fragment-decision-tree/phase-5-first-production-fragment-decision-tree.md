@@ -122,7 +122,7 @@ There is no existing multi-frame executor-body entry point. Adding one would cha
 or `AbstractExecutor` contracts for this single branch. Instead, amortize a single-frame timer pair:
 
 - sample the first accepted frame, then one accepted frame every eight completed policy batches;
-- retain all cadence, count, and EWMA fields in `FragmentControlPolicy` or the fragment's
+- retain all cadence, count, and EWMA fields in `FragmentDecisionTree` or the fragment's
   owner-local `CycleState` with plain access;
 - apply the existing one-eighth EWMA form to positive finite elapsed samples;
 - require eight valid samples before work cost may select STAGED; and
@@ -181,7 +181,7 @@ exactly that value.
 
 ## Explicit production logic
 
-Keep `FragmentControlPolicy` as the small owner-thread controller. Remove the old service-time mode
+Keep `FragmentDecisionTree` as the small owner-thread controller. Remove the old service-time mode
 thresholds and completed-batch transition streak from normal selection. Preserve its miss/park and
 batch-size responsibilities.
 
@@ -366,7 +366,7 @@ measurement code should not be left active as an unproven policy input.
 
 ## Future extension seam
 
-Keep one package-private selector method in `FragmentControlPolicy` whose inputs are only live
+Keep one package-private selector method in `FragmentDecisionTree` whose inputs are only live
 handles, registered workers, work-cost history count, and smoothed dispatch cost. Later evidence may
 split a leaf by adding one explicit conditional to that method; callers and execution paths should
 not require restructuring.

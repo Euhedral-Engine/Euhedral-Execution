@@ -201,7 +201,7 @@ overhead forks, so both workers remained present with no new regime.
 
 `ControlPlaneFragment.recordProgress` now reads `getProductiveHandleCount()` only after the existing
 batch completes, stores that plain value for benchmark diagnostics, and passes it to the unchanged
-`FragmentControlPolicy`. `CycleState.upstreamCount`, `getCachedUpCount()`, and
+`FragmentDecisionTree`. `CycleState.upstreamCount`, `getCachedUpCount()`, and
 `getTrueUpstreamCount()` retain live-count semantics. Forced modes, selector ordering, the 90/95 ns
 body-cost bounds, history, sampling cadence, batching, routing, and request ordering are unchanged.
 

@@ -58,7 +58,7 @@ smoothedBodyCostNs >= 95 ns
 The `registeredWorkers <= 0` case is a conservative invalid/startup fallback, not another physical
 branch. An executing registered fragment should observe at least one worker.
 
-Keep one package-private selector in `FragmentControlPolicy` with exactly these conceptual inputs:
+Keep one package-private selector in `FragmentDecisionTree` with exactly these conceptual inputs:
 
 ```text
 liveHandles
@@ -151,7 +151,7 @@ allocation, lock, registry lookup, or cross-core read in this path.
 
 ## Estimator ownership and arithmetic
 
-Keep the estimator fields in `FragmentControlPolicy`, beside the selector that consumes them. They
+Keep the estimator fields in `FragmentDecisionTree`, beside the selector that consumes them. They
 are owned by one pinned fragment thread for the policy lifetime.
 
 Use one fixed, allocation-free robust aggregation:
@@ -580,7 +580,7 @@ discovery phase; it is not implemented here.
 
 1. Refactor the accepted executor timing seam for setup-only production attachment while preserving
    the Phase 6 diagnostic API and tests.
-2. Add the owner-local robust estimator and pure selector to `FragmentControlPolicy`; replace old
+2. Add the owner-local robust estimator and pure selector to `FragmentDecisionTree`; replace old
    service-time mode hysteresis without changing batch sizing.
 3. Wire cloned fragment/executor pairs in `BaseCloneableObject` before start and update
    `ControlPlaneFragment` only at completed-batch and ordinary upstream-count boundaries.
@@ -658,7 +658,7 @@ Implemented production path:
 - `AbstractExecutor` retains the Phase 6 body-only interval, samples every 256 eligible calls, and
   fans one successful timed call to diagnostic and production recorders with one timer pair.
 - `BaseCloneableObject` attaches each clone's recorder before start/input publication.
-- `FragmentControlPolicy` owns the robust window, expensive confirmation, 90/95 ns guard, explicit
+- `FragmentDecisionTree` owns the robust window, expensive confirmation, 90/95 ns guard, explicit
   selector, forced bypass, and owner-local reset state.
 - `ControlPlaneFragment` reads live handles and registered workers only at completed batches and
   does not truncate a batch or clear history on ordinary availability changes.

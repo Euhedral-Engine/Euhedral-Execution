@@ -23,17 +23,20 @@ public class StopWatch {
         this.mask = pow2 ? recordingInterval - 1 : -1;
     }
 
+    /// Starts the clock every `recordingInterval` number of calls
     public void start() {
         if (this.started) {
             return;
         }
         boolean ready = this.mask > 0 ? (ticks & mask) == 0 : ticks % recordingInterval == 0;
         if (!ready) {
+            ticks++;
             return;
         }
         this.lastTime = System.nanoTime();
     }
 
+    /// Returns 0 if the clock wasn't started.
     public long stop() {
         if (started) {
             long elapsed = System.nanoTime() - lastTime;
@@ -41,11 +44,6 @@ public class StopWatch {
             started = false;
             return elapsed;
         }
-        boolean ready = mask > 0 ? (ticks & mask) == 0 : ticks % recordingInterval == 0;
-        if (ready) {
-            return 0;
-        }
-        ticks++;
         return 0;
     }
 }

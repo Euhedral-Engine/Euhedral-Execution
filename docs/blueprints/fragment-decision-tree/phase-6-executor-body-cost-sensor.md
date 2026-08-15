@@ -123,7 +123,7 @@ the JMH owner reads them at iteration boundaries with the same acquire snapshots
 counters. This is diagnostic evidence transport, not production controller state.
 
 Do not add a static diagnostic lease, modify `FragmentConfig`, expose the sampler through
-`ControlPlaneFragment`, or connect it to `FragmentControlPolicy`.
+`ControlPlaneFragment`, or connect it to `FragmentDecisionTree`.
 
 ## Benchmark shape
 
@@ -313,7 +313,7 @@ mise exec -- gradle build
 git diff --check
 ```
 
-Search for accidental additions to `FragmentControlPolicy`, `ControlPlaneFragment`, normal policy
+Search for accidental additions to `FragmentDecisionTree`, `ControlPlaneFragment`, normal policy
 selection, or `EXPENSIVE_WORK_BOUNDARY_NS`. Confirm new documentation is ASCII and final status
 contains only intended source, test, benchmark, and completion-record changes.
 

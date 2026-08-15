@@ -2,7 +2,7 @@
 
 ## Production rule and ownership
 
-`FragmentControlPolicy` remains owner-thread state and owns the idle eligibility predicate
+`FragmentDecisionTree` remains owner-thread state and owns the idle eligibility predicate
 independently of DIRECT/STAGED selection. Isolate the temporary bound as:
 
 ```text
@@ -91,7 +91,7 @@ parked/polling state.
 
 1. The exact temporary idle boundary is `EXTREMELY_CHEAP_BODY_COST_MAX_NS = 20.0`. It includes the
    measured 13-15 ns near-no-op extreme and excludes the measured 33-35 ns 24-round region. It is
-   isolated in `FragmentControlPolicy` and is not claimed to be portable.
+   isolated in `FragmentDecisionTree` and is not claimed to be portable.
 2. The polling quota is `max(1, min(productiveHandles, registeredWorkers))`. A worker polls when its
    zero-based registered-core rank is below that quota; higher ranks are idle-eligible only when
    history and body cost also pass. Rank is the count of already-registered lower physical core IDs

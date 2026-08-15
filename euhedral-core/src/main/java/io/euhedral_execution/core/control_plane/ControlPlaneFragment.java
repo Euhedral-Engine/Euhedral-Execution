@@ -2,7 +2,7 @@ package io.euhedral_execution.core.control_plane;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
-import io.euhedral_execution.core.control_plane.FragmentControlPolicy.ExecutionPath;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
@@ -69,13 +69,16 @@ public final class ControlPlaneFragment extends WorkRequester {
     @Getter
     private final FragmentConfig config;
 
+    private final FragmentObserver observer;
+
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong resetRequested = new AtomicLong();
     private final AtomicLong resetCompleted = new AtomicLong();
     private final AtomicLong resetCleared = new AtomicLong();
     private final PinnedThreadExecutor mainExecutor;
-    private final FragmentControlPolicy controlPolicy;
+    private final FragmentDecisionTree controlPolicy;
     private final CycleState state;
+
     private UpstreamQueue upstreamQueue;
     boolean drainMode = false;
     CoreSnapshot coreSnapshot = null;
@@ -93,6 +96,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = -1;
             this.core = -1;
             this.cpu = -1;
+            this.observer = null;
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
             this.controlPolicy = null;
             this.state = null;
@@ -113,7 +117,13 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = info.socket();
             this.core = info.core();
 
-            this.controlPolicy = new FragmentControlPolicy();
+            if (config.benchmarkMode()) {
+                Objects.requireNonNull(config.observer());
+                this.observer = config.observer();
+            } else {
+                this.observer = null;
+            }
+            this.controlPolicy = new FragmentDecisionTree();
             this.state = new CycleState();
 
             this.mainExecutor = PinnedThreadExecutor.getOrSetIfAbsent(
@@ -125,16 +135,15 @@ public final class ControlPlaneFragment extends WorkRequester {
                     .pCore();
 
             StopWatch stopWatch = new StopWatch();
-            this.outputStream = new LatticeHotSource(
-                    ignored -> {
-                        stopWatch.start();
-                    },
-                    () -> {
-                        long elapsed = stopWatch.stop();
-                        if (elapsed > 0) {
-                            this.controlPolicy.recordBodyCost(elapsed);
-                        }
-                    });
+            this.outputStream = new LatticeHotSource(ignored -> stopWatch.start(), () -> {
+                long elapsed = stopWatch.stop();
+                if (elapsed > 0) {
+                    this.controlPolicy.recordBodyCost(elapsed);
+                    if (config.benchmarkMode()) {
+                        this.observer.rawBodyCost(this.core, this.socket, elapsed);
+                    }
+                }
+            });
 
             this.metrics = new ExecutionMetrics(config);
             long maxBatch = config.maxBatchSize();
@@ -216,20 +225,37 @@ public final class ControlPlaneFragment extends WorkRequester {
             while (keepRunning()) {
                 serviceResetRequest();
 
-                if (super.getLocalCacheCount() == 0L) {
+                long newUpCount = this.upstreamQueue.getCachedUpCount();
+                if (this.state.upstreamCount != newUpCount) {
+                    this.state.upstreamCount = newUpCount;
+                }
+
+                long localCache = super.getLocalCacheCount();
+
+                if (this.config.benchmarkMode()) {
+                    this.observer.cycleStartState(
+                            this.core,
+                            this.socket,
+                            this.state.completed,
+                            this.state.batchSize,
+                            newUpCount,
+                            this.state.registeredWorkers,
+                            this.state.workerRank,
+                            upstreamQueue.getContention(),
+                            this.state.throughputRecorder.averageUnitsOverTime());
+                }
+
+                if (localCache == 0L) {
                     this.controlPolicy.idle(
                             this.state.upstreamCount,
                             this.state.registeredWorkers,
                             this.state.workerRank,
-                            context.upstream.getContention());
+                            this.upstreamQueue.getContention());
+                    localCache = super.getLocalCacheCount();
                 }
 
-                long newUpCount = context.upstream.getCachedUpCount();
-                if (this.state.upstreamCount != newUpCount) {
-                    this.state.upstreamCount = newUpCount;
-                }
-                if (newUpCount == 0 && super.getLocalCacheCount() == 0 && super.getUpstreamCacheCount() == 0) {
-                    this.state.upstreamCount = context.upstream.getTrueUpstreamCount();
+                if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
+                    this.state.upstreamCount = this.upstreamQueue.getTrueUpstreamCount();
                     continue;
                 }
 
@@ -237,8 +263,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long processed = 0L;
                 long executionFrames = 0L;
                 long executionElapsedNs = 0L;
+                localCache = super.getLocalCacheCount();
 
-                if (limit > 0L && super.getLocalCacheCount() > 0L) {
+                if (limit > 0L && localCache > 0L) {
                     long start = System.nanoTime();
                     long count = localCacheExecute(limit);
                     long end = System.nanoTime();
@@ -250,7 +277,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                 }
 
-                ExecutionPath path = this.controlPolicy.selectExecutionPath(
+                ExecutionPath path = this.controlPolicy.executionPath(
                         context.upstream.getCachedUpCount(),
                         this.state.registeredWorkers,
                         context.upstream.getContention());
@@ -360,11 +387,33 @@ public final class ControlPlaneFragment extends WorkRequester {
         this.state.throughputRecorder.recordUnits(nowNs, processed);
 
         if (this.state.completed < this.state.batchSize) {
+            if (this.config.benchmarkMode()) {
+                this.observer.batchProgressState(
+                        this.core,
+                        this.socket,
+                        this.state.upstreamCount,
+                        this.state.registeredWorkers,
+                        this.state.workerRank,
+                        this.upstreamQueue.getContention(),
+                        this.state.serviceTimeRecorder.averageUnits());
+            }
             return;
         }
 
         int registeredWorkers = super.getThreadCount();
         int workerRank = super.getThreadRank(this.core);
+
+        if (this.config.benchmarkMode()) {
+            this.observer.batchCompleteState(
+                    this.core,
+                    this.socket,
+                    this.state.upstreamCount,
+                    registeredWorkers,
+                    workerRank,
+                    upstreamQueue.getContention(),
+                    this.state.serviceTimeRecorder.averageUnits(),
+                    this.state.throughputRecorder.averageUnitsOverTime());
+        }
 
         this.state.completed = 0L;
         this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit());
@@ -450,7 +499,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private void serviceResetRequest() {
         long requested = this.resetRequested.getAcquire();
-        if (requested <= this.resetCompleted.getOpaque() || this.state == null) {
+        if (this.state == null || requested <= this.resetCompleted.getOpaque()) {
             return;
         }
 
@@ -544,8 +593,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         int registeredWorkers = 0;
         int workerRank = -1;
 
+        long totalExecutions = 0;
+
         void reset() {
-            GlobalState.resetThroughput(ControlPlaneFragment.this.socket, ControlPlaneFragment.this.cpu);
             this.batchRecorder.reset();
             this.serviceTimeRecorder.reset();
             this.throughputRecorder.reset();

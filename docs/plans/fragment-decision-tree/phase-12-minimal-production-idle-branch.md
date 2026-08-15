@@ -26,11 +26,11 @@ state, and lifecycle behavior in the hot control loop.
 ## Current state and direction
 
 `ControlPlaneFragment.recordProgress` already publishes worker-local productive count and advances
-`FragmentControlPolicy` only at a completed-batch boundary. `FragmentControlPolicy` already owns the
+`FragmentDecisionTree` only at a completed-batch boundary. `FragmentDecisionTree` already owns the
 body estimate and captures diagnostic overrides. `LatticeEdge` already owns the JVM-wide registered
 core bitmap and count. Reset and close already unpark the fragment owner.
 
-Add an orthogonal idle decision to `FragmentControlPolicy`, derive a zero-based rank by counting the
+Add an orthogonal idle decision to `FragmentDecisionTree`, derive a zero-based rank by counting the
 existing registered cores below the owner core, and guarantee rank zero always polls. A production
 idle loop will use one fixed timed park so source/productivity changes are eventually rechecked
 without a new wake controller; reset and close retain their immediate unpark paths. Benchmark-only
