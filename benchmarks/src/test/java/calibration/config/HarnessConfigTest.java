@@ -928,13 +928,54 @@ class HarnessConfigTest {
                 IllegalArgumentException.class, () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", List.of()));
     }
 
-    /// Verifies blank parameter path is rejected.
+    /// Verifies invalid repetitions in SweepConfig are rejected.
     @Test
-    void rejectBlankSweepParameterPath() {
+    void rejectInvalidSweepConfigRepetitions() {
+        HarnessConfig.SweepParameter param =
+                new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", "desc", true, 0, null, null, List.of(param)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", "desc", true, -2, null, null, List.of(param)));
+    }
+
+    /// Verifies blank group in SweepConfig is rejected.
+    @Test
+    void rejectBlankSweepConfigGroup() {
+        HarnessConfig.SweepParameter param =
+                new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", "desc", true, 1, "   ", null, List.of(param)));
+    }
+
+    /// Verifies blank label key or value in SweepConfig is rejected.
+    @Test
+    void rejectBlankSweepConfigLabelKeysOrValues() {
+        HarnessConfig.SweepParameter param =
+                new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig(
+                        "sweep-1", "base-1", "desc", true, 1, "grp", Map.of(" ", "val"), List.of(param)));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig(
+                        "sweep-1", "base-1", "desc", true, 1, "grp", Map.of("key", "   "), List.of(param)));
+    }
+
+    /// Verifies blank parameter path or description is rejected.
+    @Test
+    void rejectBlankSweepParameterPathOrDescription() {
         assertThrows(
                 IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("   ", List.of(new IntNode(1))));
         assertThrows(
                 IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("", List.of(new IntNode(1))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepParameter("/calibrationConfig/p", "   ", List.of(new IntNode(1))));
     }
 
     /// Verifies duplicate parameter paths inside one sweep are rejected.

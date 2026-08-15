@@ -247,6 +247,30 @@ class CalibrationRunnerTest {
     }
 
     @Test
+    void globalHarnessRepeatCountIndependentFromSweepRepetitions() {
+        TrialConfig baseDisabled = dummyTrialConfig("base1", false);
+        SweepParameter param = dummySweepParameter("/calibrationConfig/workUnits", List.of(500, 1000));
+        SweepConfig sweep = new SweepConfig("s1", "base1", "desc", true, 3, null, null, List.of(param));
+
+        HarnessRunOptions options = new HarnessRunOptions(false, null, true, 2);
+        HarnessConfig harnessConfig = new HarnessConfig(
+                null, null, null, null, null, options, null, null, null, List.of(sweep), null, List.of(baseDisabled));
+
+        List<TrialConfig> resolvedTrials = CalibrationRunner.resolveTrials(harnessConfig, mapper);
+
+        assertEquals(6, resolvedTrials.size());
+        assertEquals("base1__s1__0__sample_0", resolvedTrials.get(0).id());
+        assertEquals("base1__s1__0__sample_1", resolvedTrials.get(1).id());
+        assertEquals("base1__s1__0__sample_2", resolvedTrials.get(2).id());
+        assertEquals("base1__s1__1__sample_0", resolvedTrials.get(3).id());
+        assertEquals("base1__s1__1__sample_1", resolvedTrials.get(4).id());
+        assertEquals("base1__s1__1__sample_2", resolvedTrials.get(5).id());
+
+        assertEquals(2, harnessConfig.runOptions().repeatCount());
+        assertEquals(3, sweep.repetitions());
+    }
+
+    @Test
     void resolveTrialsDuplicateFinalTrialIdRejectionExplicitDuplicates() {
         TrialConfig t1 = dummyTrialConfig("dup1", true);
         TrialConfig t2 = dummyTrialConfig("dup1", true);

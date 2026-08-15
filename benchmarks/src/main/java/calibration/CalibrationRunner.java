@@ -99,13 +99,16 @@ public class CalibrationRunner {
                         + sweep.id() + "' was not found in trials");
             }
             List<TrialConfig> expanded = expander.expandSweep(baseTrial, sweep);
-            int paramCount = sweep.parameters().size();
+            int samplesPerCandidate = (sweep.repetitions() != null) ? sweep.repetitions() : 1;
+            int totalGenerated = expanded.size();
+            int uniqueCandidates = totalGenerated / samplesPerCandidate;
             LOGGER.info(
-                    "Enabled sweep: id={}, baseTrialId={}, parameterCount={}, generatedCandidateCount={}",
+                    "Enabled sweep: sweep={}, base={}, uniqueCandidates={}, samplesPerCandidate={}, generatedTrials={}",
                     sweep.id(),
                     sweep.baseTrialId(),
-                    paramCount,
-                    expanded.size());
+                    uniqueCandidates,
+                    samplesPerCandidate,
+                    totalGenerated);
             generatedSweepTrials.addAll(expanded);
         }
 

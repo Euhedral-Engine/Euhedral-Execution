@@ -343,4 +343,186 @@ class TrialSweepExpanderTest {
 
         assertThrows(IllegalArgumentException.class, () -> lowLimitExpander.expandSweep(baseTrial, sweep));
     }
+
+    /// Verifies sweep repetitions duplicates candidates before global repeatCount.
+    @Test
+    void repetitions() {
+        SweepParameter param =
+                new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(100), new IntNode(200)));
+        SweepConfig sweep = new SweepConfig("sweep-rep", "trial-001", "desc", true, 3, null, null, List.of(param));
+
+        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
+        assertEquals(6, generated.size());
+
+        // 3 repetitions of candidate 0 (workUnits=100) followed by 3 repetitions of candidate 1 (workUnits=200)
+        for (int i = 0; i < 3; i++) {
+            assertEquals(100, generated.get(i).calibrationConfig().workUnits());
+        }
+        for (int i = 3; i < 6; i++) {
+            assertEquals(200, generated.get(i).calibrationConfig().workUnits());
+        }
+    }
+
+    /// Verifies deterministic IDs and names with and without repetitions.
+    @Test
+    void deterministicIdsWithRepetitions() {
+        SweepParameter param =
+                new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(100), new IntNode(200)));
+
+        // Repetitions > 1 appends __sample_<sampleIndex>
+        SweepConfig sweepWithReps =
+                new SweepConfig("sweep-det-rep", "trial-001", "desc", true, 2, null, null, List.of(param));
+        List<TrialConfig> genReps = expander.expandSweep(baseTrial, sweepWithReps);
+        assertEquals(4, genReps.size());
+        assertEquals("trial-001__sweep-det-rep__0__sample_0", genReps.get(0).id());
+        assertEquals(
+                "Base Trial Name__sweep-det-rep__0__sample_0", genReps.get(0).name());
+        assertEquals("trial-001__sweep-det-rep__0__sample_1", genReps.get(1).id());
+        assertEquals(
+                "Base Trial Name__sweep-det-rep__0__sample_1", genReps.get(1).name());
+        assertEquals("trial-001__sweep-det-rep__1__sample_0", genReps.get(2).id());
+        assertEquals(
+                "Base Trial Name__sweep-det-rep__1__sample_0", genReps.get(2).name());
+        assertEquals("trial-001__sweep-det-rep__1__sample_1", genReps.get(3).id());
+        assertEquals(
+                "Base Trial Name__sweep-det-rep__1__sample_1", genReps.get(3).name());
+
+        // Repetitions = 1 or null does NOT append __sample_
+        SweepConfig sweepSingleRep =
+                new SweepConfig("sweep-det-single", "trial-001", "desc", true, 1, null, null, List.of(param));
+        List<TrialConfig> genSingle = expander.expandSweep(baseTrial, sweepSingleRep);
+        assertEquals(2, genSingle.size());
+        assertEquals("trial-001__sweep-det-single__0", genSingle.get(0).id());
+        assertEquals("trial-001__sweep-det-single__1", genSingle.get(1).id());
+    }
+
+    /// Verifies candidateIndex represents configuration candidate index while sampleIndex represents repetition sample
+    /// index.
+    @Test
+    void candidateIndexVersusSampleIndex() {
+        SweepParameter param =
+                new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(100), new IntNode(200)));
+        SweepConfig sweep = new SweepConfig("sweep-idx", "trial-001", "desc", true, 2, null, null, List.of(param));
+
+        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
+        assertEquals(4, generated.size());
+
+        // Trial 0: candidate 0, sample 0
+        TrialOrigin origin0 = generated.get(0).origin();
+        assertNotNull(origin0);
+        assertEquals(0, origin0.candidateIndex());
+        assertEquals(0, origin0.sampleIndex());
+
+        // Trial 1: candidate 0, sample 1
+        TrialOrigin origin1 = generated.get(1).origin();
+        assertNotNull(origin1);
+        assertEquals(0, origin1.candidateIndex());
+        assertEquals(1, origin1.sampleIndex());
+
+        // Trial 2: candidate 1, sample 0
+        TrialOrigin origin2 = generated.get(2).origin();
+        assertNotNull(origin2);
+        assertEquals(1, origin2.candidateIndex());
+        assertEquals(0, origin2.sampleIndex());
+
+        // Trial 3: candidate 1, sample 1
+        TrialOrigin origin3 = generated.get(3).origin();
+        assertNotNull(origin3);
+        assertEquals(1, origin3.candidateIndex());
+        assertEquals(1, origin3.sampleIndex());
+    }
+
+    /// Verifies group inheritance from base trial when sweep group is absent.
+    @Test
+    void groupInheritance() {
+        SweepParameter param = new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(100)));
+        SweepConfig sweep =
+                new SweepConfig("sweep-grp-inh", "trial-001", "desc", true, null, null, null, List.of(param));
+
+        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
+        assertEquals(1, generated.size());
+        assertEquals("group-1", generated.get(0).group());
+    }
+
+    /// Verifies group override when sweep specifies a group.
+    @Test
+    void groupOverride() {
+        SweepParameter param = new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(100)));
+        SweepConfig sweep = new SweepConfig(
+                "sweep-grp-ovr", "trial-001", "desc", true, null, "custom-sweep-group", null, List.of(param));
+
+        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
+        assertEquals(1, generated.size());
+        assertEquals("custom-sweep-group", generated.get(0).group());
+    }
+
+    /// Verifies label inheritance and overriding matching keys from base trial to sweep.
+    @Test
+    void labelInheritanceAndOverride() {
+        TrialConfig baseWithLabels = new TrialConfig(
+                "trial-lbl",
+                "Base",
+                "grp",
+                "desc",
+                "hyp",
+                null,
+                null,
+                java.util.Map.of("env", "prod", "tier", "web"),
+                true,
+                null,
+                1,
+                1,
+                5,
+                null,
+                dummyCalibrationConfig());
+
+        SweepParameter param = new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(100)));
+        SweepConfig sweepWithLabels = new SweepConfig(
+                "sweep-lbl",
+                "trial-lbl",
+                "desc",
+                true,
+                null,
+                null,
+                java.util.Map.of("tier", "api", "region", "us-east"),
+                List.of(param));
+
+        List<TrialConfig> generated = expander.expandSweep(baseWithLabels, sweepWithLabels);
+        assertEquals(1, generated.size());
+        java.util.Map<String, String> labels = generated.get(0).labels();
+        assertNotNull(labels);
+        assertEquals(3, labels.size());
+        assertEquals("prod", labels.get("env"));
+        assertEquals("api", labels.get("tier"));
+        assertEquals("us-east", labels.get("region"));
+    }
+
+    /// Verifies description round-trip on SweepParameter and SweepConfig.
+    @Test
+    void descriptionRoundTrip() throws Exception {
+        SweepParameter param = new SweepParameter(
+                "/calibrationConfig/workUnits",
+                "Varies work unit batch size",
+                List.of(new IntNode(100), new IntNode(200)));
+        SweepConfig sweep = new SweepConfig(
+                "sweep-desc",
+                "trial-001",
+                "Sweep description for testing",
+                true,
+                2,
+                "grp",
+                java.util.Map.of("key", "val"),
+                List.of(param));
+
+        assertEquals("Sweep description for testing", sweep.description());
+        assertEquals("Varies work unit batch size", sweep.parameters().get(0).description());
+
+        String json = mapper.writeValueAsString(sweep);
+        SweepConfig readSweep = mapper.readValue(json, SweepConfig.class);
+
+        assertEquals("sweep-desc", readSweep.id());
+        assertEquals("Sweep description for testing", readSweep.description());
+        assertEquals(
+                "Varies work unit batch size", readSweep.parameters().get(0).description());
+    }
 }

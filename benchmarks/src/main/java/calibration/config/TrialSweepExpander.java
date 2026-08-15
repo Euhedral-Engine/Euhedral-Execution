@@ -135,10 +135,20 @@ public class TrialSweepExpander {
                 throw new IllegalArgumentException(
                         "Cartesian product size for sweep '" + sweep.id() + "' overflows integer limit");
             }
-            if (product > maxGeneratedTrials) {
-                throw new IllegalArgumentException("Cartesian product size (" + product + ") for sweep '" + sweep.id()
-                        + "' exceeds maximum allowed generated limit of " + maxGeneratedTrials);
-            }
+        }
+
+        int repetitions = (sweep.repetitions() != null) ? sweep.repetitions() : 1;
+        long totalGeneratedTrials;
+        try {
+            totalGeneratedTrials = Math.multiplyExact(product, (long) repetitions);
+        } catch (ArithmeticException e) {
+            throw new IllegalArgumentException(
+                    "Generated trial count for sweep '" + sweep.id() + "' overflows integer limit");
+        }
+
+        if (totalGeneratedTrials > maxGeneratedTrials) {
+            throw new IllegalArgumentException("Cartesian product size (" + totalGeneratedTrials + ") for sweep '"
+                    + sweep.id() + "' exceeds maximum allowed generated limit of " + maxGeneratedTrials);
         }
 
         ObjectNode baseObjectNode = mapper.valueToTree(baseTrial);
@@ -154,7 +164,20 @@ public class TrialSweepExpander {
         List<List<JsonNode>> combinations = new ArrayList<>();
         buildCartesianCombinations(parameters, 0, new ArrayList<>(), combinations);
 
-        List<TrialConfig> generatedTrials = new ArrayList<>((int) product);
+        String effectiveGroup = (sweep.group() != null) ? sweep.group() : baseTrial.group();
+        Map<String, String> mergedLabels = null;
+        if (baseTrial.labels() != null || sweep.labels() != null) {
+            Map<String, String> map = new HashMap<>();
+            if (baseTrial.labels() != null) {
+                map.putAll(baseTrial.labels());
+            }
+            if (sweep.labels() != null) {
+                map.putAll(sweep.labels());
+            }
+            mergedLabels = Map.copyOf(map);
+        }
+
+        List<TrialConfig> generatedTrials = new ArrayList<>((int) totalGeneratedTrials);
         for (int candidateIndex = 0; candidateIndex < combinations.size(); candidateIndex++) {
             List<JsonNode> combination = combinations.get(candidateIndex);
             ObjectNode candidateNode = baseObjectNode.deepCopy();
@@ -175,28 +198,35 @@ public class TrialSweepExpander {
                         e);
             }
 
-            String generatedId = baseTrial.id() + "__" + sweep.id() + "__" + candidateIndex;
-            String generatedName =
-                    (baseTrial.name() != null) ? baseTrial.name() + "__" + sweep.id() + "__" + candidateIndex : null;
-            TrialOrigin generatedOrigin = new TrialOrigin(OriginType.SWEEP, sweep.id(), null, candidateIndex);
+            for (int sampleIndex = 0; sampleIndex < repetitions; sampleIndex++) {
+                String sampleSuffix = (repetitions > 1) ? "__sample_" + sampleIndex : "";
+                String generatedId = baseTrial.id() + "__" + sweep.id() + "__" + candidateIndex + sampleSuffix;
+                String generatedName = (baseTrial.name() != null)
+                        ? baseTrial.name() + "__" + sweep.id() + "__" + candidateIndex + sampleSuffix
+                        : null;
+                Integer originSampleIndex = (repetitions > 1) ? sampleIndex : null;
+                TrialOrigin generatedOrigin =
+                        new TrialOrigin(OriginType.SWEEP, sweep.id(), null, candidateIndex, originSampleIndex);
 
-            TrialConfig finalTrial = new TrialConfig(
-                    generatedId,
-                    generatedName,
-                    candidateTrial.group(),
-                    candidateTrial.description(),
-                    candidateTrial.hypothesis(),
-                    candidateTrial.comparison(),
-                    candidateTrial.tags(),
-                    Boolean.TRUE,
-                    generatedOrigin,
-                    candidateTrial.forks(),
-                    candidateTrial.warmups(),
-                    candidateTrial.iterations(),
-                    candidateTrial.jvmArgs(),
-                    candidateTrial.calibrationConfig());
+                TrialConfig finalTrial = new TrialConfig(
+                        generatedId,
+                        generatedName,
+                        effectiveGroup,
+                        candidateTrial.description(),
+                        candidateTrial.hypothesis(),
+                        candidateTrial.comparison(),
+                        candidateTrial.tags(),
+                        mergedLabels,
+                        Boolean.TRUE,
+                        generatedOrigin,
+                        candidateTrial.forks(),
+                        candidateTrial.warmups(),
+                        candidateTrial.iterations(),
+                        candidateTrial.jvmArgs(),
+                        candidateTrial.calibrationConfig());
 
-            generatedTrials.add(finalTrial);
+                generatedTrials.add(finalTrial);
+            }
         }
 
         return generatedTrials;

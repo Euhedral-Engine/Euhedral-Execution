@@ -335,20 +335,33 @@ public record HarnessConfig(
             @NonNull String baseTrialId,
             @Nullable String description,
             @Nullable Boolean enabled,
+            @Nullable Integer repetitions,
+            @Nullable String group,
+            @Nullable Map<String, String> labels,
             @NonNull List<SweepParameter> parameters) {
 
-        /// Convenience constructor for sweep configs without description and enabled.
+        /// Convenience constructor for sweep configs without description, enabled, repetitions, group, and labels.
         public SweepConfig(@NonNull String id, @NonNull String baseTrialId, @NonNull List<SweepParameter> parameters) {
-            this(id, baseTrialId, null, null, parameters);
+            this(id, baseTrialId, null, null, null, null, null, parameters);
         }
 
-        /// Convenience constructor for sweep configs without enabled.
+        /// Convenience constructor for sweep configs without enabled, repetitions, group, and labels.
         public SweepConfig(
                 @NonNull String id,
                 @NonNull String baseTrialId,
                 @Nullable String description,
                 @NonNull List<SweepParameter> parameters) {
-            this(id, baseTrialId, description, null, parameters);
+            this(id, baseTrialId, description, null, null, null, null, parameters);
+        }
+
+        /// Convenience constructor for sweep configs without repetitions, group, and labels.
+        public SweepConfig(
+                @NonNull String id,
+                @NonNull String baseTrialId,
+                @Nullable String description,
+                @Nullable Boolean enabled,
+                @NonNull List<SweepParameter> parameters) {
+            this(id, baseTrialId, description, enabled, null, null, null, parameters);
         }
 
         /// Returns true if enabled is null or true.
@@ -359,8 +372,10 @@ public record HarnessConfig(
 
         /// Creates and validates a SweepConfig instance.
         ///
-        /// @throws IllegalArgumentException if id or baseTrialId is blank, description is blank when present,
-        ///                                  parameters is empty, or parameter paths are duplicated
+        /// @throws IllegalArgumentException if id or baseTrialId is blank, description, group, or label keys/values are
+        /// blank when present,
+        ///                                  repetitions is present and < 1, parameters is empty, or parameter paths are
+        /// duplicated
         /// @throws NullPointerException     if id, baseTrialId, or parameters is null or contains null elements
         @JsonCreator
         public SweepConfig(
@@ -368,6 +383,9 @@ public record HarnessConfig(
                 @JsonProperty("baseTrialId") @NonNull String baseTrialId,
                 @JsonProperty("description") @Nullable String description,
                 @JsonProperty("enabled") @Nullable Boolean enabled,
+                @JsonProperty("repetitions") @Nullable Integer repetitions,
+                @JsonProperty("group") @Nullable String group,
+                @JsonProperty("labels") @Nullable Map<String, String> labels,
                 @JsonProperty("parameters") @NonNull List<SweepParameter> parameters) {
             if (id.isBlank()) {
                 throw new IllegalArgumentException("SweepConfig id cannot be blank");
@@ -377,6 +395,25 @@ public record HarnessConfig(
             }
             if (description != null && description.isBlank()) {
                 throw new IllegalArgumentException("SweepConfig description cannot be blank if present");
+            }
+            if (repetitions != null && repetitions < 1) {
+                throw new IllegalArgumentException("SweepConfig repetitions must be >= 1 if present: " + repetitions);
+            }
+            if (group != null && group.isBlank()) {
+                throw new IllegalArgumentException("SweepConfig group cannot be blank if present");
+            }
+            if (labels != null) {
+                for (Map.Entry<String, String> entry : labels.entrySet()) {
+                    String key = entry.getKey();
+                    String val = entry.getValue();
+                    if (key == null || key.isBlank()) {
+                        throw new IllegalArgumentException("SweepConfig label key cannot be blank");
+                    }
+                    if (val == null || val.isBlank()) {
+                        throw new IllegalArgumentException("SweepConfig label value cannot be blank for key: " + key);
+                    }
+                }
+                labels = Map.copyOf(labels);
             }
             Objects.requireNonNull(parameters, "SweepConfig parameters cannot be null");
             if (parameters.isEmpty()) {
@@ -394,22 +431,38 @@ public record HarnessConfig(
             this.baseTrialId = baseTrialId;
             this.description = description;
             this.enabled = enabled;
+            this.repetitions = repetitions;
+            this.group = group;
+            this.labels = labels;
             this.parameters = List.copyOf(parameters);
         }
     }
 
     /// Parameter entry within a sweep specification.
     public record SweepParameter(
-            @NonNull String path, @NonNull List<JsonNode> values) {
+            @NonNull String path,
+            @Nullable String description,
+            @NonNull List<JsonNode> values) {
+
+        /// Convenience constructor for SweepParameter without description.
+        public SweepParameter(@NonNull String path, @NonNull List<JsonNode> values) {
+            this(path, null, values);
+        }
 
         /// Creates and validates a SweepParameter instance.
         ///
-        /// @throws IllegalArgumentException if path is blank, values is empty, or values contain null
+        /// @throws IllegalArgumentException if path or description is blank, values is empty, or values contain null
         /// @throws NullPointerException     if path or values is null
         @JsonCreator
-        public SweepParameter {
+        public SweepParameter(
+                @JsonProperty("path") @NonNull String path,
+                @JsonProperty("description") @Nullable String description,
+                @JsonProperty("values") @NonNull List<JsonNode> values) {
             if (path.isBlank()) {
                 throw new IllegalArgumentException("SweepParameter path cannot be blank");
+            }
+            if (description != null && description.isBlank()) {
+                throw new IllegalArgumentException("SweepParameter description cannot be blank if present");
             }
             Objects.requireNonNull(values, "SweepParameter values cannot be null");
             if (values.isEmpty()) {
@@ -420,7 +473,9 @@ public record HarnessConfig(
                     throw new IllegalArgumentException("SweepParameter values cannot contain null");
                 }
             }
-            values = List.copyOf(values);
+            this.path = path;
+            this.description = description;
+            this.values = List.copyOf(values);
         }
     }
 
@@ -500,15 +555,30 @@ public record HarnessConfig(
             @NonNull OriginType type,
             @Nullable String sourceId,
             @Nullable Long seed,
-            @Nullable Integer candidateIndex) {
+            @Nullable Integer candidateIndex,
+            @Nullable Integer sampleIndex) {
+
+        /// Convenience constructor for TrialOrigin without sampleIndex.
+        public TrialOrigin(
+                @NonNull OriginType type,
+                @Nullable String sourceId,
+                @Nullable Long seed,
+                @Nullable Integer candidateIndex) {
+            this(type, sourceId, seed, candidateIndex, null);
+        }
 
         /// Creates and validates a TrialOrigin instance.
         ///
         /// @throws IllegalArgumentException if MANUAL origin specifies a sourceId, sourceId is blank when present,
-        ///                                  or candidateIndex < 0
+        ///                                  candidateIndex < 0, or sampleIndex < 0
         /// @throws NullPointerException     if type is null
         @JsonCreator
-        public TrialOrigin {
+        public TrialOrigin(
+                @JsonProperty("type") @NonNull OriginType type,
+                @JsonProperty("sourceId") @Nullable String sourceId,
+                @JsonProperty("seed") @Nullable Long seed,
+                @JsonProperty("candidateIndex") @Nullable Integer candidateIndex,
+                @JsonProperty("sampleIndex") @Nullable Integer sampleIndex) {
             Objects.requireNonNull(type, "TrialOrigin type cannot be null");
             if (type == OriginType.MANUAL && sourceId != null) {
                 throw new IllegalArgumentException("MANUAL TrialOrigin type requires no sourceId");
@@ -520,6 +590,14 @@ public record HarnessConfig(
                 throw new IllegalArgumentException(
                         "TrialOrigin candidateIndex must be >= 0 if present: " + candidateIndex);
             }
+            if (sampleIndex != null && sampleIndex < 0) {
+                throw new IllegalArgumentException("TrialOrigin sampleIndex must be >= 0 if present: " + sampleIndex);
+            }
+            this.type = type;
+            this.sourceId = sourceId;
+            this.seed = seed;
+            this.candidateIndex = candidateIndex;
+            this.sampleIndex = sampleIndex;
         }
     }
 
@@ -532,6 +610,7 @@ public record HarnessConfig(
             @Nullable String hypothesis,
             @Nullable ComparisonConfig comparison,
             @Nullable List<String> tags,
+            @Nullable Map<String, String> labels,
             @Nullable Boolean enabled,
             @Nullable TrialOrigin origin,
             int forks,
@@ -557,6 +636,7 @@ public record HarnessConfig(
                     null,
                     null,
                     null,
+                    null,
                     forks,
                     warmups,
                     iterations,
@@ -564,7 +644,7 @@ public record HarnessConfig(
                     calibrationConfig);
         }
 
-        /// Convenience constructor for trial metadata without origin.
+        /// Convenience constructor for trial metadata without origin and labels.
         public TrialConfig(
                 @Nullable String id,
                 @Nullable String name,
@@ -587,6 +667,7 @@ public record HarnessConfig(
                     hypothesis,
                     comparison,
                     tags,
+                    null,
                     enabled,
                     null,
                     forks,
@@ -596,13 +677,63 @@ public record HarnessConfig(
                     calibrationConfig);
         }
 
+        /// Convenience constructor for trial metadata without labels.
+        public TrialConfig(
+                @Nullable String id,
+                @Nullable String name,
+                @Nullable String group,
+                @Nullable String description,
+                @Nullable String hypothesis,
+                @Nullable ComparisonConfig comparison,
+                @Nullable List<String> tags,
+                @Nullable Boolean enabled,
+                @Nullable TrialOrigin origin,
+                int forks,
+                int warmups,
+                int iterations,
+                @Nullable List<String> jvmArgs,
+                @NonNull CalibrationBenchmarkConfig calibrationConfig) {
+            this(
+                    id,
+                    name,
+                    group,
+                    description,
+                    hypothesis,
+                    comparison,
+                    tags,
+                    null,
+                    enabled,
+                    origin,
+                    forks,
+                    warmups,
+                    iterations,
+                    jvmArgs,
+                    calibrationConfig);
+        }
+
         /// Creates and validates a TrialConfig instance.
         ///
-        /// @throws IllegalArgumentException if any non-null string metadata is blank or tags/jvmArgs contain blank
+        /// @throws IllegalArgumentException if any non-null string metadata is blank or tags/labels/jvmArgs contain
+        /// blank
         /// values
         /// @throws NullPointerException     if calibrationConfig is null or tags/jvmArgs contain null elements
         @JsonCreator
-        public TrialConfig {
+        public TrialConfig(
+                @JsonProperty("id") @Nullable String id,
+                @JsonProperty("name") @Nullable String name,
+                @JsonProperty("group") @Nullable String group,
+                @JsonProperty("description") @Nullable String description,
+                @JsonProperty("hypothesis") @Nullable String hypothesis,
+                @JsonProperty("comparison") @Nullable ComparisonConfig comparison,
+                @JsonProperty("tags") @Nullable List<String> tags,
+                @JsonProperty("labels") @Nullable Map<String, String> labels,
+                @JsonProperty("enabled") @Nullable Boolean enabled,
+                @JsonProperty("origin") @Nullable TrialOrigin origin,
+                @JsonProperty("forks") int forks,
+                @JsonProperty("warmups") int warmups,
+                @JsonProperty("iterations") int iterations,
+                @JsonProperty("jvmArgs") @Nullable List<String> jvmArgs,
+                @JsonProperty("calibrationConfig") @NonNull CalibrationBenchmarkConfig calibrationConfig) {
             if (id != null && id.isBlank()) {
                 throw new IllegalArgumentException("TrialConfig id cannot be blank if present");
             }
@@ -627,6 +758,19 @@ public record HarnessConfig(
                 }
                 tags = List.copyOf(tags);
             }
+            if (labels != null) {
+                for (Map.Entry<String, String> entry : labels.entrySet()) {
+                    String key = entry.getKey();
+                    String val = entry.getValue();
+                    if (key == null || key.isBlank()) {
+                        throw new IllegalArgumentException("TrialConfig label key cannot be blank");
+                    }
+                    if (val == null || val.isBlank()) {
+                        throw new IllegalArgumentException("TrialConfig label value cannot be blank for key: " + key);
+                    }
+                }
+                labels = Map.copyOf(labels);
+            }
             if (jvmArgs != null) {
                 for (String jvmArg : jvmArgs) {
                     Objects.requireNonNull(jvmArg, "TrialConfig jvmArg element cannot be null");
@@ -637,6 +781,21 @@ public record HarnessConfig(
                 jvmArgs = List.copyOf(jvmArgs);
             }
             Objects.requireNonNull(calibrationConfig, "TrialConfig calibrationConfig cannot be null");
+            this.id = id;
+            this.name = name;
+            this.group = group;
+            this.description = description;
+            this.hypothesis = hypothesis;
+            this.comparison = comparison;
+            this.tags = tags;
+            this.labels = labels;
+            this.enabled = enabled;
+            this.origin = origin;
+            this.forks = forks;
+            this.warmups = warmups;
+            this.iterations = iterations;
+            this.jvmArgs = jvmArgs;
+            this.calibrationConfig = calibrationConfig;
         }
     }
 }
