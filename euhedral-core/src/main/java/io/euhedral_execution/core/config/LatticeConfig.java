@@ -1,10 +1,12 @@
 package io.euhedral_execution.core.config;
 
 import io.euhedral_execution.core.control_plane.ControlPlaneShard;
+import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.util.BitSet;
@@ -90,5 +92,18 @@ public record LatticeConfig(
     /// [BaseCloneableObject]
     public static LatticeConfig ofDefaults(@NonNull CloneableObject cloneableObject) {
         return ofDefaults(DEFAULT_NAME, DEFAULT_SHARD_NAME, cloneableObject);
+    }
+
+    public static LatticeConfig ofBenchmark(
+            @NonNull UnmodifiableBitSet allowedCpus,
+            @NonNull FragmentObserver observer,
+            @NonNull FragmentDecisionWeights decisionWeights,
+            @NonNull AbstractExecutor executor) {
+        return new LatticeConfig(
+                DEFAULT_NAME,
+                allowedCpus,
+                Duration.ofMinutes(1),
+                ControlPlaneShard.createBaseShard(
+                        new BaseCloneableObject(FragmentConfig.ofBenchmark(observer, decisionWeights), executor)));
     }
 }

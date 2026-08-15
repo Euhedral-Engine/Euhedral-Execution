@@ -3,6 +3,8 @@
 
 [versions]
 ch-qos-logback-logback-classic = "1.5.34"
+com-fasterxml-jackson-core-jackson-annotations = "2.18.2"
+com-fasterxml-jackson-core-jackson-databind = "2.18.2"
 com-google-guava-guava = "33.6.0-jre"
 com-google-protobuf-protobuf-java = "4.33.4"
 com-tdunning-t-digest = "3.3"
@@ -38,6 +40,8 @@ org-springframework-grpc-spring-grpc-spring-boot-starter = "1.0.3"
 
 [libraries]
 ch-qos-logback-logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "ch-qos-logback-logback-classic" }
+com-fasterxml-jackson-core-jackson-annotations = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "com-fasterxml-jackson-core-jackson-annotations" }
+com-fasterxml-jackson-core-jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "com-fasterxml-jackson-core-jackson-databind" }
 com-google-guava-guava = { module = "com.google.guava:guava", version.ref = "com-google-guava-guava" }
 com-google-protobuf-protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "com-google-protobuf-protobuf-java" }
 com-tdunning-t-digest = { module = "com.tdunning:t-digest", version.ref = "com-tdunning-t-digest" }

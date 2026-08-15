@@ -1,5 +1,6 @@
 package io.euhedral_execution.core.config;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ContentionThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy;
@@ -23,6 +24,7 @@ public record FragmentDecisionWeights(
             BodyCostWeights.EXEC_DEFAULTS,
             ExecutionPolicy.DEFAULT);
 
+    @JsonCreator
     public FragmentDecisionWeights {
         Objects.requireNonNull(idleContentionThresholds);
         Objects.requireNonNull(idleBodyCostWeights);

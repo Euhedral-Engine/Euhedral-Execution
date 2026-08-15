@@ -53,10 +53,10 @@ public record FragmentConfig(
                 meterRegistry);
     }
 
-    public static FragmentConfig ofBenchmark(@NonNull FragmentObserver observer) {
+    public static FragmentConfig ofBenchmark(
+            @NonNull FragmentObserver observer, @NonNull FragmentDecisionWeights decisionWeights) {
         Objects.requireNonNull(observer);
-        return new FragmentConfig(
-                null, CacheConfig.ofDefaults(), FragmentDecisionWeights.DEFAULT, observer, 4_096, true, null, null);
+        return new FragmentConfig(null, CacheConfig.ofDefaults(), decisionWeights, observer, 4_096, true, null, null);
     }
 
     @Override

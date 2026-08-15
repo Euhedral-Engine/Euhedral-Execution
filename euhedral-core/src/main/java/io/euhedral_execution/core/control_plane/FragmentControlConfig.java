@@ -1,20 +1,25 @@
 package io.euhedral_execution.core.control_plane;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.utils.MicroCalibrator;
+import java.io.File;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
 public final class FragmentControlConfig {
-    public static final String IDLE_CONTENTION_THRESHOLDS = "euhedral.fragment.idle.contentionThresholds";
-    public static final String IDLE_BODY_COST_WEIGHTS = "euhedral.fragment.idle.bodyCostThresholds";
-    public static final String IDLE_POLICY_PARK_NS = "euhedral.fragment.idle.parkTimeValuesNs";
-    public static final String EXEC_CONTENTION_THRESHOLDS = "euhedral.fragment.execution.contentionThresholds";
-    public static final String EXEC_BODY_COST_WEIGHTS = "euhedral.fragment.execution.bodyCostWeights";
-    public static final String EXEC_CONTENTION_POLICY = "euhedral.fragment.execution.contentionPolicy";
+    public static final String IDLE_CONTENTION_THRESHOLDS = "euhedral.fragment.idle.contentionThresholdsPath";
+    public static final String IDLE_BODY_COST_WEIGHTS = "euhedral.fragment.idle.bodyCostThresholdsPath";
+    public static final String IDLE_POLICY_PARK_NS = "euhedral.fragment.idle.parkTimeValuesNsPath";
+    public static final String EXEC_CONTENTION_THRESHOLDS = "euhedral.fragment.execution.contentionThresholdsPath";
+    public static final String EXEC_BODY_COST_WEIGHTS = "euhedral.fragment.execution.bodyCostWeightsPath";
+    public static final String EXEC_CONTENTION_POLICY = "euhedral.fragment.execution.contentionPolicyPath";
 
-    public static final int WEIGHT_COUNT = 4;
+    public static final int IDLE_WEIGHT_SETS = 4;
+    public static final int EXEC_WEIGHT_SETS = 4;
+    public static final int POLICY_COUNT = 5;
 
     public static final long DEFAULT_PARK_NS = 15_000L;
     public static final long DEFAULT_LOW_CONTENTION_THRESHOLD = 650_000L; // 65%
@@ -37,8 +42,8 @@ public final class FragmentControlConfig {
         this.executionPolicies = weights.executionPolicies();
         this.idleTimeNs = weights.idleTimeNs();
 
-        BodyCostThresholds[] idle = new BodyCostThresholds[WEIGHT_COUNT];
-        BodyCostThresholds[] exec = new BodyCostThresholds[WEIGHT_COUNT];
+        BodyCostThresholds[] idle = new BodyCostThresholds[IDLE_WEIGHT_SETS];
+        BodyCostThresholds[] exec = new BodyCostThresholds[EXEC_WEIGHT_SETS];
 
         MicroCalibrator calibrator = new MicroCalibrator();
         calibrator.warmup();
@@ -69,7 +74,12 @@ public final class FragmentControlConfig {
         static {
             String prop = System.getProperty(IDLE_CONTENTION_THRESHOLDS);
             if (prop != null) {
-                IDLE_DEFAULTS = readThresholds(IDLE_CONTENTION_THRESHOLDS);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    IDLE_DEFAULTS = mapper.readValue(new File(prop), ContentionThresholds.class);
+                } catch (Exception e) {
+                    throw new ExceptionInInitializerError(e);
+                }
             } else {
                 IDLE_DEFAULTS = new ContentionThresholds(
                         DEFAULT_LOW_CONTENTION_THRESHOLD,
@@ -80,7 +90,12 @@ public final class FragmentControlConfig {
 
             prop = System.getProperty(EXEC_CONTENTION_THRESHOLDS);
             if (prop != null) {
-                EXEC_DEFAULTS = readThresholds(EXEC_CONTENTION_THRESHOLDS);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    EXEC_DEFAULTS = mapper.readValue(new File(prop), ContentionThresholds.class);
+                } catch (Exception e) {
+                    throw new ExceptionInInitializerError(e);
+                }
             } else {
                 EXEC_DEFAULTS = new ContentionThresholds(
                         DEFAULT_LOW_CONTENTION_THRESHOLD,
@@ -90,33 +105,14 @@ public final class FragmentControlConfig {
             }
         }
 
+        @JsonCreator
         public ContentionThresholds {
             if (hContention > 1_000_000L
                     || xsContention > sContention
                     || sContention > mContention
                     || mContention > hContention) {
-                throw new IllegalArgumentException(
-                        "This class's parameters must have values from [0..1,000,000] in increasing order");
+                throw new IllegalArgumentException("Parameters must be values from [0..1,000,000] in increasing order");
             }
-        }
-
-        private static ContentionThresholds readThresholds(String property) {
-            String raw = System.getProperty(property);
-            String[] tokens = raw.split(",");
-            if (tokens.length != WEIGHT_COUNT) {
-                throw new IllegalArgumentException(property
-                        + " must have 4 comma-separated integers with values [0..1,000,000] in increasing order");
-            }
-            long xs = Long.parseLong(tokens[0]);
-            long s = Long.parseLong(tokens[1]);
-            long m = Long.parseLong(tokens[2]);
-            long h = Long.parseLong(tokens[3]);
-
-            if (xs > s || s > m || m > h) {
-                throw new IllegalArgumentException(property
-                        + " must have 4 comma-separated integers with values [0..1,000,000] in increasing order");
-            }
-            return new ContentionThresholds(xs, s, m, h);
         }
     }
 
@@ -125,14 +121,16 @@ public final class FragmentControlConfig {
         public static final List<BodyCostThresholds> EXEC_DEFAULTS;
 
         static {
-            BodyCostThresholds[] idle = new BodyCostThresholds[WEIGHT_COUNT];
-            BodyCostThresholds[] exec = new BodyCostThresholds[WEIGHT_COUNT];
+            BodyCostThresholds[] idle = new BodyCostThresholds[IDLE_WEIGHT_SETS];
+            BodyCostThresholds[] exec = new BodyCostThresholds[EXEC_WEIGHT_SETS];
 
             MicroCalibrator calibrator = new MicroCalibrator();
             calibrator.warmup();
 
             for (int i = 0; i < idle.length; i++) {
                 idle[i] = new BodyCostThresholds(calibrator, BodyCostWeights.IDLE_DEFAULTS.get(i));
+            }
+            for (int i = 0; i < exec.length; i++) {
                 exec[i] = new BodyCostThresholds(calibrator, BodyCostWeights.EXEC_DEFAULTS.get(i));
             }
 
@@ -148,9 +146,6 @@ public final class FragmentControlConfig {
         public BodyCostThresholds(@NonNull MicroCalibrator calibrator, @NonNull BodyCostWeights weights) {
             Objects.requireNonNull(calibrator);
             Objects.requireNonNull(weights);
-            if (weights.xs > weights.s || weights.s > weights.m || weights.m > weights.h) {
-                throw new IllegalArgumentException("Weights must be in increasing order");
-            }
             this.xs = calibrator.benchmark(weights.xs);
             if (weights.xs == weights.s) {
                 this.s = this.xs;
@@ -177,7 +172,16 @@ public final class FragmentControlConfig {
         static {
             String prop = System.getProperty(IDLE_BODY_COST_WEIGHTS);
             if (prop != null) {
-                IDLE_DEFAULTS = readWeights(IDLE_BODY_COST_WEIGHTS, prop);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    IDLE_DEFAULTS = List.of(mapper.readValue(new File(prop), BodyCostWeights[].class));
+                } catch (Exception e) {
+                    throw new ExceptionInInitializerError(e);
+                }
+                if (IDLE_DEFAULTS.size() != IDLE_WEIGHT_SETS) {
+                    throw new IllegalArgumentException(
+                            String.format("There can only be %d sets of idle weights", IDLE_WEIGHT_SETS));
+                }
             } else {
                 IDLE_DEFAULTS = List.of(
                         new BodyCostWeights(0, 0, 24, 256), // XS Contention
@@ -188,7 +192,16 @@ public final class FragmentControlConfig {
 
             prop = System.getProperty(EXEC_BODY_COST_WEIGHTS);
             if (prop != null) {
-                EXEC_DEFAULTS = readWeights(EXEC_BODY_COST_WEIGHTS, prop);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    EXEC_DEFAULTS = List.of(mapper.readValue(new File(prop), BodyCostWeights[].class));
+                } catch (Exception e) {
+                    throw new ExceptionInInitializerError(e);
+                }
+                if (EXEC_DEFAULTS.size() != EXEC_WEIGHT_SETS) {
+                    throw new IllegalArgumentException(
+                            String.format("There can only be %d sets of execution weights", EXEC_WEIGHT_SETS));
+                }
             } else {
                 EXEC_DEFAULTS = List.of(
                         new BodyCostWeights(0, 24, 96, 256), // XS Contention
@@ -198,34 +211,11 @@ public final class FragmentControlConfig {
             }
         }
 
-        private static List<BodyCostWeights> readWeights(String property, String raw) {
-            String[] sets = raw.split(";");
-            if (sets.length != WEIGHT_COUNT) {
-                throw new IllegalArgumentException(property
-                        + " must have 4 sets of 4 semi-colon-separated 32-bit integers with values in increasing"
-                        + " order within each set. Format the list like: property=\"[,,];[,,];[,,];[,,]\"");
+        @JsonCreator
+        public BodyCostWeights {
+            if (xs > s || s > m || m > h) {
+                throw new IllegalStateException("Body cost weights must be in ascending order");
             }
-
-            BodyCostWeights[] thresholds = new BodyCostWeights[sets.length];
-            for (int i = 0; i < sets.length; i++) {
-                String[] tokens = sets[i].replace("[", "").replace("]", "").split(",");
-                if (tokens.length != WEIGHT_COUNT) {
-                    throw new IllegalArgumentException("Set " + i + " does not have 4 32-bit integers");
-                }
-
-                int xs = Integer.parseInt(tokens[0]);
-                int s = Integer.parseInt(tokens[1]);
-                int m = Integer.parseInt(tokens[2]);
-                int h = Integer.parseInt(tokens[3]);
-
-                if (xs > s || s > m || m > h) {
-                    throw new IllegalArgumentException(property
-                            + " must have 4 sets of 4 semi-colon-separated 32-bit integers with values in increasing"
-                            + " order within each set. Format the list like: property=\"[,,];[,,];[,,];[,,]\"");
-                }
-                thresholds[i] = new BodyCostWeights(xs, s, m, h);
-            }
-            return List.of(thresholds);
         }
     }
 
@@ -235,7 +225,16 @@ public final class FragmentControlConfig {
         static {
             String prop = System.getProperty(IDLE_POLICY_PARK_NS);
             if (prop != null) {
-                DEFAULT = readPolicy(prop);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    DEFAULT = List.of(mapper.readValue(new File(prop), IdlePolicy[].class));
+                } catch (Exception e) {
+                    throw new ExceptionInInitializerError(e);
+                }
+                if (DEFAULT.size() != POLICY_COUNT) {
+                    throw new IllegalArgumentException(
+                            String.format("There can only be %d sets of idle policies", POLICY_COUNT));
+                }
             } else {
                 DEFAULT = List.of(
                         new IdlePolicy(0, 0, 0, 0, 0), // XS Contention
@@ -247,32 +246,8 @@ public final class FragmentControlConfig {
             }
         }
 
-        private static List<IdlePolicy> readPolicy(String raw) {
-            String[] sets = raw.split(";");
-            if (sets.length != WEIGHT_COUNT + 1) {
-                throw new IllegalArgumentException(IDLE_POLICY_PARK_NS
-                        + " must have 5 sets of 5 semi-colon-separated 64-bit integers within each set. Formatting:"
-                        + " propertyName=\"[,,];[,,];[,,];[,,]\"");
-            }
-
-            IdlePolicy[] policies = new IdlePolicy[sets.length];
-            for (int i = 0; i < policies.length; i++) {
-                String[] tokens = sets[i].split(",");
-                if (tokens.length != WEIGHT_COUNT + 1) {
-                    throw new IllegalArgumentException(IDLE_POLICY_PARK_NS
-                            + " must have 5 sets of 5 semi-colon-separated 64-bit integers within each set. Formatting:"
-                            + " propertyName=\"[,,];[,,];[,,];[,,]\"");
-                }
-                long xs = Long.parseLong(tokens[0]);
-                long s = Long.parseLong(tokens[1]);
-                long m = Long.parseLong(tokens[2]);
-                long h = Long.parseLong(tokens[3]);
-                long xh = Long.parseLong(tokens[4]);
-
-                policies[i] = new IdlePolicy(xs, s, m, h, xh);
-            }
-            return List.of(policies);
-        }
+        @JsonCreator
+        public IdlePolicy {}
     }
 
     public record ExecutionPolicy(
@@ -282,7 +257,16 @@ public final class FragmentControlConfig {
         static {
             String prop = System.getProperty(EXEC_CONTENTION_POLICY);
             if (prop != null) {
-                DEFAULT = readPolicy(prop);
+                ObjectMapper mapper = new ObjectMapper();
+                try {
+                    DEFAULT = List.of(mapper.readValue(new File(prop), ExecutionPolicy[].class));
+                } catch (Exception e) {
+                    throw new ExceptionInInitializerError(e);
+                }
+                if (DEFAULT.size() != POLICY_COUNT) {
+                    throw new IllegalArgumentException(
+                            String.format("There can only be %d sets of execution policies", POLICY_COUNT));
+                }
             } else {
                 DEFAULT = List.of(
                         new ExecutionPolicy(
@@ -318,31 +302,7 @@ public final class FragmentControlConfig {
             }
         }
 
-        private static List<ExecutionPolicy> readPolicy(String raw) {
-            String[] sets = raw.split(";");
-            if (sets.length != WEIGHT_COUNT + 1) {
-                throw new IllegalArgumentException(EXEC_CONTENTION_POLICY
-                        + " must have 5 sets of 5 semi-colon-separated enums (DIRECT, STAGED, SKIP) within each set."
-                        + " Formatting: propertyName=\"[,,];[,,];[,,];[,,]\"");
-            }
-
-            ExecutionPolicy[] policies = new ExecutionPolicy[sets.length];
-            for (int i = 0; i < policies.length; i++) {
-                String[] tokens = sets[i].split(",");
-                if (tokens.length != WEIGHT_COUNT + 1) {
-                    throw new IllegalArgumentException(EXEC_CONTENTION_POLICY
-                            + " must have 5 sets of 5 semi-colon-separated enums (DIRECT, STAGED, SKIP) within each set."
-                            + " Formatting: propertyName=\"[,,];[,,];[,,];[,,]\"");
-                }
-                ExecutionPath xs = ExecutionPath.valueOf(tokens[0].toUpperCase());
-                ExecutionPath s = ExecutionPath.valueOf(tokens[1].toUpperCase());
-                ExecutionPath m = ExecutionPath.valueOf(tokens[2].toUpperCase());
-                ExecutionPath h = ExecutionPath.valueOf(tokens[3].toUpperCase());
-                ExecutionPath xh = ExecutionPath.valueOf(tokens[4].toUpperCase());
-
-                policies[i] = new ExecutionPolicy(xs, s, m, h, xh);
-            }
-            return List.of(policies);
-        }
+        @JsonCreator
+        public ExecutionPolicy {}
     }
 }

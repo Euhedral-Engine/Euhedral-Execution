@@ -9,6 +9,8 @@ dependencies {
     api(libs.org.slf4j.slf4j.api)
     api(libs.io.micrometer.micrometer.core)
     api(libs.org.jspecify.jspecify)
+    implementation(libs.com.fasterxml.jackson.core.jackson.annotations)
+    implementation(libs.com.fasterxml.jackson.core.jackson.databind)
     testImplementation(libs.org.assertj.assertj.core)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
     testImplementation(libs.org.mockito.mockito.core)
