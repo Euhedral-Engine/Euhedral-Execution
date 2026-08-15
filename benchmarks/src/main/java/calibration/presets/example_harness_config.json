@@ -1,0 +1,67 @@
+{
+  "trials": [
+    {
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 5,
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationConfig": {
+        "parallelSources": 4,
+        "orderedSources": 2,
+        "workUnits": 100,
+        "randomizeWork": true,
+        "totalRequiredExecutions": 1000000,
+        "invocationTimeoutMillis": 60000,
+        "decisionWeights": {
+          "idleContentionThresholds": {
+            "xsContention": 650000,
+            "sContention": 650000,
+            "mContention": 650000,
+            "hContention": 980000
+          },
+          "idleBodyCostWeights": [
+            { "xs": 0, "s": 0, "m": 24, "h": 256 },
+            { "xs": 0, "s": 0, "m": 24, "h": 256 },
+            { "xs": 0, "s": 0, "m": 24, "h": 256 },
+            { "xs": 0, "s": 24, "m": 96, "h": 256 }
+          ],
+          "idleTimeNs": [
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
+          ],
+          "execContentionThresholds": {
+            "xsContention": 650000,
+            "sContention": 650000,
+            "mContention": 650000,
+            "hContention": 980000
+          },
+          "execBodyCostWeights": [
+            { "xs": 0, "s": 24, "m": 96, "h": 256 },
+            { "xs": 0, "s": 24, "m": 96, "h": 256 },
+            { "xs": 0, "s": 24, "m": 96, "h": 256 },
+            { "xs": 0, "s": 24, "m": 96, "h": 256 }
+          ],
+          "executionPolicies": [
+            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
+          ]
+        },
+        "observeCycleStart": false,
+        "observeBatchProgress": false,
+        "observeBatchComplete": false,
+        "observeRawBodyCost": false,
+        "observeIdleDecision": false,
+        "observeExecDecision": false
+      }
+    }
+  ]
+}
