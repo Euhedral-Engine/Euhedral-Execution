@@ -18,6 +18,9 @@ public class CalibrationRunner {
     private static final String CONFIG_PATH_ARG = "config_path";
     private static final Map<String, Integer> ARGUMENTS = Map.of(CONFIG_PATH_ARG, 0);
 
+    private static final String TRIAL_CONFIG_PATH_PROP = Constants.TRIAL_CONFIG_PROP;
+    private static final String CPU_SET_PROP = Constants.CPU_SET_PROP;
+
     private static final List<String> DEFAULT_FLAGS = List.of(
             "-XX:+UseThreadPriorities",
             "--enable-native-access=ALL-UNNAMED",
@@ -39,26 +42,42 @@ public class CalibrationRunner {
         ObjectMapper mapper = new ObjectMapper();
         HarnessConfig harnessConfig = mapper.readValue(configFile, HarnessConfig.class);
         for (TrialConfig trial : harnessConfig.trials()) {
-            runTrial(trial);
+            runTrial(trial, mapper);
         }
     }
 
-    private static void runTrial(TrialConfig trial) throws Exception {
-        List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
-        if (trial.jvmArgs() != null) {
-            jvmArgs.addAll(trial.jvmArgs());
+    private static void runTrial(TrialConfig trial, ObjectMapper mapper) throws Exception {
+        File tempConfigFile = File.createTempFile("trial_config_", ".json");
+        tempConfigFile.deleteOnExit();
+        try {
+            mapper.writeValue(tempConfigFile, trial);
+            String canonicalPath = tempConfigFile.getCanonicalPath();
+
+            List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
+            jvmArgs.add("-D" + TRIAL_CONFIG_PATH_PROP + "=" + canonicalPath);
+
+            String cpuSet = System.getProperty(CPU_SET_PROP);
+            if (cpuSet != null && !cpuSet.isBlank()) {
+                jvmArgs.add("-D" + CPU_SET_PROP + "=" + cpuSet);
+            }
+
+            if (trial.jvmArgs() != null) {
+                jvmArgs.addAll(trial.jvmArgs());
+            }
+
+            ChainedOptionsBuilder opt = new OptionsBuilder();
+            opt = opt.include(CalibrationBenchmark.class.getName());
+            opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
+            opt = opt.forks(trial.forks());
+            opt = opt.warmupForks(trial.warmups());
+            opt = opt.measurementIterations(trial.iterations());
+
+            Options options = opt.build();
+            new Runner(options).run();
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            tempConfigFile.delete();
         }
-        jvmArgs.add(String.format("-D%s=\"%s\"", Constants.TRIAL_CONFIG_PROP, "insert_path_here"));
-
-        ChainedOptionsBuilder opt = new OptionsBuilder();
-        opt = opt.include(CalibrationBenchmark.class.getName());
-        opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
-        opt = opt.forks(trial.forks());
-        opt = opt.warmupForks(trial.warmups());
-        opt = opt.measurementIterations(trial.iterations());
-
-        Options options = opt.build();
-        new Runner(options).run();
     }
 
     private static final class MainError extends RuntimeException {
