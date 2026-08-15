@@ -10,7 +10,7 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /// Configuration for benchmark calibration harness execution.
-/// Holds optional metadata, run options, and non-empty trial specifications.
+/// Holds optional metadata, run options, artifact retention settings, and non-empty trial specifications.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
         @Nullable String id,
@@ -18,16 +18,17 @@ public record HarnessConfig(
         @Nullable String description,
         @Nullable Map<String, String> labels,
         @Nullable HarnessRunOptions runOptions,
+        @Nullable ArtifactConfig artifacts,
         @NonNull List<TrialConfig> trials) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     /// Convenience constructor for harness configs containing only trials.
     public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, null, trials);
+        this(null, null, null, null, null, null, null, trials);
     }
 
-    /// Convenience constructor for harness configs without runOptions.
+    /// Convenience constructor for harness configs without runOptions and artifacts.
     public HarnessConfig(
             @Nullable Integer schemaVersion,
             @Nullable String id,
@@ -35,7 +36,19 @@ public record HarnessConfig(
             @Nullable String description,
             @Nullable Map<String, String> labels,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, trials);
+        this(schemaVersion, id, name, description, labels, null, null, trials);
+    }
+
+    /// Convenience constructor for harness configs without artifacts.
+    public HarnessConfig(
+            @Nullable Integer schemaVersion,
+            @Nullable String id,
+            @Nullable String name,
+            @Nullable String description,
+            @Nullable Map<String, String> labels,
+            @Nullable HarnessRunOptions runOptions,
+            @NonNull List<TrialConfig> trials) {
+        this(schemaVersion, id, name, description, labels, runOptions, null, trials);
     }
 
     /// Creates and validates a HarnessConfig instance.
@@ -100,6 +113,26 @@ public record HarnessConfig(
         public HarnessRunOptions {
             if (repeatCount != null && repeatCount < 1) {
                 throw new IllegalArgumentException("repeatCount must be positive if present: " + repeatCount);
+            }
+        }
+    }
+
+    /// Result-retention configuration for benchmark execution outputs and artifacts.
+    public record ArtifactConfig(
+            @Nullable String outputDirectory,
+            @Nullable Boolean retainExpandedConfig,
+            @Nullable Boolean retainRawBenchmarkOutput,
+            @Nullable Boolean retainObserverData,
+            @Nullable Boolean retainPerForkResults,
+            @Nullable Boolean retainPerIterationResults) {
+
+        /// Creates and validates an ArtifactConfig instance.
+        ///
+        /// @throws IllegalArgumentException if outputDirectory is present and blank
+        @JsonCreator
+        public ArtifactConfig {
+            if (outputDirectory != null && outputDirectory.isBlank()) {
+                throw new IllegalArgumentException("outputDirectory cannot be blank if present");
             }
         }
     }

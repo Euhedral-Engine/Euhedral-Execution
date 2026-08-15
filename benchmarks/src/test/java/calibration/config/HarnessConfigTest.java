@@ -293,6 +293,108 @@ class HarnessConfigTest {
         assertEquals(1, options.repeatCount());
     }
 
+    /// Verifies ArtifactConfig JSON parsing and round-trip.
+    @Test
+    void parseArtifactConfigAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "artifacts": {
+                "outputDirectory": "build/reports/benchmarks",
+                "retainExpandedConfig": true,
+                "retainRawBenchmarkOutput": false,
+                "retainObserverData": true,
+                "retainPerForkResults": false,
+                "retainPerIterationResults": true
+              },
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNotNull(config.artifacts());
+        assertEquals("build/reports/benchmarks", config.artifacts().outputDirectory());
+        assertEquals(Boolean.TRUE, config.artifacts().retainExpandedConfig());
+        assertEquals(Boolean.FALSE, config.artifacts().retainRawBenchmarkOutput());
+        assertEquals(Boolean.TRUE, config.artifacts().retainObserverData());
+        assertEquals(Boolean.FALSE, config.artifacts().retainPerForkResults());
+        assertEquals(Boolean.TRUE, config.artifacts().retainPerIterationResults());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies ArtifactConfig validation for blank outputDirectory.
+    @Test
+    void rejectBlankOutputDirectory() {
+        String jsonBlankDir = """
+            {
+              "artifacts": {
+                "outputDirectory": "   "
+              },
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonBlankDir, HarnessConfig.class));
+
+        String jsonEmptyDir = """
+            {
+              "artifacts": {
+                "outputDirectory": ""
+              },
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonEmptyDir, HarnessConfig.class));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.ArtifactConfig("   ", true, true, true, true, true));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.ArtifactConfig("", true, true, true, true, true));
+    }
+
+    /// Verifies ArtifactConfig allows null properties.
+    @Test
+    void allowNullArtifactFields() {
+        HarnessConfig.ArtifactConfig artifacts = new HarnessConfig.ArtifactConfig(null, null, null, null, null, null);
+        assertNull(artifacts.outputDirectory());
+        assertNull(artifacts.retainExpandedConfig());
+        assertNull(artifacts.retainRawBenchmarkOutput());
+        assertNull(artifacts.retainObserverData());
+        assertNull(artifacts.retainPerForkResults());
+        assertNull(artifacts.retainPerIterationResults());
+    }
+
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {
