@@ -1696,7 +1696,12 @@ class HarnessConfigTest {
         assertEquals("exec-contention-band-calibration", config.id());
         assertEquals("Execution Contention Band Calibration", config.name());
         assertNotNull(config.trials());
-        assertEquals(2, config.trials().size());
+        assertEquals(1, config.trials().size());
+        assertNotNull(config.sweeps());
+        assertEquals(1, config.sweeps().size());
+
+        HarnessConfig expanded = TrialSweepExpander.expandHarnessConfig(config);
+        assertEquals(3, expanded.trials().size());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
