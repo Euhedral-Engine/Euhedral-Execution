@@ -8,8 +8,10 @@ import calibration.infra.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
@@ -47,14 +49,24 @@ public class CalibrationRunner {
         int repeatCount = (runOptions != null && runOptions.repeatCount() != null) ? runOptions.repeatCount() : 1;
         boolean failFast = runOptions == null || runOptions.failFast() == null || runOptions.failFast();
 
+        List<TrialConfig> activeTrials = new ArrayList<>();
+        for (TrialConfig trial : harnessConfig.trials()) {
+            if (!Boolean.FALSE.equals(trial.enabled())) {
+                activeTrials.add(trial);
+            }
+        }
+
+        boolean randomize = runOptions != null && Boolean.TRUE.equals(runOptions.randomizeTrialOrder());
+        if (randomize) {
+            long seed = (runOptions.randomSeed() != null) ? runOptions.randomSeed() : new Random().nextLong();
+            System.out.println("Randomized trial order with seed: " + seed);
+            Collections.shuffle(activeTrials, new Random(seed));
+        }
+
         List<String> failures = new ArrayList<>();
 
-        for (TrialConfig trial : harnessConfig.trials()) {
-            if (Boolean.FALSE.equals(trial.enabled())) {
-                continue;
-            }
-
-            for (int r = 0; r < repeatCount; r++) {
+        for (int r = 0; r < repeatCount; r++) {
+            for (TrialConfig trial : activeTrials) {
                 if (failFast) {
                     runTrial(trial, mapper);
                 } else {
