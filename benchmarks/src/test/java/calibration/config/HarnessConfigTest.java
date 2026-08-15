@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
@@ -19,7 +20,7 @@ import org.junit.jupiter.api.Test;
 /// Unit tests for HarnessConfig JSON parsing, metadata validation, and round-tripping.
 class HarnessConfigTest {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true);
 
     private static HarnessConfig.TrialConfig dummyTrialConfig() {
         return new HarnessConfig.TrialConfig(1, 1, 1, null, dummyCalibrationConfig());
@@ -57,6 +58,62 @@ class HarnessConfigTest {
     @Test
     void currentSchemaVersionIsOne() {
         assertEquals(1, HarnessConfig.CURRENT_SCHEMA_VERSION);
+    }
+
+    /// Verifies old minimal JSON with only trials parses cleanly.
+    @Test
+    void parseOldMinimalJsonWithOnlyTrials() throws Exception {
+        String json = """
+            {
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNull(config.schemaVersion());
+        assertNull(config.id());
+        assertNull(config.name());
+        assertNull(config.description());
+        assertNull(config.labels());
+        assertNull(config.runOptions());
+        assertNull(config.artifacts());
+        assertNull(config.calibrationProfiles());
+        assertNull(config.decisionWeightProfiles());
+        assertNull(config.sweeps());
+        assertNull(config.searches());
+        assertEquals(1, config.trials().size());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
     }
 
     /// Verifies deserialization of all new metadata properties and JSON round-trip equivalence.
@@ -144,9 +201,9 @@ class HarnessConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(-5, "id", "name", null, null, List.of()));
     }
 
-    /// Verifies blank id or blank name is rejected.
+    /// Verifies blank id, name, or description is rejected.
     @Test
-    void rejectBlankIdAndName() {
+    void rejectBlankIdNameAndDescription() {
         String jsonBlankId = """
             {
               "id": "   ",
@@ -155,40 +212,59 @@ class HarnessConfigTest {
             """;
         assertThrows(Exception.class, () -> mapper.readValue(jsonBlankId, HarnessConfig.class));
 
-        String jsonEmptyId = """
+        String jsonBlankDescription = """
             {
-              "id": "",
+              "description": "   ",
               "trials": []
             }
             """;
-        assertThrows(Exception.class, () -> mapper.readValue(jsonEmptyId, HarnessConfig.class));
-
-        String jsonBlankName = """
-            {
-              "name": "   ",
-              "trials": []
-            }
-            """;
-        assertThrows(Exception.class, () -> mapper.readValue(jsonBlankName, HarnessConfig.class));
-
-        String jsonEmptyName = """
-            {
-              "name": "",
-              "trials": []
-            }
-            """;
-        assertThrows(Exception.class, () -> mapper.readValue(jsonEmptyName, HarnessConfig.class));
+        assertThrows(Exception.class, () -> mapper.readValue(jsonBlankDescription, HarnessConfig.class));
 
         // Also verify via constructor directly
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(1, "", "name", null, null, List.of()));
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(1, "   ", "name", null, null, List.of()));
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(1, "id", "", null, null, List.of()));
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(1, "id", "   ", null, null, List.of()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        1, "id", "name", "   ", null, null, null, null, null, null, null, List.of(dummyTrialConfig())));
     }
 
-    /// Verifies defensive copying of labels.
+    /// Verifies defensive copying of labels and rejection of blank label keys/values.
     @Test
-    void defensivelyCopyLabels() {
+    void defensivelyCopyAndValidateLabels() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        1,
+                        "id",
+                        "name",
+                        "desc",
+                        Map.of("  ", "val"),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(dummyTrialConfig())));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        1,
+                        "id",
+                        "name",
+                        "desc",
+                        Map.of("key", "   "),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(dummyTrialConfig())));
+
         Map<String, String> originalLabels = Map.of("key", "val");
         HarnessConfig config = new HarnessConfig(1, "id", "name", "desc", originalLabels, List.of(dummyTrialConfig()));
 
@@ -1331,7 +1407,7 @@ class HarnessConfigTest {
         assertEquals("group-alpha", config.trials().get(0).comparison().comparisonGroup());
     }
 
-    /// Verifies blank trial id, name, or group are rejected.
+    /// Verifies blank trial metadata fields (id, name, group, description, hypothesis, tags, jvmArgs) are rejected.
     @Test
     void rejectBlankTrialMetadataFields() {
         assertThrows(
@@ -1358,34 +1434,87 @@ class HarnessConfigTest {
                 IllegalArgumentException.class,
                 () -> new HarnessConfig.TrialConfig(
                         "id", "name", "  ", "desc", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
-    }
-
-    /// Verifies tags are defensively copied and blank or null tags are rejected.
-    @Test
-    void defensivelyCopyAndValidateTags() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialConfig(
+                        "id", "name", "group", "  ", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new HarnessConfig.TrialConfig(
                         "id",
                         "name",
                         "group",
+                        "desc",
+                        "  ",
                         null,
                         null,
-                        null,
-                        List.of("tag1", "   "),
                         true,
                         1,
                         1,
-                        5,
+                        1,
                         null,
                         dummyCalibrationConfig()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialConfig(
+                        "id",
+                        "name",
+                        "group",
+                        "desc",
+                        "hyp",
+                        null,
+                        List.of("  "),
+                        true,
+                        1,
+                        1,
+                        1,
+                        null,
+                        dummyCalibrationConfig()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialConfig(
+                        "id",
+                        "name",
+                        "group",
+                        "desc",
+                        "hyp",
+                        null,
+                        null,
+                        true,
+                        1,
+                        1,
+                        1,
+                        List.of("  "),
+                        dummyCalibrationConfig()));
+    }
 
+    /// Verifies tags and jvmArgs are defensively copied.
+    @Test
+    void defensivelyCopyTagsAndJvmArgs() {
         List<String> mutableTags = Arrays.asList("tag1", "tag2");
+        List<String> mutableJvmArgs = Arrays.asList("-Xmx1g", "-Xms1g");
+
         HarnessConfig.TrialConfig trial = new HarnessConfig.TrialConfig(
-                "id", "name", "group", null, null, null, mutableTags, true, 1, 1, 5, null, dummyCalibrationConfig());
+                "id",
+                "name",
+                "group",
+                null,
+                null,
+                null,
+                mutableTags,
+                true,
+                null,
+                1,
+                1,
+                5,
+                mutableJvmArgs,
+                dummyCalibrationConfig());
 
         assertNotNull(trial.tags());
         assertThrows(UnsupportedOperationException.class, () -> trial.tags().add("tag3"));
+
+        assertNotNull(trial.jvmArgs());
+        assertThrows(UnsupportedOperationException.class, () -> trial.jvmArgs().add("-XX:+UseG1GC"));
     }
 
     /// Verifies duplicate trial IDs are rejected at the HarnessConfig level.
@@ -1409,37 +1538,91 @@ class HarnessConfigTest {
         assertEquals(4, config.trials().size());
     }
 
-    /// Verifies preset JSON file example_harness_config.json parses correctly.
+    /// Verifies preset JSON file example_harness_config.json parses correctly and passes round-trip validation.
     @Test
-    void parseExampleHarnessConfigPreset() throws Exception {
+    void parseComprehensiveExampleHarnessConfigPresetAndRoundTrip() throws Exception {
         File file = new File("src/main/java/calibration/presets/example_harness_config.json");
         if (!file.exists()) {
             file = new File("benchmarks/src/main/java/calibration/presets/example_harness_config.json");
         }
         assertTrue(file.exists(), "example_harness_config.json should exist");
+
         HarnessConfig config = mapper.readValue(file, HarnessConfig.class);
         assertEquals(1, config.schemaVersion());
         assertEquals("example-harness-config", config.id());
         assertEquals("Example Calibration Harness Configuration", config.name());
+        assertEquals(
+                "Comprehensive example harness configuration demonstrating all schema features", config.description());
+        assertEquals(Map.of("preset", "example", "environment", "benchmark"), config.labels());
+
+        // Verify runOptions and artifacts
+        assertNotNull(config.runOptions());
+        assertEquals(Boolean.TRUE, config.runOptions().randomizeTrialOrder());
+        assertEquals(Long.valueOf(42L), config.runOptions().randomSeed());
+        assertEquals(Boolean.FALSE, config.runOptions().failFast());
+        assertEquals(Integer.valueOf(1), config.runOptions().repeatCount());
+
+        assertNotNull(config.artifacts());
+        assertEquals("build/reports/benchmarks", config.artifacts().outputDirectory());
+        assertEquals(Boolean.TRUE, config.artifacts().retainExpandedConfig());
+
+        // Verify profiles
+        assertNotNull(config.calibrationProfiles());
+        assertEquals(2, config.calibrationProfiles().size());
+        assertTrue(config.calibrationProfiles().containsKey("standard-calibration"));
+        assertTrue(config.calibrationProfiles().containsKey("high-contention-calibration"));
+
+        assertNotNull(config.decisionWeightProfiles());
+        assertEquals(2, config.decisionWeightProfiles().size());
+        assertTrue(config.decisionWeightProfiles().containsKey("default-weights"));
+        assertTrue(config.decisionWeightProfiles().containsKey("aggressive-weights"));
+
+        // Verify sweeps and searches
+        assertNotNull(config.sweeps());
+        assertEquals(1, config.sweeps().size());
+        assertEquals("sweep-001", config.sweeps().get(0).id());
+
+        assertNotNull(config.searches());
+        assertEquals(1, config.searches().size());
+        assertEquals("search-grid-001", config.searches().get(0).id());
+        assertEquals(HarnessConfig.SearchStrategy.GRID, config.searches().get(0).strategy());
+
+        // Verify trials and origin provenance
         assertNotNull(config.trials());
-        assertEquals(1, config.trials().size());
+        assertEquals(2, config.trials().size());
         assertEquals("trial-001", config.trials().get(0).id());
-        assertNotNull(config.trials().get(0).comparison());
-        assertEquals("baseline-calibration", config.trials().get(0).comparison().comparisonGroup());
+        assertNotNull(config.trials().get(0).origin());
+        assertEquals(
+                HarnessConfig.OriginType.MANUAL, config.trials().get(0).origin().type());
+
+        assertEquals("trial-002", config.trials().get(1).id());
+        assertNotNull(config.trials().get(1).comparison());
+        assertEquals("trial-001", config.trials().get(1).comparison().baselineTrialId());
+
+        // Round-trip test
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
     }
 
-    /// Verifies preset JSON file exec_contention_band_calibration.json parses correctly.
+    /// Verifies preset JSON file exec_contention_band_calibration.json parses correctly and passes round-trip.
     @Test
-    void parseExecContentionBandCalibrationPreset() throws Exception {
+    void parseExecContentionBandCalibrationPresetAndRoundTrip() throws Exception {
         File file = new File("src/main/java/calibration/presets/exec_contention_band_calibration.json");
         if (!file.exists()) {
             file = new File("benchmarks/src/main/java/calibration/presets/exec_contention_band_calibration.json");
         }
         assertTrue(file.exists(), "exec_contention_band_calibration.json should exist");
+
         HarnessConfig config = mapper.readValue(file, HarnessConfig.class);
         assertEquals(1, config.schemaVersion());
         assertEquals("exec-contention-band-calibration", config.id());
         assertEquals("Execution Contention Band Calibration", config.name());
         assertNotNull(config.trials());
+        assertEquals(2, config.trials().size());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
     }
 }

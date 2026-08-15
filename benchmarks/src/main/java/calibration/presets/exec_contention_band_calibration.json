@@ -6,8 +6,36 @@
   "labels": {
     "preset": "contention"
   },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "build/reports/contention-calibration",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true
+  },
   "trials": [
     {
+      "id": "contention-band-staged",
+      "name": "Staged Execution Contention Band",
+      "group": "contention-calibration",
+      "description": "Staged policy band trial for contention calibration",
+      "comparison": {
+        "comparisonGroup": "contention-calibration",
+        "purpose": "Evaluate staged policy under execution contention"
+      },
+      "tags": [
+        "contention",
+        "staged"
+      ],
+      "enabled": true,
+      "origin": {
+        "type": "MANUAL",
+        "candidateIndex": 0
+      },
       "forks": 1,
       "warmups": 1,
       "iterations": 5,
@@ -71,6 +99,24 @@
       }
     },
     {
+      "id": "contention-band-direct",
+      "name": "Direct Execution Contention Band",
+      "group": "contention-calibration",
+      "description": "Direct policy band trial comparing against staged trial",
+      "comparison": {
+        "baselineTrialId": "contention-band-staged",
+        "comparisonGroup": "contention-calibration",
+        "purpose": "Compare direct execution policies against staged baseline"
+      },
+      "tags": [
+        "contention",
+        "direct"
+      ],
+      "enabled": true,
+      "origin": {
+        "type": "MANUAL",
+        "candidateIndex": 1
+      },
       "forks": 1,
       "warmups": 1,
       "iterations": 5,

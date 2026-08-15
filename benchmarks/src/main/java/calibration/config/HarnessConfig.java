@@ -142,32 +142,49 @@ public record HarnessConfig(
 
     /// Creates and validates a HarnessConfig instance.
     ///
-    /// @throws IllegalArgumentException if schemaVersion is non-positive, id or name is blank,
+    /// @throws IllegalArgumentException if schemaVersion is non-positive, id/name/description is blank,
     ///                                  trials is empty, non-null trial IDs are duplicated,
     ///                                  referenced baselineTrialIds are invalid/self-referential,
-    ///                                  calibrationProfiles/decisionWeightProfiles keys are blank,
+    ///                                  profile keys or label keys/values are blank,
     ///                                  sweep/search IDs are duplicated, or referenced sweepIds do not exist
     /// @throws NullPointerException     if trials is null or profiles/sweeps/searches contain null values
     @JsonCreator
     public HarnessConfig {
         if (schemaVersion != null && schemaVersion <= 0) {
-            throw new IllegalArgumentException("schemaVersion must be positive if present: " + schemaVersion);
+            throw new IllegalArgumentException(
+                    "HarnessConfig schemaVersion must be positive if present: " + schemaVersion);
         }
         if (id != null && id.isBlank()) {
-            throw new IllegalArgumentException("id cannot be blank if present");
+            throw new IllegalArgumentException("HarnessConfig id cannot be blank if present");
         }
         if (name != null && name.isBlank()) {
-            throw new IllegalArgumentException("name cannot be blank if present");
+            throw new IllegalArgumentException("HarnessConfig name cannot be blank if present");
         }
-        labels = labels != null ? Map.copyOf(labels) : null;
+        if (description != null && description.isBlank()) {
+            throw new IllegalArgumentException("HarnessConfig description cannot be blank if present");
+        }
+        if (labels != null) {
+            for (Map.Entry<String, String> entry : labels.entrySet()) {
+                String key = entry.getKey();
+                String val = entry.getValue();
+                if (key == null || key.isBlank()) {
+                    throw new IllegalArgumentException("HarnessConfig label key cannot be blank");
+                }
+                if (val == null || val.isBlank()) {
+                    throw new IllegalArgumentException("HarnessConfig label value cannot be blank for key: " + key);
+                }
+            }
+            labels = Map.copyOf(labels);
+        }
         if (calibrationProfiles != null) {
             for (Map.Entry<String, CalibrationBenchmarkConfig> entry : calibrationProfiles.entrySet()) {
                 String profileName = entry.getKey();
                 if (profileName == null || profileName.isBlank()) {
-                    throw new IllegalArgumentException("calibrationProfiles profile name cannot be blank");
+                    throw new IllegalArgumentException("HarnessConfig calibrationProfiles key cannot be blank");
                 }
                 Objects.requireNonNull(
-                        entry.getValue(), "calibrationProfiles profile value cannot be null for: " + profileName);
+                        entry.getValue(),
+                        "HarnessConfig calibrationProfiles value cannot be null for key: " + profileName);
             }
             calibrationProfiles = Map.copyOf(calibrationProfiles);
         }
@@ -175,19 +192,20 @@ public record HarnessConfig(
             for (Map.Entry<String, FragmentDecisionWeights> entry : decisionWeightProfiles.entrySet()) {
                 String profileName = entry.getKey();
                 if (profileName == null || profileName.isBlank()) {
-                    throw new IllegalArgumentException("decisionWeightProfiles profile name cannot be blank");
+                    throw new IllegalArgumentException("HarnessConfig decisionWeightProfiles key cannot be blank");
                 }
                 Objects.requireNonNull(
-                        entry.getValue(), "decisionWeightProfiles profile value cannot be null for: " + profileName);
+                        entry.getValue(),
+                        "HarnessConfig decisionWeightProfiles value cannot be null for key: " + profileName);
             }
             decisionWeightProfiles = Map.copyOf(decisionWeightProfiles);
         }
         Set<String> declaredSweepIds = new HashSet<>();
         if (sweeps != null) {
             for (SweepConfig sweep : sweeps) {
-                Objects.requireNonNull(sweep, "sweep element cannot be null");
+                Objects.requireNonNull(sweep, "HarnessConfig sweep element cannot be null");
                 if (!declaredSweepIds.add(sweep.id())) {
-                    throw new IllegalArgumentException("Duplicate sweep id found: " + sweep.id());
+                    throw new IllegalArgumentException("HarnessConfig duplicate sweep id found: " + sweep.id());
                 }
             }
             sweeps = List.copyOf(sweeps);
@@ -195,48 +213,49 @@ public record HarnessConfig(
         if (searches != null) {
             Set<String> searchIds = new HashSet<>();
             for (SearchConfig search : searches) {
-                Objects.requireNonNull(search, "search element cannot be null");
+                Objects.requireNonNull(search, "HarnessConfig search element cannot be null");
                 if (!searchIds.add(search.id())) {
-                    throw new IllegalArgumentException("Duplicate search id found: " + search.id());
+                    throw new IllegalArgumentException("HarnessConfig duplicate search id found: " + search.id());
                 }
                 if (search.sweepIds() != null) {
                     for (String sweepId : search.sweepIds()) {
                         if (!declaredSweepIds.contains(sweepId)) {
-                            throw new IllegalArgumentException("Referenced sweepId '" + sweepId + "' in search '"
-                                    + search.id() + "' was not found in sweeps");
+                            throw new IllegalArgumentException("Referenced sweepId '" + sweepId + "' in SearchConfig '"
+                                    + search.id() + "' was not found in declared sweeps");
                         }
                     }
                 }
             }
             searches = List.copyOf(searches);
         }
-        Objects.requireNonNull(trials, "trials cannot be null");
+        Objects.requireNonNull(trials, "HarnessConfig trials cannot be null");
         if (trials.isEmpty()) {
-            throw new IllegalArgumentException("Trial configurations can not be empty");
+            throw new IllegalArgumentException("HarnessConfig trial configurations cannot be empty");
         }
 
         Set<String> trialIds = new HashSet<>();
         for (TrialConfig trial : trials) {
-            if (trial != null && trial.id() != null) {
+            Objects.requireNonNull(trial, "HarnessConfig trial element cannot be null");
+            if (trial.id() != null) {
                 if (!trialIds.add(trial.id())) {
-                    throw new IllegalArgumentException("Duplicate trial id found: " + trial.id());
+                    throw new IllegalArgumentException("HarnessConfig duplicate trial id found: " + trial.id());
                 }
             }
         }
 
         for (TrialConfig trial : trials) {
-            if (trial != null
-                    && trial.comparison() != null
-                    && trial.comparison().baselineTrialId() != null) {
+            if (trial.comparison() != null && trial.comparison().baselineTrialId() != null) {
                 String baselineId = trial.comparison().baselineTrialId();
                 if (trial.id() != null && trial.id().equals(baselineId)) {
-                    throw new IllegalArgumentException("Trial cannot reference itself as baseline: " + trial.id());
+                    throw new IllegalArgumentException(
+                            "TrialConfig cannot reference itself as baseline: " + trial.id());
                 }
                 if (!trialIds.contains(baselineId)) {
-                    throw new IllegalArgumentException("Referenced baselineTrialId not found: " + baselineId);
+                    throw new IllegalArgumentException("Referenced baselineTrialId not found in trials: " + baselineId);
                 }
             }
         }
+        trials = List.copyOf(trials);
     }
 
     /// Strategy for automated candidate search generation.
@@ -260,29 +279,42 @@ public record HarnessConfig(
         /// Creates and validates a SearchConfig instance.
         ///
         /// @throws IllegalArgumentException if id is blank, maxTrials <= 0, objective is blank when present,
-        ///                                  or sweepIds contain blank elements
+        ///                                  metadata key/val is blank, or sweepIds contain blank elements
         /// @throws NullPointerException     if id or strategy is null
         @JsonCreator
         public SearchConfig {
             if (id == null || id.isBlank()) {
-                throw new IllegalArgumentException("Search id cannot be blank");
+                throw new IllegalArgumentException("SearchConfig id cannot be blank");
             }
-            Objects.requireNonNull(strategy, "Search strategy cannot be null");
+            Objects.requireNonNull(strategy, "SearchConfig strategy cannot be null");
             if (maxTrials <= 0) {
-                throw new IllegalArgumentException("maxTrials must be positive: " + maxTrials);
+                throw new IllegalArgumentException("SearchConfig maxTrials must be positive: " + maxTrials);
             }
             if (objective != null && objective.isBlank()) {
-                throw new IllegalArgumentException("Search objective cannot be blank if present");
+                throw new IllegalArgumentException("SearchConfig objective cannot be blank if present");
             }
             if (sweepIds != null) {
                 for (String sweepId : sweepIds) {
                     if (sweepId == null || sweepId.isBlank()) {
-                        throw new IllegalArgumentException("sweepId in search cannot be blank");
+                        throw new IllegalArgumentException("SearchConfig sweepId element cannot be blank");
                     }
                 }
                 sweepIds = List.copyOf(sweepIds);
             }
-            metadata = metadata != null ? Map.copyOf(metadata) : null;
+            if (metadata != null) {
+                for (Map.Entry<String, String> entry : metadata.entrySet()) {
+                    String key = entry.getKey();
+                    String val = entry.getValue();
+                    if (key == null || key.isBlank()) {
+                        throw new IllegalArgumentException("SearchConfig metadata key cannot be blank");
+                    }
+                    if (val == null || val.isBlank()) {
+                        throw new IllegalArgumentException(
+                                "SearchConfig metadata value cannot be blank for key: " + key);
+                    }
+                }
+                metadata = Map.copyOf(metadata);
+            }
         }
     }
 
@@ -300,21 +332,21 @@ public record HarnessConfig(
         @JsonCreator
         public SweepConfig {
             if (id == null || id.isBlank()) {
-                throw new IllegalArgumentException("Sweep id cannot be blank");
+                throw new IllegalArgumentException("SweepConfig id cannot be blank");
             }
             if (description != null && description.isBlank()) {
-                throw new IllegalArgumentException("Sweep description cannot be blank if present");
+                throw new IllegalArgumentException("SweepConfig description cannot be blank if present");
             }
-            Objects.requireNonNull(parameters, "Sweep parameters cannot be null");
+            Objects.requireNonNull(parameters, "SweepConfig parameters cannot be null");
             if (parameters.isEmpty()) {
-                throw new IllegalArgumentException("Sweep parameters cannot be empty");
+                throw new IllegalArgumentException("SweepConfig parameters cannot be empty");
             }
             Set<String> parameterPaths = new HashSet<>();
             for (SweepParameter param : parameters) {
-                Objects.requireNonNull(param, "Sweep parameter cannot be null");
+                Objects.requireNonNull(param, "SweepConfig parameter element cannot be null");
                 if (!parameterPaths.add(param.path())) {
                     throw new IllegalArgumentException(
-                            "Duplicate parameter path in sweep '" + id + "': " + param.path());
+                            "Duplicate parameter path in SweepConfig '" + id + "': " + param.path());
                 }
             }
             parameters = List.copyOf(parameters);
@@ -361,7 +393,8 @@ public record HarnessConfig(
         @JsonCreator
         public HarnessRunOptions {
             if (repeatCount != null && repeatCount < 1) {
-                throw new IllegalArgumentException("repeatCount must be positive if present: " + repeatCount);
+                throw new IllegalArgumentException(
+                        "HarnessRunOptions repeatCount must be positive if present: " + repeatCount);
             }
         }
     }
@@ -381,7 +414,7 @@ public record HarnessConfig(
         @JsonCreator
         public ArtifactConfig {
             if (outputDirectory != null && outputDirectory.isBlank()) {
-                throw new IllegalArgumentException("outputDirectory cannot be blank if present");
+                throw new IllegalArgumentException("ArtifactConfig outputDirectory cannot be blank if present");
             }
         }
     }
@@ -398,13 +431,13 @@ public record HarnessConfig(
         @JsonCreator
         public ComparisonConfig {
             if (baselineTrialId != null && baselineTrialId.isBlank()) {
-                throw new IllegalArgumentException("baselineTrialId cannot be blank if present");
+                throw new IllegalArgumentException("ComparisonConfig baselineTrialId cannot be blank if present");
             }
             if (comparisonGroup != null && comparisonGroup.isBlank()) {
-                throw new IllegalArgumentException("comparisonGroup cannot be blank if present");
+                throw new IllegalArgumentException("ComparisonConfig comparisonGroup cannot be blank if present");
             }
             if (purpose != null && purpose.isBlank()) {
-                throw new IllegalArgumentException("purpose cannot be blank if present");
+                throw new IllegalArgumentException("ComparisonConfig purpose cannot be blank if present");
             }
         }
     }
@@ -431,15 +464,16 @@ public record HarnessConfig(
         /// @throws NullPointerException     if type is null
         @JsonCreator
         public TrialOrigin {
-            Objects.requireNonNull(type, "Origin type cannot be null");
+            Objects.requireNonNull(type, "TrialOrigin type cannot be null");
             if (type == OriginType.MANUAL && sourceId != null) {
-                throw new IllegalArgumentException("MANUAL origin type requires no sourceId");
+                throw new IllegalArgumentException("MANUAL TrialOrigin type requires no sourceId");
             }
             if (sourceId != null && sourceId.isBlank()) {
-                throw new IllegalArgumentException("sourceId cannot be blank if present");
+                throw new IllegalArgumentException("TrialOrigin sourceId cannot be blank if present");
             }
             if (candidateIndex != null && candidateIndex < 0) {
-                throw new IllegalArgumentException("candidateIndex must be >= 0 if present: " + candidateIndex);
+                throw new IllegalArgumentException(
+                        "TrialOrigin candidateIndex must be >= 0 if present: " + candidateIndex);
             }
         }
     }
@@ -519,29 +553,45 @@ public record HarnessConfig(
 
         /// Creates and validates a TrialConfig instance.
         ///
-        /// @throws IllegalArgumentException if any non-null string metadata is blank or tags contain blank values
-        /// @throws NullPointerException     if calibrationConfig is null or tags contain null elements
+        /// @throws IllegalArgumentException if any non-null string metadata is blank or tags/jvmArgs contain blank
+        /// values
+        /// @throws NullPointerException     if calibrationConfig is null or tags/jvmArgs contain null elements
         @JsonCreator
         public TrialConfig {
             if (id != null && id.isBlank()) {
-                throw new IllegalArgumentException("trial id cannot be blank if present");
+                throw new IllegalArgumentException("TrialConfig id cannot be blank if present");
             }
             if (name != null && name.isBlank()) {
-                throw new IllegalArgumentException("trial name cannot be blank if present");
+                throw new IllegalArgumentException("TrialConfig name cannot be blank if present");
             }
             if (group != null && group.isBlank()) {
-                throw new IllegalArgumentException("trial group cannot be blank if present");
+                throw new IllegalArgumentException("TrialConfig group cannot be blank if present");
+            }
+            if (description != null && description.isBlank()) {
+                throw new IllegalArgumentException("TrialConfig description cannot be blank if present");
+            }
+            if (hypothesis != null && hypothesis.isBlank()) {
+                throw new IllegalArgumentException("TrialConfig hypothesis cannot be blank if present");
             }
             if (tags != null) {
                 for (String tag : tags) {
-                    Objects.requireNonNull(tag, "tag cannot be null");
+                    Objects.requireNonNull(tag, "TrialConfig tag element cannot be null");
                     if (tag.isBlank()) {
-                        throw new IllegalArgumentException("tag cannot be blank");
+                        throw new IllegalArgumentException("TrialConfig tag element cannot be blank");
                     }
                 }
                 tags = List.copyOf(tags);
             }
-            Objects.requireNonNull(calibrationConfig, "calibrationConfig cannot be null");
+            if (jvmArgs != null) {
+                for (String jvmArg : jvmArgs) {
+                    Objects.requireNonNull(jvmArg, "TrialConfig jvmArg element cannot be null");
+                    if (jvmArg.isBlank()) {
+                        throw new IllegalArgumentException("TrialConfig jvmArg element cannot be blank");
+                    }
+                }
+                jvmArgs = List.copyOf(jvmArgs);
+            }
+            Objects.requireNonNull(calibrationConfig, "TrialConfig calibrationConfig cannot be null");
         }
     }
 }

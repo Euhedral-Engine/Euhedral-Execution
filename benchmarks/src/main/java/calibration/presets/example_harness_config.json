@@ -1,29 +1,272 @@
 {
+  // Optional: Schema version (positive integer)
   "schemaVersion": 1,
+  // Optional: Harness unique identifier
   "id": "example-harness-config",
+  // Optional: Display name
   "name": "Example Calibration Harness Configuration",
-  "description": "Example harness configuration with single trial for calibration benchmarking",
+  // Optional: Detailed description of harness configuration
+  "description": "Comprehensive example harness configuration demonstrating all schema features",
+  // Optional: Key-value metadata labels
   "labels": {
-    "preset": "example"
+    "preset": "example",
+    "environment": "benchmark"
   },
+  // Optional: Execution run-control options
+  "runOptions": {
+    // Optional: Whether trial execution order is randomized
+    "randomizeTrialOrder": true,
+    // Optional: Seed for random number generation
+    "randomSeed": 42,
+    // Optional: Stop execution on first trial failure
+    "failFast": false,
+    // Optional: Number of times to repeat the trial set
+    "repeatCount": 1
+  },
+  // Optional: Artifact retention configuration
+  "artifacts": {
+    // Optional: Output directory path for benchmark results
+    "outputDirectory": "build/reports/benchmarks",
+    // Optional: Retain expanded configuration files
+    "retainExpandedConfig": true,
+    // Optional: Retain raw console output from benchmarks
+    "retainRawBenchmarkOutput": false,
+    // Optional: Retain observer events data
+    "retainObserverData": true,
+    // Optional: Retain per-fork results
+    "retainPerForkResults": false,
+    // Optional: Retain per-iteration results
+    "retainPerIterationResults": true
+  },
+  // Optional: Reusable calibration benchmark profiles
+  "calibrationProfiles": {
+    "standard-calibration": {
+      "parallelSources": 4,
+      "orderedSources": 2,
+      "workUnits": 100,
+      "randomizeWork": true,
+      "totalRequiredExecutions": 1000000,
+      "invocationTimeoutMillis": 60000,
+      "decisionWeights": {
+        "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
+        "idleBodyCostWeights": [
+          { "xs": 0, "s": 0, "m": 24, "h": 256 },
+          { "xs": 0, "s": 0, "m": 24, "h": 256 },
+          { "xs": 0, "s": 0, "m": 24, "h": 256 },
+          { "xs": 0, "s": 24, "m": 96, "h": 256 }
+        ],
+        "idleTimeNs": [
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
+        ],
+        "execContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
+        "execBodyCostWeights": [
+          { "xs": 0, "s": 24, "m": 96, "h": 256 },
+          { "xs": 0, "s": 24, "m": 96, "h": 256 },
+          { "xs": 0, "s": 24, "m": 96, "h": 256 },
+          { "xs": 0, "s": 24, "m": 96, "h": 256 }
+        ],
+        "executionPolicies": [
+          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
+        ]
+      },
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": false,
+      "observeIdleDecision": false,
+      "observeExecDecision": false
+    },
+    "high-contention-calibration": {
+      "parallelSources": 11,
+      "orderedSources": 0,
+      "workUnits": 24,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 32000000,
+      "invocationTimeoutMillis": 6000,
+      "decisionWeights": {
+        "idleContentionThresholds": { "xsContention": 1000000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
+        "idleBodyCostWeights": [
+          { "xs": 0, "s": 0, "m": 0, "h": 0 },
+          { "xs": 0, "s": 0, "m": 0, "h": 0 },
+          { "xs": 0, "s": 0, "m": 0, "h": 0 },
+          { "xs": 0, "s": 0, "m": 0, "h": 0 }
+        ],
+        "idleTimeNs": [
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+        ],
+        "execContentionThresholds": { "xsContention": 500000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
+        "execBodyCostWeights": [
+          { "xs": 0, "s": 0, "m": 0, "h": 0 },
+          { "xs": 0, "s": 0, "m": 0, "h": 0 },
+          { "xs": 0, "s": 0, "m": 0, "h": 0 },
+          { "xs": 0, "s": 0, "m": 0, "h": 0 }
+        ],
+        "executionPolicies": [
+          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+          { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+          { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+          { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+          { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+        ]
+      },
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": false,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  // Optional: Reusable fragment decision weights profiles
+  "decisionWeightProfiles": {
+    "default-weights": {
+      "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
+      "idleBodyCostWeights": [
+        { "xs": 0, "s": 0, "m": 24, "h": 256 },
+        { "xs": 0, "s": 0, "m": 24, "h": 256 },
+        { "xs": 0, "s": 0, "m": 24, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
+      "execBodyCostWeights": [
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
+      ]
+    },
+    "aggressive-weights": {
+      "idleContentionThresholds": { "xsContention": 1000000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
+      "idleBodyCostWeights": [
+        { "xs": 0, "s": 0, "m": 0, "h": 0 },
+        { "xs": 0, "s": 0, "m": 0, "h": 0 },
+        { "xs": 0, "s": 0, "m": 0, "h": 0 },
+        { "xs": 0, "s": 0, "m": 0, "h": 0 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": { "xsContention": 500000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
+      "execBodyCostWeights": [
+        { "xs": 0, "s": 0, "m": 0, "h": 0 },
+        { "xs": 0, "s": 0, "m": 0, "h": 0 },
+        { "xs": 0, "s": 0, "m": 0, "h": 0 },
+        { "xs": 0, "s": 0, "m": 0, "h": 0 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    }
+  },
+  // Optional: Parameter sweep declarations
+  "sweeps": [
+    {
+      "id": "sweep-001",
+      // Optional: Description of parameter sweep
+      "description": "Parallel sources parameter variation sweep",
+      "parameters": [
+        {
+          "path": "parallelSources",
+          "values": [2, 4, 8]
+        }
+      ]
+    }
+  ],
+  // Optional: Candidate search generation descriptors
+  "searches": [
+    {
+      "id": "search-grid-001",
+      "strategy": "GRID",
+      "maxTrials": 10,
+      // Optional: Search random seed
+      "seed": 42,
+      // Optional: Search optimization objective
+      "objective": "maximize_throughput",
+      // Optional: Referenced sweep IDs
+      "sweepIds": ["sweep-001"],
+      // Optional: Search metadata
+      "metadata": {
+        "optimizer": "grid-search"
+      }
+    }
+  ],
+  // Required: Non-empty array of trial configurations
   "trials": [
     {
+      // Optional: Trial unique identifier
       "id": "trial-001",
+      // Optional: Trial display name
       "name": "Default Calibration Trial",
+      // Optional: Trial group identifier
       "group": "baseline-calibration",
+      // Optional: Trial description
       "description": "Baseline calibration trial run with standard decision weights",
+      // Optional: Trial hypothesis
+      "hypothesis": "Standard weights perform well under low contention",
+      // Optional: Trial comparison relationship metadata
       "comparison": {
+        // Optional: Reference to baseline trial ID
+        "baselineTrialId": null,
+        // Optional: Group name for comparison aggregating
         "comparisonGroup": "baseline-calibration",
+        // Optional: Purpose of comparison
         "purpose": "Baseline benchmark comparison"
       },
+      // Optional: Trial tags
       "tags": [
         "example",
         "baseline"
       ],
+      // Optional: Whether trial is enabled for execution
       "enabled": true,
+      // Optional: Trial provenance origin metadata
+      "origin": {
+        "type": "MANUAL",
+        // Optional: Source ID (must be null for MANUAL)
+        "sourceId": null,
+        // Optional: Generation seed
+        "seed": null,
+        // Optional: Candidate index (>= 0)
+        "candidateIndex": 0
+      },
       "forks": 1,
       "warmups": 1,
       "iterations": 5,
+      // Optional: JVM flags for benchmark forks
       "jvmArgs": [
         "-XX:+UseThreadPriorities",
         "--enable-native-access=ALL-UNNAMED"
@@ -36,12 +279,7 @@
         "totalRequiredExecutions": 1000000,
         "invocationTimeoutMillis": 60000,
         "decisionWeights": {
-          "idleContentionThresholds": {
-            "xsContention": 650000,
-            "sContention": 650000,
-            "mContention": 650000,
-            "hContention": 980000
-          },
+          "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
           "idleBodyCostWeights": [
             { "xs": 0, "s": 0, "m": 24, "h": 256 },
             { "xs": 0, "s": 0, "m": 24, "h": 256 },
@@ -55,12 +293,7 @@
             { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
             { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
           ],
-          "execContentionThresholds": {
-            "xsContention": 650000,
-            "sContention": 650000,
-            "mContention": 650000,
-            "hContention": 980000
-          },
+          "execContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
           "execBodyCostWeights": [
             { "xs": 0, "s": 24, "m": 96, "h": 256 },
             { "xs": 0, "s": 24, "m": 96, "h": 256 },
@@ -81,6 +314,80 @@
         "observeRawBodyCost": false,
         "observeIdleDecision": false,
         "observeExecDecision": false
+      }
+    },
+    {
+      "id": "trial-002",
+      "name": "Comparing Calibration Trial",
+      "group": "baseline-calibration",
+      "description": "Comparison trial run referencing trial-001 as baseline",
+      "hypothesis": "High contention calibration yields different execution policy transitions",
+      "comparison": {
+        "baselineTrialId": "trial-001",
+        "comparisonGroup": "baseline-calibration",
+        "purpose": "Evaluate performance delta against trial-001"
+      },
+      "tags": [
+        "example",
+        "comparison"
+      ],
+      "enabled": true,
+      "origin": {
+        "type": "MANUAL",
+        "sourceId": null,
+        "seed": null,
+        "candidateIndex": 1
+      },
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 5,
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationConfig": {
+        "parallelSources": 11,
+        "orderedSources": 0,
+        "workUnits": 24,
+        "randomizeWork": false,
+        "totalRequiredExecutions": 32000000,
+        "invocationTimeoutMillis": 6000,
+        "decisionWeights": {
+          "idleContentionThresholds": { "xsContention": 1000000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
+          "idleBodyCostWeights": [
+            { "xs": 0, "s": 0, "m": 0, "h": 0 },
+            { "xs": 0, "s": 0, "m": 0, "h": 0 },
+            { "xs": 0, "s": 0, "m": 0, "h": 0 },
+            { "xs": 0, "s": 0, "m": 0, "h": 0 }
+          ],
+          "idleTimeNs": [
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+          ],
+          "execContentionThresholds": { "xsContention": 500000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
+          "execBodyCostWeights": [
+            { "xs": 0, "s": 0, "m": 0, "h": 0 },
+            { "xs": 0, "s": 0, "m": 0, "h": 0 },
+            { "xs": 0, "s": 0, "m": 0, "h": 0 },
+            { "xs": 0, "s": 0, "m": 0, "h": 0 }
+          ],
+          "executionPolicies": [
+            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+          ]
+        },
+        "observeCycleStart": false,
+        "observeBatchProgress": false,
+        "observeBatchComplete": false,
+        "observeRawBodyCost": false,
+        "observeIdleDecision": false,
+        "observeExecDecision": true
       }
     }
   ]
