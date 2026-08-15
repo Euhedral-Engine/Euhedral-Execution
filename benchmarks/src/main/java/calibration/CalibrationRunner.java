@@ -2,6 +2,7 @@ package calibration;
 
 import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.HarnessConfig;
+import calibration.config.HarnessConfig.HarnessRunOptions;
 import calibration.config.HarnessConfig.TrialConfig;
 import calibration.infra.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -41,9 +42,51 @@ public class CalibrationRunner {
 
         ObjectMapper mapper = new ObjectMapper();
         HarnessConfig harnessConfig = mapper.readValue(configFile, HarnessConfig.class);
+
+        HarnessRunOptions runOptions = harnessConfig.runOptions();
+        int repeatCount = (runOptions != null && runOptions.repeatCount() != null) ? runOptions.repeatCount() : 1;
+        boolean failFast = runOptions == null || runOptions.failFast() == null || runOptions.failFast();
+
+        List<String> failures = new ArrayList<>();
+
         for (TrialConfig trial : harnessConfig.trials()) {
-            runTrial(trial, mapper);
+            if (Boolean.FALSE.equals(trial.enabled())) {
+                continue;
+            }
+
+            for (int r = 0; r < repeatCount; r++) {
+                if (failFast) {
+                    runTrial(trial, mapper);
+                } else {
+                    try {
+                        runTrial(trial, mapper);
+                    } catch (Exception e) {
+                        String idStr = getTrialIdentifier(trial);
+                        failures.add(idStr + " (repeat " + (r + 1) + "): " + e.getMessage());
+                    }
+                }
+            }
         }
+
+        if (!failFast && !failures.isEmpty()) {
+            throw new MainError("One or more trials failed execution: " + String.join("; ", failures));
+        }
+    }
+
+    private static String getTrialIdentifier(TrialConfig trial) {
+        if (trial.id() != null
+                && !trial.id().isBlank()
+                && trial.name() != null
+                && !trial.name().isBlank()) {
+            return trial.id() + " (" + trial.name() + ")";
+        }
+        if (trial.id() != null && !trial.id().isBlank()) {
+            return trial.id();
+        }
+        if (trial.name() != null && !trial.name().isBlank()) {
+            return trial.name();
+        }
+        return "<unnamed trial>";
     }
 
     private static void runTrial(TrialConfig trial, ObjectMapper mapper) throws Exception {
