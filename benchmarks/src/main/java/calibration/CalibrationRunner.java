@@ -47,17 +47,22 @@ public class CalibrationRunner {
         }
 
         String path = args[ARGUMENTS.get(CONFIG_PATH_ARG)];
+        ObjectMapper mapper = new ObjectMapper();
+        HarnessConfig harnessConfig = loadConfig(path, mapper);
 
+        List<TrialConfig> activeTrials = resolveTrials(harnessConfig);
+        File baseOutputDir = resolveOutputDirectory(harnessConfig.artifacts());
+
+        runHarness(harnessConfig, activeTrials, baseOutputDir, mapper);
+    }
+
+    static HarnessConfig loadConfig(String path, ObjectMapper mapper) throws Exception {
         //noinspection JvmTaintAnalysis
         File configFile = new File(path).getCanonicalFile();
+        return mapper.readValue(configFile, HarnessConfig.class);
+    }
 
-        ObjectMapper mapper = new ObjectMapper();
-        HarnessConfig harnessConfig = mapper.readValue(configFile, HarnessConfig.class);
-
-        HarnessRunOptions runOptions = harnessConfig.runOptions();
-        int repeatCount = (runOptions != null && runOptions.repeatCount() != null) ? runOptions.repeatCount() : 1;
-        boolean failFast = runOptions == null || runOptions.failFast() == null || runOptions.failFast();
-
+    static List<TrialConfig> resolveTrials(HarnessConfig harnessConfig) {
         List<TrialConfig> activeTrials = new ArrayList<>();
         for (TrialConfig trial : harnessConfig.trials()) {
             if (!Boolean.FALSE.equals(trial.enabled())) {
@@ -65,6 +70,7 @@ public class CalibrationRunner {
             }
         }
 
+        HarnessRunOptions runOptions = harnessConfig.runOptions();
         boolean randomize = runOptions != null && Boolean.TRUE.equals(runOptions.randomizeTrialOrder());
         if (randomize) {
             long seed = (runOptions.randomSeed() != null) ? runOptions.randomSeed() : new Random().nextLong();
@@ -72,32 +78,45 @@ public class CalibrationRunner {
             Collections.shuffle(activeTrials, new Random(seed));
         }
 
-        HarnessConfig.ArtifactConfig artifacts = harnessConfig.artifacts();
-        File baseOutputDir = null;
-        if (artifacts != null
-                && artifacts.outputDirectory() != null
-                && !artifacts.outputDirectory().isBlank()) {
-            baseOutputDir = new File(artifacts.outputDirectory()).getCanonicalFile();
-            if (!baseOutputDir.exists()) {
-                //noinspection ResultOfMethodCallIgnored
-                baseOutputDir.mkdirs();
-            }
-        }
+        return activeTrials;
+    }
 
+    static File resolveOutputDirectory(ArtifactConfig artifacts) throws Exception {
+        if (artifacts == null
+                || artifacts.outputDirectory() == null
+                || artifacts.outputDirectory().isBlank()) {
+            return null;
+        }
+        File baseOutputDir = new File(artifacts.outputDirectory()).getCanonicalFile();
+        if (!baseOutputDir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            baseOutputDir.mkdirs();
+        }
+        return baseOutputDir;
+    }
+
+    static void runHarness(
+            HarnessConfig harnessConfig, List<TrialConfig> activeTrials, File baseOutputDir, ObjectMapper mapper)
+            throws Exception {
+        HarnessRunOptions runOptions = harnessConfig.runOptions();
+        int repeatCount = (runOptions != null && runOptions.repeatCount() != null) ? runOptions.repeatCount() : 1;
+        boolean failFast = runOptions == null || runOptions.failFast() == null || runOptions.failFast();
+
+        ArtifactConfig artifacts = harnessConfig.artifacts();
         List<String> failures = new ArrayList<>();
 
-        for (int r = 0; r < repeatCount; r++) {
-            for (int t = 0; t < activeTrials.size(); t++) {
-                TrialConfig trial = activeTrials.get(t);
+        for (int repeat = 0; repeat < repeatCount; repeat++) {
+            for (int trial = 0; trial < activeTrials.size(); trial++) {
+                TrialConfig trialConfig = activeTrials.get(trial);
                 if (failFast) {
-                    runTrial(trial, t, r, mapper, artifacts, baseOutputDir);
+                    runTrial(trialConfig, trial, repeat, mapper, artifacts, baseOutputDir);
                 } else {
                     try {
-                        runTrial(trial, t, r, mapper, artifacts, baseOutputDir);
+                        runTrial(trialConfig, trial, repeat, mapper, artifacts, baseOutputDir);
                     } catch (Exception e) {
-                        String idStr = getTrialIdentifier(trial);
-                        LOGGER.error("[Failed trial] repeat={} trial={} {}", r, t, idStr, e);
-                        failures.add(idStr + " (repeat " + (r + 1) + "): " + e.getMessage());
+                        String idStr = getTrialIdentifier(trialConfig);
+                        LOGGER.error("[Failed trial] repeat={} trial={} {}", repeat, trial, idStr, e);
+                        failures.add(idStr + " (repeat " + (repeat + 1) + "): " + e.getMessage());
                     }
                 }
             }
@@ -106,6 +125,117 @@ public class CalibrationRunner {
         if (!failFast && !failures.isEmpty()) {
             throw new MainError("One or more trials failed execution: " + String.join("; ", failures));
         }
+    }
+
+    static void runTrial(
+            TrialConfig trial,
+            int trialIndex,
+            int repeatIndex,
+            ObjectMapper mapper,
+            ArtifactConfig artifacts,
+            File baseOutputDir)
+            throws Exception {
+        logTrialStart(trial, trialIndex, repeatIndex);
+
+        File tempConfigFile = File.createTempFile("trial_config_", ".json");
+        tempConfigFile.deleteOnExit();
+        try {
+            writeTrialConfig(mapper, tempConfigFile, trial);
+
+            File invocationDir =
+                    prepareInvocationDirectory(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir);
+            List<String> jvmArgs =
+                    buildJvmArgs(trial, trialIndex, repeatIndex, tempConfigFile.getCanonicalPath(), invocationDir);
+
+            ChainedOptionsBuilder opt = new OptionsBuilder();
+            opt = opt.include(CalibrationBenchmark.class.getName());
+            opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
+            opt = opt.forks(trial.forks());
+            opt = opt.warmupForks(trial.warmups());
+            opt = opt.measurementIterations(trial.iterations());
+
+            Options options = opt.build();
+            new Runner(options).run();
+
+            logTrialCompletion(trial, trialIndex, repeatIndex);
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            tempConfigFile.delete();
+        }
+    }
+
+    static void writeTrialConfig(ObjectMapper mapper, File targetFile, TrialConfig trial) throws Exception {
+        mapper.writeValue(targetFile, trial);
+    }
+
+    static File prepareInvocationDirectory(
+            TrialConfig trial,
+            int trialIndex,
+            int repeatIndex,
+            ObjectMapper mapper,
+            ArtifactConfig artifacts,
+            File baseOutputDir)
+            throws Exception {
+        if (baseOutputDir == null) {
+            return null;
+        }
+        String trialKey = (trial.id() != null && !trial.id().isBlank()) ? trial.id() : Integer.toString(trialIndex);
+        File invocationDir = new File(baseOutputDir, trialKey + "_repeat_" + repeatIndex).getCanonicalFile();
+        if (!invocationDir.exists()) {
+            //noinspection ResultOfMethodCallIgnored
+            invocationDir.mkdirs();
+        }
+        if (artifacts != null && Boolean.TRUE.equals(artifacts.retainExpandedConfig())) {
+            writeTrialConfig(mapper, new File(invocationDir, "trial_config.json"), trial);
+        }
+        return invocationDir;
+    }
+
+    static List<String> buildJvmArgs(
+            TrialConfig trial, int trialIndex, int repeatIndex, String canonicalConfigPath, File invocationDir) {
+        List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
+        addJVMProperty(jvmArgs, TRIAL_CONFIG_PROP, canonicalConfigPath);
+        addJVMProperty(jvmArgs, TRIAL_INDEX_PROP, Integer.toString(trialIndex));
+        addJVMProperty(jvmArgs, REPEAT_INDEX_PROP, Integer.toString(repeatIndex));
+        addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
+        addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
+        addJVMProperty(jvmArgs, CPU_SET_PROP);
+
+        if (invocationDir != null) {
+            try {
+                addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getCanonicalPath());
+            } catch (Exception e) {
+                addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getAbsolutePath());
+            }
+        }
+
+        if (trial.jvmArgs() != null) {
+            jvmArgs.addAll(trial.jvmArgs());
+        }
+
+        return jvmArgs;
+    }
+
+    private static void logTrialStart(TrialConfig trial, int trialIndex, int repeatIndex) {
+        LOGGER.info(
+                "[Running trial] repeat={} trial={} id={} name={} group={} forks={} warmups={} iterations={}",
+                repeatIndex,
+                trialIndex,
+                trial.id(),
+                trial.name(),
+                trial.group(),
+                trial.forks(),
+                trial.warmups(),
+                trial.iterations());
+    }
+
+    private static void logTrialCompletion(TrialConfig trial, int trialIndex, int repeatIndex) {
+        LOGGER.info(
+                "[Completed trial] repeat={} trial={} id={} name={}",
+                repeatIndex,
+                trialIndex,
+                trial.id(),
+                trial.name());
     }
 
     private static String getTrialIdentifier(TrialConfig trial) {
@@ -124,85 +254,6 @@ public class CalibrationRunner {
         return "<unnamed trial>";
     }
 
-    private static void runTrial(
-            TrialConfig trial,
-            int trialIndex,
-            int repeatIndex,
-            ObjectMapper mapper,
-            ArtifactConfig artifacts,
-            File baseOutputDir)
-            throws Exception {
-        StringBuilder startMsg = new StringBuilder();
-        startMsg.append("[Running trial] repeat=")
-                .append(repeatIndex)
-                .append(" trial=")
-                .append(trialIndex);
-        if (trial.id() != null && !trial.id().isBlank()) {
-            startMsg.append(" id=").append(trial.id());
-        }
-        if (trial.name() != null && !trial.name().isBlank()) {
-            startMsg.append(" name=").append(trial.name());
-        }
-        if (trial.group() != null && !trial.group().isBlank()) {
-            startMsg.append(" group=").append(trial.group());
-        }
-        startMsg.append(" forks=")
-                .append(trial.forks())
-                .append(" warmups=")
-                .append(trial.warmups())
-                .append(" iterations=")
-                .append(trial.iterations());
-        LOGGER.info(startMsg.toString());
-
-        File tempConfigFile = File.createTempFile("trial_config_", ".json");
-        tempConfigFile.deleteOnExit();
-        try {
-            mapper.writeValue(tempConfigFile, trial);
-            String canonicalPath = tempConfigFile.getCanonicalPath();
-
-            List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
-            addJVMProperty(jvmArgs, TRIAL_CONFIG_PROP, canonicalPath);
-            addJVMProperty(jvmArgs, TRIAL_INDEX_PROP, Integer.toString(trialIndex));
-            addJVMProperty(jvmArgs, REPEAT_INDEX_PROP, Integer.toString(repeatIndex));
-            addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
-            addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
-            addJVMProperty(jvmArgs, CPU_SET_PROP);
-
-            prepareInvocationDirectory(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir, jvmArgs);
-
-            if (trial.jvmArgs() != null) {
-                jvmArgs.addAll(trial.jvmArgs());
-            }
-
-            ChainedOptionsBuilder opt = new OptionsBuilder();
-            opt = opt.include(CalibrationBenchmark.class.getName());
-            opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
-            opt = opt.forks(trial.forks());
-            opt = opt.warmupForks(trial.warmups());
-            opt = opt.measurementIterations(trial.iterations());
-
-            Options options = opt.build();
-            new Runner(options).run();
-
-            StringBuilder completeMsg = new StringBuilder();
-            completeMsg
-                    .append("[Completed trial] repeat=")
-                    .append(repeatIndex)
-                    .append(" trial=")
-                    .append(trialIndex);
-            if (trial.id() != null && !trial.id().isBlank()) {
-                completeMsg.append(" id=").append(trial.id());
-            }
-            if (trial.name() != null && !trial.name().isBlank()) {
-                completeMsg.append(" name=").append(trial.name());
-            }
-            LOGGER.info(completeMsg.toString());
-        } finally {
-            //noinspection ResultOfMethodCallIgnored
-            tempConfigFile.delete();
-        }
-    }
-
     private static void addJVMProperty(List<String> jvmArgs, String property) {
         String value = System.getProperty(property);
         if (value != null && !value.isBlank()) {
@@ -214,32 +265,6 @@ public class CalibrationRunner {
         if (value != null && !value.isBlank()) {
             jvmArgs.add("-D" + property + "=" + value);
         }
-    }
-
-    static File prepareInvocationDirectory(
-            TrialConfig trial,
-            int trialIndex,
-            int repeatIndex,
-            ObjectMapper mapper,
-            ArtifactConfig artifacts,
-            File baseOutputDir,
-            List<String> jvmArgs)
-            throws Exception {
-        if (baseOutputDir == null) {
-            return null;
-        }
-        String trialKey = (trial.id() != null && !trial.id().isBlank()) ? trial.id() : Integer.toString(trialIndex);
-        File invocationDir = new File(baseOutputDir, trialKey + "_repeat_" + repeatIndex).getCanonicalFile();
-        if (!invocationDir.exists()) {
-            //noinspection ResultOfMethodCallIgnored
-            invocationDir.mkdirs();
-        }
-        addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getCanonicalPath());
-        if (artifacts != null && Boolean.TRUE.equals(artifacts.retainExpandedConfig())) {
-            File expandedConfigFile = new File(invocationDir, "trial_config.json");
-            mapper.writeValue(expandedConfigFile, trial);
-        }
-        return invocationDir;
     }
 
     private static final class MainError extends RuntimeException {
