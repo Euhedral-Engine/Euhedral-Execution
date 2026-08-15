@@ -1,6 +1,7 @@
 package calibration.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.databind.JsonNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.HashSet;
 import java.util.List;
@@ -12,8 +13,7 @@ import org.jspecify.annotations.Nullable;
 
 /// Configuration for benchmark calibration harness execution.
 /// Holds optional metadata, run options, artifact retention settings, reusable calibration and decision weight
-/// profiles, and non-empty
-/// trial specifications.
+/// profiles, parameter sweeps, and non-empty trial specifications.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
         @Nullable String id,
@@ -24,16 +24,17 @@ public record HarnessConfig(
         @Nullable ArtifactConfig artifacts,
         @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
         @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
+        @Nullable List<SweepConfig> sweeps,
         @NonNull List<TrialConfig> trials) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     /// Convenience constructor for harness configs containing only trials.
     public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, null, null, null, null, trials);
+        this(null, null, null, null, null, null, null, null, null, null, trials);
     }
 
-    /// Convenience constructor for harness configs without runOptions, artifacts, and profiles.
+    /// Convenience constructor for harness configs without runOptions, artifacts, profiles, and sweeps.
     public HarnessConfig(
             @Nullable Integer schemaVersion,
             @Nullable String id,
@@ -41,10 +42,10 @@ public record HarnessConfig(
             @Nullable String description,
             @Nullable Map<String, String> labels,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, null, null, null, trials);
+        this(schemaVersion, id, name, description, labels, null, null, null, null, null, trials);
     }
 
-    /// Convenience constructor for harness configs without profiles.
+    /// Convenience constructor for harness configs without profiles and sweeps.
     public HarnessConfig(
             @Nullable Integer schemaVersion,
             @Nullable String id,
@@ -54,10 +55,10 @@ public record HarnessConfig(
             @Nullable HarnessRunOptions runOptions,
             @Nullable ArtifactConfig artifacts,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, runOptions, artifacts, null, null, trials);
+        this(schemaVersion, id, name, description, labels, runOptions, artifacts, null, null, null, trials);
     }
 
-    /// Convenience constructor for harness configs without decisionWeightProfiles.
+    /// Convenience constructor for harness configs without decisionWeightProfiles and sweeps.
     public HarnessConfig(
             @Nullable Integer schemaVersion,
             @Nullable String id,
@@ -68,7 +69,44 @@ public record HarnessConfig(
             @Nullable ArtifactConfig artifacts,
             @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, runOptions, artifacts, calibrationProfiles, null, trials);
+        this(
+                schemaVersion,
+                id,
+                name,
+                description,
+                labels,
+                runOptions,
+                artifacts,
+                calibrationProfiles,
+                null,
+                null,
+                trials);
+    }
+
+    /// Convenience constructor for harness configs without sweeps.
+    public HarnessConfig(
+            @Nullable Integer schemaVersion,
+            @Nullable String id,
+            @Nullable String name,
+            @Nullable String description,
+            @Nullable Map<String, String> labels,
+            @Nullable HarnessRunOptions runOptions,
+            @Nullable ArtifactConfig artifacts,
+            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
+            @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
+            @NonNull List<TrialConfig> trials) {
+        this(
+                schemaVersion,
+                id,
+                name,
+                description,
+                labels,
+                runOptions,
+                artifacts,
+                calibrationProfiles,
+                decisionWeightProfiles,
+                null,
+                trials);
     }
 
     /// Creates and validates a HarnessConfig instance.
@@ -76,8 +114,9 @@ public record HarnessConfig(
     /// @throws IllegalArgumentException if schemaVersion is non-positive, id or name is blank,
     ///                                  trials is empty, non-null trial IDs are duplicated,
     ///                                  referenced baselineTrialIds are invalid/self-referential,
-    ///                                  or calibrationProfiles/decisionWeightProfiles keys are blank
-    /// @throws NullPointerException     if trials is null or profiles maps contain null values
+    ///                                  calibrationProfiles/decisionWeightProfiles keys are blank,
+    ///                                  or sweep IDs are duplicated
+    /// @throws NullPointerException     if trials is null or profiles/sweeps maps/lists contain null values
     @JsonCreator
     public HarnessConfig {
         if (schemaVersion != null && schemaVersion <= 0) {
@@ -112,6 +151,16 @@ public record HarnessConfig(
             }
             decisionWeightProfiles = Map.copyOf(decisionWeightProfiles);
         }
+        if (sweeps != null) {
+            Set<String> sweepIds = new HashSet<>();
+            for (SweepConfig sweep : sweeps) {
+                Objects.requireNonNull(sweep, "sweep element cannot be null");
+                if (!sweepIds.add(sweep.id())) {
+                    throw new IllegalArgumentException("Duplicate sweep id found: " + sweep.id());
+                }
+            }
+            sweeps = List.copyOf(sweeps);
+        }
         Objects.requireNonNull(trials, "trials cannot be null");
         if (trials.isEmpty()) {
             throw new IllegalArgumentException("Trial configurations can not be empty");
@@ -138,6 +187,67 @@ public record HarnessConfig(
                     throw new IllegalArgumentException("Referenced baselineTrialId not found: " + baselineId);
                 }
             }
+        }
+    }
+
+    /// Parameter sweep specification for parameter variation.
+    public record SweepConfig(
+            @NonNull String id,
+            @Nullable String description,
+            @NonNull List<SweepParameter> parameters) {
+
+        /// Creates and validates a SweepConfig instance.
+        ///
+        /// @throws IllegalArgumentException if id is blank, description is blank when present,
+        ///                                  parameters is empty, or parameter paths are duplicated
+        /// @throws NullPointerException     if id or parameters is null or contains null elements
+        @JsonCreator
+        public SweepConfig {
+            if (id == null || id.isBlank()) {
+                throw new IllegalArgumentException("Sweep id cannot be blank");
+            }
+            if (description != null && description.isBlank()) {
+                throw new IllegalArgumentException("Sweep description cannot be blank if present");
+            }
+            Objects.requireNonNull(parameters, "Sweep parameters cannot be null");
+            if (parameters.isEmpty()) {
+                throw new IllegalArgumentException("Sweep parameters cannot be empty");
+            }
+            Set<String> parameterPaths = new HashSet<>();
+            for (SweepParameter param : parameters) {
+                Objects.requireNonNull(param, "Sweep parameter cannot be null");
+                if (!parameterPaths.add(param.path())) {
+                    throw new IllegalArgumentException(
+                            "Duplicate parameter path in sweep '" + id + "': " + param.path());
+                }
+            }
+            parameters = List.copyOf(parameters);
+        }
+    }
+
+    /// Parameter entry within a sweep specification.
+    public record SweepParameter(
+            @NonNull String path, @NonNull List<JsonNode> values) {
+
+        /// Creates and validates a SweepParameter instance.
+        ///
+        /// @throws IllegalArgumentException if path is blank, values is empty, or values contain null
+        /// @throws NullPointerException     if path or values is null
+        @JsonCreator
+        public SweepParameter {
+            if (path == null || path.isBlank()) {
+                throw new IllegalArgumentException("SweepParameter path cannot be blank");
+            }
+            Objects.requireNonNull(values, "SweepParameter values cannot be null");
+            if (values.isEmpty()) {
+                throw new IllegalArgumentException("SweepParameter values cannot be empty");
+            }
+            for (JsonNode val : values) {
+                if (val == null || val.isNull()) {
+                    throw new IllegalArgumentException("SweepParameter values cannot contain null");
+                }
+            }
+            values = List.copyOf(values);
         }
     }
 

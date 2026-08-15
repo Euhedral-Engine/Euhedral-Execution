@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.IntNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
 import java.util.Arrays;
@@ -672,6 +673,203 @@ class HarnessConfigTest {
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> config.decisionWeightProfiles().put("profile-2", FragmentDecisionWeights.DEFAULT));
+    }
+
+    /// Verifies sweeps JSON parsing and round-trip with various JsonNode value types.
+    @Test
+    void parseSweepsAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "sweeps": [
+                {
+                  "id": "sweep-001",
+                  "description": "Comprehensive parameter sweep",
+                  "parameters": [
+                    {
+                      "path": "calibrationConfig.parallelSources",
+                      "values": [2, 4, 8]
+                    },
+                    {
+                      "path": "calibrationConfig.totalRequiredExecutions",
+                      "values": [1000, 5000000000]
+                    },
+                    {
+                      "path": "calibrationConfig.observeCycleStart",
+                      "values": [true, false]
+                    },
+                    {
+                      "path": "calibrationConfig.ratio",
+                      "values": [0.25, 0.75]
+                    },
+                    {
+                      "path": "calibrationConfig.mode",
+                      "values": ["FAST", "SLOW"]
+                    },
+                    {
+                      "path": "calibrationConfig.tags",
+                      "values": [["tagA", "tagB"], ["tagC"]]
+                    },
+                    {
+                      "path": "calibrationConfig.weights",
+                      "values": [{ "threshold": 10 }, { "threshold": 20 }]
+                    }
+                  ]
+                }
+              ],
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNotNull(config.sweeps());
+        assertEquals(1, config.sweeps().size());
+
+        HarnessConfig.SweepConfig sweep = config.sweeps().get(0);
+        assertEquals("sweep-001", sweep.id());
+        assertEquals("Comprehensive parameter sweep", sweep.description());
+        assertEquals(7, sweep.parameters().size());
+
+        assertEquals(
+                "calibrationConfig.parallelSources", sweep.parameters().get(0).path());
+        assertEquals(3, sweep.parameters().get(0).values().size());
+        assertEquals(2, sweep.parameters().get(0).values().get(0).asInt());
+
+        assertEquals(
+                "calibrationConfig.totalRequiredExecutions",
+                sweep.parameters().get(1).path());
+        assertEquals(5000000000L, sweep.parameters().get(1).values().get(1).asLong());
+
+        assertEquals(
+                "calibrationConfig.observeCycleStart", sweep.parameters().get(2).path());
+        assertTrue(sweep.parameters().get(2).values().get(0).asBoolean());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies blank sweep id or description are rejected.
+    @Test
+    void rejectBlankSweepIdAndDescription() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig(
+                        "  ", "desc", List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1))))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig(
+                        "", "desc", List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1))))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig(
+                        "id", "   ", List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1))))));
+    }
+
+    /// Verifies duplicate sweep IDs across sweeps list are rejected.
+    @Test
+    void rejectDuplicateSweepId() {
+        HarnessConfig.SweepConfig sweep1 = new HarnessConfig.SweepConfig(
+                "sweep-1", null, List.of(new HarnessConfig.SweepParameter("path1", List.of(new IntNode(1)))));
+        HarnessConfig.SweepConfig sweep2 = new HarnessConfig.SweepConfig(
+                "sweep-1", null, List.of(new HarnessConfig.SweepParameter("path2", List.of(new IntNode(2)))));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        List.of(sweep1, sweep2),
+                        List.of(dummyTrialConfig())));
+    }
+
+    /// Verifies null or empty parameters in SweepConfig are rejected.
+    @Test
+    void rejectNullOrEmptySweepParameters() {
+        assertThrows(NullPointerException.class, () -> new HarnessConfig.SweepConfig("sweep-1", null, null));
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.SweepConfig("sweep-1", null, List.of()));
+    }
+
+    /// Verifies blank parameter path is rejected.
+    @Test
+    void rejectBlankSweepParameterPath() {
+        assertThrows(
+                IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("   ", List.of(new IntNode(1))));
+        assertThrows(
+                IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("", List.of(new IntNode(1))));
+    }
+
+    /// Verifies duplicate parameter paths inside one sweep are rejected.
+    @Test
+    void rejectDuplicateParameterPathInSweep() {
+        HarnessConfig.SweepParameter param1 = new HarnessConfig.SweepParameter("path.a", List.of(new IntNode(1)));
+        HarnessConfig.SweepParameter param2 = new HarnessConfig.SweepParameter("path.a", List.of(new IntNode(2)));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig("sweep-1", null, List.of(param1, param2)));
+    }
+
+    /// Verifies null or empty sweep parameter values are rejected.
+    @Test
+    void rejectNullOrEmptySweepParameterValues() {
+        assertThrows(NullPointerException.class, () -> new HarnessConfig.SweepParameter("path", null));
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("path", List.of()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepParameter("path", Arrays.asList(new IntNode(1), null)));
+
+        String jsonNullValue = """
+            {
+              "sweeps": [
+                {
+                  "id": "sweep-1",
+                  "parameters": [
+                    {
+                      "path": "path.a",
+                      "values": [1, null]
+                    }
+                  ]
+                }
+              ],
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonNullValue, HarnessConfig.class));
     }
 
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
