@@ -538,6 +538,142 @@ class HarnessConfigTest {
                 () -> config.calibrationProfiles().put("profile-2", dummyCalibrationConfig()));
     }
 
+    /// Verifies decisionWeightProfiles JSON parsing and round-trip equivalence with distinct profiles.
+    @Test
+    void parseDecisionWeightProfilesAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "decisionWeightProfiles": {
+                "default-weights": {
+                  "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                  "idleBodyCostWeights": [],
+                  "idleTimeNs": [],
+                  "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                  "execBodyCostWeights": [],
+                  "executionPolicies": []
+                },
+                "aggressive-weights": {
+                  "idleContentionThresholds": { "xsContention": 10, "sContention": 20, "mContention": 30, "hContention": 40 },
+                  "idleBodyCostWeights": [],
+                  "idleTimeNs": [],
+                  "execContentionThresholds": { "xsContention": 10, "sContention": 20, "mContention": 30, "hContention": 40 },
+                  "execBodyCostWeights": [],
+                  "executionPolicies": []
+                }
+              },
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNotNull(config.decisionWeightProfiles());
+        assertEquals(2, config.decisionWeightProfiles().size());
+        assertTrue(config.decisionWeightProfiles().containsKey("default-weights"));
+        assertTrue(config.decisionWeightProfiles().containsKey("aggressive-weights"));
+
+        assertEquals(
+                1,
+                config.decisionWeightProfiles()
+                        .get("default-weights")
+                        .idleContentionThresholds()
+                        .hContention());
+        assertEquals(
+                40,
+                config.decisionWeightProfiles()
+                        .get("aggressive-weights")
+                        .idleContentionThresholds()
+                        .hContention());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies blank decisionWeightProfiles names are rejected.
+    @Test
+    void rejectBlankDecisionWeightProfileName() {
+        String jsonBlankProfileName = """
+            {
+              "decisionWeightProfiles": {
+                "   ": {
+                  "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                  "idleBodyCostWeights": [],
+                  "idleTimeNs": [],
+                  "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                  "execBodyCostWeights": [],
+                  "executionPolicies": []
+                }
+              },
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonBlankProfileName, HarnessConfig.class));
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of("  ", FragmentDecisionWeights.DEFAULT),
+                        List.of(dummyTrialConfig())));
+    }
+
+    /// Verifies null decisionWeightProfiles values are rejected and map is defensively copied.
+    @Test
+    void rejectNullDecisionWeightProfileValueAndDefensivelyCopy() {
+        Map<String, FragmentDecisionWeights> mutableProfiles = new HashMap<>();
+        mutableProfiles.put("profile-1", FragmentDecisionWeights.DEFAULT);
+        mutableProfiles.put("profile-2", null);
+
+        assertThrows(
+                NullPointerException.class,
+                () -> new HarnessConfig(
+                        null, null, null, null, null, null, null, null, mutableProfiles, List.of(dummyTrialConfig())));
+
+        Map<String, FragmentDecisionWeights> validProfiles = Map.of("profile-1", FragmentDecisionWeights.DEFAULT);
+        HarnessConfig config = new HarnessConfig(
+                null, null, null, null, null, null, null, null, validProfiles, List.of(dummyTrialConfig()));
+
+        assertNotNull(config.decisionWeightProfiles());
+        assertThrows(
+                UnsupportedOperationException.class,
+                () -> config.decisionWeightProfiles().put("profile-2", FragmentDecisionWeights.DEFAULT));
+    }
+
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {

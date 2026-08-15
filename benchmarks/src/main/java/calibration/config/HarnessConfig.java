@@ -1,6 +1,7 @@
 package calibration.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -10,7 +11,8 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /// Configuration for benchmark calibration harness execution.
-/// Holds optional metadata, run options, artifact retention settings, reusable calibration profiles, and non-empty
+/// Holds optional metadata, run options, artifact retention settings, reusable calibration and decision weight
+/// profiles, and non-empty
 /// trial specifications.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
@@ -21,13 +23,14 @@ public record HarnessConfig(
         @Nullable HarnessRunOptions runOptions,
         @Nullable ArtifactConfig artifacts,
         @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
+        @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
         @NonNull List<TrialConfig> trials) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     /// Convenience constructor for harness configs containing only trials.
     public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, null, null, null, trials);
+        this(null, null, null, null, null, null, null, null, null, trials);
     }
 
     /// Convenience constructor for harness configs without runOptions, artifacts, and profiles.
@@ -38,7 +41,7 @@ public record HarnessConfig(
             @Nullable String description,
             @Nullable Map<String, String> labels,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, null, null, trials);
+        this(schemaVersion, id, name, description, labels, null, null, null, null, trials);
     }
 
     /// Convenience constructor for harness configs without profiles.
@@ -51,7 +54,21 @@ public record HarnessConfig(
             @Nullable HarnessRunOptions runOptions,
             @Nullable ArtifactConfig artifacts,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, runOptions, artifacts, null, trials);
+        this(schemaVersion, id, name, description, labels, runOptions, artifacts, null, null, trials);
+    }
+
+    /// Convenience constructor for harness configs without decisionWeightProfiles.
+    public HarnessConfig(
+            @Nullable Integer schemaVersion,
+            @Nullable String id,
+            @Nullable String name,
+            @Nullable String description,
+            @Nullable Map<String, String> labels,
+            @Nullable HarnessRunOptions runOptions,
+            @Nullable ArtifactConfig artifacts,
+            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
+            @NonNull List<TrialConfig> trials) {
+        this(schemaVersion, id, name, description, labels, runOptions, artifacts, calibrationProfiles, null, trials);
     }
 
     /// Creates and validates a HarnessConfig instance.
@@ -59,8 +76,8 @@ public record HarnessConfig(
     /// @throws IllegalArgumentException if schemaVersion is non-positive, id or name is blank,
     ///                                  trials is empty, non-null trial IDs are duplicated,
     ///                                  referenced baselineTrialIds are invalid/self-referential,
-    ///                                  or calibrationProfiles keys are blank
-    /// @throws NullPointerException     if trials is null or calibrationProfiles contains null values
+    ///                                  or calibrationProfiles/decisionWeightProfiles keys are blank
+    /// @throws NullPointerException     if trials is null or profiles maps contain null values
     @JsonCreator
     public HarnessConfig {
         if (schemaVersion != null && schemaVersion <= 0) {
@@ -83,6 +100,17 @@ public record HarnessConfig(
                         entry.getValue(), "calibrationProfiles profile value cannot be null for: " + profileName);
             }
             calibrationProfiles = Map.copyOf(calibrationProfiles);
+        }
+        if (decisionWeightProfiles != null) {
+            for (Map.Entry<String, FragmentDecisionWeights> entry : decisionWeightProfiles.entrySet()) {
+                String profileName = entry.getKey();
+                if (profileName == null || profileName.isBlank()) {
+                    throw new IllegalArgumentException("decisionWeightProfiles profile name cannot be blank");
+                }
+                Objects.requireNonNull(
+                        entry.getValue(), "decisionWeightProfiles profile value cannot be null for: " + profileName);
+            }
+            decisionWeightProfiles = Map.copyOf(decisionWeightProfiles);
         }
         Objects.requireNonNull(trials, "trials cannot be null");
         if (trials.isEmpty()) {
