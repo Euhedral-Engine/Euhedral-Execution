@@ -2,8 +2,8 @@ package io.euhedral_execution.core.control_plane;
 
 import static io.euhedral_execution.core.control_plane.FragmentControlConfig.DEFAULT_PARK_NS;
 
+import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostThresholds;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ContentionThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy;
@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 /// Owner-thread policy for choosing direct or staged execution and a bounded batch size.
 ///
@@ -26,6 +27,10 @@ final class FragmentDecisionTree {
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
     static final int SPIN_MISSES = 64;
+
+    private final int core;
+    private final int socket;
+    private final FragmentObserver observer;
 
     private final ContentionThresholds idleContentionThresholds;
     private final List<BodyCostThresholds> idleBodyCostThresholds;
@@ -47,19 +52,17 @@ final class FragmentDecisionTree {
     private int expensiveConfirmationWindows;
     private int activeMissStreak;
 
-    /// Creates a policy, capturing any setup-only diagnostic override before owner-thread use.
-    FragmentDecisionTree() {
-        this(new FragmentControlConfig(
-                ContentionThresholds.IDLE_DEFAULTS,
-                BodyCostWeights.IDLE_DEFAULTS,
-                IdlePolicy.DEFAULT,
-                ContentionThresholds.EXEC_DEFAULTS,
-                BodyCostWeights.EXEC_DEFAULTS,
-                ExecutionPolicy.DEFAULT));
-    }
+    FragmentDecisionTree(
+            @NonNull FragmentDecisionWeights decisionWeights,
+            @Nullable FragmentObserver observer,
+            int core,
+            int socket) {
+        Objects.requireNonNull(decisionWeights);
+        this.observer = observer;
+        this.core = core;
+        this.socket = socket;
 
-    FragmentDecisionTree(@NonNull FragmentControlConfig config) {
-        Objects.requireNonNull(config);
+        FragmentControlConfig config = new FragmentControlConfig(decisionWeights);
         this.idleContentionThresholds = config.idleContentionThresholds;
         this.idleBodyCostThresholds = config.idleBodyCostThresholds;
         this.idleTimeNs = config.idleTimeNs;
@@ -70,7 +73,14 @@ final class FragmentDecisionTree {
         reset();
     }
 
-    public void idle(long upstreamHandles, int registeredWorkers, int workerRank, long contention) {
+    /// Makes an idling decision using the idle branch and parks the fragment
+    public void idle(
+            long cycleEpoch,
+            long batchEpoch,
+            long upstreamHandles,
+            int registeredWorkers,
+            int workerRank,
+            long contention) {
         if (upstreamHandles <= 0) {
             LockSupport.parkNanos(DEFAULT_PARK_NS);
             return;
@@ -82,54 +92,87 @@ final class FragmentDecisionTree {
             return;
         }
 
-        idle(this.idleContentionThresholds, this.idleBodyCostThresholds, this.idleTimeNs, contention);
+        idle(
+                cycleEpoch,
+                batchEpoch,
+                this.idleContentionThresholds,
+                this.idleBodyCostThresholds,
+                this.idleTimeNs,
+                contention);
     }
 
     private void idle(
+            long cycleEpoch,
+            long batchEpoch,
             ContentionThresholds thresholds,
             List<BodyCostThresholds> idleBodyCost,
             List<IdlePolicy> idleTimeNs,
             long contention) {
-        if (contention <= thresholds.xs()) {
-            idle(idleBodyCost.getFirst(), idleTimeNs.getFirst());
+        if (contention <= thresholds.xsContention()) {
+            idle(cycleEpoch, batchEpoch, 0, idleBodyCost.getFirst(), idleTimeNs.getFirst());
             return;
         }
-        if (contention <= thresholds.s()) {
-            idle(idleBodyCost.get(1), idleTimeNs.get(1));
+        if (contention <= thresholds.sContention()) {
+            idle(cycleEpoch, batchEpoch, 1, idleBodyCost.get(1), idleTimeNs.get(1));
             return;
         }
-        if (contention <= thresholds.m()) {
-            idle(idleBodyCost.get(2), idleTimeNs.get(2));
+        if (contention <= thresholds.mContention()) {
+            idle(cycleEpoch, batchEpoch, 2, idleBodyCost.get(2), idleTimeNs.get(2));
             return;
         }
-        if (contention <= thresholds.h()) {
-            idle(idleBodyCost.get(3), idleTimeNs.get(3));
+        if (contention <= thresholds.hContention()) {
+            idle(cycleEpoch, batchEpoch, 3, idleBodyCost.get(3), idleTimeNs.get(3));
             return;
         }
-        idle(idleBodyCost.getLast(), idleTimeNs.getLast());
+        idle(cycleEpoch, batchEpoch, 4, idleBodyCost.getLast(), idleTimeNs.getLast());
     }
 
-    private void idle(BodyCostThresholds thresholds, IdlePolicy policy) {
-        if (this.smoothedBodyCostNs <= thresholds.xs) {
-            LockSupport.parkNanos(policy.xsPark());
-            return;
+    private void idle(
+            long cycleEpoch,
+            long batchEpoch,
+            int contentionDecision,
+            BodyCostThresholds thresholds,
+            IdlePolicy policy) {
+        int decision = -1;
+        try {
+            if (this.smoothedBodyCostNs <= thresholds.xs) {
+                decision = 0;
+                LockSupport.parkNanos(policy.xsPark());
+                return;
+            }
+            if (this.smoothedBodyCostNs <= thresholds.s) {
+                decision = 1;
+                LockSupport.parkNanos(policy.sPark());
+                return;
+            }
+            if (this.smoothedBodyCostNs <= thresholds.m) {
+                decision = 2;
+                LockSupport.parkNanos(policy.mPark());
+                return;
+            }
+            if (this.smoothedBodyCostNs <= thresholds.h) {
+                decision = 3;
+                LockSupport.parkNanos(policy.hPark());
+                return;
+            }
+            decision = 4;
+            LockSupport.parkNanos(policy.xhPark());
+        } finally {
+            if (this.observer != null) {
+                this.observer.idleBranchDecision(
+                        this.core,
+                        this.socket,
+                        cycleEpoch,
+                        batchEpoch,
+                        contentionDecision,
+                        decision,
+                        this.smoothedBodyCostNs);
+            }
         }
-        if (this.smoothedBodyCostNs <= thresholds.s) {
-            LockSupport.parkNanos(policy.sPark());
-            return;
-        }
-        if (this.smoothedBodyCostNs <= thresholds.m) {
-            LockSupport.parkNanos(policy.mPark());
-            return;
-        }
-        if (this.smoothedBodyCostNs <= thresholds.h) {
-            LockSupport.parkNanos(policy.hPark());
-            return;
-        }
-        LockSupport.parkNanos(policy.xhPark());
     }
 
-    ExecutionPath executionPath(long upstreamHandles, long registeredWorkers, long contention) {
+    ExecutionPath executionPath(
+            long cycleEpoch, long batchEpoch, long upstreamHandles, long registeredWorkers, long contention) {
         if (upstreamHandles <= 0) {
             this.executionPath = ExecutionPath.SKIP;
             return this.executionPath;
@@ -140,44 +183,75 @@ final class FragmentDecisionTree {
         }
 
         this.executionPath = executionPath(
-                this.execContentionThresholds, this.execBodyCostThresholds, this.executionPolicies, contention);
+                cycleEpoch,
+                batchEpoch,
+                this.execContentionThresholds,
+                this.execBodyCostThresholds,
+                this.executionPolicies,
+                contention);
         return this.executionPath;
     }
 
     private ExecutionPath executionPath(
+            long cycleEpoch,
+            long batchEpoch,
             ContentionThresholds thresholds,
             List<BodyCostThresholds> execBodyCost,
             List<ExecutionPolicy> policies,
             long contention) {
-        if (contention <= thresholds.xs()) {
-            return executionPath(execBodyCost.getFirst(), policies.getFirst());
+        if (contention <= thresholds.xsContention()) {
+            return executionPath(cycleEpoch, batchEpoch, 0, execBodyCost.getFirst(), policies.getFirst());
         }
-        if (contention <= thresholds.s()) {
-            return executionPath(execBodyCost.get(1), policies.get(1));
+        if (contention <= thresholds.sContention()) {
+            return executionPath(cycleEpoch, batchEpoch, 1, execBodyCost.get(1), policies.get(1));
         }
-        if (contention <= thresholds.m()) {
-            return executionPath(execBodyCost.get(2), policies.get(2));
+        if (contention <= thresholds.mContention()) {
+            return executionPath(cycleEpoch, batchEpoch, 2, execBodyCost.get(2), policies.get(2));
         }
-        if (contention <= thresholds.h()) {
-            return executionPath(execBodyCost.get(3), policies.get(3));
+        if (contention <= thresholds.hContention()) {
+            return executionPath(cycleEpoch, batchEpoch, 3, execBodyCost.get(3), policies.get(3));
         }
-        return executionPath(execBodyCost.getLast(), policies.getLast());
+        return executionPath(cycleEpoch, batchEpoch, 4, execBodyCost.getLast(), policies.getLast());
     }
 
-    private ExecutionPath executionPath(BodyCostThresholds thresholds, ExecutionPolicy policy) {
-        if (this.smoothedBodyCostNs <= thresholds.xs) {
-            return policy.xsContention();
+    private ExecutionPath executionPath(
+            long cycleEpoch,
+            long batchEpoch,
+            int contentionDecision,
+            BodyCostThresholds thresholds,
+            ExecutionPolicy policy) {
+        int decision = -1;
+        try {
+            if (this.smoothedBodyCostNs <= thresholds.xs) {
+                decision = 0;
+                return policy.xsBody();
+            }
+            if (this.smoothedBodyCostNs <= thresholds.s) {
+                decision = 1;
+                return policy.sBody();
+            }
+            if (this.smoothedBodyCostNs <= thresholds.m) {
+                decision = 2;
+                return policy.mBody();
+            }
+            if (this.smoothedBodyCostNs <= thresholds.h) {
+                decision = 3;
+                return policy.hBody();
+            }
+            decision = 4;
+            return policy.xhBody();
+        } finally {
+            if (this.observer != null) {
+                this.observer.execBranchDecision(
+                        this.core,
+                        this.socket,
+                        cycleEpoch,
+                        batchEpoch,
+                        contentionDecision,
+                        decision,
+                        this.smoothedBodyCostNs);
+            }
         }
-        if (this.smoothedBodyCostNs <= thresholds.s) {
-            return policy.sContention();
-        }
-        if (this.smoothedBodyCostNs <= thresholds.m) {
-            return policy.mContention();
-        }
-        if (this.smoothedBodyCostNs <= thresholds.h) {
-            return policy.hContention();
-        }
-        return policy.xhContention();
     }
 
     /// Records one aggregate execution sample in nanoseconds across `frames` completed frames.

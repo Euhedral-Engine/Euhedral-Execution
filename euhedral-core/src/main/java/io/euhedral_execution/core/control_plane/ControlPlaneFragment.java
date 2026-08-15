@@ -76,8 +76,9 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final AtomicLong resetCompleted = new AtomicLong();
     private final AtomicLong resetCleared = new AtomicLong();
     private final PinnedThreadExecutor mainExecutor;
-    private final FragmentDecisionTree controlPolicy;
     private final CycleState state;
+
+    private FragmentDecisionTree controlPolicy;
 
     private UpstreamQueue upstreamQueue;
     boolean drainMode = false;
@@ -123,7 +124,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             } else {
                 this.observer = null;
             }
-            this.controlPolicy = new FragmentDecisionTree();
             this.state = new CycleState();
 
             this.mainExecutor = PinnedThreadExecutor.getOrSetIfAbsent(
@@ -140,7 +140,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 if (elapsed > 0) {
                     this.controlPolicy.recordBodyCost(elapsed);
                     if (config.benchmarkMode()) {
-                        this.observer.rawBodyCost(this.core, this.socket, elapsed);
+                        this.observer.rawBodyCost(
+                                this.core, this.socket, this.state.cycleEpoch, this.state.batchEpoch, elapsed);
                     }
                 }
             });
@@ -202,6 +203,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ThreadTools.setTimerResolution(1);
                 super.register();
                 this.mainThread = Thread.currentThread();
+                this.controlPolicy =
+                        new FragmentDecisionTree(this.config.decisionWeights(), this.observer, this.core, this.socket);
 
                 try {
                     cycle();
@@ -223,6 +226,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             context.upstream = getThreadUpstreamQueue();
             this.upstreamQueue = context.upstream;
             while (keepRunning()) {
+                this.state.cycleEpoch++;
                 serviceResetRequest();
 
                 long newUpCount = this.upstreamQueue.getCachedUpCount();
@@ -236,6 +240,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                     this.observer.cycleStartState(
                             this.core,
                             this.socket,
+                            this.state.cycleEpoch,
+                            this.state.batchEpoch,
                             this.state.completed,
                             this.state.batchSize,
                             newUpCount,
@@ -247,6 +253,8 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 if (localCache == 0L) {
                     this.controlPolicy.idle(
+                            this.state.cycleEpoch,
+                            this.state.batchEpoch,
                             this.state.upstreamCount,
                             this.state.registeredWorkers,
                             this.state.workerRank,
@@ -278,9 +286,11 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
 
                 ExecutionPath path = this.controlPolicy.executionPath(
-                        context.upstream.getCachedUpCount(),
+                        this.state.cycleEpoch,
+                        this.state.batchEpoch,
+                        this.upstreamQueue.getCachedUpCount(),
                         this.state.registeredWorkers,
-                        context.upstream.getContention());
+                        this.upstreamQueue.getContention());
                 if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
                         long start = System.nanoTime();
@@ -391,6 +401,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.observer.batchProgressState(
                         this.core,
                         this.socket,
+                        this.state.cycleEpoch,
+                        this.state.batchEpoch,
                         this.state.upstreamCount,
                         this.state.registeredWorkers,
                         this.state.workerRank,
@@ -407,12 +419,15 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.observer.batchCompleteState(
                     this.core,
                     this.socket,
+                    this.state.cycleEpoch,
+                    this.state.batchEpoch,
                     this.state.upstreamCount,
                     registeredWorkers,
                     workerRank,
                     upstreamQueue.getContention(),
                     this.state.serviceTimeRecorder.averageUnits(),
                     this.state.throughputRecorder.averageUnitsOverTime());
+            this.state.batchEpoch++;
         }
 
         this.state.completed = 0L;
@@ -593,7 +608,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         int registeredWorkers = 0;
         int workerRank = -1;
 
-        long totalExecutions = 0;
+        long cycleEpoch = -1;
+        long batchEpoch = 0;
 
         void reset() {
             this.batchRecorder.reset();
