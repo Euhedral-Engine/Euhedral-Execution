@@ -409,6 +409,41 @@ public record HarnessConfig(
         }
     }
 
+    /// Provenance origin type for generated or manual trial configurations.
+    public enum OriginType {
+        MANUAL,
+        SWEEP,
+        SEARCH,
+        EXTERNAL
+    }
+
+    /// Provenance origin metadata detailing how a trial configuration was produced.
+    public record TrialOrigin(
+            @NonNull OriginType type,
+            @Nullable String sourceId,
+            @Nullable Long seed,
+            @Nullable Integer candidateIndex) {
+
+        /// Creates and validates a TrialOrigin instance.
+        ///
+        /// @throws IllegalArgumentException if MANUAL origin specifies a sourceId, sourceId is blank when present,
+        ///                                  or candidateIndex < 0
+        /// @throws NullPointerException     if type is null
+        @JsonCreator
+        public TrialOrigin {
+            Objects.requireNonNull(type, "Origin type cannot be null");
+            if (type == OriginType.MANUAL && sourceId != null) {
+                throw new IllegalArgumentException("MANUAL origin type requires no sourceId");
+            }
+            if (sourceId != null && sourceId.isBlank()) {
+                throw new IllegalArgumentException("sourceId cannot be blank if present");
+            }
+            if (candidateIndex != null && candidateIndex < 0) {
+                throw new IllegalArgumentException("candidateIndex must be >= 0 if present: " + candidateIndex);
+            }
+        }
+    }
+
     /// Configuration for an individual calibration trial run.
     public record TrialConfig(
             @Nullable String id,
@@ -419,6 +454,7 @@ public record HarnessConfig(
             @Nullable ComparisonConfig comparison,
             @Nullable List<String> tags,
             @Nullable Boolean enabled,
+            @Nullable TrialOrigin origin,
             int forks,
             int warmups,
             int iterations,
@@ -440,6 +476,39 @@ public record HarnessConfig(
                     null,
                     null,
                     null,
+                    null,
+                    null,
+                    forks,
+                    warmups,
+                    iterations,
+                    jvmArgs,
+                    calibrationConfig);
+        }
+
+        /// Convenience constructor for trial metadata without origin.
+        public TrialConfig(
+                @Nullable String id,
+                @Nullable String name,
+                @Nullable String group,
+                @Nullable String description,
+                @Nullable String hypothesis,
+                @Nullable ComparisonConfig comparison,
+                @Nullable List<String> tags,
+                @Nullable Boolean enabled,
+                int forks,
+                int warmups,
+                int iterations,
+                @Nullable List<String> jvmArgs,
+                @NonNull CalibrationBenchmarkConfig calibrationConfig) {
+            this(
+                    id,
+                    name,
+                    group,
+                    description,
+                    hypothesis,
+                    comparison,
+                    tags,
+                    enabled,
                     null,
                     forks,
                     warmups,

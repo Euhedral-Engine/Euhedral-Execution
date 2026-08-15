@@ -1072,6 +1072,139 @@ class HarnessConfigTest {
                 UnsupportedOperationException.class, () -> search.metadata().put("k2", "v2"));
     }
 
+    /// Verifies TrialOrigin parsing and round-trip equivalence across all origin types.
+    @Test
+    void parseTrialOriginAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "trials": [
+                {
+                  "id": "trial-sweep",
+                  "origin": {
+                    "type": "SWEEP",
+                    "sourceId": "sweep-001",
+                    "seed": 12345,
+                    "candidateIndex": 0
+                  },
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                },
+                {
+                  "id": "trial-manual",
+                  "origin": {
+                    "type": "MANUAL"
+                  },
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertEquals(2, config.trials().size());
+
+        HarnessConfig.TrialConfig trial1 = config.trials().get(0);
+        assertNotNull(trial1.origin());
+        assertEquals(HarnessConfig.OriginType.SWEEP, trial1.origin().type());
+        assertEquals("sweep-001", trial1.origin().sourceId());
+        assertEquals(Long.valueOf(12345L), trial1.origin().seed());
+        assertEquals(Integer.valueOf(0), trial1.origin().candidateIndex());
+
+        HarnessConfig.TrialConfig trial2 = config.trials().get(1);
+        assertNotNull(trial2.origin());
+        assertEquals(HarnessConfig.OriginType.MANUAL, trial2.origin().type());
+        assertNull(trial2.origin().sourceId());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies MANUAL origin type requires no sourceId.
+    @Test
+    void rejectManualWithSourceId() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.MANUAL, "source-1", null, null));
+    }
+
+    /// Verifies blank sourceId is rejected.
+    @Test
+    void rejectBlankOriginSourceId() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.SWEEP, "   ", null, null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.SWEEP, "", null, null));
+    }
+
+    /// Verifies candidateIndex < 0 is rejected.
+    @Test
+    void rejectNegativeCandidateIndex() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.SWEEP, "sweep-1", null, -1));
+    }
+
+    /// Verifies candidateIndex >= 0 and null fields are allowed.
+    @Test
+    void allowZeroCandidateIndexAndNullFields() {
+        HarnessConfig.TrialOrigin origin =
+                new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.EXTERNAL, null, null, 0);
+        assertEquals(HarnessConfig.OriginType.EXTERNAL, origin.type());
+        assertNull(origin.sourceId());
+        assertNull(origin.seed());
+        assertEquals(Integer.valueOf(0), origin.candidateIndex());
+    }
+
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {
