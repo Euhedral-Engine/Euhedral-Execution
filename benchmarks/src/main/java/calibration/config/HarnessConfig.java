@@ -10,20 +10,32 @@ import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /// Configuration for benchmark calibration harness execution.
-/// Holds optional metadata and non-empty trial specifications.
+/// Holds optional metadata, run options, and non-empty trial specifications.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
         @Nullable String id,
         @Nullable String name,
         @Nullable String description,
         @Nullable Map<String, String> labels,
+        @Nullable HarnessRunOptions runOptions,
         @NonNull List<TrialConfig> trials) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
     /// Convenience constructor for harness configs containing only trials.
     public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, trials);
+        this(null, null, null, null, null, null, trials);
+    }
+
+    /// Convenience constructor for harness configs without runOptions.
+    public HarnessConfig(
+            @Nullable Integer schemaVersion,
+            @Nullable String id,
+            @Nullable String name,
+            @Nullable String description,
+            @Nullable Map<String, String> labels,
+            @NonNull List<TrialConfig> trials) {
+        this(schemaVersion, id, name, description, labels, null, trials);
     }
 
     /// Creates and validates a HarnessConfig instance.
@@ -69,6 +81,25 @@ public record HarnessConfig(
                 if (!trialIds.contains(baselineId)) {
                     throw new IllegalArgumentException("Referenced baselineTrialId not found: " + baselineId);
                 }
+            }
+        }
+    }
+
+    /// Run-control options for harness trial execution.
+    /// Null fields indicate that harness default behavior should be used when the feature is wired in later.
+    public record HarnessRunOptions(
+            @Nullable Boolean randomizeTrialOrder,
+            @Nullable Long randomSeed,
+            @Nullable Boolean failFast,
+            @Nullable Integer repeatCount) {
+
+        /// Creates and validates a HarnessRunOptions instance.
+        ///
+        /// @throws IllegalArgumentException if repeatCount is present and less than 1
+        @JsonCreator
+        public HarnessRunOptions {
+            if (repeatCount != null && repeatCount < 1) {
+                throw new IllegalArgumentException("repeatCount must be positive if present: " + repeatCount);
             }
         }
     }

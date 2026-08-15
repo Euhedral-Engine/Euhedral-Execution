@@ -201,6 +201,98 @@ class HarnessConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(1, "id", "name", null, null, List.of()));
     }
 
+    /// Verifies HarnessRunOptions parsing and round-trip.
+    @Test
+    void parseRunOptionsAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "runOptions": {
+                "randomizeTrialOrder": true,
+                "randomSeed": 42,
+                "failFast": false,
+                "repeatCount": 3
+              },
+              "trials": [
+                {
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertNotNull(config.runOptions());
+        assertEquals(Boolean.TRUE, config.runOptions().randomizeTrialOrder());
+        assertEquals(Long.valueOf(42L), config.runOptions().randomSeed());
+        assertEquals(Boolean.FALSE, config.runOptions().failFast());
+        assertEquals(Integer.valueOf(3), config.runOptions().repeatCount());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies HarnessRunOptions validation for repeatCount.
+    @Test
+    void rejectInvalidRepeatCount() {
+        String jsonZeroRepeat = """
+            {
+              "runOptions": {
+                "repeatCount": 0
+              },
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonZeroRepeat, HarnessConfig.class));
+
+        String jsonNegativeRepeat = """
+            {
+              "runOptions": {
+                "repeatCount": -2
+              },
+              "trials": []
+            }
+            """;
+        assertThrows(Exception.class, () -> mapper.readValue(jsonNegativeRepeat, HarnessConfig.class));
+
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.HarnessRunOptions(null, null, null, 0));
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.HarnessRunOptions(null, null, null, -1));
+    }
+
+    /// Verifies HarnessRunOptions accepts any long for randomSeed and null booleans.
+    @Test
+    void allowAnyRandomSeedAndNullBooleans() {
+        HarnessConfig.HarnessRunOptions options = new HarnessConfig.HarnessRunOptions(null, -999L, null, 1);
+        assertNull(options.randomizeTrialOrder());
+        assertEquals(-999L, options.randomSeed());
+        assertNull(options.failFast());
+        assertEquals(1, options.repeatCount());
+    }
+
     /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {
