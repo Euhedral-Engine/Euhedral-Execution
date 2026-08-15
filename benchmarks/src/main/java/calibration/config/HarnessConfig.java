@@ -1,6 +1,8 @@
 package calibration.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.HashSet;
@@ -243,6 +245,15 @@ public record HarnessConfig(
             }
         }
 
+        if (sweeps != null) {
+            for (SweepConfig sweep : sweeps) {
+                if (!trialIds.contains(sweep.baseTrialId())) {
+                    throw new IllegalArgumentException("Referenced baseTrialId '" + sweep.baseTrialId()
+                            + "' in SweepConfig '" + sweep.id() + "' was not found in trials");
+                }
+            }
+        }
+
         for (TrialConfig trial : trials) {
             if (trial.comparison() != null && trial.comparison().baselineTrialId() != null) {
                 String baselineId = trial.comparison().baselineTrialId();
@@ -321,18 +332,48 @@ public record HarnessConfig(
     /// Parameter sweep specification for parameter variation.
     public record SweepConfig(
             @NonNull String id,
+            @NonNull String baseTrialId,
             @Nullable String description,
+            @Nullable Boolean enabled,
             @NonNull List<SweepParameter> parameters) {
+
+        /// Convenience constructor for sweep configs without description and enabled.
+        public SweepConfig(@NonNull String id, @NonNull String baseTrialId, @NonNull List<SweepParameter> parameters) {
+            this(id, baseTrialId, null, null, parameters);
+        }
+
+        /// Convenience constructor for sweep configs without enabled.
+        public SweepConfig(
+                @NonNull String id,
+                @NonNull String baseTrialId,
+                @Nullable String description,
+                @NonNull List<SweepParameter> parameters) {
+            this(id, baseTrialId, description, null, parameters);
+        }
+
+        /// Returns true if enabled is null or true.
+        @JsonIgnore
+        public boolean isEnabled() {
+            return enabled == null || enabled;
+        }
 
         /// Creates and validates a SweepConfig instance.
         ///
-        /// @throws IllegalArgumentException if id is blank, description is blank when present,
+        /// @throws IllegalArgumentException if id or baseTrialId is blank, description is blank when present,
         ///                                  parameters is empty, or parameter paths are duplicated
-        /// @throws NullPointerException     if id or parameters is null or contains null elements
+        /// @throws NullPointerException     if id, baseTrialId, or parameters is null or contains null elements
         @JsonCreator
-        public SweepConfig {
-            if (id == null || id.isBlank()) {
+        public SweepConfig(
+                @JsonProperty("id") @NonNull String id,
+                @JsonProperty("baseTrialId") @NonNull String baseTrialId,
+                @JsonProperty("description") @Nullable String description,
+                @JsonProperty("enabled") @Nullable Boolean enabled,
+                @JsonProperty("parameters") @NonNull List<SweepParameter> parameters) {
+            if (id.isBlank()) {
                 throw new IllegalArgumentException("SweepConfig id cannot be blank");
+            }
+            if (baseTrialId.isBlank()) {
+                throw new IllegalArgumentException("SweepConfig baseTrialId cannot be blank");
             }
             if (description != null && description.isBlank()) {
                 throw new IllegalArgumentException("SweepConfig description cannot be blank if present");
@@ -349,7 +390,11 @@ public record HarnessConfig(
                             "Duplicate parameter path in SweepConfig '" + id + "': " + param.path());
                 }
             }
-            parameters = List.copyOf(parameters);
+            this.id = id;
+            this.baseTrialId = baseTrialId;
+            this.description = description;
+            this.enabled = enabled;
+            this.parameters = List.copyOf(parameters);
         }
     }
 
@@ -363,7 +408,7 @@ public record HarnessConfig(
         /// @throws NullPointerException     if path or values is null
         @JsonCreator
         public SweepParameter {
-            if (path == null || path.isBlank()) {
+            if (path.isBlank()) {
                 throw new IllegalArgumentException("SweepParameter path cannot be blank");
             }
             Objects.requireNonNull(values, "SweepParameter values cannot be null");

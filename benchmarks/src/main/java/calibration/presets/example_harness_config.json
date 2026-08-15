@@ -196,11 +196,12 @@
   "sweeps": [
     {
       "id": "sweep-001",
+      "baseTrialId": "trial-001",
       // Optional: Description of parameter sweep
       "description": "Parallel sources parameter variation sweep",
       "parameters": [
         {
-          "path": "parallelSources",
+          "path": "/calibrationConfig/parallelSources",
           "values": [2, 4, 8]
         }
       ]

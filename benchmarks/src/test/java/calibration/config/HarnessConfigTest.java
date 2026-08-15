@@ -759,34 +759,35 @@ class HarnessConfigTest {
               "sweeps": [
                 {
                   "id": "sweep-001",
+                  "baseTrialId": "trial-1",
                   "description": "Comprehensive parameter sweep",
                   "parameters": [
                     {
-                      "path": "calibrationConfig.parallelSources",
+                      "path": "/calibrationConfig/parallelSources",
                       "values": [2, 4, 8]
                     },
                     {
-                      "path": "calibrationConfig.totalRequiredExecutions",
+                      "path": "/calibrationConfig/totalRequiredExecutions",
                       "values": [1000, 5000000000]
                     },
                     {
-                      "path": "calibrationConfig.observeCycleStart",
+                      "path": "/calibrationConfig/observeCycleStart",
                       "values": [true, false]
                     },
                     {
-                      "path": "calibrationConfig.ratio",
+                      "path": "/calibrationConfig/ratio",
                       "values": [0.25, 0.75]
                     },
                     {
-                      "path": "calibrationConfig.mode",
+                      "path": "/calibrationConfig/mode",
                       "values": ["FAST", "SLOW"]
                     },
                     {
-                      "path": "calibrationConfig.tags",
+                      "path": "/calibrationConfig/tags",
                       "values": [["tagA", "tagB"], ["tagC"]]
                     },
                     {
-                      "path": "calibrationConfig.weights",
+                      "path": "/calibrationConfig/weights",
                       "values": [{ "threshold": 10 }, { "threshold": 20 }]
                     }
                   ]
@@ -794,6 +795,7 @@ class HarnessConfigTest {
               ],
               "trials": [
                 {
+                  "id": "trial-1",
                   "forks": 1,
                   "warmups": 1,
                   "iterations": 5,
@@ -830,21 +832,23 @@ class HarnessConfigTest {
 
         HarnessConfig.SweepConfig sweep = config.sweeps().get(0);
         assertEquals("sweep-001", sweep.id());
+        assertEquals("trial-1", sweep.baseTrialId());
         assertEquals("Comprehensive parameter sweep", sweep.description());
         assertEquals(7, sweep.parameters().size());
 
         assertEquals(
-                "calibrationConfig.parallelSources", sweep.parameters().get(0).path());
+                "/calibrationConfig/parallelSources", sweep.parameters().get(0).path());
         assertEquals(3, sweep.parameters().get(0).values().size());
         assertEquals(2, sweep.parameters().get(0).values().get(0).asInt());
 
         assertEquals(
-                "calibrationConfig.totalRequiredExecutions",
+                "/calibrationConfig/totalRequiredExecutions",
                 sweep.parameters().get(1).path());
         assertEquals(5000000000L, sweep.parameters().get(1).values().get(1).asLong());
 
         assertEquals(
-                "calibrationConfig.observeCycleStart", sweep.parameters().get(2).path());
+                "/calibrationConfig/observeCycleStart",
+                sweep.parameters().get(2).path());
         assertTrue(sweep.parameters().get(2).values().get(0).asBoolean());
 
         String reSerialized = mapper.writeValueAsString(config);
@@ -852,30 +856,52 @@ class HarnessConfigTest {
         assertEquals(config, roundTrip);
     }
 
-    /// Verifies blank sweep id or description are rejected.
+    /// Verifies blank sweep id, baseTrialId, or description are rejected.
     @Test
-    void rejectBlankSweepIdAndDescription() {
+    void rejectBlankSweepIdBaseTrialIdAndDescription() {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new HarnessConfig.SweepConfig(
-                        "  ", "desc", List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1))))));
+                        "  ",
+                        "base-1",
+                        "desc",
+                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new HarnessConfig.SweepConfig(
-                        "", "desc", List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1))))));
+                        "",
+                        "base-1",
+                        "desc",
+                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new HarnessConfig.SweepConfig(
-                        "id", "   ", List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1))))));
+                        "id",
+                        "   ",
+                        "desc",
+                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig.SweepConfig(
+                        "id",
+                        "base-1",
+                        "   ",
+                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
     }
 
     /// Verifies duplicate sweep IDs across sweeps list are rejected.
     @Test
     void rejectDuplicateSweepId() {
         HarnessConfig.SweepConfig sweep1 = new HarnessConfig.SweepConfig(
-                "sweep-1", null, List.of(new HarnessConfig.SweepParameter("path1", List.of(new IntNode(1)))));
+                "sweep-1",
+                "trial-1",
+                null,
+                List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p1", List.of(new IntNode(1)))));
         HarnessConfig.SweepConfig sweep2 = new HarnessConfig.SweepConfig(
-                "sweep-1", null, List.of(new HarnessConfig.SweepParameter("path2", List.of(new IntNode(2)))));
+                "sweep-1",
+                "trial-1",
+                null,
+                List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p2", List.of(new IntNode(2)))));
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -890,14 +916,16 @@ class HarnessConfigTest {
                         null,
                         null,
                         List.of(sweep1, sweep2),
-                        List.of(dummyTrialConfig())));
+                        List.of(dummyTrialConfigWithId("trial-1"))));
     }
 
     /// Verifies null or empty parameters in SweepConfig are rejected.
     @Test
     void rejectNullOrEmptySweepParameters() {
-        assertThrows(NullPointerException.class, () -> new HarnessConfig.SweepConfig("sweep-1", null, null));
-        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.SweepConfig("sweep-1", null, List.of()));
+        assertThrows(
+                NullPointerException.class, () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", null, null, null));
+        assertThrows(
+                IllegalArgumentException.class, () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", List.of()));
     }
 
     /// Verifies blank parameter path is rejected.
@@ -912,12 +940,14 @@ class HarnessConfigTest {
     /// Verifies duplicate parameter paths inside one sweep are rejected.
     @Test
     void rejectDuplicateParameterPathInSweep() {
-        HarnessConfig.SweepParameter param1 = new HarnessConfig.SweepParameter("path.a", List.of(new IntNode(1)));
-        HarnessConfig.SweepParameter param2 = new HarnessConfig.SweepParameter("path.a", List.of(new IntNode(2)));
+        HarnessConfig.SweepParameter param1 =
+                new HarnessConfig.SweepParameter("/calibrationConfig/pathA", List.of(new IntNode(1)));
+        HarnessConfig.SweepParameter param2 =
+                new HarnessConfig.SweepParameter("/calibrationConfig/pathA", List.of(new IntNode(2)));
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig("sweep-1", null, List.of(param1, param2)));
+                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", List.of(param1, param2)));
     }
 
     /// Verifies null or empty sweep parameter values are rejected.
@@ -934,9 +964,10 @@ class HarnessConfigTest {
               "sweeps": [
                 {
                   "id": "sweep-1",
+                  "baseTrialId": "trial-1",
                   "parameters": [
                     {
-                      "path": "path.a",
+                      "path": "/calibrationConfig/pathA",
                       "values": [1, null]
                     }
                   ]
@@ -956,9 +987,10 @@ class HarnessConfigTest {
               "sweeps": [
                 {
                   "id": "sweep-1",
+                  "baseTrialId": "trial-1",
                   "parameters": [
                     {
-                      "path": "parallelSources",
+                      "path": "/calibrationConfig/parallelSources",
                       "values": [2, 4]
                     }
                   ]
@@ -994,6 +1026,7 @@ class HarnessConfigTest {
               ],
               "trials": [
                 {
+                  "id": "trial-1",
                   "forks": 1,
                   "warmups": 1,
                   "iterations": 5,
@@ -1108,7 +1141,10 @@ class HarnessConfigTest {
     @Test
     void rejectUnreferencedSweepId() {
         HarnessConfig.SweepConfig sweep1 = new HarnessConfig.SweepConfig(
-                "sweep-1", null, List.of(new HarnessConfig.SweepParameter("path", List.of(new IntNode(1)))));
+                "sweep-1",
+                "trial-1",
+                null,
+                List.of(new HarnessConfig.SweepParameter("/calibrationConfig/path", List.of(new IntNode(1)))));
         HarnessConfig.SearchConfig search = new HarnessConfig.SearchConfig(
                 "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, List.of("sweep-missing"), null);
 
