@@ -69,6 +69,8 @@ dependencies {
     api(libs.org.hdrhistogram.hdrhistogram)
     api(libs.org.jspecify.jspecify)
     api(libs.org.slf4j.slf4j.api)
+    implementation(libs.com.fasterxml.jackson.core.jackson.annotations)
+    implementation(libs.com.fasterxml.jackson.core.jackson.databind)
     runtimeOnly(libs.ch.qos.logback.logback.classic)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
     annotationProcessor(libs.org.openjdk.jmh.jmh.generator.annprocess)
