@@ -1,10 +1,5 @@
 package calibration.config;
 
-import calibration.config.HarnessConfig.OriginType;
-import calibration.config.HarnessConfig.SweepConfig;
-import calibration.config.HarnessConfig.SweepParameter;
-import calibration.config.HarnessConfig.TrialConfig;
-import calibration.config.HarnessConfig.TrialOrigin;
 import com.fasterxml.jackson.core.JsonPointer;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;

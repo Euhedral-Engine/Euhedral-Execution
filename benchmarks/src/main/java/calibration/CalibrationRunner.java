@@ -9,11 +9,11 @@ import static calibration.infra.Constants.TRIAL_INDEX_PROP;
 import static calibration.infra.Constants.TRIAL_NAME_PROP;
 
 import calibration.benchmarks.CalibrationBenchmark;
+import calibration.config.ArtifactConfig;
 import calibration.config.HarnessConfig;
-import calibration.config.HarnessConfig.ArtifactConfig;
-import calibration.config.HarnessConfig.HarnessRunOptions;
-import calibration.config.HarnessConfig.SweepConfig;
-import calibration.config.HarnessConfig.TrialConfig;
+import calibration.config.HarnessRunOptions;
+import calibration.config.SweepConfig;
+import calibration.config.TrialConfig;
 import calibration.config.TrialSweepExpander;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;

@@ -5,11 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import calibration.config.HarnessConfig.OriginType;
-import calibration.config.HarnessConfig.SweepConfig;
-import calibration.config.HarnessConfig.SweepParameter;
-import calibration.config.HarnessConfig.TrialConfig;
-import calibration.config.HarnessConfig.TrialOrigin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.LongNode;

@@ -22,18 +22,17 @@ class HarnessConfigTest {
 
     private final ObjectMapper mapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true);
 
-    private static HarnessConfig.TrialConfig dummyTrialConfig() {
-        return new HarnessConfig.TrialConfig(1, 1, 1, null, dummyCalibrationConfig());
+    private static TrialConfig dummyTrialConfig() {
+        return new TrialConfig(1, 1, 1, null, dummyCalibrationConfig());
     }
 
-    private static HarnessConfig.TrialConfig dummyTrialConfigWithId(String id) {
-        return new HarnessConfig.TrialConfig(
+    private static TrialConfig dummyTrialConfigWithId(String id) {
+        return new TrialConfig(
                 id, "name", "group", null, null, null, null, true, 1, 1, 1, null, dummyCalibrationConfig());
     }
 
-    private static HarnessConfig.TrialConfig dummyTrialConfigWithComparison(
-            String id, HarnessConfig.ComparisonConfig comparison) {
-        return new HarnessConfig.TrialConfig(
+    private static TrialConfig dummyTrialConfigWithComparison(String id, ComparisonConfig comparison) {
+        return new TrialConfig(
                 id,
                 "name",
                 "group",
@@ -357,14 +356,14 @@ class HarnessConfigTest {
             """;
         assertThrows(Exception.class, () -> mapper.readValue(jsonNegativeRepeat, HarnessConfig.class));
 
-        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.HarnessRunOptions(null, null, null, 0));
-        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.HarnessRunOptions(null, null, null, -1));
+        assertThrows(IllegalArgumentException.class, () -> new HarnessRunOptions(null, null, null, 0));
+        assertThrows(IllegalArgumentException.class, () -> new HarnessRunOptions(null, null, null, -1));
     }
 
     /// Verifies HarnessRunOptions accepts any long for randomSeed and null booleans.
     @Test
     void allowAnyRandomSeedAndNullBooleans() {
-        HarnessConfig.HarnessRunOptions options = new HarnessConfig.HarnessRunOptions(null, -999L, null, 1);
+        HarnessRunOptions options = new HarnessRunOptions(null, -999L, null, 1);
         assertNull(options.randomizeTrialOrder());
         assertEquals(-999L, options.randomSeed());
         assertNull(options.failFast());
@@ -453,18 +452,14 @@ class HarnessConfigTest {
             """;
         assertThrows(Exception.class, () -> mapper.readValue(jsonEmptyDir, HarnessConfig.class));
 
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.ArtifactConfig("   ", true, true, true, true, true));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.ArtifactConfig("", true, true, true, true, true));
+        assertThrows(IllegalArgumentException.class, () -> new ArtifactConfig("   ", true, true, true, true, true));
+        assertThrows(IllegalArgumentException.class, () -> new ArtifactConfig("", true, true, true, true, true));
     }
 
     /// Verifies ArtifactConfig allows null properties.
     @Test
     void allowNullArtifactFields() {
-        HarnessConfig.ArtifactConfig artifacts = new HarnessConfig.ArtifactConfig(null, null, null, null, null, null);
+        ArtifactConfig artifacts = new ArtifactConfig(null, null, null, null, null, null);
         assertNull(artifacts.outputDirectory());
         assertNull(artifacts.retainExpandedConfig());
         assertNull(artifacts.retainRawBenchmarkOutput());
@@ -830,7 +825,7 @@ class HarnessConfigTest {
         assertNotNull(config.sweeps());
         assertEquals(1, config.sweeps().size());
 
-        HarnessConfig.SweepConfig sweep = config.sweeps().get(0);
+        SweepConfig sweep = config.sweeps().get(0);
         assertEquals("sweep-001", sweep.id());
         assertEquals("trial-1", sweep.baseTrialId());
         assertEquals("Comprehensive parameter sweep", sweep.description());
@@ -861,47 +856,47 @@ class HarnessConfigTest {
     void rejectBlankSweepIdBaseTrialIdAndDescription() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig(
+                () -> new SweepConfig(
                         "  ",
                         "base-1",
                         "desc",
-                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
+                        List.of(new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig(
+                () -> new SweepConfig(
                         "",
                         "base-1",
                         "desc",
-                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
+                        List.of(new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig(
+                () -> new SweepConfig(
                         "id",
                         "   ",
                         "desc",
-                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
+                        List.of(new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig(
+                () -> new SweepConfig(
                         "id",
                         "base-1",
                         "   ",
-                        List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
+                        List.of(new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1))))));
     }
 
     /// Verifies duplicate sweep IDs across sweeps list are rejected.
     @Test
     void rejectDuplicateSweepId() {
-        HarnessConfig.SweepConfig sweep1 = new HarnessConfig.SweepConfig(
+        SweepConfig sweep1 = new SweepConfig(
                 "sweep-1",
                 "trial-1",
                 null,
-                List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p1", List.of(new IntNode(1)))));
-        HarnessConfig.SweepConfig sweep2 = new HarnessConfig.SweepConfig(
+                List.of(new SweepParameter("/calibrationConfig/p1", List.of(new IntNode(1)))));
+        SweepConfig sweep2 = new SweepConfig(
                 "sweep-1",
                 "trial-1",
                 null,
-                List.of(new HarnessConfig.SweepParameter("/calibrationConfig/p2", List.of(new IntNode(2)))));
+                List.of(new SweepParameter("/calibrationConfig/p2", List.of(new IntNode(2)))));
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -922,83 +917,71 @@ class HarnessConfigTest {
     /// Verifies null or empty parameters in SweepConfig are rejected.
     @Test
     void rejectNullOrEmptySweepParameters() {
-        assertThrows(
-                NullPointerException.class, () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", null, null, null));
-        assertThrows(
-                IllegalArgumentException.class, () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", List.of()));
+        assertThrows(NullPointerException.class, () -> new SweepConfig("sweep-1", "base-1", null, null, null));
+        assertThrows(IllegalArgumentException.class, () -> new SweepConfig("sweep-1", "base-1", List.of()));
     }
 
     /// Verifies invalid repetitions in SweepConfig are rejected.
     @Test
     void rejectInvalidSweepConfigRepetitions() {
-        HarnessConfig.SweepParameter param =
-                new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
+        SweepParameter param = new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", "desc", true, 0, null, null, List.of(param)));
+                () -> new SweepConfig("sweep-1", "base-1", "desc", true, 0, null, null, List.of(param)));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", "desc", true, -2, null, null, List.of(param)));
+                () -> new SweepConfig("sweep-1", "base-1", "desc", true, -2, null, null, List.of(param)));
     }
 
     /// Verifies blank group in SweepConfig is rejected.
     @Test
     void rejectBlankSweepConfigGroup() {
-        HarnessConfig.SweepParameter param =
-                new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
+        SweepParameter param = new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", "desc", true, 1, "   ", null, List.of(param)));
+                () -> new SweepConfig("sweep-1", "base-1", "desc", true, 1, "   ", null, List.of(param)));
     }
 
     /// Verifies blank label key or value in SweepConfig is rejected.
     @Test
     void rejectBlankSweepConfigLabelKeysOrValues() {
-        HarnessConfig.SweepParameter param =
-                new HarnessConfig.SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
+        SweepParameter param = new SweepParameter("/calibrationConfig/p", List.of(new IntNode(1)));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig(
-                        "sweep-1", "base-1", "desc", true, 1, "grp", Map.of(" ", "val"), List.of(param)));
+                () -> new SweepConfig("sweep-1", "base-1", "desc", true, 1, "grp", Map.of(" ", "val"), List.of(param)));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig(
+                () -> new SweepConfig(
                         "sweep-1", "base-1", "desc", true, 1, "grp", Map.of("key", "   "), List.of(param)));
     }
 
     /// Verifies blank parameter path or description is rejected.
     @Test
     void rejectBlankSweepParameterPathOrDescription() {
-        assertThrows(
-                IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("   ", List.of(new IntNode(1))));
-        assertThrows(
-                IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("", List.of(new IntNode(1))));
+        assertThrows(IllegalArgumentException.class, () -> new SweepParameter("   ", List.of(new IntNode(1))));
+        assertThrows(IllegalArgumentException.class, () -> new SweepParameter("", List.of(new IntNode(1))));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepParameter("/calibrationConfig/p", "   ", List.of(new IntNode(1))));
+                () -> new SweepParameter("/calibrationConfig/p", "   ", List.of(new IntNode(1))));
     }
 
     /// Verifies duplicate parameter paths inside one sweep are rejected.
     @Test
     void rejectDuplicateParameterPathInSweep() {
-        HarnessConfig.SweepParameter param1 =
-                new HarnessConfig.SweepParameter("/calibrationConfig/pathA", List.of(new IntNode(1)));
-        HarnessConfig.SweepParameter param2 =
-                new HarnessConfig.SweepParameter("/calibrationConfig/pathA", List.of(new IntNode(2)));
+        SweepParameter param1 = new SweepParameter("/calibrationConfig/pathA", List.of(new IntNode(1)));
+        SweepParameter param2 = new SweepParameter("/calibrationConfig/pathA", List.of(new IntNode(2)));
 
         assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepConfig("sweep-1", "base-1", List.of(param1, param2)));
+                IllegalArgumentException.class, () -> new SweepConfig("sweep-1", "base-1", List.of(param1, param2)));
     }
 
     /// Verifies null or empty sweep parameter values are rejected.
     @Test
     void rejectNullOrEmptySweepParameterValues() {
-        assertThrows(NullPointerException.class, () -> new HarnessConfig.SweepParameter("path", null));
-        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig.SweepParameter("path", List.of()));
+        assertThrows(NullPointerException.class, () -> new SweepParameter("path", null));
+        assertThrows(IllegalArgumentException.class, () -> new SweepParameter("path", List.of()));
         assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.SweepParameter("path", Arrays.asList(new IntNode(1), null)));
+                IllegalArgumentException.class, () -> new SweepParameter("path", Arrays.asList(new IntNode(1), null)));
 
         String jsonNullValue = """
             {
@@ -1102,25 +1085,25 @@ class HarnessConfigTest {
         assertNotNull(config.searches());
         assertEquals(4, config.searches().size());
 
-        HarnessConfig.SearchConfig search1 = config.searches().get(0);
+        SearchConfig search1 = config.searches().get(0);
         assertEquals("search-grid", search1.id());
-        assertEquals(HarnessConfig.SearchStrategy.GRID, search1.strategy());
+        assertEquals(SearchStrategy.GRID, search1.strategy());
         assertEquals(10, search1.maxTrials());
         assertEquals(Long.valueOf(42L), search1.seed());
         assertEquals("maximize_throughput", search1.objective());
         assertEquals(List.of("sweep-1"), search1.sweepIds());
         assertEquals(Map.of("optimizer", "internal"), search1.metadata());
 
-        HarnessConfig.SearchConfig search2 = config.searches().get(1);
+        SearchConfig search2 = config.searches().get(1);
         assertEquals("search-ext", search2.id());
-        assertEquals(HarnessConfig.SearchStrategy.EXTERNAL, search2.strategy());
+        assertEquals(SearchStrategy.EXTERNAL, search2.strategy());
         assertEquals(50, search2.maxTrials());
 
-        HarnessConfig.SearchConfig search3 = config.searches().get(2);
-        assertEquals(HarnessConfig.SearchStrategy.SOBOL, search3.strategy());
+        SearchConfig search3 = config.searches().get(2);
+        assertEquals(SearchStrategy.SOBOL, search3.strategy());
 
-        HarnessConfig.SearchConfig search4 = config.searches().get(3);
-        assertEquals(HarnessConfig.SearchStrategy.RANDOM, search4.strategy());
+        SearchConfig search4 = config.searches().get(3);
+        assertEquals(SearchStrategy.RANDOM, search4.strategy());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
@@ -1132,12 +1115,10 @@ class HarnessConfigTest {
     void rejectInvalidMaxTrials() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SearchConfig(
-                        "id", HarnessConfig.SearchStrategy.GRID, 0, null, null, null, null));
+                () -> new SearchConfig("id", SearchStrategy.GRID, 0, null, null, null, null));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SearchConfig(
-                        "id", HarnessConfig.SearchStrategy.GRID, -5, null, null, null, null));
+                () -> new SearchConfig("id", SearchStrategy.GRID, -5, null, null, null, null));
     }
 
     /// Verifies blank search id or objective are rejected.
@@ -1145,21 +1126,17 @@ class HarnessConfigTest {
     void rejectBlankSearchIdAndObjective() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SearchConfig(
-                        "  ", HarnessConfig.SearchStrategy.GRID, 10, null, null, null, null));
+                () -> new SearchConfig("  ", SearchStrategy.GRID, 10, null, null, null, null));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.SearchConfig(
-                        "id", HarnessConfig.SearchStrategy.GRID, 10, null, "   ", null, null));
+                () -> new SearchConfig("id", SearchStrategy.GRID, 10, null, "   ", null, null));
     }
 
     /// Verifies duplicate search IDs across searches list are rejected.
     @Test
     void rejectDuplicateSearchId() {
-        HarnessConfig.SearchConfig search1 = new HarnessConfig.SearchConfig(
-                "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, null, null);
-        HarnessConfig.SearchConfig search2 = new HarnessConfig.SearchConfig(
-                "search-1", HarnessConfig.SearchStrategy.RANDOM, 10, null, null, null, null);
+        SearchConfig search1 = new SearchConfig("search-1", SearchStrategy.GRID, 10, null, null, null, null);
+        SearchConfig search2 = new SearchConfig("search-1", SearchStrategy.RANDOM, 10, null, null, null, null);
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -1181,13 +1158,13 @@ class HarnessConfigTest {
     /// Verifies referenced sweepIds in search must exist in declared sweeps.
     @Test
     void rejectUnreferencedSweepId() {
-        HarnessConfig.SweepConfig sweep1 = new HarnessConfig.SweepConfig(
+        SweepConfig sweep1 = new SweepConfig(
                 "sweep-1",
                 "trial-1",
                 null,
-                List.of(new HarnessConfig.SweepParameter("/calibrationConfig/path", List.of(new IntNode(1)))));
-        HarnessConfig.SearchConfig search = new HarnessConfig.SearchConfig(
-                "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, List.of("sweep-missing"), null);
+                List.of(new SweepParameter("/calibrationConfig/path", List.of(new IntNode(1)))));
+        SearchConfig search =
+                new SearchConfig("search-1", SearchStrategy.GRID, 10, null, null, List.of("sweep-missing"), null);
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -1213,8 +1190,8 @@ class HarnessConfigTest {
         Map<String, String> mutableMetadata = new HashMap<>();
         mutableMetadata.put("key", "val");
 
-        HarnessConfig.SearchConfig search = new HarnessConfig.SearchConfig(
-                "search-1", HarnessConfig.SearchStrategy.GRID, 10, null, null, mutableSweepIds, mutableMetadata);
+        SearchConfig search =
+                new SearchConfig("search-1", SearchStrategy.GRID, 10, null, null, mutableSweepIds, mutableMetadata);
 
         assertNotNull(search.sweepIds());
         assertThrows(
@@ -1303,16 +1280,16 @@ class HarnessConfigTest {
         HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
         assertEquals(2, config.trials().size());
 
-        HarnessConfig.TrialConfig trial1 = config.trials().get(0);
+        TrialConfig trial1 = config.trials().get(0);
         assertNotNull(trial1.origin());
-        assertEquals(HarnessConfig.OriginType.SWEEP, trial1.origin().type());
+        assertEquals(OriginType.SWEEP, trial1.origin().type());
         assertEquals("sweep-001", trial1.origin().sourceId());
         assertEquals(Long.valueOf(12345L), trial1.origin().seed());
         assertEquals(Integer.valueOf(0), trial1.origin().candidateIndex());
 
-        HarnessConfig.TrialConfig trial2 = config.trials().get(1);
+        TrialConfig trial2 = config.trials().get(1);
         assertNotNull(trial2.origin());
-        assertEquals(HarnessConfig.OriginType.MANUAL, trial2.origin().type());
+        assertEquals(OriginType.MANUAL, trial2.origin().type());
         assertNull(trial2.origin().sourceId());
 
         String reSerialized = mapper.writeValueAsString(config);
@@ -1323,36 +1300,27 @@ class HarnessConfigTest {
     /// Verifies MANUAL origin type requires no sourceId.
     @Test
     void rejectManualWithSourceId() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.MANUAL, "source-1", null, null));
+        assertThrows(IllegalArgumentException.class, () -> new TrialOrigin(OriginType.MANUAL, "source-1", null, null));
     }
 
     /// Verifies blank sourceId is rejected.
     @Test
     void rejectBlankOriginSourceId() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.SWEEP, "   ", null, null));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.SWEEP, "", null, null));
+        assertThrows(IllegalArgumentException.class, () -> new TrialOrigin(OriginType.SWEEP, "   ", null, null));
+        assertThrows(IllegalArgumentException.class, () -> new TrialOrigin(OriginType.SWEEP, "", null, null));
     }
 
     /// Verifies candidateIndex < 0 is rejected.
     @Test
     void rejectNegativeCandidateIndex() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.SWEEP, "sweep-1", null, -1));
+        assertThrows(IllegalArgumentException.class, () -> new TrialOrigin(OriginType.SWEEP, "sweep-1", null, -1));
     }
 
     /// Verifies candidateIndex >= 0 and null fields are allowed.
     @Test
     void allowZeroCandidateIndexAndNullFields() {
-        HarnessConfig.TrialOrigin origin =
-                new HarnessConfig.TrialOrigin(HarnessConfig.OriginType.EXTERNAL, null, null, 0);
-        assertEquals(HarnessConfig.OriginType.EXTERNAL, origin.type());
+        TrialOrigin origin = new TrialOrigin(OriginType.EXTERNAL, null, null, 0);
+        assertEquals(OriginType.EXTERNAL, origin.type());
         assertNull(origin.sourceId());
         assertNull(origin.seed());
         assertEquals(Integer.valueOf(0), origin.candidateIndex());
@@ -1409,7 +1377,7 @@ class HarnessConfigTest {
 
         HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
         assertEquals(1, config.trials().size());
-        HarnessConfig.TrialConfig trial = config.trials().get(0);
+        TrialConfig trial = config.trials().get(0);
 
         assertEquals("trial-1", trial.id());
         assertEquals("Trial One", trial.name());
@@ -1431,20 +1399,17 @@ class HarnessConfigTest {
     /// Verifies blank fields in ComparisonConfig are rejected.
     @Test
     void rejectBlankComparisonConfigFields() {
-        assertThrows(
-                IllegalArgumentException.class, () -> new HarnessConfig.ComparisonConfig("  ", "group", "purpose"));
-        assertThrows(
-                IllegalArgumentException.class, () -> new HarnessConfig.ComparisonConfig("baseline", "  ", "purpose"));
-        assertThrows(
-                IllegalArgumentException.class, () -> new HarnessConfig.ComparisonConfig("baseline", "group", "  "));
+        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig("  ", "group", "purpose"));
+        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig("baseline", "  ", "purpose"));
+        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig("baseline", "group", "  "));
     }
 
     /// Verifies valid baseline reference between trials.
     @Test
     void validBaselineReference() {
-        HarnessConfig.TrialConfig baselineTrial = dummyTrialConfigWithId("trial-1");
-        HarnessConfig.TrialConfig comparingTrial = dummyTrialConfigWithComparison(
-                "trial-2", new HarnessConfig.ComparisonConfig("trial-1", "contention-group", "Compare throughput"));
+        TrialConfig baselineTrial = dummyTrialConfigWithId("trial-1");
+        TrialConfig comparingTrial = dummyTrialConfigWithComparison(
+                "trial-2", new ComparisonConfig("trial-1", "contention-group", "Compare throughput"));
 
         HarnessConfig config = new HarnessConfig(List.of(baselineTrial, comparingTrial));
         assertEquals(2, config.trials().size());
@@ -1454,9 +1419,8 @@ class HarnessConfigTest {
     /// Verifies error when trial references a missing baseline ID.
     @Test
     void missingBaselineReference() {
-        HarnessConfig.TrialConfig trial = dummyTrialConfigWithComparison(
-                "trial-2",
-                new HarnessConfig.ComparisonConfig("non-existent-id", "contention-group", "Compare throughput"));
+        TrialConfig trial = dummyTrialConfigWithComparison(
+                "trial-2", new ComparisonConfig("non-existent-id", "contention-group", "Compare throughput"));
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
     }
@@ -1464,8 +1428,8 @@ class HarnessConfigTest {
     /// Verifies error when trial references itself as baseline.
     @Test
     void selfReferenceBaseline() {
-        HarnessConfig.TrialConfig trial = dummyTrialConfigWithComparison(
-                "trial-1", new HarnessConfig.ComparisonConfig("trial-1", "contention-group", "Self comparison"));
+        TrialConfig trial = dummyTrialConfigWithComparison(
+                "trial-1", new ComparisonConfig("trial-1", "contention-group", "Self comparison"));
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
     }
@@ -1473,10 +1437,10 @@ class HarnessConfigTest {
     /// Verifies comparison group without a baseline ID is valid.
     @Test
     void comparisonGroupsWithoutABaseline() {
-        HarnessConfig.TrialConfig trial1 = dummyTrialConfigWithComparison(
-                "trial-1", new HarnessConfig.ComparisonConfig(null, "group-alpha", "Group member 1"));
-        HarnessConfig.TrialConfig trial2 = dummyTrialConfigWithComparison(
-                "trial-2", new HarnessConfig.ComparisonConfig(null, "group-alpha", "Group member 2"));
+        TrialConfig trial1 =
+                dummyTrialConfigWithComparison("trial-1", new ComparisonConfig(null, "group-alpha", "Group member 1"));
+        TrialConfig trial2 =
+                dummyTrialConfigWithComparison("trial-2", new ComparisonConfig(null, "group-alpha", "Group member 2"));
 
         HarnessConfig config = new HarnessConfig(List.of(trial1, trial2));
         assertEquals(2, config.trials().size());
@@ -1489,7 +1453,7 @@ class HarnessConfigTest {
     void rejectBlankTrialMetadataFields() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "  ",
                         "name",
                         "group",
@@ -1505,19 +1469,19 @@ class HarnessConfigTest {
                         dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "id", "  ", "group", "desc", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "id", "name", "  ", "desc", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "id", "name", "group", "  ", "hyp", null, null, true, 1, 1, 1, null, dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "id",
                         "name",
                         "group",
@@ -1533,7 +1497,7 @@ class HarnessConfigTest {
                         dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "id",
                         "name",
                         "group",
@@ -1549,7 +1513,7 @@ class HarnessConfigTest {
                         dummyCalibrationConfig()));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new HarnessConfig.TrialConfig(
+                () -> new TrialConfig(
                         "id",
                         "name",
                         "group",
@@ -1571,7 +1535,7 @@ class HarnessConfigTest {
         List<String> mutableTags = Arrays.asList("tag1", "tag2");
         List<String> mutableJvmArgs = Arrays.asList("-Xmx1g", "-Xms1g");
 
-        HarnessConfig.TrialConfig trial = new HarnessConfig.TrialConfig(
+        TrialConfig trial = new TrialConfig(
                 "id",
                 "name",
                 "group",
@@ -1597,8 +1561,8 @@ class HarnessConfigTest {
     /// Verifies duplicate trial IDs are rejected at the HarnessConfig level.
     @Test
     void rejectDuplicateTrialIds() {
-        HarnessConfig.TrialConfig trial1 = dummyTrialConfigWithId("trial-1");
-        HarnessConfig.TrialConfig trial2 = dummyTrialConfigWithId("trial-1");
+        TrialConfig trial1 = dummyTrialConfigWithId("trial-1");
+        TrialConfig trial2 = dummyTrialConfigWithId("trial-1");
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial1, trial2)));
     }
@@ -1606,10 +1570,10 @@ class HarnessConfigTest {
     /// Verifies multiple trials with unique or null IDs are accepted.
     @Test
     void allowMultipleTrialsWithUniqueOrNullIds() {
-        HarnessConfig.TrialConfig trial1 = dummyTrialConfigWithId("trial-1");
-        HarnessConfig.TrialConfig trial2 = dummyTrialConfigWithId("trial-2");
-        HarnessConfig.TrialConfig trial3 = dummyTrialConfigWithId(null);
-        HarnessConfig.TrialConfig trial4 = dummyTrialConfigWithId(null);
+        TrialConfig trial1 = dummyTrialConfigWithId("trial-1");
+        TrialConfig trial2 = dummyTrialConfigWithId("trial-2");
+        TrialConfig trial3 = dummyTrialConfigWithId(null);
+        TrialConfig trial4 = dummyTrialConfigWithId(null);
 
         HarnessConfig config = new HarnessConfig(List.of(trial1, trial2, trial3, trial4));
         assertEquals(4, config.trials().size());
@@ -1662,15 +1626,14 @@ class HarnessConfigTest {
         assertNotNull(config.searches());
         assertEquals(1, config.searches().size());
         assertEquals("search-grid-001", config.searches().get(0).id());
-        assertEquals(HarnessConfig.SearchStrategy.GRID, config.searches().get(0).strategy());
+        assertEquals(SearchStrategy.GRID, config.searches().get(0).strategy());
 
         // Verify trials and origin provenance
         assertNotNull(config.trials());
         assertEquals(2, config.trials().size());
         assertEquals("trial-001", config.trials().get(0).id());
         assertNotNull(config.trials().get(0).origin());
-        assertEquals(
-                HarnessConfig.OriginType.MANUAL, config.trials().get(0).origin().type());
+        assertEquals(OriginType.MANUAL, config.trials().get(0).origin().type());
 
         assertEquals("trial-002", config.trials().get(1).id());
         assertNotNull(config.trials().get(1).comparison());
