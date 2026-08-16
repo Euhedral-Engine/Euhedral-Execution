@@ -2,6 +2,7 @@ package calibration.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -252,6 +253,13 @@ public record HarnessConfig(
         }
 
         for (TrialConfig trial : trials) {
+            if (trial.calibrationProfile() != null) {
+                if (calibrationProfiles == null || !calibrationProfiles.containsKey(trial.calibrationProfile())) {
+                    throw new IllegalArgumentException(
+                            "Referenced calibrationProfile '" + trial.calibrationProfile()
+                                    + "' was not found in calibrationProfiles");
+                }
+            }
             if (trial.comparison() != null && trial.comparison().baselineTrialId() != null) {
                 String baselineId = trial.comparison().baselineTrialId();
                 if (trial.id() != null && trial.id().equals(baselineId)) {
@@ -264,5 +272,45 @@ public record HarnessConfig(
             }
         }
         trials = List.copyOf(trials);
+    }
+
+    /// Resolves calibrationProfiles references across all trials, populating calibrationConfig where needed.
+    ///
+    /// @return a new HarnessConfig with all trial calibration profiles resolved, or this instance if no resolution was needed
+    public HarnessConfig resolveCalibrationProfiles() {
+        if (calibrationProfiles == null || calibrationProfiles.isEmpty()) {
+            return this;
+        }
+        boolean modified = false;
+        List<TrialConfig> resolvedTrials = new ArrayList<>(trials.size());
+        for (TrialConfig trial : trials) {
+            if (trial.calibrationProfile() != null && trial.calibrationConfig() == null) {
+                CalibrationBenchmarkConfig profileConfig = calibrationProfiles.get(trial.calibrationProfile());
+                if (profileConfig == null) {
+                    throw new IllegalArgumentException("Referenced calibrationProfile '" + trial.calibrationProfile()
+                            + "' was not found in calibrationProfiles");
+                }
+                resolvedTrials.add(trial.withCalibrationConfig(profileConfig));
+                modified = true;
+            } else {
+                resolvedTrials.add(trial);
+            }
+        }
+        if (!modified) {
+            return this;
+        }
+        return new HarnessConfig(
+                schemaVersion,
+                id,
+                name,
+                description,
+                labels,
+                runOptions,
+                artifacts,
+                calibrationProfiles,
+                decisionWeightProfiles,
+                sweeps,
+                searches,
+                resolvedTrials);
     }
 }

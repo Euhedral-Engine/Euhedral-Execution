@@ -21,6 +21,7 @@ import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -419,5 +420,39 @@ class CalibrationRunnerTest {
         File invocationDir = CalibrationRunner.prepareInvocationDirectory(trial, 0, 0, mapper, null, null);
 
         assertNull(invocationDir);
+    }
+
+    @Test
+    void resolveTrialsResolvesCalibrationProfiles() {
+        TrialConfig trial1 = new TrialConfig("t1", "Trial 1", "grp", null, null, null, null, true, 1, 1, 5, null, "profile-alpha");
+        TrialConfig trial2 = new TrialConfig("t2", "Trial 2", "grp", null, null, null, null, true, 1, 1, 5, null, dummyCalibrationConfig());
+
+        HarnessConfig config = new HarnessConfig(
+                1,
+                "harness-1",
+                "Harness 1",
+                "desc",
+                null,
+                null,
+                null,
+                Map.of("profile-alpha", dummyCalibrationConfig()),
+                null,
+                null,
+                null,
+                List.of(trial1, trial2));
+
+        List<TrialConfig> resolved = CalibrationRunner.resolveTrials(config, mapper);
+        assertEquals(2, resolved.size());
+
+        TrialConfig resolvedTrial1 = resolved.get(0);
+        assertEquals("t1", resolvedTrial1.id());
+        assertEquals("profile-alpha", resolvedTrial1.calibrationProfile());
+        assertNotNull(resolvedTrial1.calibrationConfig());
+        assertEquals(4, resolvedTrial1.calibrationConfig().parallelSources());
+        assertEquals(100, resolvedTrial1.calibrationConfig().workUnits());
+
+        TrialConfig resolvedTrial2 = resolved.get(1);
+        assertEquals("t2", resolvedTrial2.id());
+        assertNotNull(resolvedTrial2.calibrationConfig());
     }
 }

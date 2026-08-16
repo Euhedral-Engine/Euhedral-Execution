@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -521,5 +522,61 @@ class TrialSweepExpanderTest {
         assertEquals("Sweep description for testing", readSweep.description());
         assertEquals(
                 "Varies work unit batch size", readSweep.parameters().get(0).description());
+    }
+
+    /// Verifies sweep expansion on base trial that references a calibrationProfile.
+    @Test
+    void sweepOnBaseTrialReferencingCalibrationProfile() {
+        TrialConfig baseProfileTrial = new TrialConfig(
+                "profile-base",
+                "Profile Base Trial",
+                "profile-group",
+                "desc",
+                "hyp",
+                null,
+                null,
+                true,
+                1,
+                1,
+                5,
+                null,
+                "my-profile");
+
+        SweepParameter param = new SweepParameter(
+                "/calibrationConfig/workUnits",
+                List.of(new IntNode(250), new IntNode(500)));
+        SweepConfig sweep = new SweepConfig("sweep-prof", "profile-base", List.of(param));
+
+        HarnessConfig harnessConfig = new HarnessConfig(
+                1,
+                "harness-prof",
+                "Harness Profile",
+                "desc",
+                null,
+                null,
+                null,
+                Map.of("my-profile", dummyCalibrationConfig()),
+                null,
+                List.of(sweep),
+                null,
+                List.of(baseProfileTrial));
+
+        HarnessConfig expanded = expander.expand(harnessConfig);
+        assertEquals(3, expanded.trials().size());
+        TrialConfig base = expanded.trials().get(0);
+        assertEquals("profile-base", base.id());
+        assertNotNull(base.calibrationConfig());
+
+        TrialConfig candidate1 = expanded.trials().get(1);
+        assertEquals("profile-base__sweep-prof__0", candidate1.id());
+        assertEquals("my-profile", candidate1.calibrationProfile());
+        assertNotNull(candidate1.calibrationConfig());
+        assertEquals(250, candidate1.calibrationConfig().workUnits());
+
+        TrialConfig candidate2 = expanded.trials().get(2);
+        assertEquals("profile-base__sweep-prof__1", candidate2.id());
+        assertEquals("my-profile", candidate2.calibrationProfile());
+        assertNotNull(candidate2.calibrationConfig());
+        assertEquals(500, candidate2.calibrationConfig().workUnits());
     }
 }

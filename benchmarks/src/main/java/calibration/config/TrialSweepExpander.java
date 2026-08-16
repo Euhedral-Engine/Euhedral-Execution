@@ -58,19 +58,20 @@ public class TrialSweepExpander {
     ///                                  missing target, incompatible value type, or exceeds max generated limit
     public HarnessConfig expand(@NonNull HarnessConfig harnessConfig) {
         Objects.requireNonNull(harnessConfig, "harnessConfig cannot be null");
-        if (harnessConfig.sweeps() == null || harnessConfig.sweeps().isEmpty()) {
-            return harnessConfig;
+        HarnessConfig resolvedConfig = harnessConfig.resolveCalibrationProfiles();
+        if (resolvedConfig.sweeps() == null || resolvedConfig.sweeps().isEmpty()) {
+            return resolvedConfig;
         }
 
-        List<TrialConfig> allTrials = new ArrayList<>(harnessConfig.trials());
+        List<TrialConfig> allTrials = new ArrayList<>(resolvedConfig.trials());
         Map<String, TrialConfig> baseTrialMap = new HashMap<>();
-        for (TrialConfig trial : harnessConfig.trials()) {
+        for (TrialConfig trial : resolvedConfig.trials()) {
             if (trial.id() != null) {
                 baseTrialMap.put(trial.id(), trial);
             }
         }
 
-        for (SweepConfig sweep : harnessConfig.sweeps()) {
+        for (SweepConfig sweep : resolvedConfig.sweeps()) {
             if (!sweep.isEnabled()) {
                 continue;
             }
@@ -84,17 +85,17 @@ public class TrialSweepExpander {
         }
 
         return new HarnessConfig(
-                harnessConfig.schemaVersion(),
-                harnessConfig.id(),
-                harnessConfig.name(),
-                harnessConfig.description(),
-                harnessConfig.labels(),
-                harnessConfig.runOptions(),
-                harnessConfig.artifacts(),
-                harnessConfig.calibrationProfiles(),
-                harnessConfig.decisionWeightProfiles(),
-                harnessConfig.sweeps(),
-                harnessConfig.searches(),
+                resolvedConfig.schemaVersion(),
+                resolvedConfig.id(),
+                resolvedConfig.name(),
+                resolvedConfig.description(),
+                resolvedConfig.labels(),
+                resolvedConfig.runOptions(),
+                resolvedConfig.artifacts(),
+                resolvedConfig.calibrationProfiles(),
+                resolvedConfig.decisionWeightProfiles(),
+                resolvedConfig.sweeps(),
+                resolvedConfig.searches(),
                 allTrials);
     }
 
@@ -220,6 +221,7 @@ public class TrialSweepExpander {
                         candidateTrial.warmupTime(),
                         candidateTrial.measurementTime(),
                         candidateTrial.jvmArgs(),
+                        baseTrial.calibrationProfile(),
                         candidateTrial.calibrationConfig());
 
                 generatedTrials.add(finalTrial);

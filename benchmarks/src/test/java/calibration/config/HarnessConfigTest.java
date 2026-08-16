@@ -1710,4 +1710,157 @@ class HarnessConfigTest {
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
         assertEquals(config, roundTrip);
     }
+
+    /// Verifies trial referencing calibrationProfile parses, resolves, and round-trips correctly.
+    @Test
+    void parseTrialReferencingCalibrationProfileAndResolve() throws Exception {
+        String json = """
+            {
+              "calibrationProfiles": {
+                "profile-a": {
+                  "cpuSet": [1, 2, 3, 4],
+                  "parallelSources": 4,
+                  "orderedSources": 2,
+                  "workUnits": 100,
+                  "randomizeWork": true,
+                  "totalRequiredExecutions": 1000000,
+                  "invocationTimeoutMillis": 60000,
+                  "decisionWeights": {
+                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                    "idleBodyCostWeights": [],
+                    "idleTimeNs": [],
+                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                    "execBodyCostWeights": [],
+                    "executionPolicies": []
+                  },
+                  "rawSampleLimit": 1024,
+                  "observeCycleStart": false,
+                  "observeBatchProgress": false,
+                  "observeBatchComplete": false,
+                  "observeRawBodyCost": false,
+                  "observeIdleDecision": false,
+                  "observeExecDecision": false
+                }
+              },
+              "trials": [
+                {
+                  "id": "trial-001",
+                  "calibrationProfile": "profile-a",
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertEquals(1, config.trials().size());
+        TrialConfig trial = config.trials().getFirst();
+        assertEquals("profile-a", trial.calibrationProfile());
+        assertNull(trial.calibrationConfig());
+
+        HarnessConfig resolved = config.resolveCalibrationProfiles();
+        assertEquals(1, resolved.trials().size());
+        TrialConfig resolvedTrial = resolved.trials().getFirst();
+        assertEquals("profile-a", resolvedTrial.calibrationProfile());
+        assertNotNull(resolvedTrial.calibrationConfig());
+        assertEquals(4, resolvedTrial.calibrationConfig().parallelSources());
+        assertEquals(100, resolvedTrial.calibrationConfig().workUnits());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies error when trial references a non-existent calibrationProfile.
+    @Test
+    void rejectMissingCalibrationProfileReference() {
+        TrialConfig trial = new TrialConfig(
+                "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "non-existent-profile");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of("profile-1", dummyCalibrationConfig()),
+                        List.of(trial)));
+    }
+
+    /// Verifies error when trial references a calibrationProfile but calibrationProfiles is null.
+    @Test
+    void rejectCalibrationProfileReferenceWhenProfilesNull() {
+        TrialConfig trial = new TrialConfig(
+                "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
+
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
+    }
+
+    /// Verifies blank calibrationProfile names in TrialConfig are rejected.
+    @Test
+    void rejectBlankCalibrationProfileInTrial() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TrialConfig(1, 1, 1, null, "   "));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TrialConfig(
+                        "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "   "));
+    }
+
+    /// Verifies trial without calibrationConfig or calibrationProfile is rejected.
+    @Test
+    void rejectTrialWithoutCalibrationConfigOrProfile() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TrialConfig(
+                        "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null, null, null));
+    }
+
+    /// Verifies example_harness_config.json parses, resolves calibration profiles, expands sweeps, and round-trips.
+    @Test
+    void parseExampleHarnessConfigAndVerifyCalibrationProfiles() throws Exception {
+        File file = new File("src/main/presets/example_harness_config.json");
+        if (!file.exists()) {
+            file = new File("benchmarks/src/main/presets/example_harness_config.json");
+        }
+        assertTrue(file.exists(), "example_harness_config.json should exist");
+
+        HarnessConfig config = mapper.readValue(file, HarnessConfig.class);
+        assertEquals(1, config.schemaVersion());
+        assertEquals("example-harness-config", config.id());
+        assertNotNull(config.calibrationProfiles());
+        assertEquals(2, config.calibrationProfiles().size());
+        assertTrue(config.calibrationProfiles().containsKey("standard-calibration"));
+        assertTrue(config.calibrationProfiles().containsKey("high-contention-calibration"));
+
+        assertEquals(2, config.trials().size());
+        TrialConfig trial1 = config.trials().get(0);
+        TrialConfig trial2 = config.trials().get(1);
+        assertNotNull(trial1.calibrationConfig());
+        assertEquals("high-contention-calibration", trial2.calibrationProfile());
+        assertNull(trial2.calibrationConfig());
+
+        HarnessConfig resolved = config.resolveCalibrationProfiles();
+        assertNotNull(resolved.trials().get(1).calibrationConfig());
+        assertEquals(11, resolved.trials().get(1).calibrationConfig().parallelSources());
+        assertEquals(24, resolved.trials().get(1).calibrationConfig().workUnits());
+
+        HarnessConfig expanded = TrialSweepExpander.expandHarnessConfig(config);
+        // Base trial-001 is swept into 3 candidates, plus trial-001 and trial-002 -> 5 trials
+        assertEquals(5, expanded.trials().size());
+        for (TrialConfig t : expanded.trials()) {
+            assertNotNull(t.calibrationConfig(), "All expanded trials must have calibrationConfig populated");
+        }
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
 }

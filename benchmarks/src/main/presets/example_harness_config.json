@@ -1,33 +1,33 @@
 {
-  // Optional: Schema version (positive integer) [IMPLEMENTED]
+  // Optional: Schema version (positive integer)
   "schemaVersion": 1,
-  // Optional: Harness unique identifier [IMPLEMENTED]
+  // Optional: Harness unique identifier
   "id": "example-harness-config",
-  // Optional: Display name [IMPLEMENTED]
+  // Optional: Display name
   "name": "Example Calibration Harness Configuration",
-  // Optional: Detailed description of harness configuration [IMPLEMENTED]
+  // Optional: Detailed description of harness configuration
   "description": "Comprehensive example harness configuration demonstrating all schema features",
-  // Optional: Key-value metadata labels [IMPLEMENTED: parsed and inherited by generated sweeps]
+  // Optional: Key-value metadata labels
   "labels": {
     "preset": "example",
     "environment": "benchmark"
   },
-  // Optional: Execution run-control options [IMPLEMENTED]
+  // Optional: Execution run-control options
   "runOptions": {
-    // Optional: Whether trial execution order is randomized [IMPLEMENTED: used in CalibrationRunner]
+    // Optional: Whether trial execution order is randomized
     "randomizeTrialOrder": true,
-    // Optional: Seed for random number generation [IMPLEMENTED: used in CalibrationRunner]
+    // Optional: Seed for random number generation
     "randomSeed": 42,
-    // Optional: Stop execution on first trial failure [IMPLEMENTED: used in CalibrationRunner]
+    // Optional: Stop execution on first trial failure
     "failFast": false,
-    // Optional: Number of times to repeat the trial set [IMPLEMENTED: used in CalibrationRunner]
+    // Optional: Number of times to repeat the trial set
     "repeatCount": 1
   },
   // Optional: Artifact retention configuration [PARTIALLY IMPLEMENTED]
   "artifacts": {
-    // Optional: Output directory path for benchmark results [IMPLEMENTED: creates directory and sets system property]
+    // Optional: Output directory path for benchmark results
     "outputDirectory": "build/reports/benchmarks",
-    // Optional: Retain expanded configuration files [IMPLEMENTED: writes trial_config.json into invocation directory]
+    // Optional: Retain expanded configuration files
     "retainExpandedConfig": true,
     // Optional: Retain raw console output from benchmarks [NOT YET IMPLEMENTED]
     "retainRawBenchmarkOutput": false,
@@ -38,7 +38,7 @@
     // Optional: Retain per-iteration results [NOT YET IMPLEMENTED]
     "retainPerIterationResults": true
   },
-  // Optional: Reusable calibration benchmark profiles [NOT YET IMPLEMENTED: parsed and validated in schema, but profile referencing in trials is not yet implemented]
+  // Optional: Reusable calibration benchmark profiles
   "calibrationProfiles": {
     "standard-calibration": {
       "cpuSet": [1, 2, 3, 4],
@@ -196,12 +196,12 @@
       ]
     }
   },
-  // Optional: Parameter sweep declarations [IMPLEMENTED: expanded via Cartesian product in TrialSweepExpander]
+  // Optional: Parameter sweep declarations
   "sweeps": [
     {
       "id": "sweep-001",
       "baseTrialId": "trial-001",
-      // Optional: Description of parameter sweep [IMPLEMENTED]
+      // Optional: Description of parameter sweep
       "description": "Parallel sources parameter variation sweep",
       "parameters": [
         {
@@ -229,18 +229,18 @@
       }
     }
   ],
-  // Required: Non-empty array of trial configurations [IMPLEMENTED]
+  // Required: Non-empty array of trial configurations
   "trials": [
     {
-      // Optional: Trial unique identifier [IMPLEMENTED: used for logging, directory naming, and sweep base lookup]
+      // Optional: Trial unique identifier
       "id": "trial-001",
-      // Optional: Trial display name [IMPLEMENTED: used for logging and sweep candidate naming]
+      // Optional: Trial display name
       "name": "Default Calibration Trial",
-      // Optional: Trial group identifier [IMPLEMENTED: used for logging and sweep group override]
+      // Optional: Trial group identifier
       "group": "baseline-calibration",
-      // Optional: Trial description [IMPLEMENTED: metadata]
+      // Optional: Trial description
       "description": "Baseline calibration trial run with standard decision weights",
-      // Optional: Trial hypothesis [IMPLEMENTED: metadata]
+      // Optional: Trial hypothesis
       "hypothesis": "Standard weights perform well under low contention",
       // Optional: Trial comparison relationship metadata [NOT YET IMPLEMENTED: parsed and validated in schema, post-run comparison is not yet implemented]
       "comparison": {
@@ -251,31 +251,34 @@
         // Optional: Purpose of comparison [NOT YET IMPLEMENTED]
         "purpose": "Baseline benchmark comparison"
       },
-      // Optional: Trial tags [IMPLEMENTED: metadata]
+      // Optional: Trial tags
       "tags": [
         "example",
         "baseline"
       ],
-      // Optional: Whether trial is enabled for execution [IMPLEMENTED: filtered in CalibrationRunner]
+      // Optional: Whether trial is enabled for execution
       "enabled": true,
-      // Optional: Trial provenance origin metadata [IMPLEMENTED: tracked and populated by TrialSweepExpander]
+      // Optional: Trial provenance origin metadata
       "origin": {
         "type": "MANUAL",
-        // Optional: Source ID (must be null for MANUAL) [IMPLEMENTED]
+        // Optional: Source ID (must be null for MANUAL)
         "sourceId": null,
-        // Optional: Generation seed [IMPLEMENTED]
+        // Optional: Generation seed
         "seed": null,
-        // Optional: Candidate index (>= 0) [IMPLEMENTED]
+        // Optional: Candidate index (>= 0)
         "candidateIndex": 0
       },
       "forks": 1,
       "warmups": 1,
       "iterations": 5,
-      // Optional: JVM flags for benchmark forks [IMPLEMENTED: appended to JMH fork args]
+      // Optional: JVM flags for benchmarks appended to JMH fork args
       "jvmArgs": [
         "-XX:+UseThreadPriorities",
         "--enable-native-access=ALL-UNNAMED"
       ],
+      // Optional: Reusable calibration profile reference
+      // "calibrationProfile": "standard-calibration",
+      // Optional: Inline calibration benchmark configuration
       "calibrationConfig": {
         "cpuSet": [1, 2, 3, 4],
         "parallelSources": 4,
@@ -315,7 +318,7 @@
           ]
         },
         "rawSampleLimit": 1024,
-      "observeCycleStart": false,
+        "observeCycleStart": false,
         "observeBatchProgress": false,
         "observeBatchComplete": false,
         "observeRawBodyCost": false,
@@ -352,52 +355,8 @@
         "-XX:+UseThreadPriorities",
         "--enable-native-access=ALL-UNNAMED"
       ],
-      "calibrationConfig": {
-        "cpuSet": [1, 2, 3, 4],
-        "parallelSources": 11,
-        "orderedSources": 0,
-        "workUnits": 24,
-        "randomizeWork": false,
-        "totalRequiredExecutions": 32000000,
-        "invocationTimeoutMillis": 6000,
-        "decisionWeights": {
-          "idleContentionThresholds": { "xsContention": 1000000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
-          "idleBodyCostWeights": [
-            { "xs": 0, "s": 0, "m": 0, "h": 0 },
-            { "xs": 0, "s": 0, "m": 0, "h": 0 },
-            { "xs": 0, "s": 0, "m": 0, "h": 0 },
-            { "xs": 0, "s": 0, "m": 0, "h": 0 }
-          ],
-          "idleTimeNs": [
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-          ],
-          "execContentionThresholds": { "xsContention": 500000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
-          "execBodyCostWeights": [
-            { "xs": 0, "s": 0, "m": 0, "h": 0 },
-            { "xs": 0, "s": 0, "m": 0, "h": 0 },
-            { "xs": 0, "s": 0, "m": 0, "h": 0 },
-            { "xs": 0, "s": 0, "m": 0, "h": 0 }
-          ],
-          "executionPolicies": [
-            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
-            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
-            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
-            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
-            { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
-          ]
-        },
-        "rawSampleLimit": 1024,
-      "observeCycleStart": false,
-        "observeBatchProgress": false,
-        "observeBatchComplete": false,
-        "observeRawBodyCost": false,
-        "observeIdleDecision": false,
-        "observeExecDecision": true
-      }
+      // Optional: Reusable calibration profile reference
+      "calibrationProfile": "high-contention-calibration"
     }
   ]
 }

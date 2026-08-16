@@ -72,7 +72,8 @@ public class CalibrationRunner {
             return List.of();
         }
 
-        List<TrialConfig> explicitTrials = harnessConfig.trials();
+        HarnessConfig resolvedConfig = harnessConfig.resolveCalibrationProfiles();
+        List<TrialConfig> explicitTrials = resolvedConfig.trials();
         int explicitCount = explicitTrials.size();
 
         Map<String, TrialConfig> explicitTrialMap = new HashMap<>();
@@ -82,7 +83,7 @@ public class CalibrationRunner {
             }
         }
 
-        List<SweepConfig> sweeps = harnessConfig.sweeps() != null ? harnessConfig.sweeps() : List.of();
+        List<SweepConfig> sweeps = resolvedConfig.sweeps() != null ? resolvedConfig.sweeps() : List.of();
         TrialSweepExpander expander = new TrialSweepExpander(mapper != null ? mapper : new ObjectMapper());
 
         List<TrialConfig> generatedSweepTrials = new ArrayList<>();
@@ -142,7 +143,7 @@ public class CalibrationRunner {
                 generatedSweepCount,
                 totalResolvedCount);
 
-        HarnessRunOptions runOptions = harnessConfig.runOptions();
+        HarnessRunOptions runOptions = resolvedConfig.runOptions();
         boolean randomize = runOptions != null && Boolean.TRUE.equals(runOptions.randomizeTrialOrder());
         if (randomize) {
             long seed = (runOptions.randomSeed() != null) ? runOptions.randomSeed() : new Random().nextLong();
