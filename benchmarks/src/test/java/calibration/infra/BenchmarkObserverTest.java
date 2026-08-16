@@ -1,0 +1,83 @@
+package calibration.infra;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
+import org.junit.jupiter.api.Test;
+
+class BenchmarkObserverTest {
+
+    @Test
+    void testRawBodyCostRecordingWarmupAndSteadyState() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(4);
+        metrics.recordRawBodyCost(1L, 10L, 100L);
+        metrics.recordRawBodyCost(2L, 20L, 200L);
+        metrics.recordRawBodyCost(3L, 30L, 300L);
+        metrics.recordRawBodyCost(4L, 40L, 400L);
+        metrics.recordRawBodyCost(5L, 50L, 500L);
+
+        assertEquals(5L, metrics.rawBodyCostObservations);
+        assertEquals(1500L, metrics.rawBodyCostTotal);
+
+        // Warmup captures first 4 samples (limit=4)
+        assertEquals(100L, metrics.rawBodyCostWarmupState[0][2]);
+        assertEquals(200L, metrics.rawBodyCostWarmupState[1][2]);
+        assertEquals(300L, metrics.rawBodyCostWarmupState[2][2]);
+        assertEquals(400L, metrics.rawBodyCostWarmupState[3][2]);
+
+        // Before align: SteadyState wrapped at index 0 (sample 5 at idx 0)
+        assertEquals(500L, metrics.rawBodyCostSteadyStateState[0][2]);
+        assertEquals(200L, metrics.rawBodyCostSteadyStateState[1][2]);
+        assertEquals(300L, metrics.rawBodyCostSteadyStateState[2][2]);
+        assertEquals(400L, metrics.rawBodyCostSteadyStateState[3][2]);
+
+        metrics.align();
+
+        // After align: SteadyState is chronologically oldest -> newest (200, 300, 400, 500)
+        assertEquals(200L, metrics.rawBodyCostSteadyStateState[0][2]);
+        assertEquals(300L, metrics.rawBodyCostSteadyStateState[1][2]);
+        assertEquals(400L, metrics.rawBodyCostSteadyStateState[2][2]);
+        assertEquals(500L, metrics.rawBodyCostSteadyStateState[3][2]);
+    }
+
+    @Test
+    void testAlignUnderCapacity() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(8);
+        metrics.recordRawBodyCost(1L, 10L, 10L);
+        metrics.recordRawBodyCost(2L, 20L, 20L);
+        metrics.recordRawBodyCost(3L, 30L, 30L);
+
+        metrics.align();
+
+        assertEquals(3L, metrics.rawBodyCostObservations);
+        assertEquals(10L, metrics.rawBodyCostSteadyStateState[0][2]);
+        assertEquals(20L, metrics.rawBodyCostSteadyStateState[1][2]);
+        assertEquals(30L, metrics.rawBodyCostSteadyStateState[2][2]);
+    }
+
+    @Test
+    void testAlignCycleStartAndDecisions() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(4);
+        for (int i = 1; i <= 6; i++) {
+            metrics.recordCycleStart(i, i * 10, i * 100, 10, 1, 4, 0, i * 2, (double) i * 1000.0);
+            metrics.recordIdle(i, i * 10, 1, 2, i * 5, (double) i * 50.0);
+            metrics.recordExec(i, i * 10, 3, 4, i * 8, (double) i * 80.0);
+        }
+
+        metrics.align();
+
+        // 6 samples recorded with limit 4, SteadyState should contain samples 3, 4, 5, 6
+        assertEquals(300L, metrics.cycleStartSteadyStateState[0][2]);
+        assertEquals(400L, metrics.cycleStartSteadyStateState[1][2]);
+        assertEquals(500L, metrics.cycleStartSteadyStateState[2][2]);
+        assertEquals(600L, metrics.cycleStartSteadyStateState[3][2]);
+        assertEquals(3000.0, metrics.cycleStartSteadyStateThroughput[0]);
+        assertEquals(6000.0, metrics.cycleStartSteadyStateThroughput[3]);
+
+        assertEquals(150.0, metrics.idleSteadyStateSmoothedBodyCost[0]);
+        assertEquals(300.0, metrics.idleSteadyStateSmoothedBodyCost[3]);
+
+        assertEquals(240.0, metrics.execSteadyStateSmoothedBodyCost[0]);
+        assertEquals(480.0, metrics.execSteadyStateSmoothedBodyCost[3]);
+    }
+}

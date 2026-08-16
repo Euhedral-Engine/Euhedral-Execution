@@ -1,7 +1,6 @@
 package calibration.infra;
 
 import calibration.config.CalibrationBenchmarkConfig;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -186,36 +185,37 @@ public class BenchmarkObserver extends FragmentObserver {
 
         public final long[][] cycleStartWarmupState;
         public final double[] cycleStartWarmupThroughput;
-        public final long[][] cycleStartTailState;
-        public final double[] cycleStartTailThroughput;
+        public final long[][] cycleStartSteadyStateState;
+        public final double[] cycleStartSteadyStateThroughput;
 
         public final long[][] batchProgressWarmupState;
         public final double[] batchProgressWarmupAvgServiceTime;
-        public final long[][] batchProgressTailState;
-        public final double[] batchProgressTailAvgServiceTime;
+        public final long[][] batchProgressSteadyStateState;
+        public final double[] batchProgressSteadyStateAvgServiceTime;
 
         public final long[][] batchCompleteWarmupState;
         public final double[] batchCompleteWarmupAvgServiceTime;
         public final double[] batchCompleteWarmupThroughput;
-        public final long[][] batchCompleteTailState;
-        public final double[] batchCompleteTailAvgServiceTime;
-        public final double[] batchCompleteTailThroughput;
+        public final long[][] batchCompleteSteadyStateState;
+        public final double[] batchCompleteSteadyStateAvgServiceTime;
+        public final double[] batchCompleteSteadyStateThroughput;
 
-        public final long[][] rawBodyCostTailState;
+        public final long[][] rawBodyCostWarmupState;
+        public final long[][] rawBodyCostSteadyStateState;
 
         public final long[][] idleBranchDecisionTotal =
-                new long[FragmentControlConfig.POLICY_COUNT][FragmentControlConfig.IDLE_WEIGHT_SETS];
+                new long[calibration.statistics.Band.GRID_SIZE][calibration.statistics.Band.GRID_SIZE];
         public final long[][] idleWarmupDecisionState;
         public final double[] idleWarmupSmoothedBodyCost;
-        public final long[][] idleTailDecisionState;
-        public final double[] idleTailSmoothedBodyCost;
+        public final long[][] idleSteadyStateDecisionState;
+        public final double[] idleSteadyStateSmoothedBodyCost;
 
         public final long[][] execBranchDecisionTotal =
-                new long[FragmentControlConfig.POLICY_COUNT][FragmentControlConfig.EXEC_WEIGHT_SETS];
+                new long[calibration.statistics.Band.GRID_SIZE][calibration.statistics.Band.GRID_SIZE];
         public final long[][] execWarmupDecisionState;
         public final double[] execWarmupSmoothedBodyCost;
-        public final long[][] execTailDecisionState;
-        public final double[] execTailSmoothedBodyCost;
+        public final long[][] execSteadyStateDecisionState;
+        public final double[] execSteadyStateSmoothedBodyCost;
 
         public long cycleStartObservations = 0;
         public long batchProgressObservations = 0;
@@ -237,35 +237,36 @@ public class BenchmarkObserver extends FragmentObserver {
 
             this.cycleStartWarmupState = new long[rawSampleLimit][8];
             this.cycleStartWarmupThroughput = new double[rawSampleLimit];
-            this.cycleStartTailState = new long[rawSampleLimit][8];
-            this.cycleStartTailThroughput = new double[rawSampleLimit];
+            this.cycleStartSteadyStateState = new long[rawSampleLimit][8];
+            this.cycleStartSteadyStateThroughput = new double[rawSampleLimit];
 
             this.batchProgressWarmupState = new long[rawSampleLimit][6];
             this.batchProgressWarmupAvgServiceTime = new double[rawSampleLimit];
-            this.batchProgressTailState = new long[rawSampleLimit][6];
-            this.batchProgressTailAvgServiceTime = new double[rawSampleLimit];
+            this.batchProgressSteadyStateState = new long[rawSampleLimit][6];
+            this.batchProgressSteadyStateAvgServiceTime = new double[rawSampleLimit];
 
             this.batchCompleteWarmupState = new long[rawSampleLimit][6];
             this.batchCompleteWarmupAvgServiceTime = new double[rawSampleLimit];
             this.batchCompleteWarmupThroughput = new double[rawSampleLimit];
-            this.batchCompleteTailState = new long[rawSampleLimit][6];
-            this.batchCompleteTailAvgServiceTime = new double[rawSampleLimit];
-            this.batchCompleteTailThroughput = new double[rawSampleLimit];
+            this.batchCompleteSteadyStateState = new long[rawSampleLimit][6];
+            this.batchCompleteSteadyStateAvgServiceTime = new double[rawSampleLimit];
+            this.batchCompleteSteadyStateThroughput = new double[rawSampleLimit];
 
-            this.rawBodyCostTailState = new long[rawSampleLimit][3];
+            this.rawBodyCostWarmupState = new long[rawSampleLimit][3];
+            this.rawBodyCostSteadyStateState = new long[rawSampleLimit][3];
 
             this.idleWarmupDecisionState = new long[rawSampleLimit][5];
             this.idleWarmupSmoothedBodyCost = new double[rawSampleLimit];
-            this.idleTailDecisionState = new long[rawSampleLimit][5];
-            this.idleTailSmoothedBodyCost = new double[rawSampleLimit];
+            this.idleSteadyStateDecisionState = new long[rawSampleLimit][5];
+            this.idleSteadyStateSmoothedBodyCost = new double[rawSampleLimit];
 
             this.execWarmupDecisionState = new long[rawSampleLimit][5];
             this.execWarmupSmoothedBodyCost = new double[rawSampleLimit];
-            this.execTailDecisionState = new long[rawSampleLimit][5];
-            this.execTailSmoothedBodyCost = new double[rawSampleLimit];
+            this.execSteadyStateDecisionState = new long[rawSampleLimit][5];
+            this.execSteadyStateSmoothedBodyCost = new double[rawSampleLimit];
         }
 
-        void recordCycleStart(
+        public void recordCycleStart(
                 long cycleEpoch,
                 long batchEpoch,
                 long completed,
@@ -287,18 +288,18 @@ public class BenchmarkObserver extends FragmentObserver {
                 cycleStartWarmupState[idx][7] = contention;
                 cycleStartWarmupThroughput[idx] = throughput;
             }
-            cycleStartTailState[idx][0] = cycleEpoch;
-            cycleStartTailState[idx][1] = batchEpoch;
-            cycleStartTailState[idx][2] = completed;
-            cycleStartTailState[idx][3] = batchSize;
-            cycleStartTailState[idx][4] = upstreamCount;
-            cycleStartTailState[idx][5] = registeredWorkers;
-            cycleStartTailState[idx][6] = workerRank;
-            cycleStartTailState[idx][7] = contention;
-            cycleStartTailThroughput[idx] = throughput;
+            cycleStartSteadyStateState[idx][0] = cycleEpoch;
+            cycleStartSteadyStateState[idx][1] = batchEpoch;
+            cycleStartSteadyStateState[idx][2] = completed;
+            cycleStartSteadyStateState[idx][3] = batchSize;
+            cycleStartSteadyStateState[idx][4] = upstreamCount;
+            cycleStartSteadyStateState[idx][5] = registeredWorkers;
+            cycleStartSteadyStateState[idx][6] = workerRank;
+            cycleStartSteadyStateState[idx][7] = contention;
+            cycleStartSteadyStateThroughput[idx] = throughput;
         }
 
-        void recordBatchProgress(
+        public void recordBatchProgress(
                 long cycleEpoch,
                 long batchEpoch,
                 long upstreamCount,
@@ -316,16 +317,16 @@ public class BenchmarkObserver extends FragmentObserver {
                 batchProgressWarmupState[idx][5] = contention;
                 batchProgressWarmupAvgServiceTime[idx] = avgServiceTime;
             }
-            batchProgressTailState[idx][0] = cycleEpoch;
-            batchProgressTailState[idx][1] = batchEpoch;
-            batchProgressTailState[idx][2] = upstreamCount;
-            batchProgressTailState[idx][3] = registeredWorkers;
-            batchProgressTailState[idx][4] = workerRank;
-            batchProgressTailState[idx][5] = contention;
-            batchProgressTailAvgServiceTime[idx] = avgServiceTime;
+            batchProgressSteadyStateState[idx][0] = cycleEpoch;
+            batchProgressSteadyStateState[idx][1] = batchEpoch;
+            batchProgressSteadyStateState[idx][2] = upstreamCount;
+            batchProgressSteadyStateState[idx][3] = registeredWorkers;
+            batchProgressSteadyStateState[idx][4] = workerRank;
+            batchProgressSteadyStateState[idx][5] = contention;
+            batchProgressSteadyStateAvgServiceTime[idx] = avgServiceTime;
         }
 
-        void recordBatchComplete(
+        public void recordBatchComplete(
                 long cycleEpoch,
                 long batchEpoch,
                 long upstreamCount,
@@ -345,26 +346,31 @@ public class BenchmarkObserver extends FragmentObserver {
                 batchCompleteWarmupAvgServiceTime[idx] = avgServiceTime;
                 batchCompleteWarmupThroughput[idx] = throughput;
             }
-            batchCompleteTailState[idx][0] = cycleEpoch;
-            batchCompleteTailState[idx][1] = batchEpoch;
-            batchCompleteTailState[idx][2] = upstreamCount;
-            batchCompleteTailState[idx][3] = registeredWorkers;
-            batchCompleteTailState[idx][4] = workerRank;
-            batchCompleteTailState[idx][5] = contention;
-            batchCompleteTailAvgServiceTime[idx] = avgServiceTime;
-            batchCompleteTailThroughput[idx] = throughput;
+            batchCompleteSteadyStateState[idx][0] = cycleEpoch;
+            batchCompleteSteadyStateState[idx][1] = batchEpoch;
+            batchCompleteSteadyStateState[idx][2] = upstreamCount;
+            batchCompleteSteadyStateState[idx][3] = registeredWorkers;
+            batchCompleteSteadyStateState[idx][4] = workerRank;
+            batchCompleteSteadyStateState[idx][5] = contention;
+            batchCompleteSteadyStateAvgServiceTime[idx] = avgServiceTime;
+            batchCompleteSteadyStateThroughput[idx] = throughput;
         }
 
-        void recordRawBodyCost(long cycleEpoch, long batchEpoch, long rawBodyCost) {
+        public void recordRawBodyCost(long cycleEpoch, long batchEpoch, long rawBodyCost) {
             int idx = (int) (rawBodyCostObservations & this.mask);
-            rawBodyCostTailState[idx][0] = cycleEpoch;
-            rawBodyCostTailState[idx][1] = batchEpoch;
-            rawBodyCostTailState[idx][2] = rawBodyCost;
+            if (rawBodyCostObservations < rawSampleLimit) {
+                rawBodyCostWarmupState[idx][0] = cycleEpoch;
+                rawBodyCostWarmupState[idx][1] = batchEpoch;
+                rawBodyCostWarmupState[idx][2] = rawBodyCost;
+            }
+            rawBodyCostSteadyStateState[idx][0] = cycleEpoch;
+            rawBodyCostSteadyStateState[idx][1] = batchEpoch;
+            rawBodyCostSteadyStateState[idx][2] = rawBodyCost;
             rawBodyCostTotal += rawBodyCost;
             rawBodyCostObservations++;
         }
 
-        void recordIdle(
+        public void recordIdle(
                 long cycleEpoch,
                 long batchEpoch,
                 int contentionPolicy,
@@ -380,17 +386,17 @@ public class BenchmarkObserver extends FragmentObserver {
                 idleWarmupDecisionState[idx][4] = contention;
                 idleWarmupSmoothedBodyCost[idx] = smoothedBodyCost;
             }
-            idleTailDecisionState[idx][0] = cycleEpoch;
-            idleTailDecisionState[idx][1] = batchEpoch;
-            idleTailDecisionState[idx][2] = contentionPolicy;
-            idleTailDecisionState[idx][3] = bodyPolicy;
-            idleTailDecisionState[idx][4] = contention;
-            idleTailSmoothedBodyCost[idx] = smoothedBodyCost;
+            idleSteadyStateDecisionState[idx][0] = cycleEpoch;
+            idleSteadyStateDecisionState[idx][1] = batchEpoch;
+            idleSteadyStateDecisionState[idx][2] = contentionPolicy;
+            idleSteadyStateDecisionState[idx][3] = bodyPolicy;
+            idleSteadyStateDecisionState[idx][4] = contention;
+            idleSteadyStateSmoothedBodyCost[idx] = smoothedBodyCost;
 
             idleBranchDecisionTotal[contentionPolicy][bodyPolicy]++;
         }
 
-        void recordExec(
+        public void recordExec(
                 long cycleEpoch,
                 long batchEpoch,
                 int contentionPolicy,
@@ -406,12 +412,12 @@ public class BenchmarkObserver extends FragmentObserver {
                 execWarmupDecisionState[idx][4] = contention;
                 execWarmupSmoothedBodyCost[idx] = smoothedBodyCost;
             }
-            execTailDecisionState[idx][0] = cycleEpoch;
-            execTailDecisionState[idx][1] = batchEpoch;
-            execTailDecisionState[idx][2] = contentionPolicy;
-            execTailDecisionState[idx][3] = bodyPolicy;
-            execTailDecisionState[idx][4] = contention;
-            execTailSmoothedBodyCost[idx] = smoothedBodyCost;
+            execSteadyStateDecisionState[idx][0] = cycleEpoch;
+            execSteadyStateDecisionState[idx][1] = batchEpoch;
+            execSteadyStateDecisionState[idx][2] = contentionPolicy;
+            execSteadyStateDecisionState[idx][3] = bodyPolicy;
+            execSteadyStateDecisionState[idx][4] = contention;
+            execSteadyStateSmoothedBodyCost[idx] = smoothedBodyCost;
 
             execBranchDecisionTotal[contentionPolicy][bodyPolicy]++;
         }
@@ -421,20 +427,20 @@ public class BenchmarkObserver extends FragmentObserver {
                 return;
             }
             long[][] longAligner = new long[rawSampleLimit][];
-            align(longAligner, cycleStartTailState, cycleStartObservations);
-            align(longAligner, batchProgressTailState, batchProgressObservations);
-            align(longAligner, batchCompleteTailState, batchCompleteObservations);
-            align(longAligner, rawBodyCostTailState, rawBodyCostObservations);
-            align(longAligner, idleTailDecisionState, idleDecisionObservations);
-            align(longAligner, execTailDecisionState, execDecisionObservations);
+            align(longAligner, cycleStartSteadyStateState, cycleStartObservations);
+            align(longAligner, batchProgressSteadyStateState, batchProgressObservations);
+            align(longAligner, batchCompleteSteadyStateState, batchCompleteObservations);
+            align(longAligner, rawBodyCostSteadyStateState, rawBodyCostObservations);
+            align(longAligner, idleSteadyStateDecisionState, idleDecisionObservations);
+            align(longAligner, execSteadyStateDecisionState, execDecisionObservations);
 
             double[] doubleAligner = new double[rawSampleLimit];
-            align(doubleAligner, cycleStartTailThroughput, cycleStartObservations);
-            align(doubleAligner, batchProgressTailAvgServiceTime, batchProgressObservations);
-            align(doubleAligner, batchCompleteTailAvgServiceTime, batchCompleteObservations);
-            align(doubleAligner, batchCompleteTailThroughput, batchCompleteObservations);
-            align(doubleAligner, idleTailSmoothedBodyCost, idleDecisionObservations);
-            align(doubleAligner, execTailSmoothedBodyCost, execDecisionObservations);
+            align(doubleAligner, cycleStartSteadyStateThroughput, cycleStartObservations);
+            align(doubleAligner, batchProgressSteadyStateAvgServiceTime, batchProgressObservations);
+            align(doubleAligner, batchCompleteSteadyStateAvgServiceTime, batchCompleteObservations);
+            align(doubleAligner, batchCompleteSteadyStateThroughput, batchCompleteObservations);
+            align(doubleAligner, idleSteadyStateSmoothedBodyCost, idleDecisionObservations);
+            align(doubleAligner, execSteadyStateSmoothedBodyCost, execDecisionObservations);
             aligned = true;
         }
 
@@ -451,7 +457,7 @@ public class BenchmarkObserver extends FragmentObserver {
             // Fill target oldest -> newest
             int len = idx;
             for (int i = 0; i < len; i++) {
-                target[i] = aligner[idx--];
+                target[i] = aligner[--idx];
             }
         }
 
@@ -468,7 +474,7 @@ public class BenchmarkObserver extends FragmentObserver {
             // Fill target oldest -> newest
             int len = idx;
             for (int i = 0; i < len; i++) {
-                target[i] = aligner[idx--];
+                target[i] = aligner[--idx];
             }
         }
     }

@@ -1,7 +1,9 @@
-package calibration.statistics;
+package calibration.statistics.iteration;
 
 import java.util.Arrays;
 import java.util.Objects;
+
+import calibration.statistics.Band;
 import org.jspecify.annotations.Nullable;
 
 /// Fixed 5x5 occupancy summary for branch counts.

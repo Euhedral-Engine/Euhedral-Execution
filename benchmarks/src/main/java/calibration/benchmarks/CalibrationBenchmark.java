@@ -5,6 +5,8 @@ import calibration.infra.BenchmarkObserver;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.CalibrationExecutor;
 import calibration.infra.Constants;
+import calibration.statistics.iteration.CoreIterationResult;
+import calibration.statistics.HighSpeedMetricsStatistics;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
@@ -22,6 +24,7 @@ import java.lang.invoke.VarHandle;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
@@ -49,6 +52,7 @@ public class CalibrationBenchmark {
     private RepeatingSink[] sinks;
 
     private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
+    private final List<List<CoreIterationResult>> calculationResults = new ArrayList<>();
 
     private static CalibrationBenchmarkConfig getConfig() {
         String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
@@ -155,16 +159,54 @@ public class CalibrationBenchmark {
         SpinWait.awaitWhile(() -> this.controlPlane.getActiveWorkers() > 0);
 
         VarHandle.fullFence();
+        int iteration = 0;
         for (PaddedAtomicReferenceArray<HighSpeedMetrics> iterationMetrics : this.observations) {
+            List<CoreIterationResult> iterationResults = new ArrayList<>();
             for (int core = 0; core < SystemInfo.getMaxCoreId(); core++) {
                 HighSpeedMetrics samples = iterationMetrics.getPlain(core);
                 if (samples == null) {
                     continue;
                 }
-                samples.align();
-                // Do statistics
+                CoreIterationResult result = HighSpeedMetricsStatistics.calculate(iteration, core, samples);
+                iterationResults.add(result);
             }
+            this.calculationResults.add(Collections.unmodifiableList(iterationResults));
+            iteration++;
         }
+    }
+
+    public List<List<CoreIterationResult>> getCalculationResults() {
+        return Collections.unmodifiableList(this.calculationResults);
+    }
+
+    /// Future TSV persistence stub for raw observations.
+    public static void exportRawObservationsTsv(List<List<CoreIterationResult>> results) {
+        // TODO: Implement in persistence phase
+    }
+
+    /// Future TSV persistence stub for descriptive and quantile statistics.
+    public static void exportStatisticsTsv(List<List<CoreIterationResult>> results) {
+        // TODO: Implement in persistence phase
+    }
+
+    /// Future TSV persistence stub for 5x5 branch occupancy results.
+    public static void exportOccupancyTsv(List<List<CoreIterationResult>> results) {
+        // TODO: Implement in persistence phase
+    }
+
+    /// Future TSV persistence stub for 25x25 state transition matrices.
+    public static void exportTransitionsTsv(List<List<CoreIterationResult>> results) {
+        // TODO: Implement in persistence phase
+    }
+
+    /// Future TSV persistence stub for 5x5 vector field displacement results.
+    public static void exportVectorFieldsTsv(List<List<CoreIterationResult>> results) {
+        // TODO: Implement in persistence phase
+    }
+
+    /// Future TSV persistence stub for Pearson and Spearman correlation matrices.
+    public static void exportCorrelationsTsv(List<List<CoreIterationResult>> results) {
+        // TODO: Implement in persistence phase
     }
 
     @State(Scope.Thread)

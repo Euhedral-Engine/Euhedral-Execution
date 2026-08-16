@@ -1,7 +1,9 @@
-package calibration.statistics;
+package calibration.statistics.iteration;
 
 import java.util.List;
 import java.util.Objects;
+
+import calibration.statistics.Band;
 import org.jspecify.annotations.NonNull;
 
 /// 25-state transition matrix and oscillation analysis.
