@@ -3,9 +3,11 @@ package calibration.config;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import java.util.List;
 import java.util.Objects;
 
 public record CalibrationBenchmarkConfig(
+        List<Integer> cpuSet,
         int parallelSources,
         int orderedSources,
         int workUnits,
@@ -25,6 +27,7 @@ public record CalibrationBenchmarkConfig(
 
     @JsonCreator
     public CalibrationBenchmarkConfig(
+            @JsonProperty("cpuSet") List<Integer> cpuSet,
             @JsonProperty("parallelSources") int parallelSources,
             @JsonProperty("orderedSources") int orderedSources,
             @JsonProperty("workUnits") int workUnits,
@@ -39,6 +42,8 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("observeRawBodyCost") boolean observeRawBodyCost,
             @JsonProperty("observeIdleDecision") boolean observeIdleDecision,
             @JsonProperty("observeExecDecision") boolean observeExecDecision) {
+        Objects.requireNonNull(cpuSet);
+        this.cpuSet = List.copyOf(cpuSet);
         this.parallelSources = parallelSources;
         this.orderedSources = orderedSources;
         this.workUnits = workUnits;

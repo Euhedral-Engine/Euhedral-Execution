@@ -19,8 +19,8 @@ public class BenchmarkObserver extends FragmentObserver {
 
     public void startObserving() {
         PaddedAtomicReferenceArray<HighSpeedMetrics> metrics =
-                new PaddedAtomicReferenceArray<>(SystemInfo.getMaxCoreId(), true, true);
-        BitSet cores = SystemInfo.getCpuSet();
+                new PaddedAtomicReferenceArray<>(SystemInfo.getMaxCoreId() + 1, true, true);
+        BitSet cores = SystemInfo.getCoreSet();
         for (int i = cores.nextSetBit(0); i >= 0; i = cores.nextSetBit(i + 1)) {
             metrics.setPlain(i, new HighSpeedMetrics(this.config.rawSampleLimit()));
         }

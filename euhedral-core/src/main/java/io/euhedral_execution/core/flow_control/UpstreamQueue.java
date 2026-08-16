@@ -32,11 +32,7 @@ import java.util.function.Function;
 public class UpstreamQueue {
 
     public static final long ACQUIRE_CONTENTION_SCALE = 1_000_000L;
-    public static final String ACQUIRE_CONTENTION_ENABLED_PROPERTY = "euhedral.fragment.acquireContention.enabled";
-
     private static final long MAX_SCALED_FAILURES = Long.MAX_VALUE / ACQUIRE_CONTENTION_SCALE;
-    private static final boolean ACQUIRE_CONTENTION_ENABLED =
-            Boolean.parseBoolean(System.getProperty(ACQUIRE_CONTENTION_ENABLED_PROPERTY, "true"));
 
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
     public final int core;
@@ -149,13 +145,9 @@ public class UpstreamQueue {
                 continue;
             }
 
-            if (ACQUIRE_CONTENTION_ENABLED) {
-                attempts++;
-            }
+            attempts++;
             if (!handle.acquireLock()) {
-                if (ACQUIRE_CONTENTION_ENABLED) {
-                    failedAcquires++;
-                }
+                failedAcquires++;
                 this.upstreams.offer(handle);
                 cycles++;
                 continue;
@@ -177,7 +169,7 @@ public class UpstreamQueue {
 
             this.upstreams.offer(handle);
         }
-        if (ACQUIRE_CONTENTION_ENABLED && attempts > 0L) {
+        if (attempts > 0L) {
             this.acquireContention.record(scaleAcquireContentionUnchecked(failedAcquires, attempts));
         }
         return totalPull;

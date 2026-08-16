@@ -1,0 +1,31 @@
+#!/usr/bin/env sh
+set -eu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+BENCHMARK_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+if [ -n "${JAVA_HOME:-}" ]; then
+  JAVA_COMMAND="$JAVA_HOME/bin/java"
+else
+  JAVA_COMMAND=java
+fi
+
+USE_MINIMAL=0
+
+if [ "${1:-}" = "--minimal" ]; then
+  USE_MINIMAL=1
+  shift
+fi
+
+if [ "$USE_MINIMAL" -eq 1 ]; then
+  exec "$JAVA_COMMAND" \
+    ${JAVA_OPTS:-} \
+    -cp "$BENCHMARK_DIR/euhedral-benchmark.jar:$BENCHMARK_DIR/lib/*" \
+    calibration.CalibrationRunner "$@"
+else
+  exec "$JAVA_COMMAND" \
+    ${JAVA_OPTS:-} \
+    -Dlogback.configurationFile=benchmark-logback.xml \
+    -cp "$BENCHMARK_DIR/euhedral-benchmark.jar:$BENCHMARK_DIR/lib/*" \
+    calibration.CalibrationRunner "$@"
+fi

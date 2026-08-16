@@ -33,6 +33,7 @@ public class StopWatch {
             ticks++;
             return;
         }
+        this.started = true;
         this.lastTime = System.nanoTime();
     }
 

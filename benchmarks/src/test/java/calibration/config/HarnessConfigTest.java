@@ -50,9 +50,10 @@ class HarnessConfigTest {
 
     private static CalibrationBenchmarkConfig dummyCalibrationConfig() {
         return new CalibrationBenchmarkConfig(
-                1,
-                1,
-                10,
+                List.of(1, 2, 3, 4),
+                4,
+                2,
+                100,
                 false,
                 100,
                 1000,
@@ -83,6 +84,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -148,6 +150,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -310,6 +313,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -405,6 +409,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -492,6 +497,7 @@ class HarnessConfigTest {
             {
               "calibrationProfiles": {
                 "profile-a": {
+                  "cpuSet": [1, 2, 3, 4],
                   "parallelSources": 4,
                   "orderedSources": 2,
                   "workUnits": 100,
@@ -521,6 +527,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -567,6 +574,7 @@ class HarnessConfigTest {
             {
               "calibrationProfiles": {
                 "   ": {
+                  "cpuSet": [1, 2, 3, 4],
                   "parallelSources": 4,
                   "orderedSources": 2,
                   "workUnits": 100,
@@ -660,6 +668,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -817,6 +826,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -1078,6 +1088,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -1244,6 +1255,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -1276,6 +1288,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -1375,6 +1388,7 @@ class HarnessConfigTest {
                   "warmups": 1,
                   "iterations": 5,
                   "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
                     "parallelSources": 4,
                     "orderedSources": 2,
                     "workUnits": 100,
@@ -1421,6 +1435,72 @@ class HarnessConfigTest {
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
         assertEquals(config, roundTrip);
+    }
+
+    /// Verifies trial warmupTime and measurementTime deserialization and round-trip equivalence.
+    @Test
+    void parseTrialWarmupAndMeasurementTimeAndRoundTrip() throws Exception {
+        String json = """
+            {
+              "trials": [
+                {
+                  "id": "trial-timed",
+                  "forks": 1,
+                  "warmups": 2,
+                  "iterations": 3,
+                  "warmupTime": "1s",
+                  "measurementTime": "5s",
+                  "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeights": {
+                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "idleBodyCostWeights": [],
+                      "idleTimeNs": [],
+                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
+                      "execBodyCostWeights": [],
+                      "executionPolicies": []
+                    },
+                    "rawSampleLimit": 1024,
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertEquals(1, config.trials().size());
+        TrialConfig trial = config.trials().get(0);
+        assertEquals("1s", trial.warmupTime());
+        assertEquals("5s", trial.measurementTime());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+        assertEquals("1s", roundTrip.trials().get(0).warmupTime());
+        assertEquals("5s", roundTrip.trials().get(0).measurementTime());
+    }
+
+    /// Verifies blank warmupTime and measurementTime in TrialConfig are rejected.
+    @Test
+    void rejectBlankWarmupAndMeasurementTime() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TrialConfig(1, 1, 1, "  ", "5s", null, dummyCalibrationConfig()));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new TrialConfig(1, 1, 1, "1s", "   ", null, dummyCalibrationConfig()));
     }
 
     /// Verifies blank fields in ComparisonConfig are rejected.
@@ -1605,81 +1685,14 @@ class HarnessConfigTest {
         HarnessConfig config = new HarnessConfig(List.of(trial1, trial2, trial3, trial4));
         assertEquals(4, config.trials().size());
     }
-
-    /// Verifies preset JSON file example_harness_config.json parses correctly and passes round-trip validation.
+    /// Verifies test calibration JSON file test_calibration.json parses correctly and passes round-trip.
     @Test
-    void parseComprehensiveExampleHarnessConfigPresetAndRoundTrip() throws Exception {
-        File file = new File("src/main/java/calibration/presets/example_harness_config.json");
+    void parseTestCalibrationConfigAndRoundTrip() throws Exception {
+        File file = new File("src/test/resources/test_calibration.json");
         if (!file.exists()) {
-            file = new File("benchmarks/src/main/java/calibration/presets/example_harness_config.json");
+            file = new File("benchmarks/src/test/resources/test_calibration.json");
         }
-        assertTrue(file.exists(), "example_harness_config.json should exist");
-
-        HarnessConfig config = mapper.readValue(file, HarnessConfig.class);
-        assertEquals(1, config.schemaVersion());
-        assertEquals("example-harness-config", config.id());
-        assertEquals("Example Calibration Harness Configuration", config.name());
-        assertEquals(
-                "Comprehensive example harness configuration demonstrating all schema features", config.description());
-        assertEquals(Map.of("preset", "example", "environment", "benchmark"), config.labels());
-
-        // Verify runOptions and artifacts
-        assertNotNull(config.runOptions());
-        assertEquals(Boolean.TRUE, config.runOptions().randomizeTrialOrder());
-        assertEquals(Long.valueOf(42L), config.runOptions().randomSeed());
-        assertEquals(Boolean.FALSE, config.runOptions().failFast());
-        assertEquals(Integer.valueOf(1), config.runOptions().repeatCount());
-
-        assertNotNull(config.artifacts());
-        assertEquals("build/reports/benchmarks", config.artifacts().outputDirectory());
-        assertEquals(Boolean.TRUE, config.artifacts().retainExpandedConfig());
-
-        // Verify profiles
-        assertNotNull(config.calibrationProfiles());
-        assertEquals(2, config.calibrationProfiles().size());
-        assertTrue(config.calibrationProfiles().containsKey("standard-calibration"));
-        assertTrue(config.calibrationProfiles().containsKey("high-contention-calibration"));
-
-        assertNotNull(config.decisionWeightProfiles());
-        assertEquals(2, config.decisionWeightProfiles().size());
-        assertTrue(config.decisionWeightProfiles().containsKey("default-weights"));
-        assertTrue(config.decisionWeightProfiles().containsKey("aggressive-weights"));
-
-        // Verify sweeps and searches
-        assertNotNull(config.sweeps());
-        assertEquals(1, config.sweeps().size());
-        assertEquals("sweep-001", config.sweeps().get(0).id());
-
-        assertNotNull(config.searches());
-        assertEquals(1, config.searches().size());
-        assertEquals("search-grid-001", config.searches().get(0).id());
-        assertEquals(SearchStrategy.GRID, config.searches().get(0).strategy());
-
-        // Verify trials and origin provenance
-        assertNotNull(config.trials());
-        assertEquals(2, config.trials().size());
-        assertEquals("trial-001", config.trials().get(0).id());
-        assertNotNull(config.trials().get(0).origin());
-        assertEquals(OriginType.MANUAL, config.trials().get(0).origin().type());
-
-        assertEquals("trial-002", config.trials().get(1).id());
-        assertNotNull(config.trials().get(1).comparison());
-        assertEquals("trial-001", config.trials().get(1).comparison().baselineTrialId());
-
-        // Round-trip test
-        String reSerialized = mapper.writeValueAsString(config);
-        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
-        assertEquals(config, roundTrip);
-    }
-
-    /// Verifies preset JSON file exec_contention_band_calibration.json parses correctly and passes round-trip.
-    @Test
-    void parseExecContentionBandCalibrationPresetAndRoundTrip() throws Exception {
-        File file = new File("src/main/java/calibration/presets/exec_contention_band_calibration.json");
-        if (!file.exists()) {
-            file = new File("benchmarks/src/main/java/calibration/presets/exec_contention_band_calibration.json");
-        }
-        assertTrue(file.exists(), "exec_contention_band_calibration.json should exist");
+        assertTrue(file.exists(), "test_calibration.json should exist");
 
         HarnessConfig config = mapper.readValue(file, HarnessConfig.class);
         assertEquals(1, config.schemaVersion());

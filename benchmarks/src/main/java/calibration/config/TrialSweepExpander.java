@@ -217,6 +217,8 @@ public class TrialSweepExpander {
                         candidateTrial.forks(),
                         candidateTrial.warmups(),
                         candidateTrial.iterations(),
+                        candidateTrial.warmupTime(),
+                        candidateTrial.measurementTime(),
                         candidateTrial.jvmArgs(),
                         candidateTrial.calibrationConfig());
 

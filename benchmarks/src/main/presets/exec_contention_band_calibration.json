@@ -1,0 +1,160 @@
+{
+  "schemaVersion": 1,
+  "id": "exec-contention-band-calibration",
+  "name": "Execution Contention Band Calibration",
+  "description": "Calibration configuration for execution contention bands",
+  "labels": {
+    "preset": "exec-contention-band"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "output/exec-contention-calibration",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true
+  },
+  "sweeps": [
+    {
+      "id": "exec-contention-policy-sweep",
+      "baseTrialId": "exec-contention-band-base",
+      "description": "Sweep execution policy between staged and direct policies under execution contention",
+      "group": "exec-contention-calibration",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/executionPolicies",
+          "description": "Adds STAGED policies band by band. Only column 0 is used.",
+          "values": [
+            [
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"}
+            ],
+            [
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"}
+            ],
+            [
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"}
+            ],
+            [
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"}
+            ],
+            [
+              {"xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"}
+            ],
+            [
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"},
+              {"xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED"}
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "exec-contention-band-base",
+      "name": "Base Execution Contention Band Trial",
+      "group": "exec-contention-calibration",
+      "description": "Base trial configuration for execution contention band sweep",
+      "tags": [
+        "contention",
+        "base"
+      ],
+      "enabled": false,
+      "origin": {
+        "type": "MANUAL",
+        "candidateIndex": 0
+      },
+      "forks": 1,
+      "warmups": 3,
+      "warmupTime": "2s",
+      "iterations": 5,
+      "measurementTime": "5s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationConfig": {
+        "cpuSet": [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31],
+        "parallelSources": 11,
+        "orderedSources": 0,
+        "workUnits": 24,
+        "randomizeWork": false,
+        "totalRequiredExecutions": 32000000,
+        "invocationTimeoutMillis": 6000,
+        "decisionWeights": {
+          "idleContentionThresholds": {
+            "xsContention": 1000000,
+            "sContention": 1000000,
+            "mContention": 1000000,
+            "hContention": 1000000
+          },
+          "idleBodyCostWeights": [
+            {"xs": 256,"s": 256,"m": 256,"h": 256},
+            {"xs": 256,"s": 256,"m": 256,"h": 256},
+            {"xs": 256,"s": 256,"m": 256,"h": 256},
+            {"xs": 256,"s": 256,"m": 256,"h": 256}
+          ],
+          "idleTimeNs": [
+            {"xsPark": 0,"sPark": 0,"mPark": 0,"hPark": 0,"xhPark": 0},
+            {"xsPark": 0,"sPark": 0,"mPark": 0,"hPark": 0,"xhPark": 0},
+            {"xsPark": 0,"sPark": 0,"mPark": 0,"hPark": 0,"xhPark": 0},
+            {"xsPark": 0,"sPark": 0,"mPark": 0,"hPark": 0,"xhPark": 0},
+            {"xsPark": 0,"sPark": 0,"mPark": 0,"hPark": 0,"xhPark": 0}
+          ],
+          "execContentionThresholds": {
+            "xsContention": 500000,
+            "sContention": 1000000,
+            "mContention": 1000000,
+            "hContention": 1000000
+          },
+          "execBodyCostWeights": [
+            {"xs": 256,"s": 256,"m": 256,"h": 256},
+            {"xs": 256,"s": 256,"m": 256,"h": 256},
+            {"xs": 256,"s": 256,"m": 256,"h": 256},
+            {"xs": 256,"s": 256,"m": 256,"h": 256}
+          ],
+          "executionPolicies": [
+            {"xsBody": "STAGED","sBody": "STAGED","mBody": "STAGED","hBody": "STAGED","xhBody": "STAGED"},
+            {"xsBody": "STAGED","sBody": "STAGED","mBody": "STAGED","hBody": "STAGED","xhBody": "STAGED"},
+            {"xsBody": "STAGED","sBody": "STAGED","mBody": "STAGED","hBody": "STAGED","xhBody": "STAGED"},
+            {"xsBody": "STAGED","sBody": "STAGED","mBody": "STAGED","hBody": "STAGED","xhBody": "STAGED"},
+            {"xsBody": "STAGED","sBody": "STAGED","mBody": "STAGED","hBody": "STAGED","xhBody": "STAGED"}
+          ]
+        },
+        "rawSampleLimit": 16384,
+        "observeCycleStart": false,
+        "observeBatchProgress": true,
+        "observeBatchComplete": false,
+        "observeRawBodyCost": true,
+        "observeIdleDecision": false,
+        "observeExecDecision": true
+      }
+    }
+  ]
+}

@@ -31,6 +31,7 @@ class CalibrationRunnerTest {
 
     private static CalibrationBenchmarkConfig dummyCalibrationConfig() {
         return new CalibrationBenchmarkConfig(
+                List.of(1, 2, 3, 4),
                 4,
                 2,
                 100,

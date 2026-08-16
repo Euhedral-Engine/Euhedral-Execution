@@ -51,6 +51,7 @@ public class CalibrationBenchmark {
 
     private final PaddedLongAdder executionCounter = new PaddedLongAdder(SystemInfo.CPU_COUNT);
 
+    private final long configId = System.currentTimeMillis();
     private final TrialConfig trialConfig = getConfig();
     private final CalibrationBenchmarkConfig calibrationConfig = trialConfig.calibrationConfig();
     private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
@@ -77,11 +78,10 @@ public class CalibrationBenchmark {
         return value;
     }
 
-    private static UnmodifiableBitSet parseBitset(String raw) {
-        String[] tokens = raw.split(",");
+    private static UnmodifiableBitSet parseBitset(List<Integer> cpuSet) {
         BitSet surrogate = new BitSet();
-        for (String t : tokens) {
-            surrogate.set(Integer.parseInt(t));
+        for (Integer c : cpuSet) {
+            surrogate.set(c);
         }
         return UnmodifiableBitSet.wrap(surrogate);
     }
@@ -108,7 +108,7 @@ public class CalibrationBenchmark {
     public void trialSetup() {
         // Benchmark thread stays off active cores
         ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet());
-        UnmodifiableBitSet cpuSet = parseBitset(getRequiredPropertyValue(Constants.CPU_SET_PROP));
+        UnmodifiableBitSet cpuSet = parseBitset(this.calibrationConfig.cpuSet());
         if (cpuSet.isEmpty()) {
             throw new IllegalArgumentException("Cpu set cannot be empty");
         }
@@ -141,7 +141,7 @@ public class CalibrationBenchmark {
 
     @Setup(Level.Iteration)
     public void iterationSetup() {
-        this.controlPlane.clear(Duration.ofMillis(1));
+        this.controlPlane.clear(Duration.ofSeconds(1));
         this.observer.startObserving();
     }
 
@@ -160,6 +160,7 @@ public class CalibrationBenchmark {
     @TearDown(Level.Iteration)
     public void iterationTeardown() {
         this.observations.add(this.observer.stopObserving());
+        this.controlPlane.clear(Duration.ofSeconds(1));
     }
 
     @TearDown(Level.Trial)
@@ -194,20 +195,10 @@ public class CalibrationBenchmark {
         if (output == null || output.isBlank()) {
             return;
         }
-        Path path = Path.of(output, "fork-" + System.currentTimeMillis() + "/");
+        Path path = Path.of(output, "fork-" + this.configId + "-" + System.currentTimeMillis() + "/");
         File outputDir = path.toFile();
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new RuntimeException("Failed to create output directory: " + output);
-        }
-
-        File configFile = Path.of(output).resolve(Constants.TRIAL_FILE_NAME).toFile();
-        if (!configFile.exists()) {
-            ObjectMapper mapper = new ObjectMapper();
-            String trialJson = mapper.writeValueAsString(this.trialConfig);
-            try (BufferedWriter writer = Files.newBufferedWriter(configFile.toPath())) {
-                writer.write(trialJson);
-            }
-            TrialExport.writeChecksum(configFile.toPath());
         }
         TrialExport.exportAll(path, this.calculationResults);
     }

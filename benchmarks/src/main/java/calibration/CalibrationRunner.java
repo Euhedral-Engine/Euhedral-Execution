@@ -1,6 +1,5 @@
 package calibration;
 
-import static calibration.infra.Constants.CPU_SET_PROP;
 import static calibration.infra.Constants.OUTPUT_DIRECTORY_PROP;
 import static calibration.infra.Constants.REPEAT_INDEX_PROP;
 import static calibration.infra.Constants.TRIAL_CONFIG_PROP;
@@ -29,6 +28,7 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
+import org.openjdk.jmh.runner.options.TimeValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -223,9 +223,14 @@ public class CalibrationRunner {
             opt = opt.include(CalibrationBenchmark.class.getName());
             opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
             opt = opt.forks(trial.forks());
-            opt = opt.warmupForks(trial.warmups());
+            opt = opt.warmupIterations(trial.warmups());
             opt = opt.measurementIterations(trial.iterations());
-
+            if (trial.warmupTime() != null) {
+                opt = opt.warmupTime(TimeValue.fromString(trial.warmupTime()));
+            }
+            if (trial.measurementTime() != null) {
+                opt = opt.measurementTime(TimeValue.fromString(trial.measurementTime()));
+            }
             Options options = opt.build();
             new Runner(options).run();
 
@@ -271,7 +276,6 @@ public class CalibrationRunner {
         addJVMProperty(jvmArgs, REPEAT_INDEX_PROP, Integer.toString(repeatIndex));
         addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
         addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
-        addJVMProperty(jvmArgs, CPU_SET_PROP);
 
         if (invocationDir != null) {
             try {

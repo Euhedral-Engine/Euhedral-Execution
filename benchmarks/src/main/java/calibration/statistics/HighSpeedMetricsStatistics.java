@@ -359,6 +359,9 @@ public final class HighSpeedMetricsStatistics {
     private static DecisionStatistics calculateIdleDecisions(HighSpeedMetrics metrics, int limit) {
         long total = metrics.idleDecisionObservations;
         BranchOccupancyResult occupancy = BranchOccupancyResult.of(metrics.idleBranchDecisionTotal);
+        if (total == 0L && occupancy.isEmpty()) {
+            return DecisionStatistics.EMPTY;
+        }
         if (total == 0L) {
             return new DecisionStatistics(
                     0L,
@@ -438,6 +441,9 @@ public final class HighSpeedMetricsStatistics {
     private static DecisionStatistics calculateExecDecisions(HighSpeedMetrics metrics, int limit) {
         long total = metrics.execDecisionObservations;
         BranchOccupancyResult occupancy = BranchOccupancyResult.of(metrics.execBranchDecisionTotal);
+        if (total == 0L && occupancy.isEmpty()) {
+            return DecisionStatistics.EMPTY;
+        }
         if (total == 0L) {
             return new DecisionStatistics(
                     0L,

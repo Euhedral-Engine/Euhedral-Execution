@@ -176,11 +176,19 @@ final class FragmentDecisionTree {
     ExecutionPath executionPath(
             long cycleEpoch, long batchEpoch, long upstreamHandles, long registeredWorkers, long contention) {
         if (upstreamHandles <= 0) {
-            this.executionPath = ExecutionPath.SKIP;
+            this.executionPath = ExecutionPath.SKIP_THEN_DIRECT;
             return this.executionPath;
         }
         if (registeredWorkers <= 1 || this.bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
             this.executionPath = ExecutionPath.DIRECT;
+            return this.executionPath;
+        }
+
+        if(this.executionPath == ExecutionPath.SKIP_THEN_DIRECT) {
+            this.executionPath = ExecutionPath.DIRECT;
+            return this.executionPath;
+        } else if(this.executionPath == ExecutionPath.SKIP_THEN_STAGED) {
+            this.executionPath = ExecutionPath.STAGED;
             return this.executionPath;
         }
 

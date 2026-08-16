@@ -23,6 +23,8 @@ public record TrialConfig(
         int forks,
         int warmups,
         int iterations,
+        @Nullable String warmupTime,
+        @Nullable String measurementTime,
         @Nullable List<String> jvmArgs,
         @NonNull CalibrationBenchmarkConfig calibrationConfig) {
 
@@ -47,6 +49,37 @@ public record TrialConfig(
                 forks,
                 warmups,
                 iterations,
+                null,
+                null,
+                jvmArgs,
+                calibrationConfig);
+    }
+
+    /// Convenience constructor for execution properties with warmupTime and measurementTime.
+    public TrialConfig(
+            int forks,
+            int warmups,
+            int iterations,
+            @Nullable String warmupTime,
+            @Nullable String measurementTime,
+            @Nullable List<String> jvmArgs,
+            @NonNull CalibrationBenchmarkConfig calibrationConfig) {
+        this(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                forks,
+                warmups,
+                iterations,
+                warmupTime,
+                measurementTime,
                 jvmArgs,
                 calibrationConfig);
     }
@@ -80,6 +113,8 @@ public record TrialConfig(
                 forks,
                 warmups,
                 iterations,
+                null,
+                null,
                 jvmArgs,
                 calibrationConfig);
     }
@@ -114,6 +149,45 @@ public record TrialConfig(
                 forks,
                 warmups,
                 iterations,
+                null,
+                null,
+                jvmArgs,
+                calibrationConfig);
+    }
+
+    /// Convenience constructor for trial metadata with labels and origin without warmupTime and measurementTime.
+    public TrialConfig(
+            @Nullable String id,
+            @Nullable String name,
+            @Nullable String group,
+            @Nullable String description,
+            @Nullable String hypothesis,
+            @Nullable ComparisonConfig comparison,
+            @Nullable List<String> tags,
+            @Nullable Map<String, String> labels,
+            @Nullable Boolean enabled,
+            @Nullable TrialOrigin origin,
+            int forks,
+            int warmups,
+            int iterations,
+            @Nullable List<String> jvmArgs,
+            @NonNull CalibrationBenchmarkConfig calibrationConfig) {
+        this(
+                id,
+                name,
+                group,
+                description,
+                hypothesis,
+                comparison,
+                tags,
+                labels,
+                enabled,
+                origin,
+                forks,
+                warmups,
+                iterations,
+                null,
+                null,
                 jvmArgs,
                 calibrationConfig);
     }
@@ -138,6 +212,8 @@ public record TrialConfig(
             @JsonProperty("forks") int forks,
             @JsonProperty("warmups") int warmups,
             @JsonProperty("iterations") int iterations,
+            @JsonProperty("warmupTime") @Nullable String warmupTime,
+            @JsonProperty("measurementTime") @Nullable String measurementTime,
             @JsonProperty("jvmArgs") @Nullable List<String> jvmArgs,
             @JsonProperty("calibrationConfig") @NonNull CalibrationBenchmarkConfig calibrationConfig) {
         if (id != null && id.isBlank()) {
@@ -154,6 +230,12 @@ public record TrialConfig(
         }
         if (hypothesis != null && hypothesis.isBlank()) {
             throw new IllegalArgumentException("TrialConfig hypothesis cannot be blank if present");
+        }
+        if (warmupTime != null && warmupTime.isBlank()) {
+            throw new IllegalArgumentException("TrialConfig warmupTime cannot be blank if present");
+        }
+        if (measurementTime != null && measurementTime.isBlank()) {
+            throw new IllegalArgumentException("TrialConfig measurementTime cannot be blank if present");
         }
         if (tags != null) {
             for (String tag : tags) {
@@ -200,6 +282,8 @@ public record TrialConfig(
         this.forks = forks;
         this.warmups = warmups;
         this.iterations = iterations;
+        this.warmupTime = warmupTime;
+        this.measurementTime = measurementTime;
         this.jvmArgs = jvmArgs;
         this.calibrationConfig = calibrationConfig;
     }

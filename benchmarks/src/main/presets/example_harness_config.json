@@ -1,46 +1,47 @@
 {
-  // Optional: Schema version (positive integer)
+  // Optional: Schema version (positive integer) [IMPLEMENTED]
   "schemaVersion": 1,
-  // Optional: Harness unique identifier
+  // Optional: Harness unique identifier [IMPLEMENTED]
   "id": "example-harness-config",
-  // Optional: Display name
+  // Optional: Display name [IMPLEMENTED]
   "name": "Example Calibration Harness Configuration",
-  // Optional: Detailed description of harness configuration
+  // Optional: Detailed description of harness configuration [IMPLEMENTED]
   "description": "Comprehensive example harness configuration demonstrating all schema features",
-  // Optional: Key-value metadata labels
+  // Optional: Key-value metadata labels [IMPLEMENTED: parsed and inherited by generated sweeps]
   "labels": {
     "preset": "example",
     "environment": "benchmark"
   },
-  // Optional: Execution run-control options
+  // Optional: Execution run-control options [IMPLEMENTED]
   "runOptions": {
-    // Optional: Whether trial execution order is randomized
+    // Optional: Whether trial execution order is randomized [IMPLEMENTED: used in CalibrationRunner]
     "randomizeTrialOrder": true,
-    // Optional: Seed for random number generation
+    // Optional: Seed for random number generation [IMPLEMENTED: used in CalibrationRunner]
     "randomSeed": 42,
-    // Optional: Stop execution on first trial failure
+    // Optional: Stop execution on first trial failure [IMPLEMENTED: used in CalibrationRunner]
     "failFast": false,
-    // Optional: Number of times to repeat the trial set
+    // Optional: Number of times to repeat the trial set [IMPLEMENTED: used in CalibrationRunner]
     "repeatCount": 1
   },
-  // Optional: Artifact retention configuration
+  // Optional: Artifact retention configuration [PARTIALLY IMPLEMENTED]
   "artifacts": {
-    // Optional: Output directory path for benchmark results
+    // Optional: Output directory path for benchmark results [IMPLEMENTED: creates directory and sets system property]
     "outputDirectory": "build/reports/benchmarks",
-    // Optional: Retain expanded configuration files
+    // Optional: Retain expanded configuration files [IMPLEMENTED: writes trial_config.json into invocation directory]
     "retainExpandedConfig": true,
-    // Optional: Retain raw console output from benchmarks
+    // Optional: Retain raw console output from benchmarks [NOT YET IMPLEMENTED]
     "retainRawBenchmarkOutput": false,
-    // Optional: Retain observer events data
+    // Optional: Retain observer events data [NOT YET IMPLEMENTED: observer metrics are always exported when outputDirectory is set]
     "retainObserverData": true,
-    // Optional: Retain per-fork results
+    // Optional: Retain per-fork results [NOT YET IMPLEMENTED]
     "retainPerForkResults": false,
-    // Optional: Retain per-iteration results
+    // Optional: Retain per-iteration results [NOT YET IMPLEMENTED]
     "retainPerIterationResults": true
   },
-  // Optional: Reusable calibration benchmark profiles
+  // Optional: Reusable calibration benchmark profiles [NOT YET IMPLEMENTED: parsed and validated in schema, but profile referencing in trials is not yet implemented]
   "calibrationProfiles": {
     "standard-calibration": {
+      "cpuSet": [1, 2, 3, 4],
       "parallelSources": 4,
       "orderedSources": 2,
       "workUnits": 100,
@@ -86,6 +87,7 @@
       "observeExecDecision": false
     },
     "high-contention-calibration": {
+      "cpuSet": [1, 2, 3, 4],
       "parallelSources": 11,
       "orderedSources": 0,
       "workUnits": 24,
@@ -131,7 +133,7 @@
       "observeExecDecision": true
     }
   },
-  // Optional: Reusable fragment decision weights profiles
+  // Optional: Reusable fragment decision weights profiles [NOT YET IMPLEMENTED: parsed and validated in schema, but profile referencing in trials is not yet implemented]
   "decisionWeightProfiles": {
     "default-weights": {
       "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
@@ -194,12 +196,12 @@
       ]
     }
   },
-  // Optional: Parameter sweep declarations
+  // Optional: Parameter sweep declarations [IMPLEMENTED: expanded via Cartesian product in TrialSweepExpander]
   "sweeps": [
     {
       "id": "sweep-001",
       "baseTrialId": "trial-001",
-      // Optional: Description of parameter sweep
+      // Optional: Description of parameter sweep [IMPLEMENTED]
       "description": "Parallel sources parameter variation sweep",
       "parameters": [
         {
@@ -209,72 +211,73 @@
       ]
     }
   ],
-  // Optional: Candidate search generation descriptors
+  // Optional: Candidate search generation descriptors [NOT YET IMPLEMENTED: schema only, search generation is not yet implemented]
   "searches": [
     {
       "id": "search-grid-001",
       "strategy": "GRID",
       "maxTrials": 10,
-      // Optional: Search random seed
+      // Optional: Search random seed [NOT YET IMPLEMENTED]
       "seed": 42,
-      // Optional: Search optimization objective
+      // Optional: Search optimization objective [NOT YET IMPLEMENTED]
       "objective": "maximize_throughput",
-      // Optional: Referenced sweep IDs
+      // Optional: Referenced sweep IDs [NOT YET IMPLEMENTED]
       "sweepIds": ["sweep-001"],
-      // Optional: Search metadata
+      // Optional: Search metadata [NOT YET IMPLEMENTED]
       "metadata": {
         "optimizer": "grid-search"
       }
     }
   ],
-  // Required: Non-empty array of trial configurations
+  // Required: Non-empty array of trial configurations [IMPLEMENTED]
   "trials": [
     {
-      // Optional: Trial unique identifier
+      // Optional: Trial unique identifier [IMPLEMENTED: used for logging, directory naming, and sweep base lookup]
       "id": "trial-001",
-      // Optional: Trial display name
+      // Optional: Trial display name [IMPLEMENTED: used for logging and sweep candidate naming]
       "name": "Default Calibration Trial",
-      // Optional: Trial group identifier
+      // Optional: Trial group identifier [IMPLEMENTED: used for logging and sweep group override]
       "group": "baseline-calibration",
-      // Optional: Trial description
+      // Optional: Trial description [IMPLEMENTED: metadata]
       "description": "Baseline calibration trial run with standard decision weights",
-      // Optional: Trial hypothesis
+      // Optional: Trial hypothesis [IMPLEMENTED: metadata]
       "hypothesis": "Standard weights perform well under low contention",
-      // Optional: Trial comparison relationship metadata
+      // Optional: Trial comparison relationship metadata [NOT YET IMPLEMENTED: parsed and validated in schema, post-run comparison is not yet implemented]
       "comparison": {
-        // Optional: Reference to baseline trial ID
+        // Optional: Reference to baseline trial ID [NOT YET IMPLEMENTED]
         "baselineTrialId": null,
-        // Optional: Group name for comparison aggregating
+        // Optional: Group name for comparison aggregating [NOT YET IMPLEMENTED]
         "comparisonGroup": "baseline-calibration",
-        // Optional: Purpose of comparison
+        // Optional: Purpose of comparison [NOT YET IMPLEMENTED]
         "purpose": "Baseline benchmark comparison"
       },
-      // Optional: Trial tags
+      // Optional: Trial tags [IMPLEMENTED: metadata]
       "tags": [
         "example",
         "baseline"
       ],
-      // Optional: Whether trial is enabled for execution
+      // Optional: Whether trial is enabled for execution [IMPLEMENTED: filtered in CalibrationRunner]
       "enabled": true,
-      // Optional: Trial provenance origin metadata
+      // Optional: Trial provenance origin metadata [IMPLEMENTED: tracked and populated by TrialSweepExpander]
       "origin": {
         "type": "MANUAL",
-        // Optional: Source ID (must be null for MANUAL)
+        // Optional: Source ID (must be null for MANUAL) [IMPLEMENTED]
         "sourceId": null,
-        // Optional: Generation seed
+        // Optional: Generation seed [IMPLEMENTED]
         "seed": null,
-        // Optional: Candidate index (>= 0)
+        // Optional: Candidate index (>= 0) [IMPLEMENTED]
         "candidateIndex": 0
       },
       "forks": 1,
       "warmups": 1,
       "iterations": 5,
-      // Optional: JVM flags for benchmark forks
+      // Optional: JVM flags for benchmark forks [IMPLEMENTED: appended to JMH fork args]
       "jvmArgs": [
         "-XX:+UseThreadPriorities",
         "--enable-native-access=ALL-UNNAMED"
       ],
       "calibrationConfig": {
+        "cpuSet": [1, 2, 3, 4],
         "parallelSources": 4,
         "orderedSources": 2,
         "workUnits": 100,
@@ -350,6 +353,7 @@
         "--enable-native-access=ALL-UNNAMED"
       ],
       "calibrationConfig": {
+        "cpuSet": [1, 2, 3, 4],
         "parallelSources": 11,
         "orderedSources": 0,
         "workUnits": 24,

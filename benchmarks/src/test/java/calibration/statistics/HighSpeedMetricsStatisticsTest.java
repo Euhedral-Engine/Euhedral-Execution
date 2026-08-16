@@ -375,4 +375,33 @@ class HighSpeedMetricsStatisticsTest {
         assertEquals(0L, result.cycleStartTotal());
         assertTrue(result.cycleStart().head().completed().isEmpty());
     }
+
+    @Test
+    void testDisabledObservationsYieldEmptyStatistics() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(16);
+        // Only record execution decisions (like in contention band calibration where other observers are disabled)
+        metrics.recordExec(1, 1, 1, 1, 10, 5.0);
+        metrics.recordExec(2, 2, 2, 2, 20, 10.0);
+
+        CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
+
+        // Exec decisions are active
+        assertEquals(2L, result.execDecisionTotal());
+        assertFalse(result.execOccupancy().isEmpty());
+
+        // Idle decisions and other observers were disabled / zero, must be EMPTY
+        assertEquals(0L, result.idleDecisionTotal());
+        assertEquals(0L, result.cycleStartTotal());
+        assertEquals(0L, result.batchProgressTotal());
+        assertEquals(0L, result.batchCompleteTotal());
+        assertEquals(0L, result.rawBodyCostTotal());
+
+        assertEquals(BranchOccupancyResult.EMPTY, result.idleOccupancy());
+        assertEquals(BranchOccupancyResult.EMPTY, result.idleDecisions().occupancy());
+        assertTrue(result.cycleStart().head().completed().isEmpty());
+        assertTrue(result.batchProgress().head().upstreamCount().isEmpty());
+        assertTrue(result.batchComplete().head().upstreamCount().isEmpty());
+        assertTrue(result.rawBodyCost().head().isEmpty());
+        assertTrue(Double.isNaN(result.centroidDistance()));
+    }
 }
