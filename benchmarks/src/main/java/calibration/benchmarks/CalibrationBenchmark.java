@@ -2,6 +2,7 @@ package calibration.benchmarks;
 
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.infra.BenchmarkObserver;
+import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.CalibrationExecutor;
 import calibration.infra.Constants;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,13 +10,19 @@ import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.utils.SpinWait;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hashing.HasherApi;
 import java.io.File;
+import java.lang.invoke.VarHandle;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
 import org.openjdk.jmh.annotations.AuxCounters.Type;
@@ -40,6 +47,8 @@ public class CalibrationBenchmark {
     private BenchmarkObserver observer;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
+
+    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
 
     private static CalibrationBenchmarkConfig getConfig() {
         String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
@@ -69,6 +78,8 @@ public class CalibrationBenchmark {
     }
 
     private static void await(long target, PaddedLongAdder counters, long timeoutMs) {
+        // Benchmark thread stays off active cores
+        ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet());
         long now = System.nanoTime();
         long deadline = now + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
 
@@ -116,6 +127,7 @@ public class CalibrationBenchmark {
 
     @Setup(Level.Iteration)
     public void iterationSetup() {
+        this.controlPlane.clear(Duration.ofMillis(1));
         this.observer.startObserving();
     }
 
@@ -131,8 +143,7 @@ public class CalibrationBenchmark {
 
     @TearDown(Level.Iteration)
     public void iterationTeardown() {
-        this.observer.stopObserving();
-        this.controlPlane.clear(Duration.ofMillis(1));
+        this.observations.add(this.observer.stopObserving());
     }
 
     @TearDown(Level.Trial)
@@ -141,6 +152,19 @@ public class CalibrationBenchmark {
             s.complete();
         }
         this.controlPlane.close();
+        SpinWait.awaitWhile(() -> this.controlPlane.getActiveWorkers() > 0);
+
+        VarHandle.fullFence();
+        for (PaddedAtomicReferenceArray<HighSpeedMetrics> iterationMetrics : this.observations) {
+            for (int core = 0; core < SystemInfo.getMaxCoreId(); core++) {
+                HighSpeedMetrics samples = iterationMetrics.getPlain(core);
+                if (samples == null) {
+                    continue;
+                }
+                samples.align();
+                // Do statistics
+            }
+        }
     }
 
     @State(Scope.Thread)

@@ -63,6 +63,7 @@ public abstract class FragmentObserver {
             long batchEpoch,
             int contentionPolicy,
             int bodyPolicy,
+            long contention,
             double smoothedBodyCost);
 
     /// This method will be called concurrently by fragments.
@@ -77,5 +78,6 @@ public abstract class FragmentObserver {
             long batchEpoch,
             int contentionPolicy,
             int bodyPolicy,
+            long contention,
             double smoothedBodyCost);
 }

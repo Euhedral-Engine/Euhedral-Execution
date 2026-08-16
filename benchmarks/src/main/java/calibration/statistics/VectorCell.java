@@ -1,0 +1,19 @@
+package calibration.statistics;
+
+/// Displacement vector for a single source cell in the 5x5 occupancy mesh.
+public record VectorCell(
+        int contentionBand,
+        int bodyBand,
+        long transitionCount,
+        double meanDeltaContention,
+        double meanDeltaBody,
+        double magnitude) {
+
+    public boolean hasVector() {
+        return transitionCount > 0L;
+    }
+
+    public static VectorCell empty(int contentionBand, int bodyBand) {
+        return new VectorCell(contentionBand, bodyBand, 0L, Double.NaN, Double.NaN, Double.NaN);
+    }
+}

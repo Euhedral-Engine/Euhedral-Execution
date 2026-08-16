@@ -109,27 +109,28 @@ final class FragmentDecisionTree {
             List<IdlePolicy> idleTimeNs,
             long contention) {
         if (contention <= thresholds.xsContention()) {
-            idle(cycleEpoch, batchEpoch, 0, idleBodyCost.getFirst(), idleTimeNs.getFirst());
+            idle(cycleEpoch, batchEpoch, contention, 0, idleBodyCost.getFirst(), idleTimeNs.getFirst());
             return;
         }
         if (contention <= thresholds.sContention()) {
-            idle(cycleEpoch, batchEpoch, 1, idleBodyCost.get(1), idleTimeNs.get(1));
+            idle(cycleEpoch, batchEpoch, contention, 1, idleBodyCost.get(1), idleTimeNs.get(1));
             return;
         }
         if (contention <= thresholds.mContention()) {
-            idle(cycleEpoch, batchEpoch, 2, idleBodyCost.get(2), idleTimeNs.get(2));
+            idle(cycleEpoch, batchEpoch, contention, 2, idleBodyCost.get(2), idleTimeNs.get(2));
             return;
         }
         if (contention <= thresholds.hContention()) {
-            idle(cycleEpoch, batchEpoch, 3, idleBodyCost.get(3), idleTimeNs.get(3));
+            idle(cycleEpoch, batchEpoch, contention, 3, idleBodyCost.get(3), idleTimeNs.get(3));
             return;
         }
-        idle(cycleEpoch, batchEpoch, 4, idleBodyCost.getLast(), idleTimeNs.getLast());
+        idle(cycleEpoch, batchEpoch, contention, 4, idleBodyCost.getLast(), idleTimeNs.getLast());
     }
 
     private void idle(
             long cycleEpoch,
             long batchEpoch,
+            long contention,
             int contentionDecision,
             BodyCostThresholds thresholds,
             IdlePolicy policy) {
@@ -166,6 +167,7 @@ final class FragmentDecisionTree {
                         batchEpoch,
                         contentionDecision,
                         decision,
+                        contention,
                         this.smoothedBodyCostNs);
             }
         }
@@ -200,23 +202,24 @@ final class FragmentDecisionTree {
             List<ExecutionPolicy> policies,
             long contention) {
         if (contention <= thresholds.xsContention()) {
-            return executionPath(cycleEpoch, batchEpoch, 0, execBodyCost.getFirst(), policies.getFirst());
+            return executionPath(cycleEpoch, batchEpoch, contention, 0, execBodyCost.getFirst(), policies.getFirst());
         }
         if (contention <= thresholds.sContention()) {
-            return executionPath(cycleEpoch, batchEpoch, 1, execBodyCost.get(1), policies.get(1));
+            return executionPath(cycleEpoch, batchEpoch, contention, 1, execBodyCost.get(1), policies.get(1));
         }
         if (contention <= thresholds.mContention()) {
-            return executionPath(cycleEpoch, batchEpoch, 2, execBodyCost.get(2), policies.get(2));
+            return executionPath(cycleEpoch, batchEpoch, contention, 2, execBodyCost.get(2), policies.get(2));
         }
         if (contention <= thresholds.hContention()) {
-            return executionPath(cycleEpoch, batchEpoch, 3, execBodyCost.get(3), policies.get(3));
+            return executionPath(cycleEpoch, batchEpoch, contention, 3, execBodyCost.get(3), policies.get(3));
         }
-        return executionPath(cycleEpoch, batchEpoch, 4, execBodyCost.getLast(), policies.getLast());
+        return executionPath(cycleEpoch, batchEpoch, contention, 4, execBodyCost.getLast(), policies.getLast());
     }
 
     private ExecutionPath executionPath(
             long cycleEpoch,
             long batchEpoch,
+            long contention,
             int contentionDecision,
             BodyCostThresholds thresholds,
             ExecutionPolicy policy) {
@@ -249,6 +252,7 @@ final class FragmentDecisionTree {
                         batchEpoch,
                         contentionDecision,
                         decision,
+                        contention,
                         this.smoothedBodyCostNs);
             }
         }
