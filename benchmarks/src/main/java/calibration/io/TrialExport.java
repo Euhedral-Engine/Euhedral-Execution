@@ -23,8 +23,8 @@ import java.security.MessageDigest;
 import java.util.HexFormat;
 import java.util.List;
 
-public final class TSVExport {
-    private static void writeChecksum(Path file) throws Exception {
+public final class TrialExport {
+    public static void writeChecksum(Path file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
         try (InputStream input = Files.newInputStream(file)) {
             byte[] buffer = new byte[8192];

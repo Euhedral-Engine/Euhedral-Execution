@@ -30,5 +30,8 @@ public final class Constants {
     public static final String CORRELATIONS_TSV = "correlations.tsv";
     public static final String CORRELATIONS_CHECKSUM = "correlations.tsv.sha256";
 
+    public static final String TRIAL_FILE_NAME = "trial_config.json";
+    public static final String TRIAL_FILE_CHECKSUM = "trial_config.json.sha256";
+
     private Constants() {}
 }

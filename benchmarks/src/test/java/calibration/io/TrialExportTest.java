@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /// Unit tests for CalibrationBenchmark TSV exports and SHA-256 checksum generation.
-class TSVExportTest {
+class TrialExportTest {
 
     private static String computeSha256(Path file) throws Exception {
         MessageDigest digest = MessageDigest.getInstance("SHA-256");
@@ -89,12 +89,12 @@ class TSVExportTest {
 
     @Test
     void testExportRawObservationsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
-        TSVExport.exportRawObservationsTsv(tempDir, List.of());
+        TrialExport.exportRawObservationsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_CHECKSUM)));
 
-        TSVExport.exportRawObservationsTsv(null, List.of());
-        TSVExport.exportRawObservationsTsv(tempDir, null);
+        TrialExport.exportRawObservationsTsv(null, List.of());
+        TrialExport.exportRawObservationsTsv(tempDir, null);
     }
 
     @Test
@@ -104,7 +104,7 @@ class TSVExportTest {
         CoreIterationResult r1c0 = createPopulatedResult(1, 0);
         List<List<CoreIterationResult>> results = List.of(List.of(r0c0, r0c1), List.of(r1c0));
 
-        TSVExport.exportRawObservationsTsv(tempDir, results);
+        TrialExport.exportRawObservationsTsv(tempDir, results);
 
         Path tsv = tempDir.resolve(Constants.RAW_OBSERVATION_TSV);
         Path checksum = tempDir.resolve(Constants.RAW_OBSERVATION_CHECKSUM);
@@ -136,12 +136,12 @@ class TSVExportTest {
 
     @Test
     void testExportStatisticsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
-        TSVExport.exportStatisticsTsv(tempDir, List.of());
+        TrialExport.exportStatisticsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.STATISTICS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.STATISTICS_CHECKSUM)));
 
-        TSVExport.exportStatisticsTsv(null, List.of());
-        TSVExport.exportStatisticsTsv(tempDir, null);
+        TrialExport.exportStatisticsTsv(null, List.of());
+        TrialExport.exportStatisticsTsv(tempDir, null);
     }
 
     @Test
@@ -149,7 +149,7 @@ class TSVExportTest {
         CoreIterationResult r0c0 = createPopulatedResult(0, 0);
         List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
 
-        TSVExport.exportStatisticsTsv(tempDir, results);
+        TrialExport.exportStatisticsTsv(tempDir, results);
 
         Path tsv = tempDir.resolve(Constants.STATISTICS_TSV);
         Path checksum = tempDir.resolve(Constants.STATISTICS_CHECKSUM);
@@ -189,12 +189,12 @@ class TSVExportTest {
 
     @Test
     void testExportOccupancyTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
-        TSVExport.exportOccupancyTsv(tempDir, List.of());
+        TrialExport.exportOccupancyTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.OCCUPANCY_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.OCCUPANCY_CHECKSUM)));
 
-        TSVExport.exportOccupancyTsv(null, List.of());
-        TSVExport.exportOccupancyTsv(tempDir, null);
+        TrialExport.exportOccupancyTsv(null, List.of());
+        TrialExport.exportOccupancyTsv(tempDir, null);
     }
 
     @Test
@@ -202,7 +202,7 @@ class TSVExportTest {
         CoreIterationResult r0c0 = createPopulatedResult(0, 0);
         List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
 
-        TSVExport.exportOccupancyTsv(tempDir, results);
+        TrialExport.exportOccupancyTsv(tempDir, results);
 
         Path tsv = tempDir.resolve(Constants.OCCUPANCY_TSV);
         Path checksum = tempDir.resolve(Constants.OCCUPANCY_CHECKSUM);
@@ -224,12 +224,12 @@ class TSVExportTest {
 
     @Test
     void testExportTransitionsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
-        TSVExport.exportTransitionsTsv(tempDir, List.of());
+        TrialExport.exportTransitionsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.TRANSITIONS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.TRANSITIONS_CHECKSUM)));
 
-        TSVExport.exportTransitionsTsv(null, List.of());
-        TSVExport.exportTransitionsTsv(tempDir, null);
+        TrialExport.exportTransitionsTsv(null, List.of());
+        TrialExport.exportTransitionsTsv(tempDir, null);
     }
 
     @Test
@@ -237,7 +237,7 @@ class TSVExportTest {
         CoreIterationResult r0c0 = createPopulatedResult(0, 0);
         List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
 
-        TSVExport.exportTransitionsTsv(tempDir, results);
+        TrialExport.exportTransitionsTsv(tempDir, results);
 
         Path tsv = tempDir.resolve(Constants.TRANSITIONS_TSV);
         Path checksum = tempDir.resolve(Constants.TRANSITIONS_CHECKSUM);
@@ -259,12 +259,12 @@ class TSVExportTest {
 
     @Test
     void testExportVectorFieldsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
-        TSVExport.exportVectorFieldsTsv(tempDir, List.of());
+        TrialExport.exportVectorFieldsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.VECTOR_FIELDS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.VECTOR_FIELDS_CHECKSUM)));
 
-        TSVExport.exportVectorFieldsTsv(null, List.of());
-        TSVExport.exportVectorFieldsTsv(tempDir, null);
+        TrialExport.exportVectorFieldsTsv(null, List.of());
+        TrialExport.exportVectorFieldsTsv(tempDir, null);
     }
 
     @Test
@@ -272,7 +272,7 @@ class TSVExportTest {
         CoreIterationResult r0c0 = createPopulatedResult(0, 0);
         List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
 
-        TSVExport.exportVectorFieldsTsv(tempDir, results);
+        TrialExport.exportVectorFieldsTsv(tempDir, results);
 
         Path tsv = tempDir.resolve(Constants.VECTOR_FIELDS_TSV);
         Path checksum = tempDir.resolve(Constants.VECTOR_FIELDS_CHECKSUM);
@@ -294,12 +294,12 @@ class TSVExportTest {
 
     @Test
     void testExportCorrelationsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
-        TSVExport.exportCorrelationsTsv(tempDir, List.of());
+        TrialExport.exportCorrelationsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.CORRELATIONS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.CORRELATIONS_CHECKSUM)));
 
-        TSVExport.exportCorrelationsTsv(null, List.of());
-        TSVExport.exportCorrelationsTsv(tempDir, null);
+        TrialExport.exportCorrelationsTsv(null, List.of());
+        TrialExport.exportCorrelationsTsv(tempDir, null);
     }
 
     @Test
@@ -307,7 +307,7 @@ class TSVExportTest {
         CoreIterationResult r0c0 = createPopulatedResult(0, 0);
         List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
 
-        TSVExport.exportCorrelationsTsv(tempDir, results);
+        TrialExport.exportCorrelationsTsv(tempDir, results);
 
         Path tsv = tempDir.resolve(Constants.CORRELATIONS_TSV);
         Path checksum = tempDir.resolve(Constants.CORRELATIONS_CHECKSUM);

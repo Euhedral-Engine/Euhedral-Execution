@@ -1,11 +1,12 @@
 package calibration.benchmarks;
 
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.TrialConfig;
 import calibration.infra.BenchmarkObserver;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.CalibrationExecutor;
 import calibration.infra.Constants;
-import calibration.io.TSVExport;
+import calibration.io.TrialExport;
 import calibration.statistics.HighSpeedMetricsStatistics;
 import calibration.statistics.iteration.CoreIterationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,8 +21,10 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hashing.HasherApi;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.lang.invoke.VarHandle;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -48,19 +51,19 @@ public class CalibrationBenchmark {
 
     private final PaddedLongAdder executionCounter = new PaddedLongAdder(SystemInfo.CPU_COUNT);
 
-    private final CalibrationBenchmarkConfig calibrationConfig = getConfig();
+    private final TrialConfig trialConfig = getConfig();
+    private final CalibrationBenchmarkConfig calibrationConfig = trialConfig.calibrationConfig();
+    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
+    private final List<List<CoreIterationResult>> calculationResults = new ArrayList<>();
     private BenchmarkObserver observer;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
 
-    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
-    private final List<List<CoreIterationResult>> calculationResults = new ArrayList<>();
-
-    private static CalibrationBenchmarkConfig getConfig() {
+    private static TrialConfig getConfig() {
         String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
         ObjectMapper mapper = new ObjectMapper();
         try {
-            return mapper.readValue(new File(configPath), CalibrationBenchmarkConfig.class);
+            return mapper.readValue(new File(configPath), TrialConfig.class);
         } catch (Exception e) {
             throw new RuntimeException("Failed to read calibration config", e);
         }
@@ -84,8 +87,6 @@ public class CalibrationBenchmark {
     }
 
     private static void await(long target, PaddedLongAdder counters, long timeoutMs) {
-        // Benchmark thread stays off active cores
-        ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet());
         long now = System.nanoTime();
         long deadline = now + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
 
@@ -105,7 +106,12 @@ public class CalibrationBenchmark {
 
     @Setup(Level.Trial)
     public void trialSetup() {
+        // Benchmark thread stays off active cores
+        ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet());
         UnmodifiableBitSet cpuSet = parseBitset(getRequiredPropertyValue(Constants.CPU_SET_PROP));
+        if (cpuSet.isEmpty()) {
+            throw new IllegalArgumentException("Cpu set cannot be empty");
+        }
         this.observer = new BenchmarkObserver(this.calibrationConfig);
         this.sinks =
                 new RepeatingSink[this.calibrationConfig.parallelSources() + this.calibrationConfig.orderedSources()];
@@ -114,9 +120,11 @@ public class CalibrationBenchmark {
         int idx = 0;
         for (int i = 0; i < this.calibrationConfig.parallelSources(); i++) {
             this.sinks[idx++] = new RepeatingSink(NoOpFrame.generate(idHash, 1_024, this.executionCounter, false));
+            idHash = HasherApi.mix(idHash + 1);
         }
         for (int i = 0; i < this.calibrationConfig.orderedSources(); i++) {
-            this.sinks[idx++] = new RepeatingSink(NoOpFrame.generate(idHash, 1_024, this.executionCounter, false));
+            this.sinks[idx++] = new RepeatingSink(NoOpFrame.generate(idHash, 1_024, this.executionCounter, true));
+            idHash = HasherApi.mix(idHash + 1);
         }
 
         LatticeConfig latticeConfig = LatticeConfig.ofBenchmark(
@@ -139,11 +147,13 @@ public class CalibrationBenchmark {
 
     @Benchmark
     public void calibrate(OperationCounter opCounter) {
-        this.executionCounter.reset();
+        long sum = this.executionCounter.sum();
         await(
-                this.calibrationConfig.totalRequiredExecutions(),
+                sum + this.calibrationConfig.totalRequiredExecutions(),
                 this.executionCounter,
                 this.calibrationConfig.invocationTimeoutMillis());
+        // An accurate count of executions is not needed here. The observer has the fine-grained
+        // statistics. JMH provides the coarse aggregate used for an overall view.
         opCounter.executions += this.calibrationConfig.totalRequiredExecutions();
     }
 
@@ -160,11 +170,16 @@ public class CalibrationBenchmark {
         this.controlPlane.close();
         SpinWait.awaitWhile(() -> this.controlPlane.getActiveWorkers() > 0);
 
+        // getActiveWorkers is atomic. Fragments only decrement when they are out of the cycle loop
+        // This fence is purely for redundancy.
         VarHandle.fullFence();
+        for (int i = 0; i < this.trialConfig.warmups(); i++) {
+            this.observations.removeFirst();
+        }
         int iteration = 0;
         for (PaddedAtomicReferenceArray<HighSpeedMetrics> iterationMetrics : this.observations) {
             List<CoreIterationResult> iterationResults = new ArrayList<>();
-            for (int core = 0; core < SystemInfo.getMaxCoreId(); core++) {
+            for (int core = 0; core < SystemInfo.getMaxCoreId() + 1; core++) {
                 HighSpeedMetrics samples = iterationMetrics.getPlain(core);
                 if (samples == null) {
                     continue;
@@ -179,16 +194,22 @@ public class CalibrationBenchmark {
         if (output == null || output.isBlank()) {
             return;
         }
-        Path path = Path.of(output);
+        Path path = Path.of(output, "fork-" + System.currentTimeMillis() + "/");
         File outputDir = path.toFile();
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new RuntimeException("Failed to create output directory: " + output);
         }
-        TSVExport.exportAll(path, this.calculationResults);
-    }
 
-    public List<List<CoreIterationResult>> getCalculationResults() {
-        return Collections.unmodifiableList(this.calculationResults);
+        File configFile = Path.of(output).resolve(Constants.TRIAL_FILE_NAME).toFile();
+        if (!configFile.exists()) {
+            ObjectMapper mapper = new ObjectMapper();
+            String trialJson = mapper.writeValueAsString(this.trialConfig);
+            try (BufferedWriter writer = Files.newBufferedWriter(configFile.toPath())) {
+                writer.write(trialJson);
+            }
+            TrialExport.writeChecksum(configFile.toPath());
+        }
+        TrialExport.exportAll(path, this.calculationResults);
     }
 
     @State(Scope.Thread)
