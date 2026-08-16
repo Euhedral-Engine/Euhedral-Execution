@@ -102,4 +102,22 @@ public record ScalarSummary(
     public double p95ToP50Ratio() {
         return quantiles.p95ToP50Ratio();
     }
+
+    public String toTsvRow() {
+        return count() + "\t"
+                + mean() + "\t"
+                + standardDeviation() + "\t"
+                + variance() + "\t"
+                + coefficientOfVariation() + "\t"
+                + min() + "\t"
+                + max() + "\t"
+                + median() + "\t"
+                + p25() + "\t"
+                + p50() + "\t"
+                + p75() + "\t"
+                + p95() + "\t"
+                + iqr() + "\t"
+                + normalizedIqr() + "\t"
+                + p95ToP50Ratio();
+    }
 }

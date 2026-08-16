@@ -1,7 +1,6 @@
 package calibration.statistics.iteration;
 
 import calibration.statistics.Band;
-
 import java.util.Arrays;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;

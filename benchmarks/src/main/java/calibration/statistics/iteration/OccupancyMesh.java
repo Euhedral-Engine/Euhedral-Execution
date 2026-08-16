@@ -1,9 +1,8 @@
 package calibration.statistics.iteration;
 
+import calibration.statistics.Band;
 import java.util.Arrays;
 import java.util.Objects;
-
-import calibration.statistics.Band;
 import org.jspecify.annotations.NonNull;
 
 /// Direct analysis and accumulation for 5x5 occupancy mesh.

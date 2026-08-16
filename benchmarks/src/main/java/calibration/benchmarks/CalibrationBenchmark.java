@@ -5,8 +5,9 @@ import calibration.infra.BenchmarkObserver;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.CalibrationExecutor;
 import calibration.infra.Constants;
-import calibration.statistics.iteration.CoreIterationResult;
+import calibration.io.TSVExport;
 import calibration.statistics.HighSpeedMetricsStatistics;
+import calibration.statistics.iteration.CoreIterationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
@@ -21,6 +22,7 @@ import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.euhedral_execution.hashing.HasherApi;
 import java.io.File;
 import java.lang.invoke.VarHandle;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
@@ -151,7 +153,7 @@ public class CalibrationBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void trialTeardown() {
+    public void trialTeardown() throws Exception {
         for (RepeatingSink s : this.sinks) {
             s.complete();
         }
@@ -173,40 +175,20 @@ public class CalibrationBenchmark {
             this.calculationResults.add(Collections.unmodifiableList(iterationResults));
             iteration++;
         }
+        String output = System.getProperty(Constants.OUTPUT_DIRECTORY_PROP);
+        if (output == null || output.isBlank()) {
+            return;
+        }
+        Path path = Path.of(output);
+        File outputDir = path.toFile();
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
+            throw new RuntimeException("Failed to create output directory: " + output);
+        }
+        TSVExport.exportAll(path, this.calculationResults);
     }
 
     public List<List<CoreIterationResult>> getCalculationResults() {
         return Collections.unmodifiableList(this.calculationResults);
-    }
-
-    /// Future TSV persistence stub for raw observations.
-    public static void exportRawObservationsTsv(List<List<CoreIterationResult>> results) {
-        // TODO: Implement in persistence phase
-    }
-
-    /// Future TSV persistence stub for descriptive and quantile statistics.
-    public static void exportStatisticsTsv(List<List<CoreIterationResult>> results) {
-        // TODO: Implement in persistence phase
-    }
-
-    /// Future TSV persistence stub for 5x5 branch occupancy results.
-    public static void exportOccupancyTsv(List<List<CoreIterationResult>> results) {
-        // TODO: Implement in persistence phase
-    }
-
-    /// Future TSV persistence stub for 25x25 state transition matrices.
-    public static void exportTransitionsTsv(List<List<CoreIterationResult>> results) {
-        // TODO: Implement in persistence phase
-    }
-
-    /// Future TSV persistence stub for 5x5 vector field displacement results.
-    public static void exportVectorFieldsTsv(List<List<CoreIterationResult>> results) {
-        // TODO: Implement in persistence phase
-    }
-
-    /// Future TSV persistence stub for Pearson and Spearman correlation matrices.
-    public static void exportCorrelationsTsv(List<List<CoreIterationResult>> results) {
-        // TODO: Implement in persistence phase
     }
 
     @State(Scope.Thread)

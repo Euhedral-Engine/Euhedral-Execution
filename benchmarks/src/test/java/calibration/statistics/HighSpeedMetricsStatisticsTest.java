@@ -4,11 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import calibration.benchmarks.CalibrationBenchmark;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
-
-import java.util.List;
-
 import calibration.statistics.iteration.BatchCompleteStatistics;
 import calibration.statistics.iteration.BatchProgressStatistics;
 import calibration.statistics.iteration.BranchOccupancyResult;
@@ -378,18 +374,5 @@ class HighSpeedMetricsStatisticsTest {
         assertEquals(5, result.core());
         assertEquals(0L, result.cycleStartTotal());
         assertTrue(result.cycleStart().head().completed().isEmpty());
-    }
-
-    @Test
-    void testTsvStubsPerformNoWrites() {
-        List<List<CoreIterationResult>> emptyResults = List.of();
-
-        // Stubs must execute cleanly without side effects or exceptions
-        CalibrationBenchmark.exportRawObservationsTsv(emptyResults);
-        CalibrationBenchmark.exportStatisticsTsv(emptyResults);
-        CalibrationBenchmark.exportOccupancyTsv(emptyResults);
-        CalibrationBenchmark.exportTransitionsTsv(emptyResults);
-        CalibrationBenchmark.exportVectorFieldsTsv(emptyResults);
-        CalibrationBenchmark.exportCorrelationsTsv(emptyResults);
     }
 }

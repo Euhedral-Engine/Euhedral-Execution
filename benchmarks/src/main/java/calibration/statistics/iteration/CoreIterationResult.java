@@ -21,6 +21,8 @@ public record CoreIterationResult(
         @NonNull DecisionStatistics idleDecisions,
         @NonNull DecisionStatistics execDecisions,
         double centroidDistance) {
+    public static final String TSV_HEADER =
+            "iteration\tcore\tcycleStartTotal\tbatchProgressTotal\tbatchCompleteTotal\trawBodyCostTotal\tidleDecisionTotal\texecDecisionTotal\tcentroidDistance\n";
 
     public static final CoreIterationResult EMPTY = new CoreIterationResult(
             0,
@@ -105,5 +107,17 @@ public record CoreIterationResult(
 
     public VectorField execSteadyStateVectorField() {
         return execDecisions.steadyStateVectorField();
+    }
+
+    public String toTsvRow() {
+        return iterationIndex + "\t"
+                + core + "\t"
+                + cycleStartTotal + "\t"
+                + batchProgressTotal + "\t"
+                + batchCompleteTotal + "\t"
+                + rawBodyCostTotal + "\t"
+                + idleDecisionTotal + "\t"
+                + execDecisionTotal + "\t"
+                + centroidDistance;
     }
 }

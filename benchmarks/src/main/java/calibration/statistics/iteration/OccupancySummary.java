@@ -1,9 +1,8 @@
 package calibration.statistics.iteration;
 
+import calibration.statistics.Band;
 import java.util.Arrays;
 import java.util.Objects;
-
-import calibration.statistics.Band;
 import org.jspecify.annotations.Nullable;
 
 /// Fixed 5x5 occupancy summary for branch counts.
@@ -110,5 +109,15 @@ public record OccupancySummary(
                 radius);
         result = 31 * result + Arrays.deepHashCode(probabilities);
         return result;
+    }
+
+    public String toTsvRow() {
+        return contentionCentroid + "\t"
+                + bodyCentroid + "\t"
+                + contentionVariance + "\t"
+                + bodyVariance + "\t"
+                + contentionBodyCovariance + "\t"
+                + radiusSquared + "\t"
+                + radius;
     }
 }

@@ -1,9 +1,8 @@
 package calibration.statistics;
 
+import calibration.statistics.iteration.TransitionAnalysis;
 import java.util.List;
 import java.util.Objects;
-
-import calibration.statistics.iteration.TransitionAnalysis;
 import org.jspecify.annotations.NonNull;
 
 /// 5x5 local vector field showing average next-state displacement for every source cell.

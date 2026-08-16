@@ -16,4 +16,8 @@ public record VectorCell(
     public static VectorCell empty(int contentionBand, int bodyBand) {
         return new VectorCell(contentionBand, bodyBand, 0L, Double.NaN, Double.NaN, Double.NaN);
     }
+
+    public String toTsvRow() {
+        return transitionCount + "\t" + meanDeltaContention + "\t" + meanDeltaBody + "\t" + magnitude;
+    }
 }
