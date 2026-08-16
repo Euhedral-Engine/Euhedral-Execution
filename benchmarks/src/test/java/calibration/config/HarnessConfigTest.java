@@ -50,7 +50,20 @@ class HarnessConfigTest {
 
     private static CalibrationBenchmarkConfig dummyCalibrationConfig() {
         return new CalibrationBenchmarkConfig(
-                1, 1, 10, false, 100, 1000, FragmentDecisionWeights.DEFAULT, false, false, false, false, false, false);
+                1,
+                1,
+                10,
+                false,
+                100,
+                1000,
+                FragmentDecisionWeights.DEFAULT,
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
     }
 
     /// Verifies static constant CURRENT_SCHEMA_VERSION.
@@ -84,6 +97,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -148,6 +162,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -309,6 +324,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -403,6 +419,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -489,6 +506,7 @@ class HarnessConfigTest {
                     "execBodyCostWeights": [],
                     "executionPolicies": []
                   },
+                  "rawSampleLimit": 1024,
                   "observeCycleStart": false,
                   "observeBatchProgress": false,
                   "observeBatchComplete": false,
@@ -517,7 +535,9 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
-                    "observeCycleStart": false,
+                    "rawSampleLimit": 1024,
+                    "rawSampleLimit": 1024,
+                  "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
                     "observeRawBodyCost": false,
@@ -561,6 +581,7 @@ class HarnessConfigTest {
                     "execBodyCostWeights": [],
                     "executionPolicies": []
                   },
+                  "rawSampleLimit": 1024,
                   "observeCycleStart": false,
                   "observeBatchProgress": false,
                   "observeBatchComplete": false,
@@ -653,6 +674,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -809,6 +831,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -1069,6 +1092,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -1234,6 +1258,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -1265,6 +1290,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,
@@ -1363,6 +1389,7 @@ class HarnessConfigTest {
                       "execBodyCostWeights": [],
                       "executionPolicies": []
                     },
+                    "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
                     "observeBatchComplete": false,

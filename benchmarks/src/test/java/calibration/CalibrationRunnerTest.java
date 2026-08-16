@@ -38,6 +38,7 @@ class CalibrationRunnerTest {
                 1000000,
                 60000,
                 FragmentDecisionWeights.DEFAULT,
+                1024,
                 false,
                 false,
                 false,

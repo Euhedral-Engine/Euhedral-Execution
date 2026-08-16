@@ -77,6 +77,7 @@
           { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
         ]
       },
+      "rawSampleLimit": 1024,
       "observeCycleStart": false,
       "observeBatchProgress": false,
       "observeBatchComplete": false,
@@ -121,6 +122,7 @@
           { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
         ]
       },
+      "rawSampleLimit": 1024,
       "observeCycleStart": false,
       "observeBatchProgress": false,
       "observeBatchComplete": false,
@@ -309,7 +311,8 @@
             { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
           ]
         },
-        "observeCycleStart": false,
+        "rawSampleLimit": 1024,
+      "observeCycleStart": false,
         "observeBatchProgress": false,
         "observeBatchComplete": false,
         "observeRawBodyCost": false,
@@ -383,7 +386,8 @@
             { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
           ]
         },
-        "observeCycleStart": false,
+        "rawSampleLimit": 1024,
+      "observeCycleStart": false,
         "observeBatchProgress": false,
         "observeBatchComplete": false,
         "observeRawBodyCost": false,

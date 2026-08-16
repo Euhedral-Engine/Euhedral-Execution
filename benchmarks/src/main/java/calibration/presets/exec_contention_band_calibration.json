@@ -116,6 +116,7 @@
             { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
           ]
         },
+        "rawSampleLimit": 1024,
         "observeCycleStart": false,
         "observeBatchProgress": false,
         "observeBatchComplete": false,

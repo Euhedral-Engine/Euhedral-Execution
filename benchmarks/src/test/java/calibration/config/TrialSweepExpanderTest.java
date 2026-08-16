@@ -53,6 +53,7 @@ class TrialSweepExpanderTest {
                 1_000_000,
                 60_000,
                 FragmentDecisionWeights.DEFAULT,
+                1024,
                 false,
                 false,
                 false,
