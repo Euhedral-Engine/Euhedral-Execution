@@ -4,10 +4,11 @@ import calibration.statistics.VectorField;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// Complete structured calculation results for a single physical core during one iteration.
-public record CoreIterationResult(
+/// Complete structured calculation results aggregated across all participating cores for one JMH iteration.
+/// Represents whole-system scheduler behavior as the primary calibration and comparison view.
+public record SystemIterationResult(
         int iterationIndex,
-        int core,
+        int participatingCoreCount,
         long cycleStartTotal,
         long batchProgressTotal,
         long batchCompleteTotal,
@@ -21,10 +22,11 @@ public record CoreIterationResult(
         @NonNull DecisionStatistics idleDecisions,
         @NonNull DecisionStatistics execDecisions,
         double centroidDistance) {
+
     public static final String TSV_HEADER =
             "iteration\tscope\tcore\tcycleStartTotal\tbatchProgressTotal\tbatchCompleteTotal\trawBodyCostTotal\tidleDecisionTotal\texecDecisionTotal\tcentroidDistance\n";
 
-    public static final CoreIterationResult EMPTY = new CoreIterationResult(
+    public static final SystemIterationResult EMPTY = new SystemIterationResult(
             0,
             0,
             0L,
@@ -41,7 +43,7 @@ public record CoreIterationResult(
             DecisionStatistics.EMPTY,
             Double.NaN);
 
-    public CoreIterationResult {
+    public SystemIterationResult {
         Objects.requireNonNull(cycleStart, "cycleStart must not be null");
         Objects.requireNonNull(batchProgress, "batchProgress must not be null");
         Objects.requireNonNull(batchComplete, "batchComplete must not be null");
@@ -50,10 +52,10 @@ public record CoreIterationResult(
         Objects.requireNonNull(execDecisions, "execDecisions must not be null");
     }
 
-    public static CoreIterationResult empty(int iterationIndex, int core) {
-        return new CoreIterationResult(
+    public static SystemIterationResult empty(int iterationIndex, int participatingCoreCount) {
+        return new SystemIterationResult(
                 iterationIndex,
-                core,
+                participatingCoreCount,
                 0L,
                 0L,
                 0L,
@@ -110,8 +112,8 @@ public record CoreIterationResult(
     }
 
     public String toTsvRow() {
-        return iterationIndex + "\tCORE\t"
-                + core + "\t"
+        return iterationIndex + "\tSYSTEM\t"
+                + -1 + "\t"
                 + cycleStartTotal + "\t"
                 + batchProgressTotal + "\t"
                 + batchCompleteTotal + "\t"

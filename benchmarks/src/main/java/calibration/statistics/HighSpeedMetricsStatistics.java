@@ -15,14 +15,19 @@ import calibration.statistics.iteration.DecisionStatistics;
 import calibration.statistics.iteration.OccupancySummary;
 import calibration.statistics.iteration.RawBodyCostStatistics;
 import calibration.statistics.iteration.ScalarSummary;
+import calibration.statistics.iteration.SystemIterationResult;
 import calibration.statistics.iteration.TransitionAnalysis;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
 /// Authoritative calculation engine for detached HighSpeedMetrics.
 ///
 /// Converts captured raw observation buffers and exact branch counters into immutable
-/// descriptive, quantile, occupancy, transition, vector-field, and correlation results.
+/// descriptive, quantile, occupancy, transition, vector-field, and correlation results
+/// for individual cores and aggregated whole-system calibration summaries.
 public final class HighSpeedMetricsStatistics {
 
     private HighSpeedMetricsStatistics() {}
@@ -40,14 +45,14 @@ public final class HighSpeedMetricsStatistics {
         }
 
         metrics.align();
-        int limit = metrics.rawSampleLimit;
+        List<HighSpeedMetrics> list = List.of(metrics);
 
-        CycleStartStatistics cycleStart = calculateCycleStart(metrics, limit);
-        BatchProgressStatistics batchProgress = calculateBatchProgress(metrics, limit);
-        BatchCompleteStatistics batchComplete = calculateBatchComplete(metrics, limit);
-        RawBodyCostStatistics rawBodyCost = calculateRawBodyCost(metrics, limit);
-        DecisionStatistics idleDecisions = calculateIdleDecisions(metrics, limit);
-        DecisionStatistics execDecisions = calculateExecDecisions(metrics, limit);
+        CycleStartStatistics cycleStart = calculateCycleStart(list);
+        BatchProgressStatistics batchProgress = calculateBatchProgress(list);
+        BatchCompleteStatistics batchComplete = calculateBatchComplete(list);
+        RawBodyCostStatistics rawBodyCost = calculateRawBodyCost(list);
+        DecisionStatistics idleDecisions = calculateIdleDecisions(list);
+        DecisionStatistics execDecisions = calculateExecDecisions(list);
 
         double centroidDistance = OccupancySummary.distance(
                 idleDecisions.occupancy().summary(), execDecisions.occupancy().summary());
@@ -70,49 +75,271 @@ public final class HighSpeedMetricsStatistics {
                 centroidDistance);
     }
 
-    private static CycleStartStatistics calculateCycleStart(HighSpeedMetrics metrics, int limit) {
-        long total = metrics.cycleStartObservations;
+    /// Calculates whole-system aggregated statistics across participating cores.
+    public static @NonNull SystemIterationResult calculateSystem(
+            int iterationIndex, @Nullable Collection<HighSpeedMetrics> metrics) {
+        if (metrics == null || metrics.isEmpty()) {
+            return SystemIterationResult.empty(iterationIndex, 0);
+        }
+
+        List<HighSpeedMetrics> validMetrics = new ArrayList<>(metrics.size());
+        for (HighSpeedMetrics m : metrics) {
+            if (m != null) {
+                m.align();
+                validMetrics.add(m);
+            }
+        }
+
+        if (validMetrics.isEmpty()) {
+            return SystemIterationResult.empty(iterationIndex, 0);
+        }
+
+        CycleStartStatistics cycleStart = calculateCycleStart(validMetrics);
+        BatchProgressStatistics batchProgress = calculateBatchProgress(validMetrics);
+        BatchCompleteStatistics batchComplete = calculateBatchComplete(validMetrics);
+        RawBodyCostStatistics rawBodyCost = calculateRawBodyCost(validMetrics);
+        DecisionStatistics idleDecisions = calculateIdleDecisions(validMetrics);
+        DecisionStatistics execDecisions = calculateExecDecisions(validMetrics);
+
+        double centroidDistance = OccupancySummary.distance(
+                idleDecisions.occupancy().summary(), execDecisions.occupancy().summary());
+
+        return new SystemIterationResult(
+                iterationIndex,
+                validMetrics.size(),
+                cycleStart.totalObservations(),
+                batchProgress.totalObservations(),
+                batchComplete.totalObservations(),
+                rawBodyCost.totalObservations(),
+                idleDecisions.totalObservations(),
+                execDecisions.totalObservations(),
+                cycleStart,
+                batchProgress,
+                batchComplete,
+                rawBodyCost,
+                idleDecisions,
+                execDecisions,
+                centroidDistance);
+    }
+
+    private static CycleStartStatistics calculateCycleStart(List<HighSpeedMetrics> metricsList) {
+        long total = 0L;
+        int hTotalLen = 0;
+        int tTotalLen = 0;
+        int cTotalLen = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.cycleStartObservations;
+            total += obs;
+            if (obs > 0L) {
+                int limit = m.rawSampleLimit;
+                int hLen = (int) Math.min(obs, limit);
+                int tLen = (int) Math.min(obs, limit);
+                int cLen = obs <= hLen ? hLen : (hLen + tLen);
+                hTotalLen += hLen;
+                tTotalLen += tLen;
+                cTotalLen += cLen;
+            }
+        }
+
         if (total == 0L) {
             return CycleStartStatistics.EMPTY;
         }
 
-        int hLen = (int) Math.min(total, limit);
-        int tLen = (int) Math.min(total, limit);
+        double[] hCompleted = new double[hTotalLen];
+        double[] hBatchSize = new double[hTotalLen];
+        double[] hUpstream = new double[hTotalLen];
+        double[] hWorkers = new double[hTotalLen];
+        double[] hRank = new double[hTotalLen];
+        double[] hContention = new double[hTotalLen];
+        double[] hThroughput = new double[hTotalLen];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][7] : new double[0][0];
 
-        double[] hCompleted = extractColumn(metrics.cycleStartWarmupState, hLen, 2);
-        double[] tCompleted = extractColumn(metrics.cycleStartSteadyStateState, tLen, 2);
-        double[] cCompleted =
-                combineColumns(metrics.cycleStartWarmupState, hLen, metrics.cycleStartSteadyStateState, tLen, total, 2);
+        double[] tCompleted = new double[tTotalLen];
+        double[] tBatchSize = new double[tTotalLen];
+        double[] tUpstream = new double[tTotalLen];
+        double[] tWorkers = new double[tTotalLen];
+        double[] tRank = new double[tTotalLen];
+        double[] tContention = new double[tTotalLen];
+        double[] tThroughput = new double[tTotalLen];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][7] : new double[0][0];
 
-        double[] hBatchSize = extractColumn(metrics.cycleStartWarmupState, hLen, 3);
-        double[] tBatchSize = extractColumn(metrics.cycleStartSteadyStateState, tLen, 3);
-        double[] cBatchSize =
-                combineColumns(metrics.cycleStartWarmupState, hLen, metrics.cycleStartSteadyStateState, tLen, total, 3);
+        double[] cCompleted = new double[cTotalLen];
+        double[] cBatchSize = new double[cTotalLen];
+        double[] cUpstream = new double[cTotalLen];
+        double[] cWorkers = new double[cTotalLen];
+        double[] cRank = new double[cTotalLen];
+        double[] cContention = new double[cTotalLen];
+        double[] cThroughput = new double[cTotalLen];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][7] : new double[0][0];
 
-        double[] hUpstream = extractColumn(metrics.cycleStartWarmupState, hLen, 4);
-        double[] tUpstream = extractColumn(metrics.cycleStartSteadyStateState, tLen, 4);
-        double[] cUpstream =
-                combineColumns(metrics.cycleStartWarmupState, hLen, metrics.cycleStartSteadyStateState, tLen, total, 4);
+        int hOffset = 0;
+        int tOffset = 0;
+        int cOffset = 0;
 
-        double[] hWorkers = extractColumn(metrics.cycleStartWarmupState, hLen, 5);
-        double[] tWorkers = extractColumn(metrics.cycleStartSteadyStateState, tLen, 5);
-        double[] cWorkers =
-                combineColumns(metrics.cycleStartWarmupState, hLen, metrics.cycleStartSteadyStateState, tLen, total, 5);
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.cycleStartObservations;
+            if (obs == 0L) {
+                continue;
+            }
+            int limit = m.rawSampleLimit;
+            int hLen = (int) Math.min(obs, limit);
+            int tLen = (int) Math.min(obs, limit);
 
-        double[] hRank = extractColumn(metrics.cycleStartWarmupState, hLen, 6);
-        double[] tRank = extractColumn(metrics.cycleStartSteadyStateState, tLen, 6);
-        double[] cRank =
-                combineColumns(metrics.cycleStartWarmupState, hLen, metrics.cycleStartSteadyStateState, tLen, total, 6);
+            // Head
+            for (int i = 0; i < hLen; i++) {
+                int idx = hOffset + i;
+                double comp = (double) m.cycleStartWarmupState[i][2];
+                double bs = (double) m.cycleStartWarmupState[i][3];
+                double up = (double) m.cycleStartWarmupState[i][4];
+                double wrk = (double) m.cycleStartWarmupState[i][5];
+                double rk = (double) m.cycleStartWarmupState[i][6];
+                double cnt = (double) m.cycleStartWarmupState[i][7];
+                double tp = m.cycleStartWarmupThroughput[i];
 
-        double[] hContention = extractColumn(metrics.cycleStartWarmupState, hLen, 7);
-        double[] tContention = extractColumn(metrics.cycleStartSteadyStateState, tLen, 7);
-        double[] cContention =
-                combineColumns(metrics.cycleStartWarmupState, hLen, metrics.cycleStartSteadyStateState, tLen, total, 7);
+                hCompleted[idx] = comp;
+                hBatchSize[idx] = bs;
+                hUpstream[idx] = up;
+                hWorkers[idx] = wrk;
+                hRank[idx] = rk;
+                hContention[idx] = cnt;
+                hThroughput[idx] = tp;
 
-        double[] hThroughput = extractDouble(metrics.cycleStartWarmupThroughput, hLen);
-        double[] tThroughput = extractDouble(metrics.cycleStartSteadyStateThroughput, tLen);
-        double[] cThroughput = combineDoubles(
-                metrics.cycleStartWarmupThroughput, hLen, metrics.cycleStartSteadyStateThroughput, tLen, total);
+                if (hData.length > 0) {
+                    hData[idx][0] = comp;
+                    hData[idx][1] = bs;
+                    hData[idx][2] = up;
+                    hData[idx][3] = wrk;
+                    hData[idx][4] = rk;
+                    hData[idx][5] = cnt;
+                    hData[idx][6] = tp;
+                }
+            }
+            hOffset += hLen;
+
+            // SteadyState
+            for (int i = 0; i < tLen; i++) {
+                int idx = tOffset + i;
+                double comp = (double) m.cycleStartSteadyStateState[i][2];
+                double bs = (double) m.cycleStartSteadyStateState[i][3];
+                double up = (double) m.cycleStartSteadyStateState[i][4];
+                double wrk = (double) m.cycleStartSteadyStateState[i][5];
+                double rk = (double) m.cycleStartSteadyStateState[i][6];
+                double cnt = (double) m.cycleStartSteadyStateState[i][7];
+                double tp = m.cycleStartSteadyStateThroughput[i];
+
+                tCompleted[idx] = comp;
+                tBatchSize[idx] = bs;
+                tUpstream[idx] = up;
+                tWorkers[idx] = wrk;
+                tRank[idx] = rk;
+                tContention[idx] = cnt;
+                tThroughput[idx] = tp;
+
+                if (tData.length > 0) {
+                    tData[idx][0] = comp;
+                    tData[idx][1] = bs;
+                    tData[idx][2] = up;
+                    tData[idx][3] = wrk;
+                    tData[idx][4] = rk;
+                    tData[idx][5] = cnt;
+                    tData[idx][6] = tp;
+                }
+            }
+            tOffset += tLen;
+
+            // Combined
+            if (obs <= hLen) {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double comp = (double) m.cycleStartWarmupState[i][2];
+                    double bs = (double) m.cycleStartWarmupState[i][3];
+                    double up = (double) m.cycleStartWarmupState[i][4];
+                    double wrk = (double) m.cycleStartWarmupState[i][5];
+                    double rk = (double) m.cycleStartWarmupState[i][6];
+                    double cnt = (double) m.cycleStartWarmupState[i][7];
+                    double tp = m.cycleStartWarmupThroughput[i];
+
+                    cCompleted[idx] = comp;
+                    cBatchSize[idx] = bs;
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cThroughput[idx] = tp;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = comp;
+                        cData[idx][1] = bs;
+                        cData[idx][2] = up;
+                        cData[idx][3] = wrk;
+                        cData[idx][4] = rk;
+                        cData[idx][5] = cnt;
+                        cData[idx][6] = tp;
+                    }
+                }
+                cOffset += hLen;
+            } else {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double comp = (double) m.cycleStartWarmupState[i][2];
+                    double bs = (double) m.cycleStartWarmupState[i][3];
+                    double up = (double) m.cycleStartWarmupState[i][4];
+                    double wrk = (double) m.cycleStartWarmupState[i][5];
+                    double rk = (double) m.cycleStartWarmupState[i][6];
+                    double cnt = (double) m.cycleStartWarmupState[i][7];
+                    double tp = m.cycleStartWarmupThroughput[i];
+
+                    cCompleted[idx] = comp;
+                    cBatchSize[idx] = bs;
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cThroughput[idx] = tp;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = comp;
+                        cData[idx][1] = bs;
+                        cData[idx][2] = up;
+                        cData[idx][3] = wrk;
+                        cData[idx][4] = rk;
+                        cData[idx][5] = cnt;
+                        cData[idx][6] = tp;
+                    }
+                }
+                cOffset += hLen;
+                for (int i = 0; i < tLen; i++) {
+                    int idx = cOffset + i;
+                    double comp = (double) m.cycleStartSteadyStateState[i][2];
+                    double bs = (double) m.cycleStartSteadyStateState[i][3];
+                    double up = (double) m.cycleStartSteadyStateState[i][4];
+                    double wrk = (double) m.cycleStartSteadyStateState[i][5];
+                    double rk = (double) m.cycleStartSteadyStateState[i][6];
+                    double cnt = (double) m.cycleStartSteadyStateState[i][7];
+                    double tp = m.cycleStartSteadyStateThroughput[i];
+
+                    cCompleted[idx] = comp;
+                    cBatchSize[idx] = bs;
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cThroughput[idx] = tp;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = comp;
+                        cData[idx][1] = bs;
+                        cData[idx][2] = up;
+                        cData[idx][3] = wrk;
+                        cData[idx][4] = rk;
+                        cData[idx][5] = cnt;
+                        cData[idx][6] = tp;
+                    }
+                }
+                cOffset += tLen;
+            }
+        }
 
         CycleStartScalars headScalars = new CycleStartScalars(
                 ScalarSummary.of(hCompleted),
@@ -123,7 +350,7 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(hContention),
                 ScalarSummary.of(hThroughput));
 
-        CycleStartScalars SteadyStateScalars = new CycleStartScalars(
+        CycleStartScalars steadyStateScalars = new CycleStartScalars(
                 ScalarSummary.of(tCompleted),
                 ScalarSummary.of(tBatchSize),
                 ScalarSummary.of(tUpstream),
@@ -141,63 +368,180 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(cContention),
                 ScalarSummary.of(cThroughput));
 
-        double[][] hData =
-                buildCycleStartMatrix(metrics.cycleStartWarmupState, metrics.cycleStartWarmupThroughput, hLen);
-        double[][] tData = buildCycleStartMatrix(
-                metrics.cycleStartSteadyStateState, metrics.cycleStartSteadyStateThroughput, tLen);
-        double[][] cData = buildCycleStartCombinedMatrix(
-                metrics.cycleStartWarmupState,
-                metrics.cycleStartWarmupThroughput,
-                hLen,
-                metrics.cycleStartSteadyStateState,
-                metrics.cycleStartSteadyStateThroughput,
-                tLen,
-                total);
-
         CorrelationResult hCorr = CorrelationResult.of(CycleStartStatistics.COLUMN_NAMES, hData);
         CorrelationResult tCorr = CorrelationResult.of(CycleStartStatistics.COLUMN_NAMES, tData);
         CorrelationResult cCorr = CorrelationResult.of(CycleStartStatistics.COLUMN_NAMES, cData);
 
-        return new CycleStartStatistics(total, headScalars, SteadyStateScalars, combinedScalars, hCorr, tCorr, cCorr);
+        return new CycleStartStatistics(total, headScalars, steadyStateScalars, combinedScalars, hCorr, tCorr, cCorr);
     }
 
-    private static BatchProgressStatistics calculateBatchProgress(HighSpeedMetrics metrics, int limit) {
-        long total = metrics.batchProgressObservations;
+    private static BatchProgressStatistics calculateBatchProgress(List<HighSpeedMetrics> metricsList) {
+        long total = 0L;
+        int hTotalLen = 0;
+        int tTotalLen = 0;
+        int cTotalLen = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.batchProgressObservations;
+            total += obs;
+            if (obs > 0L) {
+                int limit = m.rawSampleLimit;
+                int hLen = (int) Math.min(obs, limit);
+                int tLen = (int) Math.min(obs, limit);
+                int cLen = obs <= hLen ? hLen : (hLen + tLen);
+                hTotalLen += hLen;
+                tTotalLen += tLen;
+                cTotalLen += cLen;
+            }
+        }
+
         if (total == 0L) {
             return BatchProgressStatistics.EMPTY;
         }
 
-        int hLen = (int) Math.min(total, limit);
-        int tLen = (int) Math.min(total, limit);
+        double[] hUpstream = new double[hTotalLen];
+        double[] hWorkers = new double[hTotalLen];
+        double[] hRank = new double[hTotalLen];
+        double[] hContention = new double[hTotalLen];
+        double[] hAvgService = new double[hTotalLen];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][2] : new double[0][0];
 
-        double[] hUpstream = extractColumn(metrics.batchProgressWarmupState, hLen, 2);
-        double[] tUpstream = extractColumn(metrics.batchProgressSteadyStateState, tLen, 2);
-        double[] cUpstream = combineColumns(
-                metrics.batchProgressWarmupState, hLen, metrics.batchProgressSteadyStateState, tLen, total, 2);
+        double[] tUpstream = new double[tTotalLen];
+        double[] tWorkers = new double[tTotalLen];
+        double[] tRank = new double[tTotalLen];
+        double[] tContention = new double[tTotalLen];
+        double[] tAvgService = new double[tTotalLen];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][2] : new double[0][0];
 
-        double[] hWorkers = extractColumn(metrics.batchProgressWarmupState, hLen, 3);
-        double[] tWorkers = extractColumn(metrics.batchProgressSteadyStateState, tLen, 3);
-        double[] cWorkers = combineColumns(
-                metrics.batchProgressWarmupState, hLen, metrics.batchProgressSteadyStateState, tLen, total, 3);
+        double[] cUpstream = new double[cTotalLen];
+        double[] cWorkers = new double[cTotalLen];
+        double[] cRank = new double[cTotalLen];
+        double[] cContention = new double[cTotalLen];
+        double[] cAvgService = new double[cTotalLen];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][2] : new double[0][0];
 
-        double[] hRank = extractColumn(metrics.batchProgressWarmupState, hLen, 4);
-        double[] tRank = extractColumn(metrics.batchProgressSteadyStateState, tLen, 4);
-        double[] cRank = combineColumns(
-                metrics.batchProgressWarmupState, hLen, metrics.batchProgressSteadyStateState, tLen, total, 4);
+        int hOffset = 0;
+        int tOffset = 0;
+        int cOffset = 0;
 
-        double[] hContention = extractColumn(metrics.batchProgressWarmupState, hLen, 5);
-        double[] tContention = extractColumn(metrics.batchProgressSteadyStateState, tLen, 5);
-        double[] cContention = combineColumns(
-                metrics.batchProgressWarmupState, hLen, metrics.batchProgressSteadyStateState, tLen, total, 5);
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.batchProgressObservations;
+            if (obs == 0L) {
+                continue;
+            }
+            int limit = m.rawSampleLimit;
+            int hLen = (int) Math.min(obs, limit);
+            int tLen = (int) Math.min(obs, limit);
 
-        double[] hAvgService = extractDouble(metrics.batchProgressWarmupAvgServiceTime, hLen);
-        double[] tAvgService = extractDouble(metrics.batchProgressSteadyStateAvgServiceTime, tLen);
-        double[] cAvgService = combineDoubles(
-                metrics.batchProgressWarmupAvgServiceTime,
-                hLen,
-                metrics.batchProgressSteadyStateAvgServiceTime,
-                tLen,
-                total);
+            // Head
+            for (int i = 0; i < hLen; i++) {
+                int idx = hOffset + i;
+                double up = (double) m.batchProgressWarmupState[i][2];
+                double wrk = (double) m.batchProgressWarmupState[i][3];
+                double rk = (double) m.batchProgressWarmupState[i][4];
+                double cnt = (double) m.batchProgressWarmupState[i][5];
+                double svc = m.batchProgressWarmupAvgServiceTime[i];
+
+                hUpstream[idx] = up;
+                hWorkers[idx] = wrk;
+                hRank[idx] = rk;
+                hContention[idx] = cnt;
+                hAvgService[idx] = svc;
+
+                if (hData.length > 0) {
+                    hData[idx][0] = cnt;
+                    hData[idx][1] = svc;
+                }
+            }
+            hOffset += hLen;
+
+            // SteadyState
+            for (int i = 0; i < tLen; i++) {
+                int idx = tOffset + i;
+                double up = (double) m.batchProgressSteadyStateState[i][2];
+                double wrk = (double) m.batchProgressSteadyStateState[i][3];
+                double rk = (double) m.batchProgressSteadyStateState[i][4];
+                double cnt = (double) m.batchProgressSteadyStateState[i][5];
+                double svc = m.batchProgressSteadyStateAvgServiceTime[i];
+
+                tUpstream[idx] = up;
+                tWorkers[idx] = wrk;
+                tRank[idx] = rk;
+                tContention[idx] = cnt;
+                tAvgService[idx] = svc;
+
+                if (tData.length > 0) {
+                    tData[idx][0] = cnt;
+                    tData[idx][1] = svc;
+                }
+            }
+            tOffset += tLen;
+
+            // Combined
+            if (obs <= hLen) {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double up = (double) m.batchProgressWarmupState[i][2];
+                    double wrk = (double) m.batchProgressWarmupState[i][3];
+                    double rk = (double) m.batchProgressWarmupState[i][4];
+                    double cnt = (double) m.batchProgressWarmupState[i][5];
+                    double svc = m.batchProgressWarmupAvgServiceTime[i];
+
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cAvgService[idx] = svc;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = cnt;
+                        cData[idx][1] = svc;
+                    }
+                }
+                cOffset += hLen;
+            } else {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double up = (double) m.batchProgressWarmupState[i][2];
+                    double wrk = (double) m.batchProgressWarmupState[i][3];
+                    double rk = (double) m.batchProgressWarmupState[i][4];
+                    double cnt = (double) m.batchProgressWarmupState[i][5];
+                    double svc = m.batchProgressWarmupAvgServiceTime[i];
+
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cAvgService[idx] = svc;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = cnt;
+                        cData[idx][1] = svc;
+                    }
+                }
+                cOffset += hLen;
+                for (int i = 0; i < tLen; i++) {
+                    int idx = cOffset + i;
+                    double up = (double) m.batchProgressSteadyStateState[i][2];
+                    double wrk = (double) m.batchProgressSteadyStateState[i][3];
+                    double rk = (double) m.batchProgressSteadyStateState[i][4];
+                    double cnt = (double) m.batchProgressSteadyStateState[i][5];
+                    double svc = m.batchProgressSteadyStateAvgServiceTime[i];
+
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cAvgService[idx] = svc;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = cnt;
+                        cData[idx][1] = svc;
+                    }
+                }
+                cOffset += tLen;
+            }
+        }
 
         BatchProgressScalars headScalars = new BatchProgressScalars(
                 ScalarSummary.of(hUpstream),
@@ -206,7 +550,7 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(hContention),
                 ScalarSummary.of(hAvgService));
 
-        BatchProgressScalars SteadyStateScalars = new BatchProgressScalars(
+        BatchProgressScalars steadyStateScalars = new BatchProgressScalars(
                 ScalarSummary.of(tUpstream),
                 ScalarSummary.of(tWorkers),
                 ScalarSummary.of(tRank),
@@ -220,69 +564,199 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(cContention),
                 ScalarSummary.of(cAvgService));
 
-        double[][] hData = buildBatchProgressMatrix(
-                metrics.batchProgressWarmupState, metrics.batchProgressWarmupAvgServiceTime, hLen);
-        double[][] tData = buildBatchProgressMatrix(
-                metrics.batchProgressSteadyStateState, metrics.batchProgressSteadyStateAvgServiceTime, tLen);
-        double[][] cData = buildBatchProgressCombinedMatrix(
-                metrics.batchProgressWarmupState,
-                metrics.batchProgressWarmupAvgServiceTime,
-                hLen,
-                metrics.batchProgressSteadyStateState,
-                metrics.batchProgressSteadyStateAvgServiceTime,
-                tLen,
-                total);
-
         CorrelationResult hCorr = CorrelationResult.of(BatchProgressStatistics.COLUMN_NAMES, hData);
         CorrelationResult tCorr = CorrelationResult.of(BatchProgressStatistics.COLUMN_NAMES, tData);
         CorrelationResult cCorr = CorrelationResult.of(BatchProgressStatistics.COLUMN_NAMES, cData);
 
         return new BatchProgressStatistics(
-                total, headScalars, SteadyStateScalars, combinedScalars, hCorr, tCorr, cCorr);
+                total, headScalars, steadyStateScalars, combinedScalars, hCorr, tCorr, cCorr);
     }
 
-    private static BatchCompleteStatistics calculateBatchComplete(HighSpeedMetrics metrics, int limit) {
-        long total = metrics.batchCompleteObservations;
+    private static BatchCompleteStatistics calculateBatchComplete(List<HighSpeedMetrics> metricsList) {
+        long total = 0L;
+        int hTotalLen = 0;
+        int tTotalLen = 0;
+        int cTotalLen = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.batchCompleteObservations;
+            total += obs;
+            if (obs > 0L) {
+                int limit = m.rawSampleLimit;
+                int hLen = (int) Math.min(obs, limit);
+                int tLen = (int) Math.min(obs, limit);
+                int cLen = obs <= hLen ? hLen : (hLen + tLen);
+                hTotalLen += hLen;
+                tTotalLen += tLen;
+                cTotalLen += cLen;
+            }
+        }
+
         if (total == 0L) {
             return BatchCompleteStatistics.EMPTY;
         }
 
-        int hLen = (int) Math.min(total, limit);
-        int tLen = (int) Math.min(total, limit);
+        double[] hUpstream = new double[hTotalLen];
+        double[] hWorkers = new double[hTotalLen];
+        double[] hRank = new double[hTotalLen];
+        double[] hContention = new double[hTotalLen];
+        double[] hAvgService = new double[hTotalLen];
+        double[] hThroughput = new double[hTotalLen];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][3] : new double[0][0];
 
-        double[] hUpstream = extractColumn(metrics.batchCompleteWarmupState, hLen, 2);
-        double[] tUpstream = extractColumn(metrics.batchCompleteSteadyStateState, tLen, 2);
-        double[] cUpstream = combineColumns(
-                metrics.batchCompleteWarmupState, hLen, metrics.batchCompleteSteadyStateState, tLen, total, 2);
+        double[] tUpstream = new double[tTotalLen];
+        double[] tWorkers = new double[tTotalLen];
+        double[] tRank = new double[tTotalLen];
+        double[] tContention = new double[tTotalLen];
+        double[] tAvgService = new double[tTotalLen];
+        double[] tThroughput = new double[tTotalLen];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][3] : new double[0][0];
 
-        double[] hWorkers = extractColumn(metrics.batchCompleteWarmupState, hLen, 3);
-        double[] tWorkers = extractColumn(metrics.batchCompleteSteadyStateState, tLen, 3);
-        double[] cWorkers = combineColumns(
-                metrics.batchCompleteWarmupState, hLen, metrics.batchCompleteSteadyStateState, tLen, total, 3);
+        double[] cUpstream = new double[cTotalLen];
+        double[] cWorkers = new double[cTotalLen];
+        double[] cRank = new double[cTotalLen];
+        double[] cContention = new double[cTotalLen];
+        double[] cAvgService = new double[cTotalLen];
+        double[] cThroughput = new double[cTotalLen];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
 
-        double[] hRank = extractColumn(metrics.batchCompleteWarmupState, hLen, 4);
-        double[] tRank = extractColumn(metrics.batchCompleteSteadyStateState, tLen, 4);
-        double[] cRank = combineColumns(
-                metrics.batchCompleteWarmupState, hLen, metrics.batchCompleteSteadyStateState, tLen, total, 4);
+        int hOffset = 0;
+        int tOffset = 0;
+        int cOffset = 0;
 
-        double[] hContention = extractColumn(metrics.batchCompleteWarmupState, hLen, 5);
-        double[] tContention = extractColumn(metrics.batchCompleteSteadyStateState, tLen, 5);
-        double[] cContention = combineColumns(
-                metrics.batchCompleteWarmupState, hLen, metrics.batchCompleteSteadyStateState, tLen, total, 5);
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.batchCompleteObservations;
+            if (obs == 0L) {
+                continue;
+            }
+            int limit = m.rawSampleLimit;
+            int hLen = (int) Math.min(obs, limit);
+            int tLen = (int) Math.min(obs, limit);
 
-        double[] hAvgService = extractDouble(metrics.batchCompleteWarmupAvgServiceTime, hLen);
-        double[] tAvgService = extractDouble(metrics.batchCompleteSteadyStateAvgServiceTime, tLen);
-        double[] cAvgService = combineDoubles(
-                metrics.batchCompleteWarmupAvgServiceTime,
-                hLen,
-                metrics.batchCompleteSteadyStateAvgServiceTime,
-                tLen,
-                total);
+            // Head
+            for (int i = 0; i < hLen; i++) {
+                int idx = hOffset + i;
+                double up = (double) m.batchCompleteWarmupState[i][2];
+                double wrk = (double) m.batchCompleteWarmupState[i][3];
+                double rk = (double) m.batchCompleteWarmupState[i][4];
+                double cnt = (double) m.batchCompleteWarmupState[i][5];
+                double svc = m.batchCompleteWarmupAvgServiceTime[i];
+                double tp = m.batchCompleteWarmupThroughput[i];
 
-        double[] hThroughput = extractDouble(metrics.batchCompleteWarmupThroughput, hLen);
-        double[] tThroughput = extractDouble(metrics.batchCompleteSteadyStateThroughput, tLen);
-        double[] cThroughput = combineDoubles(
-                metrics.batchCompleteWarmupThroughput, hLen, metrics.batchCompleteSteadyStateThroughput, tLen, total);
+                hUpstream[idx] = up;
+                hWorkers[idx] = wrk;
+                hRank[idx] = rk;
+                hContention[idx] = cnt;
+                hAvgService[idx] = svc;
+                hThroughput[idx] = tp;
+
+                if (hData.length > 0) {
+                    hData[idx][0] = cnt;
+                    hData[idx][1] = svc;
+                    hData[idx][2] = tp;
+                }
+            }
+            hOffset += hLen;
+
+            // SteadyState
+            for (int i = 0; i < tLen; i++) {
+                int idx = tOffset + i;
+                double up = (double) m.batchCompleteSteadyStateState[i][2];
+                double wrk = (double) m.batchCompleteSteadyStateState[i][3];
+                double rk = (double) m.batchCompleteSteadyStateState[i][4];
+                double cnt = (double) m.batchCompleteSteadyStateState[i][5];
+                double svc = m.batchCompleteSteadyStateAvgServiceTime[i];
+                double tp = m.batchCompleteSteadyStateThroughput[i];
+
+                tUpstream[idx] = up;
+                tWorkers[idx] = wrk;
+                tRank[idx] = rk;
+                tContention[idx] = cnt;
+                tAvgService[idx] = svc;
+                tThroughput[idx] = tp;
+
+                if (tData.length > 0) {
+                    tData[idx][0] = cnt;
+                    tData[idx][1] = svc;
+                    tData[idx][2] = tp;
+                }
+            }
+            tOffset += tLen;
+
+            // Combined
+            if (obs <= hLen) {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double up = (double) m.batchCompleteWarmupState[i][2];
+                    double wrk = (double) m.batchCompleteWarmupState[i][3];
+                    double rk = (double) m.batchCompleteWarmupState[i][4];
+                    double cnt = (double) m.batchCompleteWarmupState[i][5];
+                    double svc = m.batchCompleteWarmupAvgServiceTime[i];
+                    double tp = m.batchCompleteWarmupThroughput[i];
+
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cAvgService[idx] = svc;
+                    cThroughput[idx] = tp;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = cnt;
+                        cData[idx][1] = svc;
+                        cData[idx][2] = tp;
+                    }
+                }
+                cOffset += hLen;
+            } else {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double up = (double) m.batchCompleteWarmupState[i][2];
+                    double wrk = (double) m.batchCompleteWarmupState[i][3];
+                    double rk = (double) m.batchCompleteWarmupState[i][4];
+                    double cnt = (double) m.batchCompleteWarmupState[i][5];
+                    double svc = m.batchCompleteWarmupAvgServiceTime[i];
+                    double tp = m.batchCompleteWarmupThroughput[i];
+
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cAvgService[idx] = svc;
+                    cThroughput[idx] = tp;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = cnt;
+                        cData[idx][1] = svc;
+                        cData[idx][2] = tp;
+                    }
+                }
+                cOffset += hLen;
+                for (int i = 0; i < tLen; i++) {
+                    int idx = cOffset + i;
+                    double up = (double) m.batchCompleteSteadyStateState[i][2];
+                    double wrk = (double) m.batchCompleteSteadyStateState[i][3];
+                    double rk = (double) m.batchCompleteSteadyStateState[i][4];
+                    double cnt = (double) m.batchCompleteSteadyStateState[i][5];
+                    double svc = m.batchCompleteSteadyStateAvgServiceTime[i];
+                    double tp = m.batchCompleteSteadyStateThroughput[i];
+
+                    cUpstream[idx] = up;
+                    cWorkers[idx] = wrk;
+                    cRank[idx] = rk;
+                    cContention[idx] = cnt;
+                    cAvgService[idx] = svc;
+                    cThroughput[idx] = tp;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = cnt;
+                        cData[idx][1] = svc;
+                        cData[idx][2] = tp;
+                    }
+                }
+                cOffset += tLen;
+            }
+        }
 
         BatchCompleteScalars headScalars = new BatchCompleteScalars(
                 ScalarSummary.of(hUpstream),
@@ -292,7 +766,7 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(hAvgService),
                 ScalarSummary.of(hThroughput));
 
-        BatchCompleteScalars SteadyStateScalars = new BatchCompleteScalars(
+        BatchCompleteScalars steadyStateScalars = new BatchCompleteScalars(
                 ScalarSummary.of(tUpstream),
                 ScalarSummary.of(tWorkers),
                 ScalarSummary.of(tRank),
@@ -308,57 +782,115 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(cAvgService),
                 ScalarSummary.of(cThroughput));
 
-        double[][] hData = buildBatchCompleteMatrix(
-                metrics.batchCompleteWarmupState,
-                metrics.batchCompleteWarmupAvgServiceTime,
-                metrics.batchCompleteWarmupThroughput,
-                hLen);
-        double[][] tData = buildBatchCompleteMatrix(
-                metrics.batchCompleteSteadyStateState,
-                metrics.batchCompleteSteadyStateAvgServiceTime,
-                metrics.batchCompleteSteadyStateThroughput,
-                tLen);
-        double[][] cData = buildBatchCompleteCombinedMatrix(
-                metrics.batchCompleteWarmupState,
-                metrics.batchCompleteWarmupAvgServiceTime,
-                metrics.batchCompleteWarmupThroughput,
-                hLen,
-                metrics.batchCompleteSteadyStateState,
-                metrics.batchCompleteSteadyStateAvgServiceTime,
-                metrics.batchCompleteSteadyStateThroughput,
-                tLen,
-                total);
-
         CorrelationResult hCorr = CorrelationResult.of(BatchCompleteStatistics.COLUMN_NAMES, hData);
         CorrelationResult tCorr = CorrelationResult.of(BatchCompleteStatistics.COLUMN_NAMES, tData);
         CorrelationResult cCorr = CorrelationResult.of(BatchCompleteStatistics.COLUMN_NAMES, cData);
 
         return new BatchCompleteStatistics(
-                total, headScalars, SteadyStateScalars, combinedScalars, hCorr, tCorr, cCorr);
+                total, headScalars, steadyStateScalars, combinedScalars, hCorr, tCorr, cCorr);
     }
 
-    private static RawBodyCostStatistics calculateRawBodyCost(HighSpeedMetrics metrics, int limit) {
-        long total = metrics.rawBodyCostObservations;
-        long totalCost = metrics.rawBodyCostTotal;
+    private static RawBodyCostStatistics calculateRawBodyCost(List<HighSpeedMetrics> metricsList) {
+        long total = 0L;
+        long totalCost = 0L;
+        int hTotalLen = 0;
+        int tTotalLen = 0;
+        int cTotalLen = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.rawBodyCostObservations;
+            total += obs;
+            totalCost += m.rawBodyCostTotal;
+            if (obs > 0L) {
+                int limit = m.rawSampleLimit;
+                int hLen = (int) Math.min(obs, limit);
+                int tLen = (int) Math.min(obs, limit);
+                int cLen = obs <= hLen ? hLen : (hLen + tLen);
+                hTotalLen += hLen;
+                tTotalLen += tLen;
+                cTotalLen += cLen;
+            }
+        }
+
         if (total == 0L) {
             return RawBodyCostStatistics.EMPTY;
         }
 
-        int hLen = (int) Math.min(total, limit);
-        int tLen = (int) Math.min(total, limit);
+        double[] hCost = new double[hTotalLen];
+        double[] tCost = new double[tTotalLen];
+        double[] cCost = new double[cTotalLen];
 
-        double[] hCost = extractColumn(metrics.rawBodyCostWarmupState, hLen, 2);
-        double[] tCost = extractColumn(metrics.rawBodyCostSteadyStateState, tLen, 2);
-        double[] cCost = combineColumns(
-                metrics.rawBodyCostWarmupState, hLen, metrics.rawBodyCostSteadyStateState, tLen, total, 2);
+        int hOffset = 0;
+        int tOffset = 0;
+        int cOffset = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.rawBodyCostObservations;
+            if (obs == 0L) {
+                continue;
+            }
+            int limit = m.rawSampleLimit;
+            int hLen = (int) Math.min(obs, limit);
+            int tLen = (int) Math.min(obs, limit);
+
+            for (int i = 0; i < hLen; i++) {
+                hCost[hOffset + i] = (double) m.rawBodyCostWarmupState[i][2];
+            }
+            hOffset += hLen;
+
+            for (int i = 0; i < tLen; i++) {
+                tCost[tOffset + i] = (double) m.rawBodyCostSteadyStateState[i][2];
+            }
+            tOffset += tLen;
+
+            if (obs <= hLen) {
+                for (int i = 0; i < hLen; i++) {
+                    cCost[cOffset + i] = (double) m.rawBodyCostWarmupState[i][2];
+                }
+                cOffset += hLen;
+            } else {
+                for (int i = 0; i < hLen; i++) {
+                    cCost[cOffset + i] = (double) m.rawBodyCostWarmupState[i][2];
+                }
+                cOffset += hLen;
+                for (int i = 0; i < tLen; i++) {
+                    cCost[cOffset + i] = (double) m.rawBodyCostSteadyStateState[i][2];
+                }
+                cOffset += tLen;
+            }
+        }
 
         return new RawBodyCostStatistics(
                 total, totalCost, ScalarSummary.of(hCost), ScalarSummary.of(tCost), ScalarSummary.of(cCost));
     }
 
-    private static DecisionStatistics calculateIdleDecisions(HighSpeedMetrics metrics, int limit) {
-        long total = metrics.idleDecisionObservations;
-        BranchOccupancyResult occupancy = BranchOccupancyResult.of(metrics.idleBranchDecisionTotal);
+    private static DecisionStatistics calculateIdleDecisions(List<HighSpeedMetrics> metricsList) {
+        long total = 0L;
+        int hTotalLen = 0;
+        int tTotalLen = 0;
+        int cTotalLen = 0;
+        long[][] aggregatedBranchCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.idleDecisionObservations;
+            total += obs;
+            for (int i = 0; i < Band.GRID_SIZE; i++) {
+                for (int j = 0; j < Band.GRID_SIZE; j++) {
+                    aggregatedBranchCounts[i][j] += m.idleBranchDecisionTotal[i][j];
+                }
+            }
+            if (obs > 0L) {
+                int limit = m.rawSampleLimit;
+                int hLen = (int) Math.min(obs, limit);
+                int tLen = (int) Math.min(obs, limit);
+                int cLen = obs <= hLen ? hLen : (hLen + tLen);
+                hTotalLen += hLen;
+                tTotalLen += tLen;
+                cTotalLen += cLen;
+            }
+        }
+
+        BranchOccupancyResult occupancy = BranchOccupancyResult.of(aggregatedBranchCounts);
         if (total == 0L && occupancy.isEmpty()) {
             return DecisionStatistics.EMPTY;
         }
@@ -378,46 +910,142 @@ public final class HighSpeedMetricsStatistics {
                     CorrelationResult.empty(DecisionStatistics.COLUMN_NAMES));
         }
 
-        int hLen = (int) Math.min(total, limit);
-        int tLen = (int) Math.min(total, limit);
+        double[] hContention = new double[hTotalLen];
+        double[] hSmoothed = new double[hTotalLen];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][3] : new double[0][0];
 
-        double[] hContention = extractColumn(metrics.idleWarmupDecisionState, hLen, 4);
-        double[] tContention = extractColumn(metrics.idleSteadyStateDecisionState, tLen, 4);
-        double[] cContention = combineColumns(
-                metrics.idleWarmupDecisionState, hLen, metrics.idleSteadyStateDecisionState, tLen, total, 4);
+        double[] tContention = new double[tTotalLen];
+        double[] tSmoothed = new double[tTotalLen];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][3] : new double[0][0];
 
-        double[] hSmoothed = extractDouble(metrics.idleWarmupSmoothedBodyCost, hLen);
-        double[] tSmoothed = extractDouble(metrics.idleSteadyStateSmoothedBodyCost, tLen);
-        double[] cSmoothed = combineDoubles(
-                metrics.idleWarmupSmoothedBodyCost, hLen, metrics.idleSteadyStateSmoothedBodyCost, tLen, total);
+        double[] cContention = new double[cTotalLen];
+        double[] cSmoothed = new double[cTotalLen];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
+
+        long[][] headTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] steadyStateTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+
+        int hOffset = 0;
+        int tOffset = 0;
+        int cOffset = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.idleDecisionObservations;
+            if (obs == 0L) {
+                continue;
+            }
+            int limit = m.rawSampleLimit;
+            int hLen = (int) Math.min(obs, limit);
+            int tLen = (int) Math.min(obs, limit);
+
+            // Head
+            for (int i = 0; i < hLen; i++) {
+                int idx = hOffset + i;
+                double cnt = (double) m.idleWarmupDecisionState[i][4];
+                double cost = m.idleWarmupSmoothedBodyCost[i];
+
+                hContention[idx] = cnt;
+                hSmoothed[idx] = cost;
+
+                if (hData.length > 0) {
+                    hData[idx][0] = (double) m.idleWarmupDecisionState[i][2];
+                    hData[idx][1] = (double) m.idleWarmupDecisionState[i][3];
+                    hData[idx][2] = cost;
+                }
+            }
+            int[] headStates = extractStateSequence(m.idleWarmupDecisionState, hLen);
+            if (headStates.length >= 2) {
+                for (int k = 0; k < headStates.length - 1; k++) {
+                    headTransitionsCount[headStates[k]][headStates[k + 1]]++;
+                }
+            }
+            hOffset += hLen;
+
+            // SteadyState
+            for (int i = 0; i < tLen; i++) {
+                int idx = tOffset + i;
+                double cnt = (double) m.idleSteadyStateDecisionState[i][4];
+                double cost = m.idleSteadyStateSmoothedBodyCost[i];
+
+                tContention[idx] = cnt;
+                tSmoothed[idx] = cost;
+
+                if (tData.length > 0) {
+                    tData[idx][0] = (double) m.idleSteadyStateDecisionState[i][2];
+                    tData[idx][1] = (double) m.idleSteadyStateDecisionState[i][3];
+                    tData[idx][2] = cost;
+                }
+            }
+            int[] steadyStateStates = extractStateSequence(m.idleSteadyStateDecisionState, tLen);
+            if (steadyStateStates.length >= 2) {
+                for (int k = 0; k < steadyStateStates.length - 1; k++) {
+                    steadyStateTransitionsCount[steadyStateStates[k]][steadyStateStates[k + 1]]++;
+                }
+            }
+            tOffset += tLen;
+
+            // Combined
+            if (obs <= hLen) {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double cnt = (double) m.idleWarmupDecisionState[i][4];
+                    double cost = m.idleWarmupSmoothedBodyCost[i];
+
+                    cContention[idx] = cnt;
+                    cSmoothed[idx] = cost;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = (double) m.idleWarmupDecisionState[i][2];
+                        cData[idx][1] = (double) m.idleWarmupDecisionState[i][3];
+                        cData[idx][2] = cost;
+                    }
+                }
+                cOffset += hLen;
+            } else {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double cnt = (double) m.idleWarmupDecisionState[i][4];
+                    double cost = m.idleWarmupSmoothedBodyCost[i];
+
+                    cContention[idx] = cnt;
+                    cSmoothed[idx] = cost;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = (double) m.idleWarmupDecisionState[i][2];
+                        cData[idx][1] = (double) m.idleWarmupDecisionState[i][3];
+                        cData[idx][2] = cost;
+                    }
+                }
+                cOffset += hLen;
+                for (int i = 0; i < tLen; i++) {
+                    int idx = cOffset + i;
+                    double cnt = (double) m.idleSteadyStateDecisionState[i][4];
+                    double cost = m.idleSteadyStateSmoothedBodyCost[i];
+
+                    cContention[idx] = cnt;
+                    cSmoothed[idx] = cost;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = (double) m.idleSteadyStateDecisionState[i][2];
+                        cData[idx][1] = (double) m.idleSteadyStateDecisionState[i][3];
+                        cData[idx][2] = cost;
+                    }
+                }
+                cOffset += tLen;
+            }
+        }
 
         DecisionScalars headScalars = new DecisionScalars(ScalarSummary.of(hContention), ScalarSummary.of(hSmoothed));
-        DecisionScalars SteadyStateScalars =
+        DecisionScalars steadyStateScalars =
                 new DecisionScalars(ScalarSummary.of(tContention), ScalarSummary.of(tSmoothed));
         DecisionScalars combinedScalars =
                 new DecisionScalars(ScalarSummary.of(cContention), ScalarSummary.of(cSmoothed));
 
-        int[] headStates = extractStateSequence(metrics.idleWarmupDecisionState, hLen);
-        int[] SteadyStateStates = extractStateSequence(metrics.idleSteadyStateDecisionState, tLen);
-
-        TransitionAnalysis headTransitions = TransitionAnalysis.compute(headStates);
-        TransitionAnalysis SteadyStateTransitions = TransitionAnalysis.compute(SteadyStateStates);
+        TransitionAnalysis headTransitions = TransitionAnalysis.computeFromCounts(headTransitionsCount);
+        TransitionAnalysis steadyStateTransitions = TransitionAnalysis.computeFromCounts(steadyStateTransitionsCount);
 
         VectorField headVectorField = VectorField.compute(headTransitions.transitionCounts());
-        VectorField SteadyStateVectorField = VectorField.compute(SteadyStateTransitions.transitionCounts());
-
-        double[][] hData =
-                buildDecisionMatrix(metrics.idleWarmupDecisionState, metrics.idleWarmupSmoothedBodyCost, hLen);
-        double[][] tData = buildDecisionMatrix(
-                metrics.idleSteadyStateDecisionState, metrics.idleSteadyStateSmoothedBodyCost, tLen);
-        double[][] cData = buildDecisionCombinedMatrix(
-                metrics.idleWarmupDecisionState,
-                metrics.idleWarmupSmoothedBodyCost,
-                hLen,
-                metrics.idleSteadyStateDecisionState,
-                metrics.idleSteadyStateSmoothedBodyCost,
-                tLen,
-                total);
+        VectorField steadyStateVectorField = VectorField.compute(steadyStateTransitions.transitionCounts());
 
         CorrelationResult hCorr = CorrelationResult.of(DecisionStatistics.COLUMN_NAMES, hData);
         CorrelationResult tCorr = CorrelationResult.of(DecisionStatistics.COLUMN_NAMES, tData);
@@ -427,20 +1055,44 @@ public final class HighSpeedMetricsStatistics {
                 total,
                 occupancy,
                 headScalars,
-                SteadyStateScalars,
+                steadyStateScalars,
                 combinedScalars,
                 headTransitions,
-                SteadyStateTransitions,
+                steadyStateTransitions,
                 headVectorField,
-                SteadyStateVectorField,
+                steadyStateVectorField,
                 hCorr,
                 tCorr,
                 cCorr);
     }
 
-    private static DecisionStatistics calculateExecDecisions(HighSpeedMetrics metrics, int limit) {
-        long total = metrics.execDecisionObservations;
-        BranchOccupancyResult occupancy = BranchOccupancyResult.of(metrics.execBranchDecisionTotal);
+    private static DecisionStatistics calculateExecDecisions(List<HighSpeedMetrics> metricsList) {
+        long total = 0L;
+        int hTotalLen = 0;
+        int tTotalLen = 0;
+        int cTotalLen = 0;
+        long[][] aggregatedBranchCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.execDecisionObservations;
+            total += obs;
+            for (int i = 0; i < Band.GRID_SIZE; i++) {
+                for (int j = 0; j < Band.GRID_SIZE; j++) {
+                    aggregatedBranchCounts[i][j] += m.execBranchDecisionTotal[i][j];
+                }
+            }
+            if (obs > 0L) {
+                int limit = m.rawSampleLimit;
+                int hLen = (int) Math.min(obs, limit);
+                int tLen = (int) Math.min(obs, limit);
+                int cLen = obs <= hLen ? hLen : (hLen + tLen);
+                hTotalLen += hLen;
+                tTotalLen += tLen;
+                cTotalLen += cLen;
+            }
+        }
+
+        BranchOccupancyResult occupancy = BranchOccupancyResult.of(aggregatedBranchCounts);
         if (total == 0L && occupancy.isEmpty()) {
             return DecisionStatistics.EMPTY;
         }
@@ -460,46 +1112,142 @@ public final class HighSpeedMetricsStatistics {
                     CorrelationResult.empty(DecisionStatistics.COLUMN_NAMES));
         }
 
-        int hLen = (int) Math.min(total, limit);
-        int tLen = (int) Math.min(total, limit);
+        double[] hContention = new double[hTotalLen];
+        double[] hSmoothed = new double[hTotalLen];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][3] : new double[0][0];
 
-        double[] hContention = extractColumn(metrics.execWarmupDecisionState, hLen, 4);
-        double[] tContention = extractColumn(metrics.execSteadyStateDecisionState, tLen, 4);
-        double[] cContention = combineColumns(
-                metrics.execWarmupDecisionState, hLen, metrics.execSteadyStateDecisionState, tLen, total, 4);
+        double[] tContention = new double[tTotalLen];
+        double[] tSmoothed = new double[tTotalLen];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][3] : new double[0][0];
 
-        double[] hSmoothed = extractDouble(metrics.execWarmupSmoothedBodyCost, hLen);
-        double[] tSmoothed = extractDouble(metrics.execSteadyStateSmoothedBodyCost, tLen);
-        double[] cSmoothed = combineDoubles(
-                metrics.execWarmupSmoothedBodyCost, hLen, metrics.execSteadyStateSmoothedBodyCost, tLen, total);
+        double[] cContention = new double[cTotalLen];
+        double[] cSmoothed = new double[cTotalLen];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
+
+        long[][] headTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] steadyStateTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+
+        int hOffset = 0;
+        int tOffset = 0;
+        int cOffset = 0;
+
+        for (HighSpeedMetrics m : metricsList) {
+            long obs = m.execDecisionObservations;
+            if (obs == 0L) {
+                continue;
+            }
+            int limit = m.rawSampleLimit;
+            int hLen = (int) Math.min(obs, limit);
+            int tLen = (int) Math.min(obs, limit);
+
+            // Head
+            for (int i = 0; i < hLen; i++) {
+                int idx = hOffset + i;
+                double cnt = (double) m.execWarmupDecisionState[i][4];
+                double cost = m.execWarmupSmoothedBodyCost[i];
+
+                hContention[idx] = cnt;
+                hSmoothed[idx] = cost;
+
+                if (hData.length > 0) {
+                    hData[idx][0] = (double) m.execWarmupDecisionState[i][2];
+                    hData[idx][1] = (double) m.execWarmupDecisionState[i][3];
+                    hData[idx][2] = cost;
+                }
+            }
+            int[] headStates = extractStateSequence(m.execWarmupDecisionState, hLen);
+            if (headStates.length >= 2) {
+                for (int k = 0; k < headStates.length - 1; k++) {
+                    headTransitionsCount[headStates[k]][headStates[k + 1]]++;
+                }
+            }
+            hOffset += hLen;
+
+            // SteadyState
+            for (int i = 0; i < tLen; i++) {
+                int idx = tOffset + i;
+                double cnt = (double) m.execSteadyStateDecisionState[i][4];
+                double cost = m.execSteadyStateSmoothedBodyCost[i];
+
+                tContention[idx] = cnt;
+                tSmoothed[idx] = cost;
+
+                if (tData.length > 0) {
+                    tData[idx][0] = (double) m.execSteadyStateDecisionState[i][2];
+                    tData[idx][1] = (double) m.execSteadyStateDecisionState[i][3];
+                    tData[idx][2] = cost;
+                }
+            }
+            int[] steadyStateStates = extractStateSequence(m.execSteadyStateDecisionState, tLen);
+            if (steadyStateStates.length >= 2) {
+                for (int k = 0; k < steadyStateStates.length - 1; k++) {
+                    steadyStateTransitionsCount[steadyStateStates[k]][steadyStateStates[k + 1]]++;
+                }
+            }
+            tOffset += tLen;
+
+            // Combined
+            if (obs <= hLen) {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double cnt = (double) m.execWarmupDecisionState[i][4];
+                    double cost = m.execWarmupSmoothedBodyCost[i];
+
+                    cContention[idx] = cnt;
+                    cSmoothed[idx] = cost;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = (double) m.execWarmupDecisionState[i][2];
+                        cData[idx][1] = (double) m.execWarmupDecisionState[i][3];
+                        cData[idx][2] = cost;
+                    }
+                }
+                cOffset += hLen;
+            } else {
+                for (int i = 0; i < hLen; i++) {
+                    int idx = cOffset + i;
+                    double cnt = (double) m.execWarmupDecisionState[i][4];
+                    double cost = m.execWarmupSmoothedBodyCost[i];
+
+                    cContention[idx] = cnt;
+                    cSmoothed[idx] = cost;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = (double) m.execWarmupDecisionState[i][2];
+                        cData[idx][1] = (double) m.execWarmupDecisionState[i][3];
+                        cData[idx][2] = cost;
+                    }
+                }
+                cOffset += hLen;
+                for (int i = 0; i < tLen; i++) {
+                    int idx = cOffset + i;
+                    double cnt = (double) m.execSteadyStateDecisionState[i][4];
+                    double cost = m.execSteadyStateSmoothedBodyCost[i];
+
+                    cContention[idx] = cnt;
+                    cSmoothed[idx] = cost;
+
+                    if (cData.length > 0) {
+                        cData[idx][0] = (double) m.execSteadyStateDecisionState[i][2];
+                        cData[idx][1] = (double) m.execSteadyStateDecisionState[i][3];
+                        cData[idx][2] = cost;
+                    }
+                }
+                cOffset += tLen;
+            }
+        }
 
         DecisionScalars headScalars = new DecisionScalars(ScalarSummary.of(hContention), ScalarSummary.of(hSmoothed));
-        DecisionScalars SteadyStateScalars =
+        DecisionScalars steadyStateScalars =
                 new DecisionScalars(ScalarSummary.of(tContention), ScalarSummary.of(tSmoothed));
         DecisionScalars combinedScalars =
                 new DecisionScalars(ScalarSummary.of(cContention), ScalarSummary.of(cSmoothed));
 
-        int[] headStates = extractStateSequence(metrics.execWarmupDecisionState, hLen);
-        int[] SteadyStateStates = extractStateSequence(metrics.execSteadyStateDecisionState, tLen);
-
-        TransitionAnalysis headTransitions = TransitionAnalysis.compute(headStates);
-        TransitionAnalysis SteadyStateTransitions = TransitionAnalysis.compute(SteadyStateStates);
+        TransitionAnalysis headTransitions = TransitionAnalysis.computeFromCounts(headTransitionsCount);
+        TransitionAnalysis steadyStateTransitions = TransitionAnalysis.computeFromCounts(steadyStateTransitionsCount);
 
         VectorField headVectorField = VectorField.compute(headTransitions.transitionCounts());
-        VectorField SteadyStateVectorField = VectorField.compute(SteadyStateTransitions.transitionCounts());
-
-        double[][] hData =
-                buildDecisionMatrix(metrics.execWarmupDecisionState, metrics.execWarmupSmoothedBodyCost, hLen);
-        double[][] tData = buildDecisionMatrix(
-                metrics.execSteadyStateDecisionState, metrics.execSteadyStateSmoothedBodyCost, tLen);
-        double[][] cData = buildDecisionCombinedMatrix(
-                metrics.execWarmupDecisionState,
-                metrics.execWarmupSmoothedBodyCost,
-                hLen,
-                metrics.execSteadyStateDecisionState,
-                metrics.execSteadyStateSmoothedBodyCost,
-                tLen,
-                total);
+        VectorField steadyStateVectorField = VectorField.compute(steadyStateTransitions.transitionCounts());
 
         CorrelationResult hCorr = CorrelationResult.of(DecisionStatistics.COLUMN_NAMES, hData);
         CorrelationResult tCorr = CorrelationResult.of(DecisionStatistics.COLUMN_NAMES, tData);
@@ -509,66 +1257,15 @@ public final class HighSpeedMetricsStatistics {
                 total,
                 occupancy,
                 headScalars,
-                SteadyStateScalars,
+                steadyStateScalars,
                 combinedScalars,
                 headTransitions,
-                SteadyStateTransitions,
+                steadyStateTransitions,
                 headVectorField,
-                SteadyStateVectorField,
+                steadyStateVectorField,
                 hCorr,
                 tCorr,
                 cCorr);
-    }
-
-    private static double[] extractColumn(long[][] state, int len, int col) {
-        if (len == 0 || state == null) {
-            return new double[0];
-        }
-        double[] res = new double[len];
-        for (int i = 0; i < len; i++) {
-            res[i] = (double) state[i][col];
-        }
-        return res;
-    }
-
-    private static double[] extractDouble(double[] arr, int len) {
-        if (len == 0 || arr == null) {
-            return new double[0];
-        }
-        double[] res = new double[len];
-        System.arraycopy(arr, 0, res, 0, len);
-        return res;
-    }
-
-    private static double[] combineColumns(
-            long[][] warmup, int hLen, long[][] SteadyState, int tLen, long totalObs, int col) {
-        if (totalObs == 0L) {
-            return new double[0];
-        }
-        if (totalObs <= hLen) {
-            return extractColumn(warmup, hLen, col);
-        }
-        double[] res = new double[hLen + tLen];
-        for (int i = 0; i < hLen; i++) {
-            res[i] = (double) warmup[i][col];
-        }
-        for (int i = 0; i < tLen; i++) {
-            res[hLen + i] = (double) SteadyState[i][col];
-        }
-        return res;
-    }
-
-    private static double[] combineDoubles(double[] warmup, int hLen, double[] SteadyState, int tLen, long totalObs) {
-        if (totalObs == 0L) {
-            return new double[0];
-        }
-        if (totalObs <= hLen) {
-            return extractDouble(warmup, hLen);
-        }
-        double[] res = new double[hLen + tLen];
-        System.arraycopy(warmup, 0, res, 0, hLen);
-        System.arraycopy(SteadyState, 0, res, hLen, tLen);
-        return res;
     }
 
     private static int[] extractStateSequence(long[][] decisionState, int len) {
@@ -582,197 +1279,5 @@ public final class HighSpeedMetricsStatistics {
             states[i] = TransitionAnalysis.toState(contentionPolicy, bodyPolicy);
         }
         return states;
-    }
-
-    private static double[][] buildCycleStartMatrix(long[][] state, double[] throughput, int len) {
-        if (len < 2 || state == null || throughput == null) {
-            return new double[0][0];
-        }
-        double[][] data = new double[len][7];
-        for (int i = 0; i < len; i++) {
-            data[i][0] = (double) state[i][2];
-            data[i][1] = (double) state[i][3];
-            data[i][2] = (double) state[i][4];
-            data[i][3] = (double) state[i][5];
-            data[i][4] = (double) state[i][6];
-            data[i][5] = (double) state[i][7];
-            data[i][6] = throughput[i];
-        }
-        return data;
-    }
-
-    private static double[][] buildCycleStartCombinedMatrix(
-            long[][] warmup,
-            double[] warmupTp,
-            int hLen,
-            long[][] SteadyState,
-            double[] SteadyStateTp,
-            int tLen,
-            long totalObs) {
-        if (totalObs == 0L) {
-            return new double[0][0];
-        }
-        if (totalObs <= hLen) {
-            return buildCycleStartMatrix(warmup, warmupTp, hLen);
-        }
-        int totalRows = hLen + tLen;
-        if (totalRows < 2) {
-            return new double[0][0];
-        }
-        double[][] data = new double[totalRows][7];
-        for (int i = 0; i < hLen; i++) {
-            data[i][0] = (double) warmup[i][2];
-            data[i][1] = (double) warmup[i][3];
-            data[i][2] = (double) warmup[i][4];
-            data[i][3] = (double) warmup[i][5];
-            data[i][4] = (double) warmup[i][6];
-            data[i][5] = (double) warmup[i][7];
-            data[i][6] = warmupTp[i];
-        }
-        for (int i = 0; i < tLen; i++) {
-            data[hLen + i][0] = (double) SteadyState[i][2];
-            data[hLen + i][1] = (double) SteadyState[i][3];
-            data[hLen + i][2] = (double) SteadyState[i][4];
-            data[hLen + i][3] = (double) SteadyState[i][5];
-            data[hLen + i][4] = (double) SteadyState[i][6];
-            data[hLen + i][5] = (double) SteadyState[i][7];
-            data[hLen + i][6] = SteadyStateTp[i];
-        }
-        return data;
-    }
-
-    private static double[][] buildBatchProgressMatrix(long[][] state, double[] avgServiceTime, int len) {
-        if (len < 2 || state == null || avgServiceTime == null) {
-            return new double[0][0];
-        }
-        double[][] data = new double[len][2];
-        for (int i = 0; i < len; i++) {
-            data[i][0] = (double) state[i][5];
-            data[i][1] = avgServiceTime[i];
-        }
-        return data;
-    }
-
-    private static double[][] buildBatchProgressCombinedMatrix(
-            long[][] warmup,
-            double[] warmupAvg,
-            int hLen,
-            long[][] SteadyState,
-            double[] SteadyStateAvg,
-            int tLen,
-            long totalObs) {
-        if (totalObs == 0L) {
-            return new double[0][0];
-        }
-        if (totalObs <= hLen) {
-            return buildBatchProgressMatrix(warmup, warmupAvg, hLen);
-        }
-        int totalRows = hLen + tLen;
-        if (totalRows < 2) {
-            return new double[0][0];
-        }
-        double[][] data = new double[totalRows][2];
-        for (int i = 0; i < hLen; i++) {
-            data[i][0] = (double) warmup[i][5];
-            data[i][1] = warmupAvg[i];
-        }
-        for (int i = 0; i < tLen; i++) {
-            data[hLen + i][0] = (double) SteadyState[i][5];
-            data[hLen + i][1] = SteadyStateAvg[i];
-        }
-        return data;
-    }
-
-    private static double[][] buildBatchCompleteMatrix(
-            long[][] state, double[] avgServiceTime, double[] throughput, int len) {
-        if (len < 2 || state == null || avgServiceTime == null || throughput == null) {
-            return new double[0][0];
-        }
-        double[][] data = new double[len][3];
-        for (int i = 0; i < len; i++) {
-            data[i][0] = (double) state[i][5];
-            data[i][1] = avgServiceTime[i];
-            data[i][2] = throughput[i];
-        }
-        return data;
-    }
-
-    private static double[][] buildBatchCompleteCombinedMatrix(
-            long[][] warmup,
-            double[] warmupAvg,
-            double[] warmupTp,
-            int hLen,
-            long[][] SteadyState,
-            double[] SteadyStateAvg,
-            double[] SteadyStateTp,
-            int tLen,
-            long totalObs) {
-        if (totalObs == 0L) {
-            return new double[0][0];
-        }
-        if (totalObs <= hLen) {
-            return buildBatchCompleteMatrix(warmup, warmupAvg, warmupTp, hLen);
-        }
-        int totalRows = hLen + tLen;
-        if (totalRows < 2) {
-            return new double[0][0];
-        }
-        double[][] data = new double[totalRows][3];
-        for (int i = 0; i < hLen; i++) {
-            data[i][0] = (double) warmup[i][5];
-            data[i][1] = warmupAvg[i];
-            data[i][2] = warmupTp[i];
-        }
-        for (int i = 0; i < tLen; i++) {
-            data[hLen + i][0] = (double) SteadyState[i][5];
-            data[hLen + i][1] = SteadyStateAvg[i];
-            data[hLen + i][2] = SteadyStateTp[i];
-        }
-        return data;
-    }
-
-    private static double[][] buildDecisionMatrix(long[][] state, double[] smoothedCost, int len) {
-        if (len < 2 || state == null || smoothedCost == null) {
-            return new double[0][0];
-        }
-        double[][] data = new double[len][3];
-        for (int i = 0; i < len; i++) {
-            data[i][0] = (double) state[i][2]; // contentionPolicy
-            data[i][1] = (double) state[i][3]; // bodyPolicy
-            data[i][2] = smoothedCost[i]; // smoothedBodyCost
-        }
-        return data;
-    }
-
-    private static double[][] buildDecisionCombinedMatrix(
-            long[][] warmup,
-            double[] warmupCost,
-            int hLen,
-            long[][] SteadyState,
-            double[] SteadyStateCost,
-            int tLen,
-            long totalObs) {
-        if (totalObs == 0L) {
-            return new double[0][0];
-        }
-        if (totalObs <= hLen) {
-            return buildDecisionMatrix(warmup, warmupCost, hLen);
-        }
-        int totalRows = hLen + tLen;
-        if (totalRows < 2) {
-            return new double[0][0];
-        }
-        double[][] data = new double[totalRows][3];
-        for (int i = 0; i < hLen; i++) {
-            data[i][0] = (double) warmup[i][2];
-            data[i][1] = (double) warmup[i][3];
-            data[i][2] = warmupCost[i];
-        }
-        for (int i = 0; i < tLen; i++) {
-            data[hLen + i][0] = (double) SteadyState[i][2];
-            data[hLen + i][1] = (double) SteadyState[i][3];
-            data[hLen + i][2] = SteadyStateCost[i];
-        }
-        return data;
     }
 }

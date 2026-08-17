@@ -9,6 +9,8 @@ import calibration.infra.Constants;
 import calibration.io.TrialExport;
 import calibration.statistics.HighSpeedMetricsStatistics;
 import calibration.statistics.iteration.CoreIterationResult;
+import calibration.statistics.iteration.IterationResult;
+import calibration.statistics.iteration.SystemIterationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
@@ -53,7 +55,7 @@ public class CalibrationBenchmark {
     private final TrialConfig trialConfig = getConfig();
     private final CalibrationBenchmarkConfig calibrationConfig = trialConfig.calibrationConfig();
     private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
-    private final List<List<CoreIterationResult>> calculationResults = new ArrayList<>();
+    private final List<IterationResult> calculationResults = new ArrayList<>();
     private BenchmarkObserver observer;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
@@ -178,15 +180,19 @@ public class CalibrationBenchmark {
         int iteration = 0;
         for (PaddedAtomicReferenceArray<HighSpeedMetrics> iterationMetrics : this.observations) {
             List<CoreIterationResult> iterationResults = new ArrayList<>();
+            List<HighSpeedMetrics> participatingMetrics = new ArrayList<>();
             for (int core = 0; core < SystemInfo.getMaxCoreId() + 1; core++) {
                 HighSpeedMetrics samples = iterationMetrics.getPlain(core);
                 if (samples == null) {
                     continue;
                 }
+                participatingMetrics.add(samples);
                 CoreIterationResult result = HighSpeedMetricsStatistics.calculate(iteration, core, samples);
                 iterationResults.add(result);
             }
-            this.calculationResults.add(Collections.unmodifiableList(iterationResults));
+            SystemIterationResult systemResult =
+                    HighSpeedMetricsStatistics.calculateSystem(iteration, participatingMetrics);
+            this.calculationResults.add(new IterationResult(iteration, systemResult, iterationResults));
             iteration++;
         }
         String output = System.getProperty(Constants.OUTPUT_DIRECTORY_PROP);

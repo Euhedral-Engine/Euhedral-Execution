@@ -8,11 +8,14 @@ import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
 import calibration.statistics.HighSpeedMetricsStatistics;
 import calibration.statistics.iteration.CoreIterationResult;
+import calibration.statistics.iteration.IterationResult;
+import calibration.statistics.iteration.SystemIterationResult;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -33,7 +36,7 @@ class TrialExportTest {
         return HexFormat.of().formatHex(digest.digest());
     }
 
-    private static CoreIterationResult createPopulatedResult(int iteration, int core) {
+    private static HighSpeedMetrics createPopulatedMetrics() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(8);
 
         // Cycle start samples
@@ -61,7 +64,19 @@ class TrialExportTest {
         metrics.recordExec(1, 1, 2, 3, 250, 30.0);
         metrics.recordExec(2, 2, 3, 4, 350, 40.0);
 
-        return HighSpeedMetricsStatistics.calculate(iteration, core, metrics);
+        return metrics;
+    }
+
+    private static IterationResult createPopulatedIteration(int iteration, int coreCount) {
+        List<CoreIterationResult> cores = new ArrayList<>(coreCount);
+        List<HighSpeedMetrics> metricsList = new ArrayList<>(coreCount);
+        for (int core = 0; core < coreCount; core++) {
+            HighSpeedMetrics m = createPopulatedMetrics();
+            metricsList.add(m);
+            cores.add(HighSpeedMetricsStatistics.calculate(iteration, core, m));
+        }
+        SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(iteration, metricsList);
+        return new IterationResult(iteration, system, cores);
     }
 
     @Test
@@ -106,10 +121,9 @@ class TrialExportTest {
 
     @Test
     void testExportRawObservationsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0c0 = createPopulatedResult(0, 0);
-        CoreIterationResult r0c1 = createPopulatedResult(0, 1);
-        CoreIterationResult r1c0 = createPopulatedResult(1, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0c0, r0c1), List.of(r1c0));
+        IterationResult iter0 = createPopulatedIteration(0, 2); // 1 system row + 2 core rows
+        IterationResult iter1 = createPopulatedIteration(1, 1); // 1 system row + 1 core row
+        List<IterationResult> results = List.of(iter0, iter1);
 
         TrialExport.exportRawObservationsTsv(tempDir, results);
 
@@ -120,21 +134,31 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        assertEquals(4, lines.size()); // header + 3 data rows
+        // Header + (1 system + 2 cores for iter0) + (1 system + 1 core for iter1) = 1 + 3 + 2 = 6 lines
+        assertEquals(6, lines.size());
         assertEquals(
-                "iteration\tcore\tcycleStartTotal\tbatchProgressTotal\tbatchCompleteTotal\trawBodyCostTotal\tidleDecisionTotal\texecDecisionTotal\tcentroidDistance",
+                "iteration\tscope\tcore\tcycleStartTotal\tbatchProgressTotal\tbatchCompleteTotal\trawBodyCostTotal\tidleDecisionTotal\texecDecisionTotal\tcentroidDistance",
                 lines.get(0));
 
-        String[] row0 = lines.get(1).split("\t");
-        assertEquals("0", row0[0]); // iteration
-        assertEquals("0", row0[1]); // core
-        assertEquals(String.valueOf(r0c0.cycleStartTotal()), row0[2]);
-        assertEquals(String.valueOf(r0c0.batchProgressTotal()), row0[3]);
-        assertEquals(String.valueOf(r0c0.batchCompleteTotal()), row0[4]);
-        assertEquals(String.valueOf(r0c0.rawBodyCostTotal()), row0[5]);
-        assertEquals(String.valueOf(r0c0.idleDecisionTotal()), row0[6]);
-        assertEquals(String.valueOf(r0c0.execDecisionTotal()), row0[7]);
-        assertEquals(String.valueOf(r0c0.centroidDistance()), row0[8]);
+        // Row 1: iter 0 SYSTEM
+        String[] row0Sys = lines.get(1).split("\t");
+        assertEquals("0", row0Sys[0]);
+        assertEquals("SYSTEM", row0Sys[1]);
+        assertEquals("-1", row0Sys[2]);
+        assertEquals(String.valueOf(iter0.system().cycleStartTotal()), row0Sys[3]);
+
+        // Row 2: iter 0 CORE 0
+        String[] row0Core0 = lines.get(2).split("\t");
+        assertEquals("0", row0Core0[0]);
+        assertEquals("CORE", row0Core0[1]);
+        assertEquals("0", row0Core0[2]);
+        assertEquals(String.valueOf(iter0.cores().get(0).cycleStartTotal()), row0Core0[3]);
+
+        // Row 3: iter 0 CORE 1
+        String[] row0Core1 = lines.get(3).split("\t");
+        assertEquals("0", row0Core1[0]);
+        assertEquals("CORE", row0Core1[1]);
+        assertEquals("1", row0Core1[2]);
 
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
@@ -153,8 +177,8 @@ class TrialExportTest {
 
     @Test
     void testExportStatisticsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0c0 = createPopulatedResult(0, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
+        IterationResult iter0 = createPopulatedIteration(0, 1);
+        List<IterationResult> results = List.of(iter0);
 
         TrialExport.exportStatisticsTsv(tempDir, results);
 
@@ -167,27 +191,43 @@ class TrialExportTest {
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
         assertTrue(lines.size() > 1);
         assertEquals(
-                "iteration\tcore\tmetric\tsegment\tvariable\tcount\tmean\tstdDev\tvariance\tcv\tmin\tmax\tmedian\tp25\tp50\tp75\tp95\tiqr\tnormalizedIqr\tp95ToP50Ratio",
+                "iteration\tscope\tcore\tmetric\tsegment\tvariable\tcount\tmean\tstdDev\tvariance\tcv\tmin\tmax\tmedian\tp25\tp50\tp75\tp95\tiqr\tnormalizedIqr\tp95ToP50Ratio",
                 lines.get(0));
 
-        // Verify cycleStart throughput line
-        boolean foundCycleStartThroughput = false;
+        // Verify cycleStart throughput lines for both SYSTEM and CORE scopes
+        boolean foundSystemCycleStartThroughput = false;
+        boolean foundCoreCycleStartThroughput = false;
         for (String line : lines) {
             String[] tokens = line.split("\t");
-            if (tokens.length >= 5
+            if (tokens.length >= 6
                     && tokens[0].equals("0")
-                    && tokens[1].equals("0")
-                    && tokens[2].equals("cycleStart")
-                    && tokens[3].equals("head")
-                    && tokens[4].equals("throughput")) {
-                foundCycleStartThroughput = true;
+                    && tokens[1].equals("SYSTEM")
+                    && tokens[2].equals("-1")
+                    && tokens[3].equals("cycleStart")
+                    && tokens[4].equals("head")
+                    && tokens[5].equals("throughput")) {
+                foundSystemCycleStartThroughput = true;
                 assertEquals(
-                        String.valueOf(r0c0.cycleStart().head().throughput().count()), tokens[5]);
+                        String.valueOf(iter0.system().cycleStart().head().throughput().count()), tokens[6]);
                 assertEquals(
-                        String.valueOf(r0c0.cycleStart().head().throughput().mean()), tokens[6]);
+                        String.valueOf(iter0.system().cycleStart().head().throughput().mean()), tokens[7]);
+            }
+            if (tokens.length >= 6
+                    && tokens[0].equals("0")
+                    && tokens[1].equals("CORE")
+                    && tokens[2].equals("0")
+                    && tokens[3].equals("cycleStart")
+                    && tokens[4].equals("head")
+                    && tokens[5].equals("throughput")) {
+                foundCoreCycleStartThroughput = true;
+                assertEquals(
+                        String.valueOf(iter0.cores().get(0).cycleStart().head().throughput().count()), tokens[6]);
+                assertEquals(
+                        String.valueOf(iter0.cores().get(0).cycleStart().head().throughput().mean()), tokens[7]);
             }
         }
-        assertTrue(foundCycleStartThroughput);
+        assertTrue(foundSystemCycleStartThroughput);
+        assertTrue(foundCoreCycleStartThroughput);
 
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
@@ -206,8 +246,8 @@ class TrialExportTest {
 
     @Test
     void testExportOccupancyTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0c0 = createPopulatedResult(0, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
+        IterationResult iter0 = createPopulatedIteration(0, 1);
+        List<IterationResult> results = List.of(iter0);
 
         TrialExport.exportOccupancyTsv(tempDir, results);
 
@@ -218,10 +258,10 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 25 (idle) + 25 (exec) = 51 lines
-        assertEquals(51, lines.size());
+        // 1 header + 50 (SYSTEM idle+exec) + 50 (CORE 0 idle+exec) = 101 lines
+        assertEquals(101, lines.size());
         assertEquals(
-                "iteration\tcore\tdecisionType\tcontentionBand\tbodyBand\tcount\tprobability\tcontentionCentroid\tbodyCentroid\tcontentionVariance\tbodyVariance\tcontentionBodyCovariance\tradiusSquared\tradius",
+                "iteration\tscope\tcore\tdecisionType\tcontentionBand\tbodyBand\tcount\tprobability\tcontentionCentroid\tbodyCentroid\tcontentionVariance\tbodyVariance\tcontentionBodyCovariance\tradiusSquared\tradius",
                 lines.get(0));
 
         String expectedHash = computeSha256(tsv);
@@ -241,8 +281,8 @@ class TrialExportTest {
 
     @Test
     void testExportTransitionsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0c0 = createPopulatedResult(0, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
+        IterationResult iter0 = createPopulatedIteration(0, 1);
+        List<IterationResult> results = List.of(iter0);
 
         TrialExport.exportTransitionsTsv(tempDir, results);
 
@@ -253,10 +293,10 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 2 (decisionTypes) * 2 (segments) * 25 * 25 = 1 + 2500 = 2501 lines
-        assertEquals(2501, lines.size());
+        // 1 header + 2 (SYSTEM + CORE) * 2 (decisionTypes) * 2 (segments) * 25 * 25 = 1 + 2 * 2500 = 5001 lines
+        assertEquals(5001, lines.size());
         assertEquals(
-                "iteration\tcore\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tcount\tprobability\tselfTransitionRate\tdominantOutgoingState\tdominantOutgoingProbability",
+                "iteration\tscope\tcore\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tcount\tprobability\tselfTransitionRate\tdominantOutgoingState\tdominantOutgoingProbability",
                 lines.get(0));
 
         String expectedHash = computeSha256(tsv);
@@ -276,8 +316,8 @@ class TrialExportTest {
 
     @Test
     void testExportVectorFieldsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0c0 = createPopulatedResult(0, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
+        IterationResult iter0 = createPopulatedIteration(0, 1);
+        List<IterationResult> results = List.of(iter0);
 
         TrialExport.exportVectorFieldsTsv(tempDir, results);
 
@@ -288,10 +328,10 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 2 (decisionTypes) * 2 (segments) * 25 (cells) = 1 + 100 = 101 lines
-        assertEquals(101, lines.size());
+        // 1 header + 2 (SYSTEM + CORE) * 2 (decisionTypes) * 2 (segments) * 25 (cells) = 1 + 2 * 100 = 201 lines
+        assertEquals(201, lines.size());
         assertEquals(
-                "iteration\tcore\tdecisionType\tsegment\tcontentionBand\tbodyBand\ttransitionCount\tmeanDeltaContention\tmeanDeltaBody\tmagnitude",
+                "iteration\tscope\tcore\tdecisionType\tsegment\tcontentionBand\tbodyBand\ttransitionCount\tmeanDeltaContention\tmeanDeltaBody\tmagnitude",
                 lines.get(0));
 
         String expectedHash = computeSha256(tsv);
@@ -311,8 +351,8 @@ class TrialExportTest {
 
     @Test
     void testExportCorrelationsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0c0 = createPopulatedResult(0, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0c0));
+        IterationResult iter0 = createPopulatedIteration(0, 1);
+        List<IterationResult> results = List.of(iter0);
 
         TrialExport.exportCorrelationsTsv(tempDir, results);
 
@@ -323,9 +363,9 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 3 segments * (7*7 + 2*2 + 3*3 + 3*3 + 3*3) = 1 + 3 * (49 + 4 + 9 + 9 + 9) = 1 + 3 * 80 = 241 lines
-        assertEquals(241, lines.size());
-        assertEquals("iteration\tcore\tmetric\tsegment\tvariable1\tvariable2\tpearson\tspearman", lines.get(0));
+        // 1 header + 2 (SYSTEM + CORE) * 3 segments * (7*7 + 2*2 + 3*3 + 3*3 + 3*3) = 1 + 2 * 3 * 80 = 481 lines
+        assertEquals(481, lines.size());
+        assertEquals("iteration\tscope\tcore\tmetric\tsegment\tvariable1\tvariable2\tpearson\tspearman", lines.get(0));
 
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
@@ -334,9 +374,9 @@ class TrialExportTest {
 
     @Test
     void testExportAllPerIterationFalseWritesOnlyTopLevel(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0 = createPopulatedResult(0, 0);
-        CoreIterationResult r1 = createPopulatedResult(1, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0), List.of(r1));
+        IterationResult r0 = createPopulatedIteration(0, 1);
+        IterationResult r1 = createPopulatedIteration(1, 1);
+        List<IterationResult> results = List.of(r0, r1);
 
         TrialExport.exportAll(tempDir, results, false);
 
@@ -353,9 +393,9 @@ class TrialExportTest {
 
     @Test
     void testExportAllPerIterationTrueWritesPerIterationSubdirectories(@TempDir Path tempDir) throws Exception {
-        CoreIterationResult r0 = createPopulatedResult(0, 0);
-        CoreIterationResult r1 = createPopulatedResult(1, 0);
-        List<List<CoreIterationResult>> results = List.of(List.of(r0), List.of(r1));
+        IterationResult r0 = createPopulatedIteration(0, 1);
+        IterationResult r1 = createPopulatedIteration(1, 1);
+        List<IterationResult> results = List.of(r0, r1);
 
         TrialExport.exportAll(tempDir, results, true);
 
