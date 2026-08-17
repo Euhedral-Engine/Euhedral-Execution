@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.openjdk.jmh.runner.options.Options;
 
 /// Unit tests for CalibrationRunner refactored private operations.
 class CalibrationRunnerTest {
@@ -424,8 +425,10 @@ class CalibrationRunnerTest {
 
     @Test
     void resolveTrialsResolvesCalibrationProfiles() {
-        TrialConfig trial1 = new TrialConfig("t1", "Trial 1", "grp", null, null, null, null, true, 1, 1, 5, null, "profile-alpha");
-        TrialConfig trial2 = new TrialConfig("t2", "Trial 2", "grp", null, null, null, null, true, 1, 1, 5, null, dummyCalibrationConfig());
+        TrialConfig trial1 =
+                new TrialConfig("t1", "Trial 1", "grp", null, null, null, null, true, 1, 1, 5, null, "profile-alpha");
+        TrialConfig trial2 = new TrialConfig(
+                "t2", "Trial 2", "grp", null, null, null, null, true, 1, 1, 5, null, dummyCalibrationConfig());
 
         HarnessConfig config = new HarnessConfig(
                 1,
@@ -454,5 +457,71 @@ class CalibrationRunnerTest {
         TrialConfig resolvedTrial2 = resolved.get(1);
         assertEquals("t2", resolvedTrial2.id());
         assertNotNull(resolvedTrial2.calibrationConfig());
+    }
+
+    @Test
+    void buildOptionsConfiguresOutputFileWhenRetainRawBenchmarkOutputIsTrue(@TempDir Path tempDir) throws Exception {
+        File invocationDir = tempDir.resolve("trial_repeat_0").toFile();
+        invocationDir.mkdirs();
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), true, true, true, false, false);
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        List<String> jvmArgs = List.of("-Xmx1g");
+
+        Options options = CalibrationRunner.buildOptions(trial, jvmArgs, artifacts, invocationDir);
+
+        assertTrue(options.getOutput().hasValue());
+        File expectedOutputFile = new File(invocationDir, "benchmark_output.log");
+        assertEquals(
+                expectedOutputFile.getCanonicalPath(),
+                new File(options.getOutput().get()).getCanonicalPath());
+    }
+
+    @Test
+    void buildOptionsDoesNotConfigureOutputFileWhenRetainRawBenchmarkOutputIsFalse(@TempDir Path tempDir) {
+        File invocationDir = tempDir.resolve("trial_repeat_0").toFile();
+        invocationDir.mkdirs();
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), true, false, true, false, false);
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        List<String> jvmArgs = List.of("-Xmx1g");
+
+        Options options = CalibrationRunner.buildOptions(trial, jvmArgs, artifacts, invocationDir);
+
+        assertFalse(options.getOutput().hasValue());
+    }
+
+    @Test
+    void buildOptionsDoesNotConfigureOutputFileWhenRetainRawBenchmarkOutputIsNull(@TempDir Path tempDir) {
+        File invocationDir = tempDir.resolve("trial_repeat_0").toFile();
+        invocationDir.mkdirs();
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), true, null, true, false, false);
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        List<String> jvmArgs = List.of("-Xmx1g");
+
+        Options options = CalibrationRunner.buildOptions(trial, jvmArgs, artifacts, invocationDir);
+
+        assertFalse(options.getOutput().hasValue());
+    }
+
+    @Test
+    void buildOptionsDoesNotConfigureOutputFileWhenArtifactsIsNull(@TempDir Path tempDir) {
+        File invocationDir = tempDir.resolve("trial_repeat_0").toFile();
+        invocationDir.mkdirs();
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        List<String> jvmArgs = List.of("-Xmx1g");
+
+        Options options = CalibrationRunner.buildOptions(trial, jvmArgs, null, invocationDir);
+
+        assertFalse(options.getOutput().hasValue());
+    }
+
+    @Test
+    void buildOptionsDoesNotConfigureOutputFileWhenInvocationDirIsNull(@TempDir Path tempDir) {
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), true, true, true, false, false);
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        List<String> jvmArgs = List.of("-Xmx1g");
+
+        Options options = CalibrationRunner.buildOptions(trial, jvmArgs, artifacts, null);
+
+        assertFalse(options.getOutput().hasValue());
     }
 }

@@ -9,6 +9,10 @@ public final class Constants {
 
     public static final String OUTPUT_DIRECTORY_PROP = "euhedral.calibration.outputDirectory";
 
+    public static final String BENCHMARK_OUTPUT_LOG = "benchmark_output.log";
+    public static final String RAW_BENCHMARK_OUTPUT_LOG = BENCHMARK_OUTPUT_LOG;
+    public static final String RAW_BENCHMARK_OUTPUT = BENCHMARK_OUTPUT_LOG;
+
     public static final String RAW_OBSERVATION_TSV = "raw_observations.tsv";
     public static final String RAW_OBSERVATIONS_TSV = RAW_OBSERVATION_TSV;
     public static final String RAW_OBSERVATION_CHECKSUM = "raw_observations.tsv.sha256";

@@ -255,9 +255,8 @@ public record HarnessConfig(
         for (TrialConfig trial : trials) {
             if (trial.calibrationProfile() != null) {
                 if (calibrationProfiles == null || !calibrationProfiles.containsKey(trial.calibrationProfile())) {
-                    throw new IllegalArgumentException(
-                            "Referenced calibrationProfile '" + trial.calibrationProfile()
-                                    + "' was not found in calibrationProfiles");
+                    throw new IllegalArgumentException("Referenced calibrationProfile '" + trial.calibrationProfile()
+                            + "' was not found in calibrationProfiles");
                 }
             }
             if (trial.comparison() != null && trial.comparison().baselineTrialId() != null) {
@@ -276,7 +275,8 @@ public record HarnessConfig(
 
     /// Resolves calibrationProfiles references across all trials, populating calibrationConfig where needed.
     ///
-    /// @return a new HarnessConfig with all trial calibration profiles resolved, or this instance if no resolution was needed
+    /// @return a new HarnessConfig with all trial calibration profiles resolved, or this instance if no resolution was
+    /// needed
     public HarnessConfig resolveCalibrationProfiles() {
         if (calibrationProfiles == null || calibrationProfiles.isEmpty()) {
             return this;

@@ -1,5 +1,6 @@
 package calibration;
 
+import static calibration.infra.Constants.BENCHMARK_OUTPUT_LOG;
 import static calibration.infra.Constants.OUTPUT_DIRECTORY_PROP;
 import static calibration.infra.Constants.REPEAT_INDEX_PROP;
 import static calibration.infra.Constants.TRIAL_CONFIG_PROP;
@@ -220,19 +221,7 @@ public class CalibrationRunner {
             List<String> jvmArgs =
                     buildJvmArgs(trial, trialIndex, repeatIndex, tempConfigFile.getCanonicalPath(), invocationDir);
 
-            ChainedOptionsBuilder opt = new OptionsBuilder();
-            opt = opt.include(CalibrationBenchmark.class.getName());
-            opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
-            opt = opt.forks(trial.forks());
-            opt = opt.warmupIterations(trial.warmups());
-            opt = opt.measurementIterations(trial.iterations());
-            if (trial.warmupTime() != null) {
-                opt = opt.warmupTime(TimeValue.fromString(trial.warmupTime()));
-            }
-            if (trial.measurementTime() != null) {
-                opt = opt.measurementTime(TimeValue.fromString(trial.measurementTime()));
-            }
-            Options options = opt.build();
+            Options options = buildOptions(trial, jvmArgs, artifacts, invocationDir);
             new Runner(options).run();
 
             logTrialCompletion(trial, trialIndex, repeatIndex);
@@ -240,6 +229,30 @@ public class CalibrationRunner {
             //noinspection ResultOfMethodCallIgnored
             tempConfigFile.delete();
         }
+    }
+
+    static Options buildOptions(TrialConfig trial, List<String> jvmArgs, ArtifactConfig artifacts, File invocationDir) {
+        ChainedOptionsBuilder opt = new OptionsBuilder();
+        opt = opt.include(CalibrationBenchmark.class.getName());
+        opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
+        opt = opt.forks(trial.forks());
+        opt = opt.warmupIterations(trial.warmups());
+        opt = opt.measurementIterations(trial.iterations());
+        if (trial.warmupTime() != null) {
+            opt = opt.warmupTime(TimeValue.fromString(trial.warmupTime()));
+        }
+        if (trial.measurementTime() != null) {
+            opt = opt.measurementTime(TimeValue.fromString(trial.measurementTime()));
+        }
+        if (artifacts != null && Boolean.TRUE.equals(artifacts.retainRawBenchmarkOutput()) && invocationDir != null) {
+            File outputFile = new File(invocationDir, BENCHMARK_OUTPUT_LOG);
+            try {
+                opt = opt.output(outputFile.getCanonicalPath());
+            } catch (Exception e) {
+                opt = opt.output(outputFile.getAbsolutePath());
+            }
+        }
+        return opt.build();
     }
 
     static void writeTrialConfig(ObjectMapper mapper, File targetFile, TrialConfig trial) throws Exception {

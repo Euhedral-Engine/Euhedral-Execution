@@ -1796,8 +1796,8 @@ class HarnessConfigTest {
     /// Verifies error when trial references a calibrationProfile but calibrationProfiles is null.
     @Test
     void rejectCalibrationProfileReferenceWhenProfilesNull() {
-        TrialConfig trial = new TrialConfig(
-                "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
+        TrialConfig trial =
+                new TrialConfig("trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
     }
@@ -1805,13 +1805,10 @@ class HarnessConfigTest {
     /// Verifies blank calibrationProfile names in TrialConfig are rejected.
     @Test
     void rejectBlankCalibrationProfileInTrial() {
+        assertThrows(IllegalArgumentException.class, () -> new TrialConfig(1, 1, 1, null, "   "));
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new TrialConfig(1, 1, 1, null, "   "));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new TrialConfig(
-                        "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "   "));
+                () -> new TrialConfig("trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "   "));
     }
 
     /// Verifies trial without calibrationConfig or calibrationProfile is rejected.
@@ -1820,7 +1817,8 @@ class HarnessConfigTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new TrialConfig(
-                        "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null, null, null));
+                        "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null,
+                        null, null));
     }
 
     /// Verifies example_harness_config.json parses, resolves calibration profiles, expands sweeps, and round-trips.

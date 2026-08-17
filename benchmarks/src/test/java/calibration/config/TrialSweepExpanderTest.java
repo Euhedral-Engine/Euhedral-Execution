@@ -542,9 +542,8 @@ class TrialSweepExpanderTest {
                 null,
                 "my-profile");
 
-        SweepParameter param = new SweepParameter(
-                "/calibrationConfig/workUnits",
-                List.of(new IntNode(250), new IntNode(500)));
+        SweepParameter param =
+                new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(250), new IntNode(500)));
         SweepConfig sweep = new SweepConfig("sweep-prof", "profile-base", List.of(param));
 
         HarnessConfig harnessConfig = new HarnessConfig(

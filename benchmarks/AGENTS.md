@@ -49,6 +49,7 @@ HarnessConfig
    ([`ArtifactConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/ArtifactConfig.java)):
    - `outputDirectory` (`string`): Target directory for benchmark telemetry exports.
    - `retainExpandedConfig` (`boolean`): Writes `trial_config.json` into each trial's output folder.
+   - `retainRawBenchmarkOutput` (`boolean`): Writes raw benchmark console output (`benchmark_output.log`) into each trial's output folder.
 
 3. **`sweeps`**
    ([`SweepConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/SweepConfig.java)):
@@ -324,6 +325,7 @@ alongside their SHA-256 integrity checksums:
 | Export File | Description | Source Structure |
 |-------------|-------------|------------------|
 | `trial_config.json` | Snapshot of the expanded trial configuration | [`TrialConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/TrialConfig.java) |
+| `benchmark_output.log` | Raw benchmark console output when retained | [`CalibrationRunner`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/CalibrationRunner.java) |
 | `raw_observations.tsv` | Total event observation counts per iteration and core | [`CoreIterationResult`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/statistics/iteration/CoreIterationResult.java) |
 | `statistics.tsv` | Descriptive & quantile scalar statistics across variables and segments | [`ScalarSummary`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/statistics/iteration/ScalarSummary.java) |
 | `occupancy.tsv` | 5x5 branch occupancy counts, probabilities, centroids, and variances | [`BranchOccupancyResult`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/statistics/iteration/BranchOccupancyResult.java) |

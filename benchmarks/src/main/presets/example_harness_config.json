@@ -29,7 +29,7 @@
     "outputDirectory": "build/reports/benchmarks",
     // Optional: Retain expanded configuration files
     "retainExpandedConfig": true,
-    // Optional: Retain raw console output from benchmarks [NOT YET IMPLEMENTED]
+    // Optional: Retain raw console output from benchmarks
     "retainRawBenchmarkOutput": false,
     // Optional: Retain observer events data [NOT YET IMPLEMENTED: observer metrics are always exported when outputDirectory is set]
     "retainObserverData": true,
