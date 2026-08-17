@@ -2148,9 +2148,9 @@ class HarnessConfigTest {
     /// and round-trips.
     @Test
     void parseExampleHarnessConfigAndVerifyCalibrationProfiles() throws Exception {
-        File file = new File("src/main/presets/example_harness_config.json");
+        File file = new File("src/main/presets/examples/example_harness_config.json");
         if (!file.exists()) {
-            file = new File("benchmarks/src/main/presets/example_harness_config.json");
+            file = new File("benchmarks/src/main/presets/examples/example_harness_config.json");
         }
         assertTrue(file.exists(), "example_harness_config.json should exist");
 

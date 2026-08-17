@@ -46,11 +46,15 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
 import org.openjdk.jmh.infra.IterationParams;
 import org.openjdk.jmh.runner.IterationType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 public class CalibrationBenchmark {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(CalibrationBenchmark.class);
 
     private final PaddedLongAdder executionCounter = new PaddedLongAdder(SystemInfo.CPU_COUNT);
 
@@ -111,6 +115,7 @@ public class CalibrationBenchmark {
 
     @Setup(Level.Trial)
     public void trialSetup() {
+        LOGGER.info("Fork start");
         // Benchmark thread stays off active cores
         ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet());
         UnmodifiableBitSet cpuSet = parseBitset(this.calibrationConfig.cpuSet());
@@ -145,7 +150,11 @@ public class CalibrationBenchmark {
     }
 
     @Setup(Level.Iteration)
-    public void iterationSetup() {
+    public void iterationSetup(IterationParams iterationParams) {
+        IterationType type = iterationParams != null ? iterationParams.getType() : IterationType.MEASUREMENT;
+        int index = type == IterationType.WARMUP ? this.warmupObservations.size() : this.measurementObservations.size();
+        int count = type == IterationType.WARMUP ? this.trialConfig.warmups() : this.trialConfig.iterations();
+        LOGGER.info("Iteration start: type={}, index={}, count={}", type, index, count);
         this.controlPlane.clear(Duration.ofSeconds(1));
         this.observer.startObserving();
     }
@@ -165,7 +174,11 @@ public class CalibrationBenchmark {
     @TearDown(Level.Iteration)
     public void iterationTeardown(IterationParams iterationParams) {
         PaddedAtomicReferenceArray<HighSpeedMetrics> obs = this.observer.stopObserving();
-        if (iterationParams != null && iterationParams.getType() == IterationType.WARMUP) {
+        IterationType type = iterationParams != null ? iterationParams.getType() : IterationType.MEASUREMENT;
+        int index = type == IterationType.WARMUP ? this.warmupObservations.size() : this.measurementObservations.size();
+        int count = type == IterationType.WARMUP ? this.trialConfig.warmups() : this.trialConfig.iterations();
+        LOGGER.info("Iteration stop: type={}, index={}, count={}", type, index, count);
+        if (type == IterationType.WARMUP) {
             this.warmupObservations.add(obs);
         } else {
             this.measurementObservations.add(obs);
@@ -175,6 +188,7 @@ public class CalibrationBenchmark {
 
     @TearDown(Level.Trial)
     public void trialTeardown() throws Exception {
+        LOGGER.info("Fork stop");
         for (RepeatingSink s : this.sinks) {
             s.complete();
         }
