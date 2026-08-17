@@ -8,6 +8,8 @@ import calibration.infra.CalibrationExecutor;
 import calibration.infra.Constants;
 import calibration.io.TrialExport;
 import calibration.statistics.HighSpeedMetricsStatistics;
+import calibration.statistics.fork.ForkCalculationResult;
+import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.CoreIterationResult;
 import calibration.statistics.iteration.IterationResult;
 import calibration.statistics.iteration.SystemIterationResult;
@@ -29,7 +31,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.AuxCounters;
@@ -43,9 +44,11 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.infra.IterationParams;
+import org.openjdk.jmh.runner.IterationType;
 
 @BenchmarkMode(Mode.Throughput)
-@OutputTimeUnit(TimeUnit.SECONDS)
+@OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 public class CalibrationBenchmark {
 
@@ -54,8 +57,10 @@ public class CalibrationBenchmark {
     private final long configId = System.currentTimeMillis();
     private final TrialConfig trialConfig = getConfig();
     private final CalibrationBenchmarkConfig calibrationConfig = trialConfig.calibrationConfig();
-    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> observations = new ArrayList<>();
+    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> measurementObservations = new ArrayList<>();
+    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> warmupObservations = new ArrayList<>();
     private final List<IterationResult> calculationResults = new ArrayList<>();
+    private ForkCalculationResult forkCalculationResult;
     private BenchmarkObserver observer;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
@@ -158,8 +163,13 @@ public class CalibrationBenchmark {
     }
 
     @TearDown(Level.Iteration)
-    public void iterationTeardown() {
-        this.observations.add(this.observer.stopObserving());
+    public void iterationTeardown(IterationParams iterationParams) {
+        PaddedAtomicReferenceArray<HighSpeedMetrics> obs = this.observer.stopObserving();
+        if (iterationParams != null && iterationParams.getType() == IterationType.WARMUP) {
+            this.warmupObservations.add(obs);
+        } else {
+            this.measurementObservations.add(obs);
+        }
         this.controlPlane.clear(Duration.ofSeconds(1));
     }
 
@@ -174,11 +184,10 @@ public class CalibrationBenchmark {
         // getActiveWorkers is atomic. Fragments only decrement when they are out of the cycle loop
         // This fence is purely for redundancy.
         VarHandle.fullFence();
-        for (int i = 0; i < this.trialConfig.warmups(); i++) {
-            this.observations.removeFirst();
-        }
+
         int iteration = 0;
-        for (PaddedAtomicReferenceArray<HighSpeedMetrics> iterationMetrics : this.observations) {
+        List<List<HighSpeedMetrics>> forkMeasurementMetrics = new ArrayList<>();
+        for (PaddedAtomicReferenceArray<HighSpeedMetrics> iterationMetrics : this.measurementObservations) {
             List<CoreIterationResult> iterationResults = new ArrayList<>();
             List<HighSpeedMetrics> participatingMetrics = new ArrayList<>();
             for (int core = 0; core < SystemInfo.getMaxCoreId() + 1; core++) {
@@ -193,8 +202,13 @@ public class CalibrationBenchmark {
             SystemIterationResult systemResult =
                     HighSpeedMetricsStatistics.calculateSystem(iteration, participatingMetrics);
             this.calculationResults.add(new IterationResult(iteration, systemResult, iterationResults));
+            forkMeasurementMetrics.add(participatingMetrics);
             iteration++;
         }
+
+        SystemForkResult forkResult = HighSpeedMetricsStatistics.calculateSystemFork(0, forkMeasurementMetrics);
+        this.forkCalculationResult = new ForkCalculationResult(forkResult, this.calculationResults);
+
         String output = System.getProperty(Constants.OUTPUT_DIRECTORY_PROP);
         if (output == null || output.isBlank()) {
             return;
@@ -216,7 +230,7 @@ public class CalibrationBenchmark {
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             throw new RuntimeException("Failed to create output directory: " + targetPath);
         }
-        TrialExport.exportAll(targetPath, this.calculationResults, retainPerIteration);
+        TrialExport.exportAll(targetPath, this.forkCalculationResult, retainPerIteration);
     }
 
     @State(Scope.Thread)

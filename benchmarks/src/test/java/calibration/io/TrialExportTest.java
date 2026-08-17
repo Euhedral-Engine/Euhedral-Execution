@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
 import calibration.statistics.HighSpeedMetricsStatistics;
+import calibration.statistics.fork.ForkCalculationResult;
+import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.CoreIterationResult;
 import calibration.statistics.iteration.IterationResult;
 import calibration.statistics.iteration.SystemIterationResult;
@@ -79,6 +81,25 @@ class TrialExportTest {
         return new IterationResult(iteration, system, cores);
     }
 
+    private static ForkCalculationResult createPopulatedFork(int coreCount, int iterationCount) {
+        List<IterationResult> iterResults = new ArrayList<>(iterationCount);
+        List<List<HighSpeedMetrics>> allIterMetrics = new ArrayList<>(iterationCount);
+        for (int iter = 0; iter < iterationCount; iter++) {
+            List<CoreIterationResult> cores = new ArrayList<>(coreCount);
+            List<HighSpeedMetrics> metricsList = new ArrayList<>(coreCount);
+            for (int core = 0; core < coreCount; core++) {
+                HighSpeedMetrics m = createPopulatedMetrics();
+                metricsList.add(m);
+                cores.add(HighSpeedMetricsStatistics.calculate(iter, core, m));
+            }
+            SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(iter, metricsList);
+            iterResults.add(new IterationResult(iter, system, cores));
+            allIterMetrics.add(metricsList);
+        }
+        SystemForkResult forkSystem = HighSpeedMetricsStatistics.calculateSystemFork(0, allIterMetrics);
+        return new ForkCalculationResult(forkSystem, iterResults);
+    }
+
     @Test
     void testConstantsMatchExpectedFileNames() {
         assertEquals("raw_observations.tsv", Constants.RAW_OBSERVATION_TSV);
@@ -111,21 +132,21 @@ class TrialExportTest {
 
     @Test
     void testExportRawObservationsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
+        TrialExport.exportRawObservationsTsv(tempDir, (ForkCalculationResult) null);
+        TrialExport.exportRawObservationsTsv(tempDir, (List<IterationResult>) null);
         TrialExport.exportRawObservationsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_CHECKSUM)));
 
+        TrialExport.exportRawObservationsTsv(null, (ForkCalculationResult) null);
         TrialExport.exportRawObservationsTsv(null, List.of());
-        TrialExport.exportRawObservationsTsv(tempDir, null);
     }
 
     @Test
     void testExportRawObservationsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        IterationResult iter0 = createPopulatedIteration(0, 2); // 1 system row + 2 core rows
-        IterationResult iter1 = createPopulatedIteration(1, 1); // 1 system row + 1 core row
-        List<IterationResult> results = List.of(iter0, iter1);
+        ForkCalculationResult forkResult = createPopulatedFork(2, 2); // 1 FORK + 2 ITERATION + 4 CORE = 7 rows
 
-        TrialExport.exportRawObservationsTsv(tempDir, results);
+        TrialExport.exportRawObservationsTsv(tempDir, forkResult);
 
         Path tsv = tempDir.resolve(Constants.RAW_OBSERVATION_TSV);
         Path checksum = tempDir.resolve(Constants.RAW_OBSERVATION_CHECKSUM);
@@ -134,31 +155,31 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // Header + (1 system + 2 cores for iter0) + (1 system + 1 core for iter1) = 1 + 3 + 2 = 6 lines
-        assertEquals(6, lines.size());
+        // Header (1) + FORK (1) + Iter 0 (1 system + 2 cores) + Iter 1 (1 system + 2 cores) = 1 + 1 + 3 + 3 = 8 lines
+        assertEquals(8, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tcycleStartTotal\tbatchProgressTotal\tbatchCompleteTotal\trawBodyCostTotal\tidleDecisionTotal\texecDecisionTotal\tcentroidDistance",
                 lines.get(0));
 
-        // Row 1: iter 0 SYSTEM
-        String[] row0Sys = lines.get(1).split("\t");
-        assertEquals("0", row0Sys[0]);
-        assertEquals("SYSTEM", row0Sys[1]);
-        assertEquals("-1", row0Sys[2]);
-        assertEquals(String.valueOf(iter0.system().cycleStartTotal()), row0Sys[3]);
+        // Row 1: FORK
+        String[] forkRow = lines.get(1).split("\t");
+        assertEquals("-1", forkRow[0]);
+        assertEquals("FORK", forkRow[1]);
+        assertEquals("-1", forkRow[2]);
+        assertEquals(String.valueOf(forkResult.system().cycleStartTotal()), forkRow[3]);
 
-        // Row 2: iter 0 CORE 0
-        String[] row0Core0 = lines.get(2).split("\t");
+        // Row 2: Iter 0 ITERATION
+        String[] row0Sys = lines.get(2).split("\t");
+        assertEquals("0", row0Sys[0]);
+        assertEquals("ITERATION", row0Sys[1]);
+        assertEquals("-1", row0Sys[2]);
+        assertEquals(String.valueOf(forkResult.iterations().get(0).system().cycleStartTotal()), row0Sys[3]);
+
+        // Row 3: Iter 0 CORE 0
+        String[] row0Core0 = lines.get(3).split("\t");
         assertEquals("0", row0Core0[0]);
         assertEquals("CORE", row0Core0[1]);
         assertEquals("0", row0Core0[2]);
-        assertEquals(String.valueOf(iter0.cores().get(0).cycleStartTotal()), row0Core0[3]);
-
-        // Row 3: iter 0 CORE 1
-        String[] row0Core1 = lines.get(3).split("\t");
-        assertEquals("0", row0Core1[0]);
-        assertEquals("CORE", row0Core1[1]);
-        assertEquals("1", row0Core1[2]);
 
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
@@ -167,20 +188,21 @@ class TrialExportTest {
 
     @Test
     void testExportStatisticsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
+        TrialExport.exportStatisticsTsv(tempDir, (ForkCalculationResult) null);
+        TrialExport.exportStatisticsTsv(tempDir, (List<IterationResult>) null);
         TrialExport.exportStatisticsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.STATISTICS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.STATISTICS_CHECKSUM)));
 
+        TrialExport.exportStatisticsTsv(null, (ForkCalculationResult) null);
         TrialExport.exportStatisticsTsv(null, List.of());
-        TrialExport.exportStatisticsTsv(tempDir, null);
     }
 
     @Test
     void testExportStatisticsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        IterationResult iter0 = createPopulatedIteration(0, 1);
-        List<IterationResult> results = List.of(iter0);
+        ForkCalculationResult forkResult = createPopulatedFork(1, 1);
 
-        TrialExport.exportStatisticsTsv(tempDir, results);
+        TrialExport.exportStatisticsTsv(tempDir, forkResult);
 
         Path tsv = tempDir.resolve(Constants.STATISTICS_TSV);
         Path checksum = tempDir.resolve(Constants.STATISTICS_CHECKSUM);
@@ -194,23 +216,47 @@ class TrialExportTest {
                 "iteration\tscope\tcore\tmetric\tsegment\tvariable\tcount\tmean\tstdDev\tvariance\tcv\tmin\tmax\tmedian\tp25\tp50\tp75\tp95\tiqr\tnormalizedIqr\tp95ToP50Ratio",
                 lines.get(0));
 
-        // Verify cycleStart throughput lines for both SYSTEM and CORE scopes
-        boolean foundSystemCycleStartThroughput = false;
-        boolean foundCoreCycleStartThroughput = false;
+        // Verify cycleStart throughput lines for FORK, ITERATION, and CORE scopes
+        boolean foundFork = false;
+        boolean foundIteration = false;
+        boolean foundCore = false;
         for (String line : lines) {
             String[] tokens = line.split("\t");
             if (tokens.length >= 6
-                    && tokens[0].equals("0")
-                    && tokens[1].equals("SYSTEM")
+                    && tokens[0].equals("-1")
+                    && tokens[1].equals("FORK")
                     && tokens[2].equals("-1")
                     && tokens[3].equals("cycleStart")
                     && tokens[4].equals("head")
                     && tokens[5].equals("throughput")) {
-                foundSystemCycleStartThroughput = true;
+                foundFork = true;
                 assertEquals(
-                        String.valueOf(iter0.system().cycleStart().head().throughput().count()), tokens[6]);
+                        String.valueOf(forkResult
+                                .system()
+                                .cycleStart()
+                                .head()
+                                .throughput()
+                                .count()),
+                        tokens[6]);
+            }
+            if (tokens.length >= 6
+                    && tokens[0].equals("0")
+                    && tokens[1].equals("ITERATION")
+                    && tokens[2].equals("-1")
+                    && tokens[3].equals("cycleStart")
+                    && tokens[4].equals("head")
+                    && tokens[5].equals("throughput")) {
+                foundIteration = true;
                 assertEquals(
-                        String.valueOf(iter0.system().cycleStart().head().throughput().mean()), tokens[7]);
+                        String.valueOf(forkResult
+                                .iterations()
+                                .get(0)
+                                .system()
+                                .cycleStart()
+                                .head()
+                                .throughput()
+                                .count()),
+                        tokens[6]);
             }
             if (tokens.length >= 6
                     && tokens[0].equals("0")
@@ -219,15 +265,23 @@ class TrialExportTest {
                     && tokens[3].equals("cycleStart")
                     && tokens[4].equals("head")
                     && tokens[5].equals("throughput")) {
-                foundCoreCycleStartThroughput = true;
+                foundCore = true;
                 assertEquals(
-                        String.valueOf(iter0.cores().get(0).cycleStart().head().throughput().count()), tokens[6]);
-                assertEquals(
-                        String.valueOf(iter0.cores().get(0).cycleStart().head().throughput().mean()), tokens[7]);
+                        String.valueOf(forkResult
+                                .iterations()
+                                .get(0)
+                                .cores()
+                                .get(0)
+                                .cycleStart()
+                                .head()
+                                .throughput()
+                                .count()),
+                        tokens[6]);
             }
         }
-        assertTrue(foundSystemCycleStartThroughput);
-        assertTrue(foundCoreCycleStartThroughput);
+        assertTrue(foundFork);
+        assertTrue(foundIteration);
+        assertTrue(foundCore);
 
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
@@ -236,20 +290,21 @@ class TrialExportTest {
 
     @Test
     void testExportOccupancyTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
+        TrialExport.exportOccupancyTsv(tempDir, (ForkCalculationResult) null);
+        TrialExport.exportOccupancyTsv(tempDir, (List<IterationResult>) null);
         TrialExport.exportOccupancyTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.OCCUPANCY_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.OCCUPANCY_CHECKSUM)));
 
+        TrialExport.exportOccupancyTsv(null, (ForkCalculationResult) null);
         TrialExport.exportOccupancyTsv(null, List.of());
-        TrialExport.exportOccupancyTsv(tempDir, null);
     }
 
     @Test
     void testExportOccupancyTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        IterationResult iter0 = createPopulatedIteration(0, 1);
-        List<IterationResult> results = List.of(iter0);
+        ForkCalculationResult forkResult = createPopulatedFork(1, 1);
 
-        TrialExport.exportOccupancyTsv(tempDir, results);
+        TrialExport.exportOccupancyTsv(tempDir, forkResult);
 
         Path tsv = tempDir.resolve(Constants.OCCUPANCY_TSV);
         Path checksum = tempDir.resolve(Constants.OCCUPANCY_CHECKSUM);
@@ -258,8 +313,8 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 50 (SYSTEM idle+exec) + 50 (CORE 0 idle+exec) = 101 lines
-        assertEquals(101, lines.size());
+        // 1 header + 50 (FORK idle+exec) + 50 (ITERATION idle+exec) + 50 (CORE 0 idle+exec) = 151 lines
+        assertEquals(151, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tdecisionType\tcontentionBand\tbodyBand\tcount\tprobability\tcontentionCentroid\tbodyCentroid\tcontentionVariance\tbodyVariance\tcontentionBodyCovariance\tradiusSquared\tradius",
                 lines.get(0));
@@ -271,20 +326,21 @@ class TrialExportTest {
 
     @Test
     void testExportTransitionsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
+        TrialExport.exportTransitionsTsv(tempDir, (ForkCalculationResult) null);
+        TrialExport.exportTransitionsTsv(tempDir, (List<IterationResult>) null);
         TrialExport.exportTransitionsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.TRANSITIONS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.TRANSITIONS_CHECKSUM)));
 
+        TrialExport.exportTransitionsTsv(null, (ForkCalculationResult) null);
         TrialExport.exportTransitionsTsv(null, List.of());
-        TrialExport.exportTransitionsTsv(tempDir, null);
     }
 
     @Test
     void testExportTransitionsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        IterationResult iter0 = createPopulatedIteration(0, 1);
-        List<IterationResult> results = List.of(iter0);
+        ForkCalculationResult forkResult = createPopulatedFork(1, 1);
 
-        TrialExport.exportTransitionsTsv(tempDir, results);
+        TrialExport.exportTransitionsTsv(tempDir, forkResult);
 
         Path tsv = tempDir.resolve(Constants.TRANSITIONS_TSV);
         Path checksum = tempDir.resolve(Constants.TRANSITIONS_CHECKSUM);
@@ -293,8 +349,9 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 2 (SYSTEM + CORE) * 2 (decisionTypes) * 2 (segments) * 25 * 25 = 1 + 2 * 2500 = 5001 lines
-        assertEquals(5001, lines.size());
+        // 1 header + 3 (FORK + ITERATION + CORE) * 2 (decisionTypes) * 2 (segments) * 25 * 25 = 1 + 3 * 2500 = 7501
+        // lines
+        assertEquals(7501, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tcount\tprobability\tselfTransitionRate\tdominantOutgoingState\tdominantOutgoingProbability",
                 lines.get(0));
@@ -306,20 +363,21 @@ class TrialExportTest {
 
     @Test
     void testExportVectorFieldsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
+        TrialExport.exportVectorFieldsTsv(tempDir, (ForkCalculationResult) null);
+        TrialExport.exportVectorFieldsTsv(tempDir, (List<IterationResult>) null);
         TrialExport.exportVectorFieldsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.VECTOR_FIELDS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.VECTOR_FIELDS_CHECKSUM)));
 
+        TrialExport.exportVectorFieldsTsv(null, (ForkCalculationResult) null);
         TrialExport.exportVectorFieldsTsv(null, List.of());
-        TrialExport.exportVectorFieldsTsv(tempDir, null);
     }
 
     @Test
     void testExportVectorFieldsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        IterationResult iter0 = createPopulatedIteration(0, 1);
-        List<IterationResult> results = List.of(iter0);
+        ForkCalculationResult forkResult = createPopulatedFork(1, 1);
 
-        TrialExport.exportVectorFieldsTsv(tempDir, results);
+        TrialExport.exportVectorFieldsTsv(tempDir, forkResult);
 
         Path tsv = tempDir.resolve(Constants.VECTOR_FIELDS_TSV);
         Path checksum = tempDir.resolve(Constants.VECTOR_FIELDS_CHECKSUM);
@@ -328,8 +386,9 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 2 (SYSTEM + CORE) * 2 (decisionTypes) * 2 (segments) * 25 (cells) = 1 + 2 * 100 = 201 lines
-        assertEquals(201, lines.size());
+        // 1 header + 3 (FORK + ITERATION + CORE) * 2 (decisionTypes) * 2 (segments) * 25 (cells) = 1 + 3 * 100 = 301
+        // lines
+        assertEquals(301, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tdecisionType\tsegment\tcontentionBand\tbodyBand\ttransitionCount\tmeanDeltaContention\tmeanDeltaBody\tmagnitude",
                 lines.get(0));
@@ -341,20 +400,21 @@ class TrialExportTest {
 
     @Test
     void testExportCorrelationsTsvEmptyResultsPerformsNoWrites(@TempDir Path tempDir) throws Exception {
+        TrialExport.exportCorrelationsTsv(tempDir, (ForkCalculationResult) null);
+        TrialExport.exportCorrelationsTsv(tempDir, (List<IterationResult>) null);
         TrialExport.exportCorrelationsTsv(tempDir, List.of());
         assertFalse(Files.exists(tempDir.resolve(Constants.CORRELATIONS_TSV)));
         assertFalse(Files.exists(tempDir.resolve(Constants.CORRELATIONS_CHECKSUM)));
 
+        TrialExport.exportCorrelationsTsv(null, (ForkCalculationResult) null);
         TrialExport.exportCorrelationsTsv(null, List.of());
-        TrialExport.exportCorrelationsTsv(tempDir, null);
     }
 
     @Test
     void testExportCorrelationsTsvWritesDataAndChecksum(@TempDir Path tempDir) throws Exception {
-        IterationResult iter0 = createPopulatedIteration(0, 1);
-        List<IterationResult> results = List.of(iter0);
+        ForkCalculationResult forkResult = createPopulatedFork(1, 1);
 
-        TrialExport.exportCorrelationsTsv(tempDir, results);
+        TrialExport.exportCorrelationsTsv(tempDir, forkResult);
 
         Path tsv = tempDir.resolve(Constants.CORRELATIONS_TSV);
         Path checksum = tempDir.resolve(Constants.CORRELATIONS_CHECKSUM);
@@ -363,8 +423,9 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 2 (SYSTEM + CORE) * 3 segments * (7*7 + 2*2 + 3*3 + 3*3 + 3*3) = 1 + 2 * 3 * 80 = 481 lines
-        assertEquals(481, lines.size());
+        // 1 header + 3 (FORK + ITERATION + CORE) * 3 segments * (7*7 + 2*2 + 3*3 + 3*3 + 3*3) = 1 + 3 * 3 * 80 = 721
+        // lines
+        assertEquals(721, lines.size());
         assertEquals("iteration\tscope\tcore\tmetric\tsegment\tvariable1\tvariable2\tpearson\tspearman", lines.get(0));
 
         String expectedHash = computeSha256(tsv);
@@ -373,12 +434,10 @@ class TrialExportTest {
     }
 
     @Test
-    void testExportAllPerIterationFalseWritesOnlyTopLevel(@TempDir Path tempDir) throws Exception {
-        IterationResult r0 = createPopulatedIteration(0, 1);
-        IterationResult r1 = createPopulatedIteration(1, 1);
-        List<IterationResult> results = List.of(r0, r1);
+    void testExportAllWithForkCalculationResultPerIterationFalse(@TempDir Path tempDir) throws Exception {
+        ForkCalculationResult forkResult = createPopulatedFork(1, 2);
 
-        TrialExport.exportAll(tempDir, results, false);
+        TrialExport.exportAll(tempDir, forkResult, false);
 
         assertTrue(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_TSV)));
         assertTrue(Files.exists(tempDir.resolve(Constants.STATISTICS_TSV)));
@@ -392,12 +451,10 @@ class TrialExportTest {
     }
 
     @Test
-    void testExportAllPerIterationTrueWritesPerIterationSubdirectories(@TempDir Path tempDir) throws Exception {
-        IterationResult r0 = createPopulatedIteration(0, 1);
-        IterationResult r1 = createPopulatedIteration(1, 1);
-        List<IterationResult> results = List.of(r0, r1);
+    void testExportAllWithForkCalculationResultPerIterationTrue(@TempDir Path tempDir) throws Exception {
+        ForkCalculationResult forkResult = createPopulatedFork(1, 2);
 
-        TrialExport.exportAll(tempDir, results, true);
+        TrialExport.exportAll(tempDir, forkResult, true);
 
         assertTrue(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_TSV)));
         assertTrue(Files.exists(tempDir.resolve(Constants.STATISTICS_TSV)));

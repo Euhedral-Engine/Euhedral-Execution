@@ -1,13 +1,21 @@
-package calibration.statistics.iteration;
+package calibration.statistics.fork;
 
 import calibration.statistics.VectorField;
+import calibration.statistics.iteration.BatchCompleteStatistics;
+import calibration.statistics.iteration.BatchProgressStatistics;
+import calibration.statistics.iteration.BranchOccupancyResult;
+import calibration.statistics.iteration.CycleStartStatistics;
+import calibration.statistics.iteration.DecisionStatistics;
+import calibration.statistics.iteration.RawBodyCostStatistics;
+import calibration.statistics.iteration.TransitionAnalysis;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// Complete structured calculation results aggregated across all participating cores for one JMH iteration.
-/// Represents whole-system scheduler behavior as the primary calibration and comparison view.
-public record SystemIterationResult(
-        int iterationIndex,
+/// Complete structured calculation results aggregated across all participating cores and measurement
+/// iterations for an entire JMH fork. Represents authoritative calibration telemetry for the fork.
+public record SystemForkResult(
+        int forkIndex,
+        int measurementIterationCount,
         int participatingCoreCount,
         long cycleStartTotal,
         long batchProgressTotal,
@@ -26,7 +34,8 @@ public record SystemIterationResult(
     public static final String TSV_HEADER =
             "iteration\tscope\tcore\tcycleStartTotal\tbatchProgressTotal\tbatchCompleteTotal\trawBodyCostTotal\tidleDecisionTotal\texecDecisionTotal\tcentroidDistance\n";
 
-    public static final SystemIterationResult EMPTY = new SystemIterationResult(
+    public static final SystemForkResult EMPTY = new SystemForkResult(
+            0,
             0,
             0,
             0L,
@@ -43,7 +52,7 @@ public record SystemIterationResult(
             DecisionStatistics.EMPTY,
             Double.NaN);
 
-    public SystemIterationResult {
+    public SystemForkResult {
         Objects.requireNonNull(cycleStart, "cycleStart must not be null");
         Objects.requireNonNull(batchProgress, "batchProgress must not be null");
         Objects.requireNonNull(batchComplete, "batchComplete must not be null");
@@ -52,9 +61,10 @@ public record SystemIterationResult(
         Objects.requireNonNull(execDecisions, "execDecisions must not be null");
     }
 
-    public static SystemIterationResult empty(int iterationIndex, int participatingCoreCount) {
-        return new SystemIterationResult(
-                iterationIndex,
+    public static SystemForkResult empty(int forkIndex, int measurementIterationCount, int participatingCoreCount) {
+        return new SystemForkResult(
+                forkIndex,
+                measurementIterationCount,
                 participatingCoreCount,
                 0L,
                 0L,
@@ -112,7 +122,7 @@ public record SystemIterationResult(
     }
 
     public String toTsvRow() {
-        return iterationIndex + "\tITERATION\t"
+        return -1 + "\tFORK\t"
                 + -1 + "\t"
                 + cycleStartTotal + "\t"
                 + batchProgressTotal + "\t"

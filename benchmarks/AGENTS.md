@@ -201,23 +201,28 @@ executes the following workflow:
 
 ---
 
-## 3. Iteration Statistics Reference (`statistics/iteration`)
+## 3. Calibration Statistics Reference
 
 The classes in
+[`calibration.statistics.fork`](src/main/java/calibration/statistics/fork/)
+and
 [`calibration.statistics.iteration`](src/main/java/calibration/statistics/iteration/)
-represent the structured results computed per measurement iteration.
+represent the structured telemetry results computed across JMH measurement iterations.
 
-Whole-system scheduler behavior (`SystemIterationResult`) is the primary calibration and
-comparison view (scope `SYSTEM`), while per-core diagnostic results (`CoreIterationResult`) provide
-fine-grained topology insights (scope `CORE`).
+The calibration telemetry hierarchy is:
+- **`SystemForkResult`** (scope `FORK`): Authoritative whole-fork calibration summary aggregated across all measurement iterations and participating cores.
+- **`SystemIterationResult`** (scope `ITERATION`): Diagnostic within-fork iteration view aggregated across all participating cores for one measurement iteration.
+- **`CoreIterationResult`** (scope `CORE`): Diagnostic per-core view for one iteration.
 
 ```text
-IterationResult
-+-- iterationIndex
-+-- system: SystemIterationResult (whole-system authority)
-+-- cores: List<CoreIterationResult> (per-core diagnostics)
+ForkCalculationResult
++-- system: SystemForkResult (authoritative whole-fork summary)
++-- iterations: List<IterationResult> (per-iteration breakdowns)
+      +-- iterationIndex
+      +-- system: SystemIterationResult (within-fork iteration summary)
+      +-- cores: List<CoreIterationResult> (per-core diagnostics)
 
-SystemIterationResult / CoreIterationResult
+SystemForkResult / SystemIterationResult / CoreIterationResult
 +-- cycleStart: CycleStartStatistics (completed, batchSize, upstreamCount, workers, rank, contention, throughput)
 +-- batchProgress: BatchProgressStatistics (upstreamCount, workers, rank, contention, avgServiceTime)
 +-- batchComplete: BatchCompleteStatistics (upstreamCount, workers, rank, contention, avgServiceTime, throughput)
@@ -242,12 +247,14 @@ Each metric category captures observations across three distinct temporal window
 
 ### Core Data Structures & Models
 
-#### 1. [`SystemIterationResult`](src/main/java/calibration/statistics/iteration/SystemIterationResult.java) & [`CoreIterationResult`](src/main/java/calibration/statistics/iteration/CoreIterationResult.java)
-`SystemIterationResult` is the top-level container for whole-system aggregated statistics across all
-participating physical cores during one JMH measurement iteration. `CoreIterationResult` retains the
-per-core breakdown for diagnostic topology inspection. Both contain exact observation counters,
-category summaries, and the `centroidDistance` metric (L2 distance between idle and execution
-occupancy centroids). Pairings for each iteration are encapsulated by
+#### 1. [`SystemForkResult`](src/main/java/calibration/statistics/fork/SystemForkResult.java), [`SystemIterationResult`](src/main/java/calibration/statistics/iteration/SystemIterationResult.java), and [`CoreIterationResult`](src/main/java/calibration/statistics/iteration/CoreIterationResult.java)
+`SystemForkResult` is the authoritative calibration result aggregated across all measurement
+iterations and participating cores within an independent JMH fork. `SystemIterationResult` is the
+within-fork whole-system aggregation for a single measurement iteration. `CoreIterationResult`
+retains the per-core breakdown for diagnostic topology inspection. All three expose exact observation
+counters, category summaries, and the `centroidDistance` metric (L2 distance between idle and
+execution occupancy centroids). Pairings for the whole fork and each iteration are encapsulated by
+[`ForkCalculationResult`](src/main/java/calibration/statistics/fork/ForkCalculationResult.java) and
 [`IterationResult`](src/main/java/calibration/statistics/iteration/IterationResult.java).
 
 #### 2. [`ScalarSummary`](src/main/java/calibration/statistics/iteration/ScalarSummary.java)
@@ -359,7 +366,7 @@ alongside their SHA-256 integrity checksums:
 |-------------|-------------|------------------|
 | `trial_config.json` | Snapshot of the expanded trial configuration | [`TrialConfig`](src/main/java/calibration/config/TrialConfig.java) |
 | `benchmark_output.log` | Raw benchmark console output when retained | [`CalibrationRunner`](src/main/java/calibration/CalibrationRunner.java) |
-| `raw_observations.tsv` | Total event observation counts per iteration (SYSTEM and CORE) | [`IterationResult`](src/main/java/calibration/statistics/iteration/IterationResult.java) |
+| `raw_observations.tsv` | Total event observation counts for FORK, ITERATION, and CORE scopes | [`ForkCalculationResult`](src/main/java/calibration/statistics/fork/ForkCalculationResult.java) |
 | `statistics.tsv` | Descriptive & quantile scalar statistics across variables and segments | [`ScalarSummary`](src/main/java/calibration/statistics/iteration/ScalarSummary.java) |
 | `occupancy.tsv` | 5x5 branch occupancy counts, probabilities, centroids, and variances | [`BranchOccupancyResult`](src/main/java/calibration/statistics/iteration/BranchOccupancyResult.java) |
 | `transitions.tsv` | 25x25 Markov transition counts, probabilities, self-rates, and dominant targets | [`TransitionAnalysis`](src/main/java/calibration/statistics/iteration/TransitionAnalysis.java) |

@@ -4,6 +4,8 @@ import calibration.infra.Constants;
 import calibration.statistics.Band;
 import calibration.statistics.VectorCell;
 import calibration.statistics.VectorField;
+import calibration.statistics.fork.ForkCalculationResult;
+import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.BatchCompleteScalars;
 import calibration.statistics.iteration.BatchCompleteStatistics;
 import calibration.statistics.iteration.BatchProgressScalars;
@@ -31,7 +33,7 @@ import java.util.HexFormat;
 import java.util.List;
 
 /// Exporter for calibration iteration telemetry into TSV files and SHA-256 integrity checksums.
-/// Persists whole-system (SYSTEM) and per-core diagnostic (CORE) statistics.
+/// Persists whole-fork (FORK), within-iteration whole-system (ITERATION), and per-core diagnostic (CORE) statistics.
 public final class TrialExport {
 
     private static final String[] SEGMENTS_3 = {"head", "steadyState", "combined"};
@@ -52,6 +54,29 @@ public final class TrialExport {
         String hex = HexFormat.of().formatHex(digest.digest());
         Path checksumFile = file.resolveSibling(file.getFileName().toString() + ".sha256");
         Files.writeString(checksumFile, hex + "\n", StandardCharsets.UTF_8);
+    }
+
+    public static void exportAll(Path outputDir, ForkCalculationResult forkResult, boolean perIteration)
+            throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        exportRawObservationsTsv(outputDir, forkResult);
+        exportStatisticsTsv(outputDir, forkResult);
+        exportOccupancyTsv(outputDir, forkResult);
+        exportTransitionsTsv(outputDir, forkResult);
+        exportVectorFieldsTsv(outputDir, forkResult);
+        exportCorrelationsTsv(outputDir, forkResult);
+
+        if (perIteration) {
+            for (IterationResult r : forkResult.iterations()) {
+                if (r == null) {
+                    continue;
+                }
+                Path iterDir = outputDir.resolve("iteration-" + r.iterationIndex());
+                exportAll(iterDir, List.of(r), false);
+            }
+        }
     }
 
     public static void exportAll(Path outputDir, List<IterationResult> results, boolean perIteration) throws Exception {
@@ -76,7 +101,31 @@ public final class TrialExport {
         }
     }
 
-    /// Exports raw observation totals for each iteration, whole system, and physical cores to TSV.
+    /// Exports raw observation totals for fork, iterations, and physical cores to TSV.
+    public static void exportRawObservationsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.RAW_OBSERVATION_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(SystemForkResult.TSV_HEADER);
+            writer.write(forkResult.system().toTsvRow() + "\n");
+            for (IterationResult ir : forkResult.iterations()) {
+                if (ir == null) {
+                    continue;
+                }
+                writer.write(ir.system().toTsvRow() + "\n");
+                for (CoreIterationResult cr : ir.cores()) {
+                    if (cr != null) {
+                        writer.write(cr.toTsvRow() + "\n");
+                    }
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
     public static void exportRawObservationsTsv(Path outputDir, List<IterationResult> results) throws Exception {
         if (outputDir == null || results == null || results.isEmpty()) {
             return;
@@ -101,6 +150,67 @@ public final class TrialExport {
     }
 
     /// Exports continuous scalar descriptive and quantile statistics to TSV.
+    public static void exportStatisticsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.STATISTICS_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "iteration\tscope\tcore\tmetric\tsegment\tvariable\tcount\tmean\tstdDev\tvariance\tcv\tmin\tmax\tmedian\tp25\tp50\tp75\tp95\tiqr\tnormalizedIqr\tp95ToP50Ratio\n");
+            SystemForkResult forkSys = forkResult.system();
+            writeScalarStatistics(
+                    writer,
+                    -1,
+                    "FORK",
+                    -1,
+                    forkSys.cycleStart(),
+                    forkSys.batchProgress(),
+                    forkSys.batchComplete(),
+                    forkSys.rawBodyCost(),
+                    forkSys.idleDecisions(),
+                    forkSys.execDecisions());
+
+            for (IterationResult ir : forkResult.iterations()) {
+                if (ir == null) {
+                    continue;
+                }
+                int iter = ir.iterationIndex();
+                SystemIterationResult sys = ir.system();
+                writeScalarStatistics(
+                        writer,
+                        iter,
+                        "ITERATION",
+                        -1,
+                        sys.cycleStart(),
+                        sys.batchProgress(),
+                        sys.batchComplete(),
+                        sys.rawBodyCost(),
+                        sys.idleDecisions(),
+                        sys.execDecisions());
+
+                for (CoreIterationResult cr : ir.cores()) {
+                    if (cr == null) {
+                        continue;
+                    }
+                    writeScalarStatistics(
+                            writer,
+                            iter,
+                            "CORE",
+                            cr.core(),
+                            cr.cycleStart(),
+                            cr.batchProgress(),
+                            cr.batchComplete(),
+                            cr.rawBodyCost(),
+                            cr.idleDecisions(),
+                            cr.execDecisions());
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
     public static void exportStatisticsTsv(Path outputDir, List<IterationResult> results) throws Exception {
         if (outputDir == null || results == null || results.isEmpty()) {
             return;
@@ -119,7 +229,7 @@ public final class TrialExport {
                 writeScalarStatistics(
                         writer,
                         iter,
-                        "SYSTEM",
+                        "ITERATION",
                         -1,
                         sys.cycleStart(),
                         sys.batchProgress(),
@@ -133,16 +243,16 @@ public final class TrialExport {
                         continue;
                     }
                     writeScalarStatistics(
-                        writer,
-                        iter,
-                        "CORE",
-                        cr.core(),
-                        cr.cycleStart(),
-                        cr.batchProgress(),
-                        cr.batchComplete(),
-                        cr.rawBodyCost(),
-                        cr.idleDecisions(),
-                        cr.execDecisions());
+                            writer,
+                            iter,
+                            "CORE",
+                            cr.core(),
+                            cr.cycleStart(),
+                            cr.batchProgress(),
+                            cr.batchComplete(),
+                            cr.rawBodyCost(),
+                            cr.idleDecisions(),
+                            cr.execDecisions());
                 }
             }
         }
@@ -185,16 +295,10 @@ public final class TrialExport {
                         case "steadyState" -> batchProgress.steadyState();
                         default -> batchProgress.combined();
                     };
-            writeScalarSummaryRow(writer, iter, scope, core, "batchProgress", segment, "upstreamCount", s.upstreamCount());
             writeScalarSummaryRow(
-                    writer,
-                    iter,
-                    scope,
-                    core,
-                    "batchProgress",
-                    segment,
-                    "registeredWorkers",
-                    s.registeredWorkers());
+                    writer, iter, scope, core, "batchProgress", segment, "upstreamCount", s.upstreamCount());
+            writeScalarSummaryRow(
+                    writer, iter, scope, core, "batchProgress", segment, "registeredWorkers", s.registeredWorkers());
             writeScalarSummaryRow(writer, iter, scope, core, "batchProgress", segment, "workerRank", s.workerRank());
             writeScalarSummaryRow(writer, iter, scope, core, "batchProgress", segment, "contention", s.contention());
             writeScalarSummaryRow(
@@ -211,14 +315,7 @@ public final class TrialExport {
             writeScalarSummaryRow(
                     writer, iter, scope, core, "batchComplete", segment, "upstreamCount", s.upstreamCount());
             writeScalarSummaryRow(
-                    writer,
-                    iter,
-                    scope,
-                    core,
-                    "batchComplete",
-                    segment,
-                    "registeredWorkers",
-                    s.registeredWorkers());
+                    writer, iter, scope, core, "batchComplete", segment, "registeredWorkers", s.registeredWorkers());
             writeScalarSummaryRow(writer, iter, scope, core, "batchComplete", segment, "workerRank", s.workerRank());
             writeScalarSummaryRow(writer, iter, scope, core, "batchComplete", segment, "contention", s.contention());
             writeScalarSummaryRow(
@@ -281,6 +378,45 @@ public final class TrialExport {
     }
 
     /// Exports 5x5 branch occupancy results to TSV.
+    public static void exportOccupancyTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.OCCUPANCY_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "iteration\tscope\tcore\tdecisionType\tcontentionBand\tbodyBand\tcount\tprobability\tcontentionCentroid\tbodyCentroid\tcontentionVariance\tbodyVariance\tcontentionBodyCovariance\tradiusSquared\tradius\n");
+            writeOccupancy(
+                    writer,
+                    -1,
+                    "FORK",
+                    -1,
+                    forkResult.system().idleOccupancy(),
+                    forkResult.system().execOccupancy());
+            for (IterationResult ir : forkResult.iterations()) {
+                if (ir == null) {
+                    continue;
+                }
+                int iter = ir.iterationIndex();
+                writeOccupancy(
+                        writer,
+                        iter,
+                        "ITERATION",
+                        -1,
+                        ir.system().idleOccupancy(),
+                        ir.system().execOccupancy());
+                for (CoreIterationResult cr : ir.cores()) {
+                    if (cr == null) {
+                        continue;
+                    }
+                    writeOccupancy(writer, iter, "CORE", cr.core(), cr.idleOccupancy(), cr.execOccupancy());
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
     public static void exportOccupancyTsv(Path outputDir, List<IterationResult> results) throws Exception {
         if (outputDir == null || results == null || results.isEmpty()) {
             return;
@@ -295,7 +431,13 @@ public final class TrialExport {
                     continue;
                 }
                 int iter = ir.iterationIndex();
-                writeOccupancy(writer, iter, "SYSTEM", -1, ir.system().idleOccupancy(), ir.system().execOccupancy());
+                writeOccupancy(
+                        writer,
+                        iter,
+                        "ITERATION",
+                        -1,
+                        ir.system().idleOccupancy(),
+                        ir.system().execOccupancy());
                 for (CoreIterationResult cr : ir.cores()) {
                     if (cr == null) {
                         continue;
@@ -337,6 +479,60 @@ public final class TrialExport {
     }
 
     /// Exports 25x25 state transition matrices to TSV.
+    public static void exportTransitionsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.TRANSITIONS_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "iteration\tscope\tcore\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tcount\tprobability\tselfTransitionRate\tdominantOutgoingState\tdominantOutgoingProbability\n");
+            SystemForkResult forkSys = forkResult.system();
+            writeTransitions(
+                    writer,
+                    -1,
+                    "FORK",
+                    -1,
+                    forkSys.idleHeadTransitions(),
+                    forkSys.idleSteadyStateTransitions(),
+                    forkSys.execHeadTransitions(),
+                    forkSys.execSteadyStateTransitions());
+
+            for (IterationResult ir : forkResult.iterations()) {
+                if (ir == null) {
+                    continue;
+                }
+                int iter = ir.iterationIndex();
+                writeTransitions(
+                        writer,
+                        iter,
+                        "ITERATION",
+                        -1,
+                        ir.system().idleHeadTransitions(),
+                        ir.system().idleSteadyStateTransitions(),
+                        ir.system().execHeadTransitions(),
+                        ir.system().execSteadyStateTransitions());
+
+                for (CoreIterationResult cr : ir.cores()) {
+                    if (cr == null) {
+                        continue;
+                    }
+                    writeTransitions(
+                            writer,
+                            iter,
+                            "CORE",
+                            cr.core(),
+                            cr.idleHeadTransitions(),
+                            cr.idleSteadyStateTransitions(),
+                            cr.execHeadTransitions(),
+                            cr.execSteadyStateTransitions());
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
     public static void exportTransitionsTsv(Path outputDir, List<IterationResult> results) throws Exception {
         if (outputDir == null || results == null || results.isEmpty()) {
             return;
@@ -354,7 +550,7 @@ public final class TrialExport {
                 writeTransitions(
                         writer,
                         iter,
-                        "SYSTEM",
+                        "ITERATION",
                         -1,
                         ir.system().idleHeadTransitions(),
                         ir.system().idleSteadyStateTransitions(),
@@ -435,6 +631,60 @@ public final class TrialExport {
     }
 
     /// Exports 5x5 vector field displacement results to TSV.
+    public static void exportVectorFieldsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.VECTOR_FIELDS_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "iteration\tscope\tcore\tdecisionType\tsegment\tcontentionBand\tbodyBand\ttransitionCount\tmeanDeltaContention\tmeanDeltaBody\tmagnitude\n");
+            SystemForkResult forkSys = forkResult.system();
+            writeVectorFields(
+                    writer,
+                    -1,
+                    "FORK",
+                    -1,
+                    forkSys.idleHeadVectorField(),
+                    forkSys.idleSteadyStateVectorField(),
+                    forkSys.execHeadVectorField(),
+                    forkSys.execSteadyStateVectorField());
+
+            for (IterationResult ir : forkResult.iterations()) {
+                if (ir == null) {
+                    continue;
+                }
+                int iter = ir.iterationIndex();
+                writeVectorFields(
+                        writer,
+                        iter,
+                        "ITERATION",
+                        -1,
+                        ir.system().idleHeadVectorField(),
+                        ir.system().idleSteadyStateVectorField(),
+                        ir.system().execHeadVectorField(),
+                        ir.system().execSteadyStateVectorField());
+
+                for (CoreIterationResult cr : ir.cores()) {
+                    if (cr == null) {
+                        continue;
+                    }
+                    writeVectorFields(
+                            writer,
+                            iter,
+                            "CORE",
+                            cr.core(),
+                            cr.idleHeadVectorField(),
+                            cr.idleSteadyStateVectorField(),
+                            cr.execHeadVectorField(),
+                            cr.execSteadyStateVectorField());
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
     public static void exportVectorFieldsTsv(Path outputDir, List<IterationResult> results) throws Exception {
         if (outputDir == null || results == null || results.isEmpty()) {
             return;
@@ -452,7 +702,7 @@ public final class TrialExport {
                 writeVectorFields(
                         writer,
                         iter,
-                        "SYSTEM",
+                        "ITERATION",
                         -1,
                         ir.system().idleHeadVectorField(),
                         ir.system().idleSteadyStateVectorField(),
@@ -516,6 +766,62 @@ public final class TrialExport {
     }
 
     /// Exports Pearson and Spearman correlation matrices to TSV.
+    public static void exportCorrelationsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
+        if (outputDir == null || forkResult == null) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.CORRELATIONS_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write("iteration\tscope\tcore\tmetric\tsegment\tvariable1\tvariable2\tpearson\tspearman\n");
+            SystemForkResult forkSys = forkResult.system();
+            writeCorrelations(
+                    writer,
+                    -1,
+                    "FORK",
+                    -1,
+                    forkSys.cycleStart(),
+                    forkSys.batchProgress(),
+                    forkSys.batchComplete(),
+                    forkSys.idleDecisions(),
+                    forkSys.execDecisions());
+
+            for (IterationResult ir : forkResult.iterations()) {
+                if (ir == null) {
+                    continue;
+                }
+                int iter = ir.iterationIndex();
+                writeCorrelations(
+                        writer,
+                        iter,
+                        "ITERATION",
+                        -1,
+                        ir.system().cycleStart(),
+                        ir.system().batchProgress(),
+                        ir.system().batchComplete(),
+                        ir.system().idleDecisions(),
+                        ir.system().execDecisions());
+
+                for (CoreIterationResult cr : ir.cores()) {
+                    if (cr == null) {
+                        continue;
+                    }
+                    writeCorrelations(
+                            writer,
+                            iter,
+                            "CORE",
+                            cr.core(),
+                            cr.cycleStart(),
+                            cr.batchProgress(),
+                            cr.batchComplete(),
+                            cr.idleDecisions(),
+                            cr.execDecisions());
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
     public static void exportCorrelationsTsv(Path outputDir, List<IterationResult> results) throws Exception {
         if (outputDir == null || results == null || results.isEmpty()) {
             return;
@@ -532,7 +838,7 @@ public final class TrialExport {
                 writeCorrelations(
                         writer,
                         iter,
-                        "SYSTEM",
+                        "ITERATION",
                         -1,
                         ir.system().cycleStart(),
                         ir.system().batchProgress(),

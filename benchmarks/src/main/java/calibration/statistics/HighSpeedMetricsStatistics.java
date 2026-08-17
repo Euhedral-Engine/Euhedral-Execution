@@ -1,6 +1,7 @@
 package calibration.statistics;
 
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
+import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.BatchCompleteScalars;
 import calibration.statistics.iteration.BatchCompleteStatistics;
 import calibration.statistics.iteration.BatchProgressScalars;
@@ -27,7 +28,7 @@ import org.jspecify.annotations.Nullable;
 ///
 /// Converts captured raw observation buffers and exact branch counters into immutable
 /// descriptive, quantile, occupancy, transition, vector-field, and correlation results
-/// for individual cores and aggregated whole-system calibration summaries.
+/// for individual cores, within-iteration whole-system views, and authoritative whole-fork summaries.
 public final class HighSpeedMetricsStatistics {
 
     private HighSpeedMetricsStatistics() {}
@@ -75,7 +76,7 @@ public final class HighSpeedMetricsStatistics {
                 centroidDistance);
     }
 
-    /// Calculates whole-system aggregated statistics across participating cores.
+    /// Calculates whole-system aggregated statistics across participating cores for one iteration.
     public static @NonNull SystemIterationResult calculateSystem(
             int iterationIndex, @Nullable Collection<HighSpeedMetrics> metrics) {
         if (metrics == null || metrics.isEmpty()) {
@@ -107,6 +108,76 @@ public final class HighSpeedMetricsStatistics {
         return new SystemIterationResult(
                 iterationIndex,
                 validMetrics.size(),
+                cycleStart.totalObservations(),
+                batchProgress.totalObservations(),
+                batchComplete.totalObservations(),
+                rawBodyCost.totalObservations(),
+                idleDecisions.totalObservations(),
+                execDecisions.totalObservations(),
+                cycleStart,
+                batchProgress,
+                batchComplete,
+                rawBodyCost,
+                idleDecisions,
+                execDecisions,
+                centroidDistance);
+    }
+
+    /// Calculates whole-fork aggregated statistics across all participating cores and measurement iterations.
+    public static @NonNull SystemForkResult calculateSystemFork(
+            @Nullable Collection<? extends Collection<HighSpeedMetrics>> measurementIterations) {
+        return calculateSystemFork(0, measurementIterations);
+    }
+
+    /// Calculates whole-fork aggregated statistics across all participating cores and measurement iterations
+    /// with explicit fork index.
+    public static @NonNull SystemForkResult calculateSystemFork(
+            int forkIndex, @Nullable Collection<? extends Collection<HighSpeedMetrics>> measurementIterations) {
+        if (measurementIterations == null || measurementIterations.isEmpty()) {
+            return SystemForkResult.empty(forkIndex, 0, 0);
+        }
+
+        List<HighSpeedMetrics> allMetrics = new ArrayList<>();
+        int measurementIterationCount = 0;
+        int maxParticipatingCores = 0;
+        for (Collection<HighSpeedMetrics> iterMetrics : measurementIterations) {
+            if (iterMetrics == null || iterMetrics.isEmpty()) {
+                continue;
+            }
+            int iterCoreCount = 0;
+            for (HighSpeedMetrics m : iterMetrics) {
+                if (m != null) {
+                    m.align();
+                    allMetrics.add(m);
+                    iterCoreCount++;
+                }
+            }
+            if (iterCoreCount > 0) {
+                measurementIterationCount++;
+                if (iterCoreCount > maxParticipatingCores) {
+                    maxParticipatingCores = iterCoreCount;
+                }
+            }
+        }
+
+        if (allMetrics.isEmpty()) {
+            return SystemForkResult.empty(forkIndex, 0, 0);
+        }
+
+        CycleStartStatistics cycleStart = calculateCycleStart(allMetrics);
+        BatchProgressStatistics batchProgress = calculateBatchProgress(allMetrics);
+        BatchCompleteStatistics batchComplete = calculateBatchComplete(allMetrics);
+        RawBodyCostStatistics rawBodyCost = calculateRawBodyCost(allMetrics);
+        DecisionStatistics idleDecisions = calculateIdleDecisions(allMetrics);
+        DecisionStatistics execDecisions = calculateExecDecisions(allMetrics);
+
+        double centroidDistance = OccupancySummary.distance(
+                idleDecisions.occupancy().summary(), execDecisions.occupancy().summary());
+
+        return new SystemForkResult(
+                forkIndex,
+                measurementIterationCount,
+                maxParticipatingCores,
                 cycleStart.totalObservations(),
                 batchProgress.totalObservations(),
                 batchComplete.totalObservations(),
