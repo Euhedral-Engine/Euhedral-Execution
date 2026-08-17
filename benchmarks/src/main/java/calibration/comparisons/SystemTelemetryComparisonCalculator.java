@@ -75,28 +75,36 @@ public final class SystemTelemetryComparisonCalculator {
             return null;
         }
 
-        OccupancyComparison idleOccupancy =
-                compareOccupancy(baseline.idleDecisions().occupancy(), candidate.idleDecisions().occupancy());
-        OccupancyComparison execOccupancy =
-                compareOccupancy(baseline.execDecisions().occupancy(), candidate.execDecisions().occupancy());
+        OccupancyComparison idleOccupancy = compareOccupancy(
+                baseline.idleDecisions().occupancy(), candidate.idleDecisions().occupancy());
+        OccupancyComparison execOccupancy = compareOccupancy(
+                baseline.execDecisions().occupancy(), candidate.execDecisions().occupancy());
 
         TransitionComparison idleHeadTransitions = compareTransitionsIfAvailable(
-                baseline.idleDecisions().headTransitions(), candidate.idleDecisions().headTransitions());
+                baseline.idleDecisions().headTransitions(),
+                candidate.idleDecisions().headTransitions());
         TransitionComparison idleSteadyStateTransitions = compareTransitionsIfAvailable(
-                baseline.idleDecisions().steadyStateTransitions(), candidate.idleDecisions().steadyStateTransitions());
+                baseline.idleDecisions().steadyStateTransitions(),
+                candidate.idleDecisions().steadyStateTransitions());
         TransitionComparison execHeadTransitions = compareTransitionsIfAvailable(
-                baseline.execDecisions().headTransitions(), candidate.execDecisions().headTransitions());
+                baseline.execDecisions().headTransitions(),
+                candidate.execDecisions().headTransitions());
         TransitionComparison execSteadyStateTransitions = compareTransitionsIfAvailable(
-                baseline.execDecisions().steadyStateTransitions(), candidate.execDecisions().steadyStateTransitions());
+                baseline.execDecisions().steadyStateTransitions(),
+                candidate.execDecisions().steadyStateTransitions());
 
         VectorFieldComparison idleHeadVectorField = compareVectorFieldIfAvailable(
-                baseline.idleDecisions().headVectorField(), candidate.idleDecisions().headVectorField());
+                baseline.idleDecisions().headVectorField(),
+                candidate.idleDecisions().headVectorField());
         VectorFieldComparison idleSteadyStateVectorField = compareVectorFieldIfAvailable(
-                baseline.idleDecisions().steadyStateVectorField(), candidate.idleDecisions().steadyStateVectorField());
+                baseline.idleDecisions().steadyStateVectorField(),
+                candidate.idleDecisions().steadyStateVectorField());
         VectorFieldComparison execHeadVectorField = compareVectorFieldIfAvailable(
-                baseline.execDecisions().headVectorField(), candidate.execDecisions().headVectorField());
+                baseline.execDecisions().headVectorField(),
+                candidate.execDecisions().headVectorField());
         VectorFieldComparison execSteadyStateVectorField = compareVectorFieldIfAvailable(
-                baseline.execDecisions().steadyStateVectorField(), candidate.execDecisions().steadyStateVectorField());
+                baseline.execDecisions().steadyStateVectorField(),
+                candidate.execDecisions().steadyStateVectorField());
 
         Map<String, ScalarComparison> scalarComparisons = collectScalarComparisons(baseline, candidate);
         Map<String, CorrelationComparison> correlationComparisons = collectCorrelationComparisons(baseline, candidate);
@@ -456,16 +464,18 @@ public final class SystemTelemetryComparisonCalculator {
         CycleStartStatistics bCycle = baseline.cycleStart();
         CycleStartStatistics cCycle = candidate.cycleStart();
         for (String seg : SEGMENTS) {
-            CycleStartScalars bScalars = switch (seg) {
-                case "head" -> bCycle.head();
-                case "steadyState" -> bCycle.steadyState();
-                default -> bCycle.combined();
-            };
-            CycleStartScalars cScalars = switch (seg) {
-                case "head" -> cCycle.head();
-                case "steadyState" -> cCycle.steadyState();
-                default -> cCycle.combined();
-            };
+            CycleStartScalars bScalars =
+                    switch (seg) {
+                        case "head" -> bCycle.head();
+                        case "steadyState" -> bCycle.steadyState();
+                        default -> bCycle.combined();
+                    };
+            CycleStartScalars cScalars =
+                    switch (seg) {
+                        case "head" -> cCycle.head();
+                        case "steadyState" -> cCycle.steadyState();
+                        default -> cCycle.combined();
+                    };
             putScalarIfAvailable(map, "cycleStart." + seg + ".completed", bScalars.completed(), cScalars.completed());
             putScalarIfAvailable(map, "cycleStart." + seg + ".batchSize", bScalars.batchSize(), cScalars.batchSize());
             putScalarIfAvailable(
@@ -475,25 +485,30 @@ public final class SystemTelemetryComparisonCalculator {
                     "cycleStart." + seg + ".registeredWorkers",
                     bScalars.registeredWorkers(),
                     cScalars.registeredWorkers());
-            putScalarIfAvailable(map, "cycleStart." + seg + ".workerRank", bScalars.workerRank(), cScalars.workerRank());
-            putScalarIfAvailable(map, "cycleStart." + seg + ".contention", bScalars.contention(), cScalars.contention());
-            putScalarIfAvailable(map, "cycleStart." + seg + ".throughput", bScalars.throughput(), cScalars.throughput());
+            putScalarIfAvailable(
+                    map, "cycleStart." + seg + ".workerRank", bScalars.workerRank(), cScalars.workerRank());
+            putScalarIfAvailable(
+                    map, "cycleStart." + seg + ".contention", bScalars.contention(), cScalars.contention());
+            putScalarIfAvailable(
+                    map, "cycleStart." + seg + ".throughput", bScalars.throughput(), cScalars.throughput());
         }
 
         // BatchProgress scalars
         BatchProgressStatistics bProgress = baseline.batchProgress();
         BatchProgressStatistics cProgress = candidate.batchProgress();
         for (String seg : SEGMENTS) {
-            BatchProgressScalars bScalars = switch (seg) {
-                case "head" -> bProgress.head();
-                case "steadyState" -> bProgress.steadyState();
-                default -> bProgress.combined();
-            };
-            BatchProgressScalars cScalars = switch (seg) {
-                case "head" -> cProgress.head();
-                case "steadyState" -> cProgress.steadyState();
-                default -> cProgress.combined();
-            };
+            BatchProgressScalars bScalars =
+                    switch (seg) {
+                        case "head" -> bProgress.head();
+                        case "steadyState" -> bProgress.steadyState();
+                        default -> bProgress.combined();
+                    };
+            BatchProgressScalars cScalars =
+                    switch (seg) {
+                        case "head" -> cProgress.head();
+                        case "steadyState" -> cProgress.steadyState();
+                        default -> cProgress.combined();
+                    };
             putScalarIfAvailable(
                     map, "batchProgress." + seg + ".upstreamCount", bScalars.upstreamCount(), cScalars.upstreamCount());
             putScalarIfAvailable(
@@ -506,23 +521,28 @@ public final class SystemTelemetryComparisonCalculator {
             putScalarIfAvailable(
                     map, "batchProgress." + seg + ".contention", bScalars.contention(), cScalars.contention());
             putScalarIfAvailable(
-                    map, "batchProgress." + seg + ".avgServiceTime", bScalars.avgServiceTime(), cScalars.avgServiceTime());
+                    map,
+                    "batchProgress." + seg + ".avgServiceTime",
+                    bScalars.avgServiceTime(),
+                    cScalars.avgServiceTime());
         }
 
         // BatchComplete scalars
         BatchCompleteStatistics bComplete = baseline.batchComplete();
         BatchCompleteStatistics cComplete = candidate.batchComplete();
         for (String seg : SEGMENTS) {
-            BatchCompleteScalars bScalars = switch (seg) {
-                case "head" -> bComplete.head();
-                case "steadyState" -> bComplete.steadyState();
-                default -> bComplete.combined();
-            };
-            BatchCompleteScalars cScalars = switch (seg) {
-                case "head" -> cComplete.head();
-                case "steadyState" -> cComplete.steadyState();
-                default -> cComplete.combined();
-            };
+            BatchCompleteScalars bScalars =
+                    switch (seg) {
+                        case "head" -> bComplete.head();
+                        case "steadyState" -> bComplete.steadyState();
+                        default -> bComplete.combined();
+                    };
+            BatchCompleteScalars cScalars =
+                    switch (seg) {
+                        case "head" -> cComplete.head();
+                        case "steadyState" -> cComplete.steadyState();
+                        default -> cComplete.combined();
+                    };
             putScalarIfAvailable(
                     map, "batchComplete." + seg + ".upstreamCount", bScalars.upstreamCount(), cScalars.upstreamCount());
             putScalarIfAvailable(
@@ -535,7 +555,10 @@ public final class SystemTelemetryComparisonCalculator {
             putScalarIfAvailable(
                     map, "batchComplete." + seg + ".contention", bScalars.contention(), cScalars.contention());
             putScalarIfAvailable(
-                    map, "batchComplete." + seg + ".avgServiceTime", bScalars.avgServiceTime(), cScalars.avgServiceTime());
+                    map,
+                    "batchComplete." + seg + ".avgServiceTime",
+                    bScalars.avgServiceTime(),
+                    cScalars.avgServiceTime());
             putScalarIfAvailable(
                     map, "batchComplete." + seg + ".throughput", bScalars.throughput(), cScalars.throughput());
         }
@@ -551,16 +574,18 @@ public final class SystemTelemetryComparisonCalculator {
         DecisionStatistics bIdle = baseline.idleDecisions();
         DecisionStatistics cIdle = candidate.idleDecisions();
         for (String seg : SEGMENTS) {
-            DecisionScalars bScalars = switch (seg) {
-                case "head" -> bIdle.head();
-                case "steadyState" -> bIdle.steadyState();
-                default -> bIdle.combined();
-            };
-            DecisionScalars cScalars = switch (seg) {
-                case "head" -> cIdle.head();
-                case "steadyState" -> cIdle.steadyState();
-                default -> cIdle.combined();
-            };
+            DecisionScalars bScalars =
+                    switch (seg) {
+                        case "head" -> bIdle.head();
+                        case "steadyState" -> bIdle.steadyState();
+                        default -> bIdle.combined();
+                    };
+            DecisionScalars cScalars =
+                    switch (seg) {
+                        case "head" -> cIdle.head();
+                        case "steadyState" -> cIdle.steadyState();
+                        default -> cIdle.combined();
+                    };
             putScalarIfAvailable(
                     map, "idleDecisions." + seg + ".contention", bScalars.contention(), cScalars.contention());
             putScalarIfAvailable(
@@ -574,16 +599,18 @@ public final class SystemTelemetryComparisonCalculator {
         DecisionStatistics bExec = baseline.execDecisions();
         DecisionStatistics cExec = candidate.execDecisions();
         for (String seg : SEGMENTS) {
-            DecisionScalars bScalars = switch (seg) {
-                case "head" -> bExec.head();
-                case "steadyState" -> bExec.steadyState();
-                default -> bExec.combined();
-            };
-            DecisionScalars cScalars = switch (seg) {
-                case "head" -> cExec.head();
-                case "steadyState" -> cExec.steadyState();
-                default -> cExec.combined();
-            };
+            DecisionScalars bScalars =
+                    switch (seg) {
+                        case "head" -> bExec.head();
+                        case "steadyState" -> bExec.steadyState();
+                        default -> bExec.combined();
+                    };
+            DecisionScalars cScalars =
+                    switch (seg) {
+                        case "head" -> cExec.head();
+                        case "steadyState" -> cExec.steadyState();
+                        default -> cExec.combined();
+                    };
             putScalarIfAvailable(
                     map, "execDecisions." + seg + ".contention", bScalars.contention(), cScalars.contention());
             putScalarIfAvailable(

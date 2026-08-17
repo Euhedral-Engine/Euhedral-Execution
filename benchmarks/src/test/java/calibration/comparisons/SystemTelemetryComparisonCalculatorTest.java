@@ -26,7 +26,6 @@ import calibration.comparisons.schema.VectorCellComparison;
 import calibration.comparisons.schema.VectorFieldComparison;
 import calibration.config.TrialConfig;
 import calibration.statistics.Band;
-import calibration.statistics.VectorCell;
 import calibration.statistics.VectorField;
 import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.BatchCompleteScalars;
@@ -261,7 +260,8 @@ class SystemTelemetryComparisonCalculatorTest {
 
         assertEquals(cand.contentionVariance() - base.contentionVariance(), comp.contentionVarianceDelta(), EPSILON);
         assertEquals(cand.bodyVariance() - base.bodyVariance(), comp.bodyVarianceDelta(), EPSILON);
-        assertEquals(cand.contentionBodyCovariance() - base.contentionBodyCovariance(), comp.covarianceDelta(), EPSILON);
+        assertEquals(
+                cand.contentionBodyCovariance() - base.contentionBodyCovariance(), comp.covarianceDelta(), EPSILON);
         assertEquals(cand.radius() - base.radius(), comp.radiusDelta(), EPSILON);
     }
 
@@ -555,8 +555,8 @@ class SystemTelemetryComparisonCalculatorTest {
                 idle, // exec moved from (4,4) to (0,0)
                 0.0);
 
-        AggregateComparison agg = SystemTelemetryComparisonCalculator.compare(
-                baseSys, candSys, ComparisonCompatibility.compatible());
+        AggregateComparison agg =
+                SystemTelemetryComparisonCalculator.compare(baseSys, candSys, ComparisonCompatibility.compatible());
 
         assertNotNull(agg);
         // Idle is unchanged
@@ -605,8 +605,8 @@ class SystemTelemetryComparisonCalculatorTest {
                 DecisionStatistics.EMPTY,
                 Double.NaN);
 
-        AggregateComparison agg = SystemTelemetryComparisonCalculator.compare(
-                base, base, ComparisonCompatibility.compatible());
+        AggregateComparison agg =
+                SystemTelemetryComparisonCalculator.compare(base, base, ComparisonCompatibility.compatible());
 
         assertNotNull(agg);
         assertNotNull(agg.idleHeadTransitions());
@@ -704,8 +704,8 @@ class SystemTelemetryComparisonCalculatorTest {
                 DecisionStatistics.EMPTY,
                 Double.NaN);
 
-        AggregateComparison agg = SystemTelemetryComparisonCalculator.compare(
-                base, cand, ComparisonCompatibility.compatible());
+        AggregateComparison agg =
+                SystemTelemetryComparisonCalculator.compare(base, cand, ComparisonCompatibility.compatible());
 
         assertNotNull(agg);
         Map<String, ScalarComparison> scalars = agg.scalarComparisons();
@@ -844,7 +844,10 @@ class SystemTelemetryComparisonCalculatorTest {
 
         ComparisonCompatibility incompatible = ComparisonCompatibility.incompatible(
                 List.of(new ConfigurationDifference(
-                        "/calibrationConfig/workUnits", new IntNode(10), new IntNode(100), DifferenceCategory.WORKLOAD)),
+                        "/calibrationConfig/workUnits",
+                        new IntNode(10),
+                        new IntNode(100),
+                        DifferenceCategory.WORKLOAD)),
                 List.of("WorkUnits mismatch"));
 
         AggregateComparison agg = SystemTelemetryComparisonCalculator.compare(base, cand, incompatible);
@@ -864,7 +867,9 @@ class SystemTelemetryComparisonCalculatorTest {
         AggregateComparison agg = SystemTelemetryComparisonCalculator.compare(base, cand);
         assertNotNull(agg);
         // Performance comparison outcome is unaffected by telemetry
-        assertEquals(perf.outcome(), PerformanceComparisonCalculator.compare(base, cand).outcome());
+        assertEquals(
+                perf.outcome(),
+                PerformanceComparisonCalculator.compare(base, cand).outcome());
     }
 
     private static CompletedRun createSimpleCompletedRun(String id, double throughputScore) {

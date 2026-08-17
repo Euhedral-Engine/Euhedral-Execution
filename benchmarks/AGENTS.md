@@ -372,3 +372,23 @@ alongside their SHA-256 integrity checksums:
 | `transitions.tsv` | 25x25 Markov transition counts, probabilities, self-rates, and dominant targets | [`TransitionAnalysis`](src/main/java/calibration/statistics/iteration/TransitionAnalysis.java) |
 | `vector_fields.tsv` | 5x5 displacement vectors (Delta_C, Delta_B) and magnitudes | [`VectorField`](src/main/java/calibration/statistics/VectorField.java) |
 | `correlations.tsv` | Aligned Pearson and Spearman correlation matrices across observation dimensions | [`CorrelationResult`](src/main/java/calibration/statistics/iteration/CorrelationResult.java) |
+
+---
+
+## 5. Comparison Artifacts Summary
+
+Comparison artifacts are post-run outputs generated when contrasting a baseline calibration run
+against one or more candidate runs. Source baseline and candidate run directories remain immutable.
+JMH throughput (`comparison_summary.tsv`) remains the authoritative performance result; diagnostic
+TSVs explain scheduler and fragment decision behavior without computing synthetic winners.
+
+| Export File | Description | Source Structure |
+|-------------|-------------|------------------|
+| `comparison_manifest.json` | Provenance manifest with identities, paths, compatibility status, and checksums | [`ComparisonManifest`](src/main/java/calibration/comparisons/schema/ComparisonManifest.java) |
+| `comparison_summary.tsv` | Authoritative performance comparison summary across candidates | [`PerformanceComparison`](src/main/java/calibration/comparisons/schema/PerformanceComparison.java) |
+| `configuration_differences.tsv` | Structural JSON pointer configuration diffs sorted deterministically | [`ConfigurationDifference`](src/main/java/calibration/comparisons/schema/ConfigurationDifference.java) |
+| `scalar_comparisons.tsv` | Aggregate and per-core continuous scalar telemetry deltas across categories | [`ScalarComparison`](src/main/java/calibration/comparisons/schema/ScalarComparison.java) |
+| `occupancy_comparisons.tsv` | 5x5 branch occupancy deltas, centroid displacement, and total variation distance | [`OccupancyComparison`](src/main/java/calibration/comparisons/schema/OccupancyComparison.java) |
+| `transition_comparisons.tsv` | 25x25 Markov transition count/probability deltas and dominant target shifts | [`TransitionComparison`](src/main/java/calibration/comparisons/schema/TransitionComparison.java) |
+| `vector_field_comparisons.tsv` | 5x5 displacement gradient and magnitude deltas for idle and exec policies | [`VectorFieldComparison`](src/main/java/calibration/comparisons/schema/VectorFieldComparison.java) |
+| `correlation_comparisons.tsv` | Aligned Pearson and Spearman correlation deltas between observation metrics | [`CorrelationComparison`](src/main/java/calibration/comparisons/schema/CorrelationComparison.java) |
