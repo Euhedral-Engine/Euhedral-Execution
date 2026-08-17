@@ -140,7 +140,8 @@ public final class TrialConfigDiffer {
                 || normalized.startsWith("tags")
                 || normalized.startsWith("labels")
                 || normalized.startsWith("origin")
-                || normalized.startsWith("enabled")) {
+                || normalized.startsWith("enabled")
+                || normalized.startsWith("calibrationProfile")) {
             return DifferenceCategory.IDENTITY;
         }
 

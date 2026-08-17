@@ -70,7 +70,7 @@ public final class CompletedRunLoader {
     public static @NonNull CompletedRun load(@NonNull Path runDirectory) {
         Objects.requireNonNull(runDirectory, "runDirectory must not be null");
 
-        Path normalizedDir = runDirectory.toAbsolutePath().normalize();
+        Path normalizedDir = resolveRunPath(runDirectory);
         if (!Files.exists(normalizedDir)) {
             throw new MissingArtifactException(normalizedDir, normalizedDir);
         }
@@ -79,6 +79,12 @@ public final class CompletedRunLoader {
         }
 
         Path configPath = normalizedDir.resolve("trial_config.json");
+        if (!Files.exists(configPath) && normalizedDir.getParent() != null) {
+            Path parentConfig = normalizedDir.getParent().resolve("trial_config.json");
+            if (Files.exists(parentConfig)) {
+                configPath = parentConfig;
+            }
+        }
         if (!Files.exists(configPath)) {
             throw new MissingArtifactException(normalizedDir, configPath);
         }
@@ -94,17 +100,25 @@ public final class CompletedRunLoader {
         }
 
         Path logPath = normalizedDir.resolve(Constants.BENCHMARK_OUTPUT_LOG);
+        if (!Files.exists(logPath) && normalizedDir.getParent() != null) {
+            Path parentLog = normalizedDir.getParent().resolve(Constants.BENCHMARK_OUTPUT_LOG);
+            if (Files.exists(parentLog)) {
+                logPath = parentLog;
+            }
+        }
         if (!Files.exists(logPath)) {
             throw new MissingArtifactException(normalizedDir, logPath);
         }
         ThroughputResult throughput = JmhOutputParser.parse(normalizedDir, logPath);
 
-        Path rawObsPath = normalizedDir.resolve(Constants.RAW_OBSERVATION_TSV);
-        Path statsPath = normalizedDir.resolve(Constants.STATISTICS_TSV);
-        Path occPath = normalizedDir.resolve(Constants.OCCUPANCY_TSV);
-        Path transPath = normalizedDir.resolve(Constants.TRANSITIONS_TSV);
-        Path vecPath = normalizedDir.resolve(Constants.VECTOR_FIELDS_TSV);
-        Path corrPath = normalizedDir.resolve(Constants.CORRELATIONS_TSV);
+        Path tsvDir = findTsvDir(normalizedDir);
+
+        Path rawObsPath = tsvDir.resolve(Constants.RAW_OBSERVATION_TSV);
+        Path statsPath = tsvDir.resolve(Constants.STATISTICS_TSV);
+        Path occPath = tsvDir.resolve(Constants.OCCUPANCY_TSV);
+        Path transPath = tsvDir.resolve(Constants.TRANSITIONS_TSV);
+        Path vecPath = tsvDir.resolve(Constants.VECTOR_FIELDS_TSV);
+        Path corrPath = tsvDir.resolve(Constants.CORRELATIONS_TSV);
 
         validateRequiredFile(normalizedDir, rawObsPath);
         validateRequiredFile(normalizedDir, statsPath);
@@ -124,7 +138,7 @@ public final class CompletedRunLoader {
                 parseSystemForkResult(normalizedDir, rawObsPath, statsPath, occPath, transPath, vecPath, corrPath);
 
         RunIdentity identity = buildIdentity(normalizedDir, trialConfig);
-        RunArtifacts artifacts = buildArtifacts(normalizedDir);
+        RunArtifacts artifacts = buildArtifacts(normalizedDir, tsvDir);
 
         return new CompletedRun(identity, trialConfig, throughput, system, List.of(), artifacts);
     }
@@ -818,25 +832,60 @@ public final class CompletedRunLoader {
         return null;
     }
 
-    private static RunArtifacts buildArtifacts(Path runDir) {
+    private static RunArtifacts buildArtifacts(Path runDir, Path tsvDir) {
         String root = runDir.toAbsolutePath().normalize().toString();
         return new RunArtifacts(
                 root,
                 resolveExistingPath(runDir, "trial_config.json"),
-                resolveExistingPath(runDir, Constants.RAW_OBSERVATION_TSV),
-                resolveExistingPath(runDir, Constants.RAW_OBSERVATION_CHECKSUM),
-                resolveExistingPath(runDir, Constants.STATISTICS_TSV),
-                resolveExistingPath(runDir, Constants.STATISTICS_CHECKSUM),
-                resolveExistingPath(runDir, Constants.OCCUPANCY_TSV),
-                resolveExistingPath(runDir, Constants.OCCUPANCY_CHECKSUM),
-                resolveExistingPath(runDir, Constants.TRANSITIONS_TSV),
-                resolveExistingPath(runDir, Constants.TRANSITIONS_CHECKSUM),
-                resolveExistingPath(runDir, Constants.VECTOR_FIELDS_TSV),
-                resolveExistingPath(runDir, Constants.VECTOR_FIELDS_CHECKSUM),
-                resolveExistingPath(runDir, Constants.CORRELATIONS_TSV),
-                resolveExistingPath(runDir, Constants.CORRELATIONS_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.RAW_OBSERVATION_TSV),
+                resolveExistingPath(tsvDir, Constants.RAW_OBSERVATION_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.STATISTICS_TSV),
+                resolveExistingPath(tsvDir, Constants.STATISTICS_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.OCCUPANCY_TSV),
+                resolveExistingPath(tsvDir, Constants.OCCUPANCY_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.TRANSITIONS_TSV),
+                resolveExistingPath(tsvDir, Constants.TRANSITIONS_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.VECTOR_FIELDS_TSV),
+                resolveExistingPath(tsvDir, Constants.VECTOR_FIELDS_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.CORRELATIONS_TSV),
+                resolveExistingPath(tsvDir, Constants.CORRELATIONS_CHECKSUM),
                 resolveExistingPath(runDir, Constants.BENCHMARK_OUTPUT_LOG),
                 resolveExistingPath(runDir, Constants.BENCHMARK_OUTPUT_LOG));
+    }
+
+    private static Path findTsvDir(Path normalizedDir) {
+        if (Files.exists(normalizedDir.resolve(Constants.RAW_OBSERVATION_TSV))) {
+            return normalizedDir;
+        }
+        try (var stream = Files.list(normalizedDir)) {
+            List<Path> forkDirs = stream.filter(Files::isDirectory)
+                    .filter(p -> p.getFileName().toString().startsWith("fork-"))
+                    .filter(p -> Files.exists(p.resolve(Constants.RAW_OBSERVATION_TSV)))
+                    .sorted()
+                    .toList();
+            if (!forkDirs.isEmpty()) {
+                return forkDirs.getFirst();
+            }
+        } catch (Exception ignored) {
+        }
+        return normalizedDir;
+    }
+
+    private static Path resolveRunPath(Path path) {
+        Path normalized = path.toAbsolutePath().normalize();
+        if (Files.exists(normalized)) {
+            return normalized;
+        }
+
+        List<Path> candidateBases =
+                List.of(Path.of(""), Path.of("benchmarks"), Path.of("benchmarks/experiments"), Path.of("experiments"));
+        for (Path base : candidateBases) {
+            Path candidate = base.resolve(path).toAbsolutePath().normalize();
+            if (Files.exists(candidate)) {
+                return candidate;
+            }
+        }
+        return normalized;
     }
 
     private static String resolveExistingPath(Path runDir, String relativeName) {

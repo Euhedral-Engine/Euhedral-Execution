@@ -627,6 +627,11 @@ class CalibrationRunnerTest {
 
     private static void setupCompletedRunOnDisk(Path runDir, TrialConfig config, double throughputScore, int offset)
             throws Exception {
+        setupCompletedRunOnDisk(runDir, config, throughputScore, offset, "ops/s");
+    }
+
+    private static void setupCompletedRunOnDisk(
+            Path runDir, TrialConfig config, double throughputScore, int offset, String unit) throws Exception {
         Files.createDirectories(runDir);
 
         Files.writeString(
@@ -637,10 +642,10 @@ class CalibrationRunnerTest {
         String logContent = "# JMH version: 1.37\n"
                 + "# Benchmark: calibration.benchmarks.CalibrationBenchmark.benchmark\n"
                 + "# Fork: 1 of 1\n"
-                + "Iteration   1: " + throughputScore + " ops/s\n\n"
+                + "Iteration   1: " + throughputScore + " " + unit + "\n\n"
                 + "Benchmark                                                 Mode  Cnt      Score     Error  Units\n"
                 + "CalibrationBenchmark.benchmark                           thrpt    1  " + throughputScore
-                + " +/- 1.0  ops/s\n";
+                + " +/- 1.0  " + unit + "\n";
         Files.writeString(runDir.resolve(Constants.BENCHMARK_OUTPUT_LOG), logContent, StandardCharsets.UTF_8);
 
         ForkCalculationResult forkResult = createForkResult(offset);
@@ -860,7 +865,7 @@ class CalibrationRunnerTest {
         setupCompletedRunOnDisk(baseDir, baseConfig, 1000.0, 0);
         setupCompletedRunOnDisk(candCompatDir, candCompatConfig, 1200.0, 5);
         setupCompletedRunOnDisk(candPartialDir, candPartialConfig, 1100.0, 10);
-        setupCompletedRunOnDisk(candIncompatDir, candIncompatConfig, 1500.0, 15);
+        setupCompletedRunOnDisk(candIncompatDir, candIncompatConfig, 1500.0, 15, "ops/ms");
 
         ComparisonConfig comparisonConfig = new ComparisonConfig(
                 RunReference.of(baseDir.toString(), "baseline"),

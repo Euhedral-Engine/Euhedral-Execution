@@ -43,3 +43,5 @@ gradlew.bat
 **/async-profiler*/
 **/.tool-versions
 **/.profileconfig.json
+benchmarks/experiments/
+**/experiments/*

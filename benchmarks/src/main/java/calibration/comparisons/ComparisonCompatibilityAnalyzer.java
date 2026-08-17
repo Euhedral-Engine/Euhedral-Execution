@@ -37,19 +37,19 @@ public final class ComparisonCompatibilityAnalyzer {
             DifferenceCategory category = diff.category();
             switch (category) {
                 case WORKLOAD ->
-                    incompatibleReasons.add("Incompatible workload configuration at " + diff.path()
+                    partialReasons.add("Workload configuration differs at " + diff.path()
                             + " (baseline=" + diff.baselineValue()
                             + ", candidate=" + diff.candidateValue() + ")");
                 case JMH ->
-                    incompatibleReasons.add("Incompatible JMH execution configuration at " + diff.path()
+                    partialReasons.add("JMH execution configuration differs at " + diff.path()
                             + " (baseline=" + diff.baselineValue()
                             + ", candidate=" + diff.candidateValue() + ")");
                 case JVM ->
-                    incompatibleReasons.add("Incompatible JVM argument configuration at " + diff.path()
+                    partialReasons.add("JVM argument configuration differs at " + diff.path()
                             + " (baseline=" + diff.baselineValue()
                             + ", candidate=" + diff.candidateValue() + ")");
                 case HARNESS ->
-                    incompatibleReasons.add("Incompatible harness configuration at " + diff.path()
+                    partialReasons.add("Harness configuration differs at " + diff.path()
                             + " (baseline=" + diff.baselineValue()
                             + ", candidate=" + diff.candidateValue() + ")");
                 case OBSERVATION ->

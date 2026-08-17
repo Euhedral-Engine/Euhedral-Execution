@@ -67,11 +67,11 @@ HarnessConfig
 3. **`artifacts`**
    ([`ArtifactConfig`](src/main/java/calibration/config/ArtifactConfig.java)):
    - `outputDirectory` (`string`): Target directory for benchmark telemetry exports.
-   - `retainExpandedConfig` (`boolean`): Writes `trial_config.json` into each trial's output folder.
+   - `retainExpandedConfig` (`boolean`): Writes the expanded `trial_config.json` into each trial's output folder.
    - `retainRawBenchmarkOutput` (`boolean`): Writes raw benchmark console output (`benchmark_output.log`) into each trial's output folder.
-   - `retainObserverData` (`boolean`): Retains observer metric telemetry TSV exports (`raw_observations.tsv`, `statistics.tsv`, etc.).
-   - `retainPerForkResults` (`boolean`): Retains dedicated per-fork subdirectories (`fork-.../`).
-   - `retainPerIterationResults` (`boolean`): Retains dedicated per-iteration subdirectories (`iteration-.../`).
+   - `retainRawData` (`boolean`): Retains raw observation event count exports (`raw_observations.tsv`).
+   - `retainPerForkResults` (`boolean`): Retains aggregated whole-fork statistical TSV exports (`statistics.tsv`, `occupancy.tsv`, `transitions.tsv`, `vector_fields.tsv`, `correlations.tsv`) in a dedicated `fork-.../` directory.
+   - `retainPerIterationResults` (`boolean`): Retains dedicated per-iteration subdirectories (`iteration-.../`) containing iteration-level TSV metrics.
 
 4. **`sweeps`**
    ([`SweepConfig`](src/main/java/calibration/config/SweepConfig.java)):
@@ -369,8 +369,8 @@ relationships.
 
 ## 4. Exported Artifacts Summary
 
-When an output directory is configured, each trial invocation produces the following TSV files
-alongside their SHA-256 integrity checksums:
+When an output directory is configured, each trial invocation produces the following files
+according to the configured artifact retention flags, alongside their SHA-256 integrity checksums:
 
 | Export File | Description | Source Structure |
 |-------------|-------------|------------------|

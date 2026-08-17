@@ -234,7 +234,7 @@ class ComparisonCompatibilityAnalyzerTest {
     }
 
     @Test
-    void testCpuSetDifferenceIsIncompatible() {
+    void testCpuSetDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
@@ -260,13 +260,13 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("cpuSet")));
     }
 
     @Test
-    void testSourceCountDifferenceIsIncompatible() {
+    void testSourceCountDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
@@ -292,13 +292,13 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("parallelSources")));
     }
 
     @Test
-    void testWorkUnitsDifferenceIsIncompatible() {
+    void testWorkUnitsDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
@@ -324,13 +324,13 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("workUnits")));
     }
 
     @Test
-    void testRandomizeWorkDifferenceIsIncompatible() {
+    void testRandomizeWorkDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
@@ -356,13 +356,13 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("randomizeWork")));
     }
 
     @Test
-    void testTotalRequiredExecutionsDifferenceIsIncompatible() {
+    void testTotalRequiredExecutionsDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
@@ -388,13 +388,13 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("totalRequiredExecutions")));
     }
 
     @Test
-    void testJmhMeasurementConfigurationDifferenceIsIncompatible() {
+    void testJmhMeasurementConfigurationDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         TrialConfig candConfig = new TrialConfig(
                 baseConfig.id(),
@@ -420,13 +420,13 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("measurementTime")));
     }
 
     @Test
-    void testJvmArgumentDifferenceIsIncompatible() {
+    void testJvmArgumentDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         TrialConfig candConfig = new TrialConfig(
                 baseConfig.id(),
@@ -452,8 +452,8 @@ class ComparisonCompatibilityAnalyzerTest {
         CompletedRun cand = createCompletedRun(candConfig, "ops/s");
 
         ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
-        assertFalse(compat.isComparable());
+        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
+        assertTrue(compat.isComparable());
         assertTrue(compat.reasons().stream().anyMatch(r -> r.contains("jvmArgs")));
     }
 
