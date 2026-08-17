@@ -1,0 +1,21 @@
+{
+  "baseline": {
+    "path": "build/results/baseline_repeat_0",
+    "label": "baseline"
+  },
+  "candidates": [
+    {
+      "path": "build/results/candidate_staged_repeat_0",
+      "label": "candidate-staged"
+    },
+    {
+      "path": "build/results/candidate_direct_repeat_0",
+      "label": "candidate-direct"
+    }
+  ],
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "build/results/comparisons/example_comparison"
+}

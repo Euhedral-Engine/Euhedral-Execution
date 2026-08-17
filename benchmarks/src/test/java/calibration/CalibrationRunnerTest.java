@@ -2,31 +2,48 @@ package calibration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import calibration.comparisons.schema.ComparisonRequest;
+import calibration.comparisons.schema.RunReference;
 import calibration.config.ArtifactConfig;
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.ComparisonConfig;
+import calibration.config.ComparisonOptions;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessRunOptions;
 import calibration.config.OriginType;
 import calibration.config.SweepConfig;
 import calibration.config.SweepParameter;
 import calibration.config.TrialConfig;
+import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
+import calibration.infra.Constants;
+import calibration.io.TrialExport;
+import calibration.statistics.HighSpeedMetricsStatistics;
+import calibration.statistics.fork.ForkCalculationResult;
+import calibration.statistics.fork.SystemForkResult;
+import calibration.statistics.iteration.CoreIterationResult;
+import calibration.statistics.iteration.IterationResult;
+import calibration.statistics.iteration.SystemIterationResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.openjdk.jmh.runner.options.Options;
 
-/// Unit tests for CalibrationRunner refactored private operations.
+/// Unit tests for CalibrationRunner refactored operations and runner modes.
 class CalibrationRunnerTest {
 
     private final ObjectMapper mapper = new ObjectMapper();
@@ -191,8 +208,8 @@ class CalibrationRunnerTest {
         assertEquals(2, resolved.size());
         assertEquals("base1__s1__0", resolved.get(0).id());
         assertEquals("base1__s1__1", resolved.get(1).id());
-        assertTrue(resolved.get(0).enabled());
-        assertTrue(resolved.get(1).enabled());
+        assertEquals(Boolean.TRUE, resolved.get(0).enabled());
+        assertEquals(Boolean.TRUE, resolved.get(1).enabled());
     }
 
     @Test
@@ -447,7 +464,7 @@ class CalibrationRunnerTest {
         List<TrialConfig> resolved = CalibrationRunner.resolveTrials(config, mapper);
         assertEquals(2, resolved.size());
 
-        TrialConfig resolvedTrial1 = resolved.get(0);
+        TrialConfig resolvedTrial1 = resolved.getFirst();
         assertEquals("t1", resolvedTrial1.id());
         assertEquals("profile-alpha", resolvedTrial1.calibrationProfile());
         assertNotNull(resolvedTrial1.calibrationConfig());
@@ -569,5 +586,355 @@ class CalibrationRunnerTest {
         assertFalse(jvmArgs.stream().anyMatch(arg -> arg.startsWith("-Deuhedral.calibration.retainPerForkResults=")));
         assertFalse(
                 jvmArgs.stream().anyMatch(arg -> arg.startsWith("-Deuhedral.calibration.retainPerIterationResults=")));
+    }
+
+    private static HighSpeedMetrics createPopulatedMetrics(int offset) {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(8);
+        metrics.recordCycleStart(1, 1, 10 + offset, 5, 2, 4, 1, 100 + offset, 10.0 + offset);
+        metrics.recordCycleStart(2, 2, 20 + offset, 5, 2, 4, 1, 200 + offset, 20.0 + offset);
+        metrics.recordCycleStart(3, 3, 30 + offset, 5, 2, 4, 1, 300 + offset, 30.0 + offset);
+        metrics.recordBatchProgress(1, 1, 2, 4, 1, 100 + offset, 1.5 + offset);
+        metrics.recordBatchProgress(2, 2, 2, 4, 1, 200 + offset, 2.5 + offset);
+        metrics.recordBatchComplete(1, 1, 2, 4, 1, 100 + offset, 1.5 + offset, 10.0 + offset);
+        metrics.recordBatchComplete(2, 2, 2, 4, 1, 200 + offset, 2.5 + offset, 20.0 + offset);
+        metrics.recordRawBodyCost(1, 1, 50 + offset);
+        metrics.recordRawBodyCost(2, 2, 70 + offset);
+        metrics.recordIdle(1, 1, 0, 1, 50 + offset, 10.0 + offset);
+        metrics.recordIdle(2, 2, 1, 2, 150 + offset, 20.0 + offset);
+        metrics.recordExec(1, 1, 2, 3, 250 + offset, 30.0 + offset);
+        metrics.recordExec(2, 2, 3, 4, 350 + offset, 40.0 + offset);
+        return metrics;
+    }
+
+    private static ForkCalculationResult createForkResult(int offset) {
+        List<IterationResult> iterResults = new ArrayList<>(2);
+        List<List<HighSpeedMetrics>> allIterMetrics = new ArrayList<>(2);
+        for (int iter = 0; iter < 2; iter++) {
+            List<CoreIterationResult> cores = new ArrayList<>(2);
+            List<HighSpeedMetrics> metricsList = new ArrayList<>(2);
+            for (int core = 0; core < 2; core++) {
+                HighSpeedMetrics m = createPopulatedMetrics(offset + iter + core);
+                metricsList.add(m);
+                cores.add(HighSpeedMetricsStatistics.calculate(iter, core, m));
+            }
+            SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(iter, metricsList);
+            iterResults.add(new IterationResult(iter, system, cores));
+            allIterMetrics.add(metricsList);
+        }
+        SystemForkResult forkSystem = HighSpeedMetricsStatistics.calculateSystemFork(0, allIterMetrics);
+        return new ForkCalculationResult(forkSystem, iterResults);
+    }
+
+    private static void setupCompletedRunOnDisk(Path runDir, TrialConfig config, double throughputScore, int offset)
+            throws Exception {
+        Files.createDirectories(runDir);
+
+        Files.writeString(
+                runDir.resolve("trial_config.json"),
+                new ObjectMapper().writeValueAsString(config),
+                StandardCharsets.UTF_8);
+
+        String logContent = "# JMH version: 1.37\n"
+                + "# Benchmark: calibration.benchmarks.CalibrationBenchmark.benchmark\n"
+                + "# Fork: 1 of 1\n"
+                + "Iteration   1: " + throughputScore + " ops/s\n\n"
+                + "Benchmark                                                 Mode  Cnt      Score     Error  Units\n"
+                + "CalibrationBenchmark.benchmark                           thrpt    1  " + throughputScore
+                + " +/- 1.0  ops/s\n";
+        Files.writeString(runDir.resolve(Constants.BENCHMARK_OUTPUT_LOG), logContent, StandardCharsets.UTF_8);
+
+        ForkCalculationResult forkResult = createForkResult(offset);
+        TrialExport.exportAll(runDir, forkResult, false);
+    }
+
+    @Test
+    void testMainNoArgumentsFailsWithUsage() {
+        CalibrationRunner.MainError err =
+                assertThrows(CalibrationRunner.MainError.class, () -> CalibrationRunner.main(new String[0]));
+        assertTrue(err.getMessage().contains("Usage:"));
+        assertTrue(err.getMessage().contains("euhedral-calibration run"));
+        assertTrue(err.getMessage().contains("euhedral-calibration compare"));
+    }
+
+    @Test
+    void testMainOneArgumentFailsWithUsage() {
+        CalibrationRunner.MainError err =
+                assertThrows(CalibrationRunner.MainError.class, () -> CalibrationRunner.main(new String[] {"run"}));
+        assertTrue(err.getMessage().contains("Usage:"));
+    }
+
+    @Test
+    void testMainMoreThanTwoArgumentsFailsWithUsage() {
+        CalibrationRunner.MainError err = assertThrows(
+                CalibrationRunner.MainError.class,
+                () -> CalibrationRunner.main(new String[] {"run", "config.json", "extra"}));
+        assertTrue(err.getMessage().contains("Usage:"));
+    }
+
+    @Test
+    void testMainUnknownModeFailsWithUsage() {
+        CalibrationRunner.MainError err = assertThrows(
+                CalibrationRunner.MainError.class,
+                () -> CalibrationRunner.main(new String[] {"unknown_mode", "config.json"}));
+        assertTrue(err.getMessage().contains("Usage:"));
+    }
+
+    @Test
+    void testRunnerModeParseCaseInsensitive() {
+        assertEquals(RunnerMode.RUN, RunnerMode.parse("run"));
+        assertEquals(RunnerMode.RUN, RunnerMode.parse("RUN"));
+        assertEquals(RunnerMode.RUN, RunnerMode.parse("Run"));
+        assertEquals(RunnerMode.COMPARE, RunnerMode.parse("compare"));
+        assertEquals(RunnerMode.COMPARE, RunnerMode.parse("COMPARE"));
+        assertEquals(RunnerMode.COMPARE, RunnerMode.parse("Compare"));
+
+        assertThrows(IllegalArgumentException.class, () -> RunnerMode.parse("invalid"));
+        assertThrows(IllegalArgumentException.class, () -> RunnerMode.parse(""));
+        assertThrows(NullPointerException.class, () -> RunnerMode.parse(null));
+    }
+
+    @Test
+    void testComparisonConfigDeserialization() throws Exception {
+        String json = """
+                {
+                  "baseline": {
+                    "path": "build/results/baseline",
+                    "label": "baseline-label"
+                  },
+                  "candidates": [
+                    {
+                      "path": "build/results/candidate-a",
+                      "label": "cand-a"
+                    },
+                    {
+                      "path": "build/results/candidate-b"
+                    }
+                  ],
+                  "options": {
+                    "includeDiagnostics": true,
+                    "failFast": false
+                  },
+                  "outputDirectory": "build/results/comparisons/test-001"
+                }
+                """;
+
+        ComparisonConfig config = mapper.readValue(json, ComparisonConfig.class);
+        assertNotNull(config);
+        assertEquals("build/results/baseline", config.baseline().path());
+        assertEquals("baseline-label", config.baseline().label());
+        assertEquals(2, config.candidates().size());
+        assertEquals("build/results/candidate-a", config.candidates().get(0).path());
+        assertEquals("cand-a", config.candidates().get(0).label());
+        assertEquals("build/results/candidate-b", config.candidates().get(1).path());
+        assertNull(config.candidates().get(1).label());
+        assertEquals("build/results/comparisons/test-001", config.outputDirectory());
+        assertTrue(config.options().includeDiagnostics());
+        assertFalse(config.options().failFast());
+
+        ComparisonRequest request = config.toRequest();
+        assertNotNull(request);
+        assertEquals(config.baseline(), request.baseline());
+        assertEquals(config.candidates(), request.candidates());
+    }
+
+    @Test
+    void testComparisonConfigValidationRules() {
+        RunReference baseline = RunReference.of("/path/to/baseline");
+        RunReference cand1 = RunReference.of("/path/to/cand1");
+        RunReference cand2 = RunReference.of("/path/to/cand2");
+
+        // Null baseline rejected
+        assertThrows(NullPointerException.class, () -> new ComparisonConfig(null, List.of(cand1), "outDir"));
+
+        // Null candidates rejected
+        assertThrows(NullPointerException.class, () -> new ComparisonConfig(baseline, null, "outDir"));
+
+        // Empty candidates rejected
+        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig(baseline, List.of(), "outDir"));
+
+        // Null / blank output directory rejected
+        assertThrows(NullPointerException.class, () -> new ComparisonConfig(baseline, List.of(cand1), null));
+        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig(baseline, List.of(cand1), "  "));
+
+        // Baseline appearing in candidates rejected
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ComparisonConfig(baseline, List.of(RunReference.of("/path/to/baseline")), "outDir"));
+
+        // Duplicate candidate rejected
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new ComparisonConfig(baseline, List.of(cand1, RunReference.of("/path/to/cand1")), "outDir"));
+    }
+
+    @Test
+    void testRunComparisonExecutesAllCalculatorsAndExportsArtifacts(@TempDir Path tempDir) throws Exception {
+        Path baseDir = tempDir.resolve("runs/base_repeat_0");
+        Path candCompatDir = tempDir.resolve("runs/cand_compat_repeat_0");
+        Path candPartialDir = tempDir.resolve("runs/cand_partial_repeat_0");
+        Path candIncompatDir = tempDir.resolve("runs/cand_incompat_repeat_0");
+        Path comparisonOutDir = tempDir.resolve("comparisons/suite_001");
+
+        TrialConfig baseConfig = dummyTrialConfig("base", true);
+
+        // Candidate 1: Compatible (different name only)
+        TrialConfig candCompatConfig = new TrialConfig(
+                "cand-compat",
+                "Candidate Compatible",
+                "group",
+                null,
+                null,
+                null,
+                null,
+                true,
+                1,
+                1,
+                1,
+                List.of("-Xmx1g"),
+                dummyCalibrationConfig());
+
+        // Candidate 2: Partial (observeIdleDecision toggle differs)
+        CalibrationBenchmarkConfig partialCalConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2, 3, 4),
+                4,
+                2,
+                100,
+                true,
+                1000000,
+                60000,
+                FragmentDecisionWeights.DEFAULT,
+                1024,
+                true, // observeCycleStart differs
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig candPartialConfig = new TrialConfig(
+                "cand-partial",
+                "Candidate Partial",
+                "group",
+                null,
+                null,
+                null,
+                null,
+                true,
+                1,
+                1,
+                1,
+                List.of("-Xmx1g"),
+                partialCalConfig);
+
+        // Candidate 3: Incompatible (workUnits differs)
+        CalibrationBenchmarkConfig incompatCalConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2, 3, 4),
+                4,
+                2,
+                9999, // workUnits differs
+                true,
+                1000000,
+                60000,
+                FragmentDecisionWeights.DEFAULT,
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig candIncompatConfig = new TrialConfig(
+                "cand-incompat",
+                "Candidate Incompatible",
+                "group",
+                null,
+                null,
+                null,
+                null,
+                true,
+                1,
+                1,
+                1,
+                List.of("-Xmx1g"),
+                incompatCalConfig);
+
+        setupCompletedRunOnDisk(baseDir, baseConfig, 1000.0, 0);
+        setupCompletedRunOnDisk(candCompatDir, candCompatConfig, 1200.0, 5);
+        setupCompletedRunOnDisk(candPartialDir, candPartialConfig, 1100.0, 10);
+        setupCompletedRunOnDisk(candIncompatDir, candIncompatConfig, 1500.0, 15);
+
+        ComparisonConfig comparisonConfig = new ComparisonConfig(
+                RunReference.of(baseDir.toString(), "baseline"),
+                List.of(
+                        RunReference.of(candCompatDir.toString(), "cand-compat"),
+                        RunReference.of(candPartialDir.toString(), "cand-partial"),
+                        RunReference.of(candIncompatDir.toString(), "cand-incompat")),
+                ComparisonOptions.DEFAULT,
+                comparisonOutDir.toString());
+
+        Path configFile = tempDir.resolve("comparison_config.json");
+        Files.writeString(configFile, mapper.writeValueAsString(comparisonConfig), StandardCharsets.UTF_8);
+
+        // Execute comparison mode
+        CalibrationComparison.runComparison(configFile.toString());
+
+        // Verify exported comparison artifacts exist
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.COMPARISON_MANIFEST_JSON)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.COMPARISON_MANIFEST_CHECKSUM)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.COMPARISON_SUMMARY_TSV)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.COMPARISON_SUMMARY_CHECKSUM)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.CONFIGURATION_DIFFERENCES_TSV)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.SCALAR_COMPARISONS_TSV)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.OCCUPANCY_COMPARISONS_TSV)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.TRANSITION_COMPARISONS_TSV)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.VECTOR_FIELD_COMPARISONS_TSV)));
+        assertTrue(Files.exists(comparisonOutDir.resolve(Constants.CORRELATION_COMPARISONS_TSV)));
+
+        // Verify summary TSV content and order
+        List<String> summaryLines =
+                Files.readAllLines(comparisonOutDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
+        // Header + 3 candidate rows
+        assertEquals(4, summaryLines.size());
+
+        // Row 1: cand-compat (COMPATIBLE)
+        String[] row1 = summaryLines.get(1).split("\t");
+        assertEquals("base", row1[0]);
+        assertEquals("cand-compat", row1[1]);
+        assertEquals("COMPATIBLE", row1[2]);
+        assertNotEquals("NaN", row1[3]);
+
+        // Row 2: cand-partial (PARTIAL)
+        String[] row2 = summaryLines.get(2).split("\t");
+        assertEquals("base", row2[0]);
+        assertEquals("cand-partial", row2[1]);
+        assertEquals("PARTIAL", row2[2]);
+        assertNotEquals("NaN", row2[3]);
+
+        // Row 3: cand-incompat (INCOMPATIBLE)
+        String[] row3 = summaryLines.get(3).split("\t");
+        assertEquals("base", row3[0]);
+        assertEquals("cand-incompat", row3[1]);
+        assertEquals("INCOMPATIBLE", row3[2]);
+        assertEquals("NaN", row3[3]);
+        assertEquals("UNAVAILABLE", row3[16]);
+    }
+
+    @Test
+    void testRunComparisonMissingConfigFileThrows() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> CalibrationComparison.runComparison("/nonexistent/path/comparison.json"));
+    }
+
+    @Test
+    void testRunComparisonMissingBaselineRunThrows(@TempDir Path tempDir) throws Exception {
+        ComparisonConfig config = new ComparisonConfig(
+                RunReference.of("/nonexistent/baseline"),
+                List.of(RunReference.of("/nonexistent/cand")),
+                tempDir.resolve("out").toString());
+
+        Path configFile = tempDir.resolve("comparison.json");
+        Files.writeString(configFile, mapper.writeValueAsString(config), StandardCharsets.UTF_8);
+
+        assertThrows(Exception.class, () -> CalibrationComparison.runComparison(configFile.toString()));
     }
 }

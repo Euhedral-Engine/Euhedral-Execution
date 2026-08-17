@@ -1,4 +1,4 @@
-package calibration.benchmarks;
+package calibration;
 
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.TrialConfig;

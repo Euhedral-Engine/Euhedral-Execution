@@ -11,7 +11,6 @@ import static calibration.infra.Constants.TRIAL_ID_PROP;
 import static calibration.infra.Constants.TRIAL_INDEX_PROP;
 import static calibration.infra.Constants.TRIAL_NAME_PROP;
 
-import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.ArtifactConfig;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessRunOptions;
@@ -40,8 +39,10 @@ import org.slf4j.LoggerFactory;
 public class CalibrationRunner {
     private static final Logger LOGGER = LoggerFactory.getLogger(CalibrationRunner.class.getSimpleName());
 
-    private static final String CONFIG_PATH_ARG = "config_path";
-    private static final Map<String, Integer> ARGUMENTS = Map.of(CONFIG_PATH_ARG, 0);
+    private static final String USAGE = """
+            Usage:
+              euhedral-calibration run <harness-config.json>
+              euhedral-calibration compare <comparison-config.json>""";
 
     private static final List<String> DEFAULT_FLAGS = List.of(
             "-XX:+UseThreadPriorities",
@@ -52,13 +53,32 @@ public class CalibrationRunner {
             "java.base/jdk.internal.vm.annotation=ALL-UNNAMED");
 
     public static void main(String[] args) throws Exception {
-        if (args.length != ARGUMENTS.size()) {
-            throw new MainError("CalibrationRunner must be provided with arguments: " + ARGUMENTS.keySet());
+        if (args.length != 2) {
+            throw usageError();
         }
 
-        String path = args[ARGUMENTS.get(CONFIG_PATH_ARG)];
+        RunnerMode mode;
+        try {
+            mode = RunnerMode.parse(args[0]);
+        } catch (IllegalArgumentException e) {
+            throw usageError();
+        }
+
+        String configPath = args[1];
+
+        switch (mode) {
+            case RUN -> runCalibration(configPath);
+            case COMPARE -> CalibrationComparison.runComparison(configPath);
+        }
+    }
+
+    static MainError usageError() {
+        return new MainError(USAGE);
+    }
+
+    static void runCalibration(String configPath) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
-        HarnessConfig harnessConfig = loadConfig(path, mapper);
+        HarnessConfig harnessConfig = loadConfig(configPath, mapper);
 
         List<TrialConfig> activeTrials = resolveTrials(harnessConfig, mapper);
         File baseOutputDir = resolveOutputDirectory(harnessConfig.artifacts());
@@ -392,7 +412,7 @@ public class CalibrationRunner {
         }
     }
 
-    private static final class MainError extends RuntimeException {
+    static final class MainError extends RuntimeException {
         public MainError(String message) {
             super(message, null, false, false);
         }

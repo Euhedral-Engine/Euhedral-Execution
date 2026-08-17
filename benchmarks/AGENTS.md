@@ -16,11 +16,14 @@ transition matrices, displacement vector fields, and correlation analyses.
 Before creating or modifying trial configurations, inspect the canonical example:
 
 - [
-`src/main/presets/example_harness_config.json`](src/main/presets/example_harness_config.json)
+`src/main/presets/example_harness_config.json`](src/main/presets/examples/example_harness_config.json)
   is the reference configuration illustrating all available schema features and options.
 - [
-`src/main/presets/example_profile_library.json`](src/main/presets/example_profile_library.json)
+`src/main/presets/example_profile_library.json`](src/main/presets/examples/example_profile_library.json)
   is an example reusable profile library containing calibration and decision weight profiles.
+- [
+`src/main/presets/example_comparison_config.json`](src/main/presets/examples/example_comparison_config.json)
+  is an example comparison configuration referencing completed run directories.
 - [
 `src/main/presets/exec_contention_band_calibration.json`](src/main/presets/exec_contention_band_calibration.json)
   is an example calibration preset for sweeping execution policies under heavy contention.
@@ -156,23 +159,30 @@ This compiles the code and generates the runtime distribution under `benchmarks/
 
 ### Script Usage
 
-Run the launcher script by providing the path to a harness JSON configuration:
+The launcher supports two explicit, separate modes:
 
 ```bash
-benchmarks/build/bin/euhedral-calibration <path-to-config.json>
+# RUN mode: executes configured calibration benchmarks
+benchmarks/build/bin/euhedral-calibration run <path-to-harness-config.json>
+
+# COMPARE mode: consumes completed immutable benchmark artifacts and produces comparison artifacts
+benchmarks/build/bin/euhedral-calibration compare <path-to-comparison-config.json>
 ```
+
+- **`run`**: Loads harness configuration, resolves trial profiles and sweeps, executes JMH benchmark harness, and writes raw observations and statistics.
+- **`compare`**: Loads baseline and candidate completed run directories, validates checksums, evaluates compatibility, and exports comparison summary, diffs, scalar, occupancy, transition, vector, and correlation artifacts.
 
 #### Command-Line Flags and Environment Variables
 
 - `--minimal`:
-  Runs the benchmark without loading `benchmark-logback.xml`.
+  Runs without loading `benchmark-logback.xml`.
   ```bash
-  benchmarks/build/bin/euhedral-calibration --minimal path/to/config.json
+  benchmarks/build/bin/euhedral-calibration --minimal run path/to/config.json
   ```
 - `JAVA_OPTS` or `JAVA_TOOL_OPTIONS`:
   Pass standard JVM options (e.g. GC logging, heap settings, profiling agents) to the launcher:
   ```bash
-  JAVA_OPTS="-Xms4g -Xmx4g" benchmarks/build/bin/euhedral-calibration path/to/config.json
+  JAVA_OPTS="-Xms4g -Xmx4g" benchmarks/build/bin/euhedral-calibration run path/to/config.json
   ```
 
 ### Execution Lifecycle
@@ -186,7 +196,7 @@ executes the following workflow:
 3. **Directory Preparation**: Creates unique output folders per trial and repeat index:
    `<outputDirectory>/<trialId>_repeat_<repeatIndex>/`
 4. **JMH Forking**: Launches
-   [`CalibrationBenchmark`](src/main/java/calibration/benchmarks/CalibrationBenchmark.java)
+   [`CalibrationBenchmark`](src/main/java/calibration/CalibrationBenchmark.java)
    with required JVM arguments, system properties, and core affinities.
 5. **Observation Recording**:
    [`BenchmarkObserver`](src/main/java/calibration/infra/BenchmarkObserver.java)

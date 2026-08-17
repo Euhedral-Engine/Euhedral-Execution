@@ -31,7 +31,7 @@ class HarnessConfigTest {
                 id, "name", "group", null, null, null, null, true, 1, 1, 1, null, dummyCalibrationConfig());
     }
 
-    private static TrialConfig dummyTrialConfigWithComparison(String id, ComparisonConfig comparison) {
+    private static TrialConfig dummyTrialConfigWithComparison(String id, TrialComparisonConfig comparison) {
         return new TrialConfig(
                 id,
                 "name",
@@ -1365,7 +1365,7 @@ class HarnessConfigTest {
         assertEquals(Integer.valueOf(0), origin.candidateIndex());
     }
 
-    /// Verifies trial metadata deserialization and round-trip equivalence with ComparisonConfig.
+    /// Verifies trial metadata deserialization and round-trip equivalence with TrialComparisonConfig.
     @Test
     void parseTrialMetadataAndRoundTrip() throws Exception {
         String json = """
@@ -1503,12 +1503,12 @@ class HarnessConfigTest {
                 () -> new TrialConfig(1, 1, 1, "1s", "   ", null, dummyCalibrationConfig()));
     }
 
-    /// Verifies blank fields in ComparisonConfig are rejected.
+    /// Verifies blank fields in TrialComparisonConfig are rejected.
     @Test
-    void rejectBlankComparisonConfigFields() {
-        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig("  ", "group", "purpose"));
-        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig("baseline", "  ", "purpose"));
-        assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig("baseline", "group", "  "));
+    void rejectBlankTrialComparisonConfigFields() {
+        assertThrows(IllegalArgumentException.class, () -> new TrialComparisonConfig("  ", "group", "purpose"));
+        assertThrows(IllegalArgumentException.class, () -> new TrialComparisonConfig("baseline", "  ", "purpose"));
+        assertThrows(IllegalArgumentException.class, () -> new TrialComparisonConfig("baseline", "group", "  "));
     }
 
     /// Verifies valid baseline reference between trials.
@@ -1516,7 +1516,7 @@ class HarnessConfigTest {
     void validBaselineReference() {
         TrialConfig baselineTrial = dummyTrialConfigWithId("trial-1");
         TrialConfig comparingTrial = dummyTrialConfigWithComparison(
-                "trial-2", new ComparisonConfig("trial-1", "contention-group", "Compare throughput"));
+                "trial-2", new TrialComparisonConfig("trial-1", "contention-group", "Compare throughput"));
 
         HarnessConfig config = new HarnessConfig(List.of(baselineTrial, comparingTrial));
         assertEquals(2, config.trials().size());
@@ -1527,7 +1527,7 @@ class HarnessConfigTest {
     @Test
     void missingBaselineReference() {
         TrialConfig trial = dummyTrialConfigWithComparison(
-                "trial-2", new ComparisonConfig("non-existent-id", "contention-group", "Compare throughput"));
+                "trial-2", new TrialComparisonConfig("non-existent-id", "contention-group", "Compare throughput"));
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
     }
@@ -1536,7 +1536,7 @@ class HarnessConfigTest {
     @Test
     void selfReferenceBaseline() {
         TrialConfig trial = dummyTrialConfigWithComparison(
-                "trial-1", new ComparisonConfig("trial-1", "contention-group", "Self comparison"));
+                "trial-1", new TrialComparisonConfig("trial-1", "contention-group", "Self comparison"));
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
     }
@@ -1544,10 +1544,10 @@ class HarnessConfigTest {
     /// Verifies comparison group without a baseline ID is valid.
     @Test
     void comparisonGroupsWithoutABaseline() {
-        TrialConfig trial1 =
-                dummyTrialConfigWithComparison("trial-1", new ComparisonConfig(null, "group-alpha", "Group member 1"));
-        TrialConfig trial2 =
-                dummyTrialConfigWithComparison("trial-2", new ComparisonConfig(null, "group-alpha", "Group member 2"));
+        TrialConfig trial1 = dummyTrialConfigWithComparison(
+                "trial-1", new TrialComparisonConfig(null, "group-alpha", "Group member 1"));
+        TrialConfig trial2 = dummyTrialConfigWithComparison(
+                "trial-2", new TrialComparisonConfig(null, "group-alpha", "Group member 2"));
 
         HarnessConfig config = new HarnessConfig(List.of(trial1, trial2));
         assertEquals(2, config.trials().size());
