@@ -1,6 +1,7 @@
 package calibration.comparisons.schema;
 
 import calibration.config.TrialConfig;
+import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.CoreIterationResult;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,6 +14,7 @@ public record CompletedRun(
         @NonNull RunIdentity identity,
         @NonNull TrialConfig trialConfig,
         @NonNull ThroughputResult throughput,
+        @NonNull SystemForkResult system,
         @NonNull List<List<CoreIterationResult>> iterations,
         @NonNull RunArtifacts artifacts) {
 
@@ -20,6 +22,7 @@ public record CompletedRun(
         Objects.requireNonNull(identity, "identity must not be null");
         Objects.requireNonNull(trialConfig, "trialConfig must not be null");
         Objects.requireNonNull(throughput, "throughput must not be null");
+        Objects.requireNonNull(system, "system must not be null");
         Objects.requireNonNull(artifacts, "artifacts must not be null");
 
         if (iterations != null) {
@@ -31,5 +34,14 @@ public record CompletedRun(
         } else {
             iterations = List.of();
         }
+    }
+
+    public CompletedRun(
+            @NonNull RunIdentity identity,
+            @NonNull TrialConfig trialConfig,
+            @NonNull ThroughputResult throughput,
+            @NonNull List<List<CoreIterationResult>> iterations,
+            @NonNull RunArtifacts artifacts) {
+        this(identity, trialConfig, throughput, SystemForkResult.EMPTY, iterations, artifacts);
     }
 }
