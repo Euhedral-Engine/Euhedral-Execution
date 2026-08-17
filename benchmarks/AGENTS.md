@@ -50,6 +50,9 @@ HarnessConfig
    - `outputDirectory` (`string`): Target directory for benchmark telemetry exports.
    - `retainExpandedConfig` (`boolean`): Writes `trial_config.json` into each trial's output folder.
    - `retainRawBenchmarkOutput` (`boolean`): Writes raw benchmark console output (`benchmark_output.log`) into each trial's output folder.
+   - `retainObserverData` (`boolean`): Retains observer metric telemetry TSV exports (`raw_observations.tsv`, `statistics.tsv`, etc.).
+   - `retainPerForkResults` (`boolean`): Retains dedicated per-fork subdirectories (`fork-.../`).
+   - `retainPerIterationResults` (`boolean`): Retains dedicated per-iteration subdirectories (`iteration-.../`).
 
 3. **`sweeps`**
    ([`SweepConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/SweepConfig.java)):

@@ -3,6 +3,9 @@ package calibration;
 import static calibration.infra.Constants.BENCHMARK_OUTPUT_LOG;
 import static calibration.infra.Constants.OUTPUT_DIRECTORY_PROP;
 import static calibration.infra.Constants.REPEAT_INDEX_PROP;
+import static calibration.infra.Constants.RETAIN_OBSERVER_DATA_PROP;
+import static calibration.infra.Constants.RETAIN_PER_FORK_RESULTS_PROP;
+import static calibration.infra.Constants.RETAIN_PER_ITERATION_RESULTS_PROP;
 import static calibration.infra.Constants.TRIAL_CONFIG_PROP;
 import static calibration.infra.Constants.TRIAL_ID_PROP;
 import static calibration.infra.Constants.TRIAL_INDEX_PROP;
@@ -218,8 +221,8 @@ public class CalibrationRunner {
 
             File invocationDir =
                     prepareInvocationDirectory(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir);
-            List<String> jvmArgs =
-                    buildJvmArgs(trial, trialIndex, repeatIndex, tempConfigFile.getCanonicalPath(), invocationDir);
+            List<String> jvmArgs = buildJvmArgs(
+                    trial, trialIndex, repeatIndex, tempConfigFile.getCanonicalPath(), invocationDir, artifacts);
 
             Options options = buildOptions(trial, jvmArgs, artifacts, invocationDir);
             new Runner(options).run();
@@ -284,6 +287,16 @@ public class CalibrationRunner {
 
     static List<String> buildJvmArgs(
             TrialConfig trial, int trialIndex, int repeatIndex, String canonicalConfigPath, File invocationDir) {
+        return buildJvmArgs(trial, trialIndex, repeatIndex, canonicalConfigPath, invocationDir, null);
+    }
+
+    static List<String> buildJvmArgs(
+            TrialConfig trial,
+            int trialIndex,
+            int repeatIndex,
+            String canonicalConfigPath,
+            File invocationDir,
+            ArtifactConfig artifacts) {
         List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
         addJVMProperty(jvmArgs, TRIAL_CONFIG_PROP, canonicalConfigPath);
         addJVMProperty(jvmArgs, TRIAL_INDEX_PROP, Integer.toString(trialIndex));
@@ -296,6 +309,27 @@ public class CalibrationRunner {
                 addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getCanonicalPath());
             } catch (Exception e) {
                 addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getAbsolutePath());
+            }
+        }
+
+        if (artifacts != null) {
+            if (artifacts.retainObserverData() != null) {
+                addJVMProperty(
+                        jvmArgs,
+                        RETAIN_OBSERVER_DATA_PROP,
+                        artifacts.retainObserverData().toString());
+            }
+            if (artifacts.retainPerForkResults() != null) {
+                addJVMProperty(
+                        jvmArgs,
+                        RETAIN_PER_FORK_RESULTS_PROP,
+                        artifacts.retainPerForkResults().toString());
+            }
+            if (artifacts.retainPerIterationResults() != null) {
+                addJVMProperty(
+                        jvmArgs,
+                        RETAIN_PER_ITERATION_RESULTS_PROP,
+                        artifacts.retainPerIterationResults().toString());
             }
         }
 

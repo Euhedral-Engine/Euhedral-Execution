@@ -193,12 +193,24 @@ public class CalibrationBenchmark {
         if (output == null || output.isBlank()) {
             return;
         }
-        Path path = Path.of(output, "fork-" + this.configId + "-" + System.currentTimeMillis() + "/");
-        File outputDir = path.toFile();
-        if (!outputDir.exists() && !outputDir.mkdirs()) {
-            throw new RuntimeException("Failed to create output directory: " + output);
+        boolean retainObserverData =
+                Boolean.parseBoolean(System.getProperty(Constants.RETAIN_OBSERVER_DATA_PROP, "true"));
+        if (!retainObserverData) {
+            return;
         }
-        TrialExport.exportAll(path, this.calculationResults);
+        boolean retainPerFork =
+                Boolean.parseBoolean(System.getProperty(Constants.RETAIN_PER_FORK_RESULTS_PROP, "false"));
+        boolean retainPerIteration =
+                Boolean.parseBoolean(System.getProperty(Constants.RETAIN_PER_ITERATION_RESULTS_PROP, "false"));
+
+        Path targetPath = retainPerFork
+                ? Path.of(output, "fork-" + this.configId + "-" + System.currentTimeMillis() + "/")
+                : Path.of(output);
+        File outputDir = targetPath.toFile();
+        if (!outputDir.exists() && !outputDir.mkdirs()) {
+            throw new RuntimeException("Failed to create output directory: " + targetPath);
+        }
+        TrialExport.exportAll(targetPath, this.calculationResults, retainPerIteration);
     }
 
     @State(Scope.Thread)

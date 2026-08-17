@@ -38,13 +38,28 @@ public final class TrialExport {
         Files.writeString(checksumFile, hex + "\n", StandardCharsets.UTF_8);
     }
 
-    public static void exportAll(Path outputDir, List<List<CoreIterationResult>> results) throws Exception {
+    public static void exportAll(Path outputDir, List<List<CoreIterationResult>> results, boolean perIteration)
+            throws Exception {
+        if (outputDir == null || results == null || results.isEmpty()) {
+            return;
+        }
         exportRawObservationsTsv(outputDir, results);
         exportStatisticsTsv(outputDir, results);
         exportOccupancyTsv(outputDir, results);
         exportTransitionsTsv(outputDir, results);
         exportVectorFieldsTsv(outputDir, results);
         exportCorrelationsTsv(outputDir, results);
+
+        if (perIteration) {
+            for (int i = 0; i < results.size(); i++) {
+                List<CoreIterationResult> iterationResults = results.get(i);
+                if (iterationResults == null || iterationResults.isEmpty()) {
+                    continue;
+                }
+                Path iterDir = outputDir.resolve("iteration-" + i);
+                exportAll(iterDir, List.of(iterationResults), false);
+            }
+        }
     }
 
     /// Exports raw observation totals for each iteration and physical core to TSV.

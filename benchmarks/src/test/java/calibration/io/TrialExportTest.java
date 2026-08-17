@@ -85,6 +85,13 @@ class TrialExportTest {
 
         assertEquals("correlations.tsv", Constants.CORRELATIONS_TSV);
         assertEquals("correlations.tsv.sha256", Constants.CORRELATIONS_CHECKSUM);
+
+        assertEquals("euhedral.calibration.retainObserverData", Constants.RETAIN_OBSERVER_DATA_PROP);
+        assertEquals("euhedral.calibration.retainObserverData", Constants.RETAIN_OBSERVER_PROP);
+        assertEquals("euhedral.calibration.retainPerForkResults", Constants.RETAIN_PER_FORK_RESULTS_PROP);
+        assertEquals("euhedral.calibration.retainPerForkResults", Constants.RETAIN_PER_FORK_PROP);
+        assertEquals("euhedral.calibration.retainPerIterationResults", Constants.RETAIN_PER_ITERATION_RESULTS_PROP);
+        assertEquals("euhedral.calibration.retainPerIterationResults", Constants.RETAIN_PER_ITERATION_PROP);
     }
 
     @Test
@@ -323,5 +330,58 @@ class TrialExportTest {
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
         assertEquals(expectedHash, storedHash);
+    }
+
+    @Test
+    void testExportAllPerIterationFalseWritesOnlyTopLevel(@TempDir Path tempDir) throws Exception {
+        CoreIterationResult r0 = createPopulatedResult(0, 0);
+        CoreIterationResult r1 = createPopulatedResult(1, 0);
+        List<List<CoreIterationResult>> results = List.of(List.of(r0), List.of(r1));
+
+        TrialExport.exportAll(tempDir, results, false);
+
+        assertTrue(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.STATISTICS_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.OCCUPANCY_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.TRANSITIONS_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.VECTOR_FIELDS_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.CORRELATIONS_TSV)));
+
+        assertFalse(Files.exists(tempDir.resolve("iteration-0")));
+        assertFalse(Files.exists(tempDir.resolve("iteration-1")));
+    }
+
+    @Test
+    void testExportAllPerIterationTrueWritesPerIterationSubdirectories(@TempDir Path tempDir) throws Exception {
+        CoreIterationResult r0 = createPopulatedResult(0, 0);
+        CoreIterationResult r1 = createPopulatedResult(1, 0);
+        List<List<CoreIterationResult>> results = List.of(List.of(r0), List.of(r1));
+
+        TrialExport.exportAll(tempDir, results, true);
+
+        assertTrue(Files.exists(tempDir.resolve(Constants.RAW_OBSERVATION_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.STATISTICS_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.OCCUPANCY_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.TRANSITIONS_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.VECTOR_FIELDS_TSV)));
+        assertTrue(Files.exists(tempDir.resolve(Constants.CORRELATIONS_TSV)));
+
+        Path iter0 = tempDir.resolve("iteration-0");
+        assertTrue(Files.exists(iter0));
+        assertTrue(Files.exists(iter0.resolve(Constants.RAW_OBSERVATION_TSV)));
+        assertTrue(Files.exists(iter0.resolve(Constants.STATISTICS_TSV)));
+        assertTrue(Files.exists(iter0.resolve(Constants.OCCUPANCY_TSV)));
+        assertTrue(Files.exists(iter0.resolve(Constants.TRANSITIONS_TSV)));
+        assertTrue(Files.exists(iter0.resolve(Constants.VECTOR_FIELDS_TSV)));
+        assertTrue(Files.exists(iter0.resolve(Constants.CORRELATIONS_TSV)));
+
+        Path iter1 = tempDir.resolve("iteration-1");
+        assertTrue(Files.exists(iter1));
+        assertTrue(Files.exists(iter1.resolve(Constants.RAW_OBSERVATION_TSV)));
+        assertTrue(Files.exists(iter1.resolve(Constants.STATISTICS_TSV)));
+        assertTrue(Files.exists(iter1.resolve(Constants.OCCUPANCY_TSV)));
+        assertTrue(Files.exists(iter1.resolve(Constants.TRANSITIONS_TSV)));
+        assertTrue(Files.exists(iter1.resolve(Constants.VECTOR_FIELDS_TSV)));
+        assertTrue(Files.exists(iter1.resolve(Constants.CORRELATIONS_TSV)));
     }
 }

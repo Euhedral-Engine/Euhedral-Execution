@@ -524,4 +524,50 @@ class CalibrationRunnerTest {
 
         assertFalse(options.getOutput().hasValue());
     }
+
+    @Test
+    void buildJvmArgsIncludesRetainPerForkAndIterationWhenConfigured(@TempDir Path tempDir) throws Exception {
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        File invocationDir = tempDir.resolve("inv_0").toFile();
+        invocationDir.mkdirs();
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), true, true, true, true, true);
+
+        List<String> jvmArgs =
+                CalibrationRunner.buildJvmArgs(trial, 0, 1, "/tmp/config.json", invocationDir, artifacts);
+
+        assertTrue(jvmArgs.contains("-Deuhedral.calibration.retainObserverData=true"));
+        assertTrue(jvmArgs.contains("-Deuhedral.calibration.retainPerForkResults=true"));
+        assertTrue(jvmArgs.contains("-Deuhedral.calibration.retainPerIterationResults=true"));
+    }
+
+    @Test
+    void buildJvmArgsIncludesRetainPerForkAndIterationWhenFalse(@TempDir Path tempDir) throws Exception {
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        File invocationDir = tempDir.resolve("inv_0").toFile();
+        invocationDir.mkdirs();
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), true, false, false, false, false);
+
+        List<String> jvmArgs =
+                CalibrationRunner.buildJvmArgs(trial, 0, 1, "/tmp/config.json", invocationDir, artifacts);
+
+        assertTrue(jvmArgs.contains("-Deuhedral.calibration.retainObserverData=false"));
+        assertTrue(jvmArgs.contains("-Deuhedral.calibration.retainPerForkResults=false"));
+        assertTrue(jvmArgs.contains("-Deuhedral.calibration.retainPerIterationResults=false"));
+    }
+
+    @Test
+    void buildJvmArgsOmitsRetainPerForkAndIterationWhenNull(@TempDir Path tempDir) throws Exception {
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        File invocationDir = tempDir.resolve("inv_0").toFile();
+        invocationDir.mkdirs();
+        ArtifactConfig artifacts = new ArtifactConfig(tempDir.toString(), null, null, null, null, null);
+
+        List<String> jvmArgs =
+                CalibrationRunner.buildJvmArgs(trial, 0, 1, "/tmp/config.json", invocationDir, artifacts);
+
+        assertFalse(jvmArgs.stream().anyMatch(arg -> arg.startsWith("-Deuhedral.calibration.retainObserverData=")));
+        assertFalse(jvmArgs.stream().anyMatch(arg -> arg.startsWith("-Deuhedral.calibration.retainPerForkResults=")));
+        assertFalse(
+                jvmArgs.stream().anyMatch(arg -> arg.startsWith("-Deuhedral.calibration.retainPerIterationResults=")));
+    }
 }

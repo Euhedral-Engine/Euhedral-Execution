@@ -8,6 +8,12 @@ public final class Constants {
     public static final String TRIAL_NAME_PROP = "euhedral.calibration.trialName";
 
     public static final String OUTPUT_DIRECTORY_PROP = "euhedral.calibration.outputDirectory";
+    public static final String RETAIN_OBSERVER_DATA_PROP = "euhedral.calibration.retainObserverData";
+    public static final String RETAIN_OBSERVER_PROP = RETAIN_OBSERVER_DATA_PROP;
+    public static final String RETAIN_PER_FORK_RESULTS_PROP = "euhedral.calibration.retainPerForkResults";
+    public static final String RETAIN_PER_FORK_PROP = RETAIN_PER_FORK_RESULTS_PROP;
+    public static final String RETAIN_PER_ITERATION_RESULTS_PROP = "euhedral.calibration.retainPerIterationResults";
+    public static final String RETAIN_PER_ITERATION_PROP = RETAIN_PER_ITERATION_RESULTS_PROP;
 
     public static final String BENCHMARK_OUTPUT_LOG = "benchmark_output.log";
     public static final String RAW_BENCHMARK_OUTPUT_LOG = BENCHMARK_OUTPUT_LOG;

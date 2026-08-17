@@ -23,7 +23,7 @@
     // Optional: Number of times to repeat the trial set
     "repeatCount": 1
   },
-  // Optional: Artifact retention configuration [PARTIALLY IMPLEMENTED]
+  // Optional: Artifact retention configuration
   "artifacts": {
     // Optional: Output directory path for benchmark results
     "outputDirectory": "build/reports/benchmarks",
@@ -31,11 +31,11 @@
     "retainExpandedConfig": true,
     // Optional: Retain raw console output from benchmarks
     "retainRawBenchmarkOutput": false,
-    // Optional: Retain observer events data [NOT YET IMPLEMENTED: observer metrics are always exported when outputDirectory is set]
+    // Optional: Retain observer events data
     "retainObserverData": true,
-    // Optional: Retain per-fork results [NOT YET IMPLEMENTED]
+    // Optional: Retain per-fork results
     "retainPerForkResults": false,
-    // Optional: Retain per-iteration results [NOT YET IMPLEMENTED]
+    // Optional: Retain per-iteration results
     "retainPerIterationResults": true
   },
   // Optional: Reusable calibration benchmark profiles
