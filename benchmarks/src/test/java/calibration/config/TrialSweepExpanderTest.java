@@ -578,4 +578,153 @@ class TrialSweepExpanderTest {
         assertNotNull(candidate2.calibrationConfig());
         assertEquals(500, candidate2.calibrationConfig().workUnits());
     }
+
+    /// Verifies sweep expansion on base trial that references a decisionWeightProfile.
+    @Test
+    void sweepOnBaseTrialReferencingDecisionWeightProfile() {
+        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2),
+                4,
+                0,
+                100,
+                false,
+                1000,
+                1000,
+                "weights-test",
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig baseProfileTrial = new TrialConfig(
+                "weight-base",
+                "Weight Base Trial",
+                "profile-group",
+                "desc",
+                "hyp",
+                null,
+                null,
+                null,
+                true,
+                null,
+                1,
+                1,
+                5,
+                null,
+                null,
+                null,
+                null,
+                calConfig);
+
+        SweepParameter param =
+                new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(250), new IntNode(500)));
+        SweepConfig sweep = new SweepConfig("sweep-weight", "weight-base", List.of(param));
+
+        HarnessConfig harnessConfig = new HarnessConfig(
+                1,
+                "harness-weight",
+                "Harness Weight Profile",
+                "desc",
+                null,
+                null,
+                null,
+                null,
+                Map.of("weights-test", FragmentDecisionWeights.DEFAULT),
+                List.of(sweep),
+                null,
+                List.of(baseProfileTrial));
+
+        HarnessConfig expanded = expander.expand(harnessConfig);
+        assertEquals(3, expanded.trials().size());
+        TrialConfig base = expanded.trials().get(0);
+        assertEquals("weight-base", base.id());
+        assertNotNull(base.calibrationConfig());
+        assertNotNull(base.calibrationConfig().decisionWeights());
+
+        TrialConfig candidate1 = expanded.trials().get(1);
+        assertEquals("weight-base__sweep-weight__0", candidate1.id());
+        assertNotNull(candidate1.calibrationConfig());
+        assertNotNull(candidate1.calibrationConfig().decisionWeights());
+        assertEquals(250, candidate1.calibrationConfig().workUnits());
+
+        TrialConfig candidate2 = expanded.trials().get(2);
+        assertEquals("weight-base__sweep-weight__1", candidate2.id());
+        assertNotNull(candidate2.calibrationConfig());
+        assertNotNull(candidate2.calibrationConfig().decisionWeights());
+        assertEquals(500, candidate2.calibrationConfig().workUnits());
+    }
+
+    /// Verifies sweep expansion on base trial with calibrationProfile referencing decisionWeightProfile.
+    @Test
+    void sweepOnBaseTrialWithCalibrationProfileReferencingDecisionWeightProfile() {
+        CalibrationBenchmarkConfig profileCalConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2),
+                4,
+                0,
+                100,
+                false,
+                1000,
+                1000,
+                "weights-test",
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig baseTrial = new TrialConfig(
+                "chained-base",
+                "Chained Base Trial",
+                "profile-group",
+                "desc",
+                "hyp",
+                null,
+                null,
+                true,
+                1,
+                1,
+                5,
+                null,
+                "cal-profile");
+
+        SweepParameter param =
+                new SweepParameter("/calibrationConfig/parallelSources", List.of(new IntNode(2), new IntNode(8)));
+        SweepConfig sweep = new SweepConfig("sweep-chained", "chained-base", List.of(param));
+
+        HarnessConfig harnessConfig = new HarnessConfig(
+                1,
+                "harness-chained",
+                "Harness Chained",
+                "desc",
+                null,
+                null,
+                null,
+                Map.of("cal-profile", profileCalConfig),
+                Map.of("weights-test", FragmentDecisionWeights.DEFAULT),
+                List.of(sweep),
+                null,
+                List.of(baseTrial));
+
+        HarnessConfig expanded = expander.expand(harnessConfig);
+        assertEquals(3, expanded.trials().size());
+        TrialConfig base = expanded.trials().get(0);
+        assertEquals("chained-base", base.id());
+        assertNotNull(base.calibrationConfig());
+        assertNotNull(base.calibrationConfig().decisionWeights());
+
+        TrialConfig candidate1 = expanded.trials().get(1);
+        assertEquals("chained-base__sweep-chained__0", candidate1.id());
+        assertNotNull(candidate1.calibrationConfig());
+        assertNotNull(candidate1.calibrationConfig().decisionWeights());
+        assertEquals(2, candidate1.calibrationConfig().parallelSources());
+
+        TrialConfig candidate2 = expanded.trials().get(2);
+        assertEquals("chained-base__sweep-chained__1", candidate2.id());
+        assertNotNull(candidate2.calibrationConfig());
+        assertNotNull(candidate2.calibrationConfig().decisionWeights());
+        assertEquals(8, candidate2.calibrationConfig().parallelSources());
+    }
 }

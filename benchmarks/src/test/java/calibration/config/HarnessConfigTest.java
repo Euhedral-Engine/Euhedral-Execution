@@ -1773,6 +1773,320 @@ class HarnessConfigTest {
         assertEquals(config, roundTrip);
     }
 
+    /// Verifies trial with inline calibrationConfig referencing decisionWeightProfile parses, resolves, and round-trips correctly.
+    @Test
+    void parseTrialReferencingDecisionWeightProfileAndResolve() throws Exception {
+        String json = """
+            {
+              "decisionWeightProfiles": {
+                "weights-a": {
+                  "idleContentionThresholds": { "xsContention": 50000, "sContention": 50000, "mContention": 50000, "hContention": 50000 },
+                  "idleBodyCostWeights": [],
+                  "idleTimeNs": [],
+                  "execContentionThresholds": { "xsContention": 50000, "sContention": 50000, "mContention": 50000, "hContention": 50000 },
+                  "execBodyCostWeights": [],
+                  "executionPolicies": []
+                }
+              },
+              "trials": [
+                {
+                  "id": "trial-001",
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5,
+                  "calibrationConfig": {
+                    "cpuSet": [1, 2, 3, 4],
+                    "parallelSources": 4,
+                    "orderedSources": 2,
+                    "workUnits": 100,
+                    "randomizeWork": true,
+                    "totalRequiredExecutions": 1000000,
+                    "invocationTimeoutMillis": 60000,
+                    "decisionWeightProfile": "weights-a",
+                    "rawSampleLimit": 1024,
+                    "observeCycleStart": false,
+                    "observeBatchProgress": false,
+                    "observeBatchComplete": false,
+                    "observeRawBodyCost": false,
+                    "observeIdleDecision": false,
+                    "observeExecDecision": false
+                  }
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertEquals(1, config.trials().size());
+        TrialConfig trial = config.trials().getFirst();
+        assertNotNull(trial.calibrationConfig());
+        assertEquals("weights-a", trial.calibrationConfig().decisionWeightProfile());
+        assertNull(trial.calibrationConfig().decisionWeights());
+
+        HarnessConfig resolved = config.resolveCalibrationProfiles();
+        assertEquals(1, resolved.trials().size());
+        TrialConfig resolvedTrial = resolved.trials().getFirst();
+        assertNotNull(resolvedTrial.calibrationConfig());
+        assertEquals("weights-a", resolvedTrial.calibrationConfig().decisionWeightProfile());
+        assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
+        assertEquals(
+                50000,
+                resolvedTrial.calibrationConfig().decisionWeights().idleContentionThresholds().xsContention());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies calibrationProfile referencing decisionWeightProfile resolves chained profiles correctly.
+    @Test
+    void parseCalibrationProfileReferencingDecisionWeightProfileAndResolve() throws Exception {
+        String json = """
+            {
+              "decisionWeightProfiles": {
+                "weights-nested": {
+                  "idleContentionThresholds": { "xsContention": 77777, "sContention": 77777, "mContention": 77777, "hContention": 77777 },
+                  "idleBodyCostWeights": [],
+                  "idleTimeNs": [],
+                  "execContentionThresholds": { "xsContention": 77777, "sContention": 77777, "mContention": 77777, "hContention": 77777 },
+                  "execBodyCostWeights": [],
+                  "executionPolicies": []
+                }
+              },
+              "calibrationProfiles": {
+                "profile-chained": {
+                  "cpuSet": [1, 2],
+                  "parallelSources": 8,
+                  "orderedSources": 1,
+                  "workUnits": 50,
+                  "randomizeWork": false,
+                  "totalRequiredExecutions": 500000,
+                  "invocationTimeoutMillis": 30000,
+                  "decisionWeightProfile": "weights-nested",
+                  "rawSampleLimit": 512,
+                  "observeCycleStart": false,
+                  "observeBatchProgress": false,
+                  "observeBatchComplete": false,
+                  "observeRawBodyCost": false,
+                  "observeIdleDecision": false,
+                  "observeExecDecision": false
+                }
+              },
+              "trials": [
+                {
+                  "id": "trial-chained",
+                  "calibrationProfile": "profile-chained",
+                  "forks": 1,
+                  "warmups": 1,
+                  "iterations": 5
+                }
+              ]
+            }
+            """;
+
+        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
+        assertEquals(1, config.trials().size());
+        TrialConfig trial = config.trials().getFirst();
+        assertEquals("profile-chained", trial.calibrationProfile());
+        assertNull(trial.calibrationConfig());
+
+        HarnessConfig resolved = config.resolveCalibrationProfiles();
+        assertEquals(1, resolved.trials().size());
+        TrialConfig resolvedTrial = resolved.trials().getFirst();
+        assertNotNull(resolvedTrial.calibrationConfig());
+        assertEquals(8, resolvedTrial.calibrationConfig().parallelSources());
+        assertEquals(50, resolvedTrial.calibrationConfig().workUnits());
+        assertEquals("weights-nested", resolvedTrial.calibrationConfig().decisionWeightProfile());
+        assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
+        assertEquals(
+                77777,
+                resolvedTrial.calibrationConfig().decisionWeights().idleContentionThresholds().xsContention());
+
+        String reSerialized = mapper.writeValueAsString(config);
+        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
+        assertEquals(config, roundTrip);
+    }
+
+    /// Verifies error when trial references a non-existent decisionWeightProfile.
+    @Test
+    void rejectMissingDecisionWeightProfileInTrial() {
+        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2),
+                4,
+                0,
+                100,
+                false,
+                1000,
+                1000,
+                "missing-weights",
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig trial = new TrialConfig(
+                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null,
+                null, calConfig);
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of("weights-1", FragmentDecisionWeights.DEFAULT),
+                        List.of(trial)));
+    }
+
+    /// Verifies error when calibrationProfile references a non-existent decisionWeightProfile.
+    @Test
+    void rejectMissingDecisionWeightProfileInCalibrationProfile() {
+        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2),
+                4,
+                0,
+                100,
+                false,
+                1000,
+                1000,
+                "missing-weights",
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig trial = new TrialConfig(
+                "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new HarnessConfig(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        Map.of("profile-1", calConfig),
+                        Map.of("weights-1", FragmentDecisionWeights.DEFAULT),
+                        List.of(trial)));
+    }
+
+    /// Verifies error when trial references a decisionWeightProfile but decisionWeightProfiles is null.
+    @Test
+    void rejectDecisionWeightProfileReferenceWhenProfilesNull() {
+        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
+                List.of(1, 2),
+                4,
+                0,
+                100,
+                false,
+                1000,
+                1000,
+                "weights-1",
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+        TrialConfig trial = new TrialConfig(
+                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null,
+                null, calConfig);
+
+        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
+    }
+
+    /// Verifies blank decisionWeightProfile names in CalibrationBenchmarkConfig are rejected.
+    @Test
+    void rejectBlankDecisionWeightProfileInCalibrationBenchmarkConfig() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        4,
+                        0,
+                        100,
+                        false,
+                        1000,
+                        1000,
+                        "   ",
+                        1024,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false));
+    }
+
+    /// Verifies CalibrationBenchmarkConfig without decisionWeights or decisionWeightProfile is rejected.
+    @Test
+    void rejectCalibrationBenchmarkConfigWithoutWeightsOrProfile() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        4,
+                        0,
+                        100,
+                        false,
+                        1000,
+                        1000,
+                        (String) null,
+                        (FragmentDecisionWeights) null,
+                        1024,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false));
+    }
+
+    /// Verifies CalibrationBenchmarkConfig withDecisionWeights and withDecisionWeightProfile copy helpers.
+    @Test
+    void testCalibrationBenchmarkConfigWithDecisionWeightsAndProfile() {
+        CalibrationBenchmarkConfig config = new CalibrationBenchmarkConfig(
+                List.of(1, 2),
+                4,
+                0,
+                100,
+                false,
+                1000,
+                1000,
+                "profile-a",
+                1024,
+                false,
+                false,
+                false,
+                false,
+                false,
+                false);
+
+        assertEquals("profile-a", config.decisionWeightProfile());
+        assertNull(config.decisionWeights());
+
+        CalibrationBenchmarkConfig withWeights = config.withDecisionWeights(FragmentDecisionWeights.DEFAULT);
+        assertEquals("profile-a", withWeights.decisionWeightProfile());
+        assertEquals(FragmentDecisionWeights.DEFAULT, withWeights.decisionWeights());
+
+        CalibrationBenchmarkConfig withNewProfile = withWeights.withDecisionWeightProfile("profile-b");
+        assertEquals("profile-b", withNewProfile.decisionWeightProfile());
+        assertEquals(FragmentDecisionWeights.DEFAULT, withNewProfile.decisionWeights());
+    }
+
     /// Verifies error when trial references a non-existent calibrationProfile.
     @Test
     void rejectMissingCalibrationProfileReference() {
@@ -1821,7 +2135,7 @@ class HarnessConfigTest {
                         null, null));
     }
 
-    /// Verifies example_harness_config.json parses, resolves calibration profiles, expands sweeps, and round-trips.
+    /// Verifies example_harness_config.json parses, resolves calibration and decision weight profiles, expands sweeps, and round-trips.
     @Test
     void parseExampleHarnessConfigAndVerifyCalibrationProfiles() throws Exception {
         File file = new File("src/main/presets/example_harness_config.json");
@@ -1838,6 +2152,16 @@ class HarnessConfigTest {
         assertTrue(config.calibrationProfiles().containsKey("standard-calibration"));
         assertTrue(config.calibrationProfiles().containsKey("high-contention-calibration"));
 
+        assertNotNull(config.decisionWeightProfiles());
+        assertEquals(2, config.decisionWeightProfiles().size());
+        assertTrue(config.decisionWeightProfiles().containsKey("default-weights"));
+        assertTrue(config.decisionWeightProfiles().containsKey("aggressive-weights"));
+        assertEquals(
+                "aggressive-weights",
+                config.calibrationProfiles().get("high-contention-calibration").decisionWeightProfile());
+        assertNull(
+                config.calibrationProfiles().get("high-contention-calibration").decisionWeights());
+
         assertEquals(2, config.trials().size());
         TrialConfig trial1 = config.trials().get(0);
         TrialConfig trial2 = config.trials().get(1);
@@ -1849,12 +2173,17 @@ class HarnessConfigTest {
         assertNotNull(resolved.trials().get(1).calibrationConfig());
         assertEquals(11, resolved.trials().get(1).calibrationConfig().parallelSources());
         assertEquals(24, resolved.trials().get(1).calibrationConfig().workUnits());
+        assertNotNull(resolved.trials().get(1).calibrationConfig().decisionWeights());
+        assertEquals(
+                1000000,
+                resolved.trials().get(1).calibrationConfig().decisionWeights().idleContentionThresholds().xsContention());
 
         HarnessConfig expanded = TrialSweepExpander.expandHarnessConfig(config);
         // Base trial-001 is swept into 3 candidates, plus trial-001 and trial-002 -> 5 trials
         assertEquals(5, expanded.trials().size());
         for (TrialConfig t : expanded.trials()) {
             assertNotNull(t.calibrationConfig(), "All expanded trials must have calibrationConfig populated");
+            assertNotNull(t.calibrationConfig().decisionWeights(), "All expanded trials must have decisionWeights populated");
         }
 
         String reSerialized = mapper.writeValueAsString(config);
