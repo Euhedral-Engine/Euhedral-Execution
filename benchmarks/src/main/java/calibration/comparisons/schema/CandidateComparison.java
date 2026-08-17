@@ -11,7 +11,7 @@ public record CandidateComparison(
         @NonNull RunIdentity candidate,
         @NonNull ComparisonCompatibility compatibility,
         @NonNull List<ConfigurationDifference> configurationDifferences,
-        @NonNull PerformanceComparison performance,
+        @Nullable PerformanceComparison performance,
         @NonNull List<CoreComparison> cores,
         @Nullable AggregateComparison aggregate) {
 
@@ -20,7 +20,6 @@ public record CandidateComparison(
         Objects.requireNonNull(candidate, "candidate must not be null");
         Objects.requireNonNull(compatibility, "compatibility must not be null");
         configurationDifferences = configurationDifferences == null ? List.of() : List.copyOf(configurationDifferences);
-        Objects.requireNonNull(performance, "performance must not be null");
         cores = cores == null ? List.of() : List.copyOf(cores);
     }
 }

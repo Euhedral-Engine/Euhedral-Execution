@@ -2,6 +2,7 @@ package calibration.statistics.iteration;
 
 import calibration.statistics.DescriptiveSummary;
 import calibration.statistics.QuantileSummary;
+import java.util.Collection;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
@@ -37,6 +38,14 @@ public record ScalarSummary(
             doubleValues[i] = (double) values[i];
         }
         return of(doubleValues);
+    }
+
+    public static ScalarSummary of(@NonNull Collection<Double> values) {
+        Objects.requireNonNull(values, "values must not be null");
+        if (values.isEmpty()) {
+            return EMPTY;
+        }
+        return new ScalarSummary(DescriptiveSummary.of(values), QuantileSummary.of(values));
     }
 
     public boolean isEmpty() {

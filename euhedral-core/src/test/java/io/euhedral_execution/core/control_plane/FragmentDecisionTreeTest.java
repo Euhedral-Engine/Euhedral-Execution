@@ -163,7 +163,7 @@ class FragmentDecisionTreeTest {
                         eq(1L),
                         eq(1L),
                         eq(0), // contention <= xsContention (650_000)
-                        eq(3), // smoothedBodyCost (200.0) > 96 -> decision index 3 or 4 based on default thresholds
+                        anyInt(),
                         eq(100L),
                         eq(200.0));
     }

@@ -184,10 +184,10 @@ final class FragmentDecisionTree {
             return this.executionPath;
         }
 
-        if(this.executionPath == ExecutionPath.SKIP_THEN_DIRECT) {
+        if (this.executionPath == ExecutionPath.SKIP_THEN_DIRECT) {
             this.executionPath = ExecutionPath.DIRECT;
             return this.executionPath;
-        } else if(this.executionPath == ExecutionPath.SKIP_THEN_STAGED) {
+        } else if (this.executionPath == ExecutionPath.SKIP_THEN_STAGED) {
             this.executionPath = ExecutionPath.STAGED;
             return this.executionPath;
         }
