@@ -15,6 +15,7 @@ import calibration.benchmarks.CalibrationBenchmark;
 import calibration.config.ArtifactConfig;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessRunOptions;
+import calibration.config.ProfileLibraryLoader;
 import calibration.config.SweepConfig;
 import calibration.config.TrialConfig;
 import calibration.config.TrialSweepExpander;
@@ -68,7 +69,7 @@ public class CalibrationRunner {
     static HarnessConfig loadConfig(String path, ObjectMapper mapper) throws Exception {
         //noinspection JvmTaintAnalysis
         File configFile = new File(path).getCanonicalFile();
-        return mapper.readValue(configFile, HarnessConfig.class);
+        return ProfileLibraryLoader.loadAndResolve(configFile, mapper);
     }
 
     static List<TrialConfig> resolveTrials(HarnessConfig harnessConfig, ObjectMapper mapper) {

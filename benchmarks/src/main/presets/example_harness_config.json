@@ -38,6 +38,13 @@
     // Optional: Retain per-iteration results
     "retainPerIterationResults": true
   },
+  // Optional: External profile library imports
+  "imports": [
+    {
+      "path": "example_profile_library.json",
+      "namespace": "common"
+    }
+  ],
   // Optional: Reusable calibration benchmark profiles
   "calibrationProfiles": {
     "standard-calibration": {
@@ -98,7 +105,7 @@
       "totalRequiredExecutions": 32000000,
       "invocationTimeoutMillis": 6000,
       // Optional: Reusable decision weights profile reference
-      "decisionWeightProfile": "aggressive-weights",
+      "decisionWeightProfile": "common.imported-weights",
       "rawSampleLimit": 1024,
       "observeCycleStart": false,
       "observeBatchProgress": false,
@@ -334,7 +341,7 @@
         "--enable-native-access=ALL-UNNAMED"
       ],
       // Optional: Reusable calibration profile reference
-      "calibrationProfile": "high-contention-calibration"
+      "calibrationProfile": "common.imported-calibration"
     }
   ]
 }

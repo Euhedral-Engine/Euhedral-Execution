@@ -19,6 +19,9 @@ Before creating or modifying trial configurations, inspect the canonical example
 `benchmarks/src/main/presets/example_harness_config.json`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/presets/example_harness_config.json)
   is the reference configuration illustrating all available schema features and options.
 - [
+`benchmarks/src/main/presets/example_profile_library.json`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/presets/example_profile_library.json)
+  is an example reusable profile library containing calibration and decision weight profiles.
+- [
 `benchmarks/src/main/presets/exec_contention_band_calibration.json`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/presets/exec_contention_band_calibration.json)
   is an example calibration preset for sweeping execution policies under heavy contention.
 
@@ -26,26 +29,39 @@ Before creating or modifying trial configurations, inspect the canonical example
 
 A harness configuration file is parsed into
 [`HarnessConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/HarnessConfig.java)
-and consists of four primary sections:
+and consists of the following primary sections:
 
 ```text
 HarnessConfig
++-- imports: external profile library imports (namespaced)
 +-- runOptions: global execution control (randomization, repeats, failFast)
 +-- artifacts: output paths and retention toggles
++-- calibrationProfiles: local reusable calibration configurations
++-- decisionWeightProfiles: local reusable decision weight matrices
 +-- sweeps: parameter variation declarations (Cartesian expansion)
 +-- trials: explicit trial definitions and benchmark configurations
 ```
 
 #### Key Configuration Fields
 
-1. **`runOptions`**
+1. **`imports`**
+   ([`ProfileImport`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/ProfileImport.java)):
+   - Declares external profile library files imported under explicit namespaces.
+   - Each import specifies `path` (relative to the declaring JSON file or absolute) and a non-blank `namespace` without dots.
+   - Imported libraries are parsed into
+     [`ProfileLibrary`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/ProfileLibrary.java)
+     which may contain nested `imports`, `calibrationProfiles`, and `decisionWeightProfiles`.
+   - Imported symbols are referenced as `<namespace>.<profileName>` (e.g. `common.uniform-xs` or `host.baseline`). Nested library imports compose namespaces explicitly (e.g. `common.base.baseline`).
+   - Import cycles (`a.json -> b.json -> a.json`) are detected via canonical paths and rejected. Loaded libraries are cached per resolution operation.
+
+2. **`runOptions`**
    ([`HarnessRunOptions`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/HarnessRunOptions.java)):
    - `randomizeTrialOrder` (`boolean`): Shuffles trial execution order across the run.
    - `randomSeed` (`long`): Deterministic PRNG seed for reproducibility.
    - `failFast` (`boolean`): If `true`, aborts the entire suite on first trial failure; otherwise accumulates failures.
    - `repeatCount` (`int`): Number of full passes through all resolved trials.
 
-2. **`artifacts`**
+3. **`artifacts`**
    ([`ArtifactConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/ArtifactConfig.java)):
    - `outputDirectory` (`string`): Target directory for benchmark telemetry exports.
    - `retainExpandedConfig` (`boolean`): Writes `trial_config.json` into each trial's output folder.
@@ -54,20 +70,21 @@ HarnessConfig
    - `retainPerForkResults` (`boolean`): Retains dedicated per-fork subdirectories (`fork-.../`).
    - `retainPerIterationResults` (`boolean`): Retains dedicated per-iteration subdirectories (`iteration-.../`).
 
-3. **`sweeps`**
+4. **`sweeps`**
    ([`SweepConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/SweepConfig.java)):
    - Declares parameter sweeps against a `baseTrialId`.
    - Expanded into concrete trial variations via Cartesian product by
      [`TrialSweepExpander`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/TrialSweepExpander.java).
    - Parameters use JSON Pointers (e.g. `/calibrationConfig/decisionWeights/executionPolicies` or `/calibrationConfig/parallelSources`).
 
-4. **`trials`**
+5. **`trials`**
    ([`TrialConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/TrialConfig.java)):
    - `id`, `name`, `group`, `description`, `hypothesis`: Trial metadata and grouping.
    - `enabled` (`boolean`): Allows selective disabling of individual base trials.
    - `forks`, `warmups`, `iterations`: JMH execution parameters.
    - `warmupTime`, `measurementTime`: JMH duration strings (e.g. `"2s"`, `"5s"`).
    - `jvmArgs`: Extra JVM flags passed to forked benchmark processes.
+   - `calibrationProfile` (`string`): Reference to local or namespaced imported calibration profile (e.g. `"common.uniform-xs"`).
    - `calibrationConfig`
      ([`CalibrationBenchmarkConfig`](file:///home/brandon/src/Euhedral-Execution/benchmarks/src/main/java/calibration/config/CalibrationBenchmarkConfig.java)):
      - `cpuSet`: List of CPU IDs for fragment worker pinning (e.g. `[1, 2, 3, 4]`).
@@ -78,6 +95,7 @@ HarnessConfig
      - `totalRequiredExecutions`: Frame execution target per JMH invocation.
      - `invocationTimeoutMillis`: Execution timeout guard.
      - `rawSampleLimit`: Circular buffer capacity for raw samples (power-of-two).
+     - `decisionWeightProfile` (`string`): Reference to local or namespaced imported decision weight profile (e.g. `"host.baseline"`).
      - `decisionWeights`: 28 fixed weights defining thresholds, costs, park times, and execution policies.
      - Observation Toggles:
        - `observeCycleStart`: Fragment cycle boundary metrics.

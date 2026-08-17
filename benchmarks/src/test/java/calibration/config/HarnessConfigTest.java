@@ -1773,7 +1773,8 @@ class HarnessConfigTest {
         assertEquals(config, roundTrip);
     }
 
-    /// Verifies trial with inline calibrationConfig referencing decisionWeightProfile parses, resolves, and round-trips correctly.
+    /// Verifies trial with inline calibrationConfig referencing decisionWeightProfile parses, resolves, and round-trips
+    /// correctly.
     @Test
     void parseTrialReferencingDecisionWeightProfileAndResolve() throws Exception {
         String json = """
@@ -1831,7 +1832,11 @@ class HarnessConfigTest {
         assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
         assertEquals(
                 50000,
-                resolvedTrial.calibrationConfig().decisionWeights().idleContentionThresholds().xsContention());
+                resolvedTrial
+                        .calibrationConfig()
+                        .decisionWeights()
+                        .idleContentionThresholds()
+                        .xsContention());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
@@ -1900,7 +1905,11 @@ class HarnessConfigTest {
         assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
         assertEquals(
                 77777,
-                resolvedTrial.calibrationConfig().decisionWeights().idleContentionThresholds().xsContention());
+                resolvedTrial
+                        .calibrationConfig()
+                        .decisionWeights()
+                        .idleContentionThresholds()
+                        .xsContention());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
@@ -1927,8 +1936,8 @@ class HarnessConfigTest {
                 false,
                 false);
         TrialConfig trial = new TrialConfig(
-                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null,
-                null, calConfig);
+                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null, null,
+                calConfig);
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -1964,8 +1973,8 @@ class HarnessConfigTest {
                 false,
                 false,
                 false);
-        TrialConfig trial = new TrialConfig(
-                "trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
+        TrialConfig trial =
+                new TrialConfig("trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -2002,8 +2011,8 @@ class HarnessConfigTest {
                 false,
                 false);
         TrialConfig trial = new TrialConfig(
-                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null,
-                null, calConfig);
+                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null, null,
+                calConfig);
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
     }
@@ -2135,7 +2144,8 @@ class HarnessConfigTest {
                         null, null));
     }
 
-    /// Verifies example_harness_config.json parses, resolves calibration and decision weight profiles, expands sweeps, and round-trips.
+    /// Verifies example_harness_config.json parses, resolves calibration and decision weight profiles, expands sweeps,
+    /// and round-trips.
     @Test
     void parseExampleHarnessConfigAndVerifyCalibrationProfiles() throws Exception {
         File file = new File("src/main/presets/example_harness_config.json");
@@ -2147,6 +2157,11 @@ class HarnessConfigTest {
         HarnessConfig config = mapper.readValue(file, HarnessConfig.class);
         assertEquals(1, config.schemaVersion());
         assertEquals("example-harness-config", config.id());
+        assertNotNull(config.imports());
+        assertEquals(1, config.imports().size());
+        assertEquals("common", config.imports().getFirst().namespace());
+        assertEquals("example_profile_library.json", config.imports().getFirst().path());
+
         assertNotNull(config.calibrationProfiles());
         assertEquals(2, config.calibrationProfiles().size());
         assertTrue(config.calibrationProfiles().containsKey("standard-calibration"));
@@ -2157,7 +2172,7 @@ class HarnessConfigTest {
         assertTrue(config.decisionWeightProfiles().containsKey("default-weights"));
         assertTrue(config.decisionWeightProfiles().containsKey("aggressive-weights"));
         assertEquals(
-                "aggressive-weights",
+                "common.imported-weights",
                 config.calibrationProfiles().get("high-contention-calibration").decisionWeightProfile());
         assertNull(
                 config.calibrationProfiles().get("high-contention-calibration").decisionWeights());
@@ -2166,24 +2181,38 @@ class HarnessConfigTest {
         TrialConfig trial1 = config.trials().get(0);
         TrialConfig trial2 = config.trials().get(1);
         assertNotNull(trial1.calibrationConfig());
-        assertEquals("high-contention-calibration", trial2.calibrationProfile());
+        assertEquals("common.imported-calibration", trial2.calibrationProfile());
         assertNull(trial2.calibrationConfig());
 
-        HarnessConfig resolved = config.resolveCalibrationProfiles();
+        HarnessConfig withImports = config.resolveImports(file, mapper);
+        assertNotNull(withImports.calibrationProfiles());
+        assertEquals(3, withImports.calibrationProfiles().size());
+        assertTrue(withImports.calibrationProfiles().containsKey("common.imported-calibration"));
+        assertNotNull(withImports.decisionWeightProfiles());
+        assertEquals(3, withImports.decisionWeightProfiles().size());
+        assertTrue(withImports.decisionWeightProfiles().containsKey("common.imported-weights"));
+
+        HarnessConfig resolved = withImports.resolveCalibrationProfiles();
         assertNotNull(resolved.trials().get(1).calibrationConfig());
-        assertEquals(11, resolved.trials().get(1).calibrationConfig().parallelSources());
-        assertEquals(24, resolved.trials().get(1).calibrationConfig().workUnits());
+        assertEquals(8, resolved.trials().get(1).calibrationConfig().parallelSources());
+        assertEquals(50, resolved.trials().get(1).calibrationConfig().workUnits());
         assertNotNull(resolved.trials().get(1).calibrationConfig().decisionWeights());
         assertEquals(
-                1000000,
-                resolved.trials().get(1).calibrationConfig().decisionWeights().idleContentionThresholds().xsContention());
+                650000,
+                resolved.trials()
+                        .get(1)
+                        .calibrationConfig()
+                        .decisionWeights()
+                        .idleContentionThresholds()
+                        .xsContention());
 
-        HarnessConfig expanded = TrialSweepExpander.expandHarnessConfig(config);
+        HarnessConfig expanded = TrialSweepExpander.expandHarnessConfig(withImports);
         // Base trial-001 is swept into 3 candidates, plus trial-001 and trial-002 -> 5 trials
         assertEquals(5, expanded.trials().size());
         for (TrialConfig t : expanded.trials()) {
             assertNotNull(t.calibrationConfig(), "All expanded trials must have calibrationConfig populated");
-            assertNotNull(t.calibrationConfig().decisionWeights(), "All expanded trials must have decisionWeights populated");
+            assertNotNull(
+                    t.calibrationConfig().decisionWeights(), "All expanded trials must have decisionWeights populated");
         }
 
         String reSerialized = mapper.writeValueAsString(config);

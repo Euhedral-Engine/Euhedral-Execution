@@ -90,6 +90,7 @@ public class TrialSweepExpander {
                 resolvedConfig.name(),
                 resolvedConfig.description(),
                 resolvedConfig.labels(),
+                resolvedConfig.imports(),
                 resolvedConfig.runOptions(),
                 resolvedConfig.artifacts(),
                 resolvedConfig.calibrationProfiles(),
