@@ -805,4 +805,48 @@ class ComparisonExportTest {
         assertEquals("NaN", tokens[9]);
         assertEquals("NaN", tokens[10]); // meanDelta
     }
+
+    @Test
+    void testFormatDoubleFullDecimalRepresentation() {
+        assertEquals("NaN", ComparisonExport.formatDouble(Double.NaN));
+        assertEquals("Infinity", ComparisonExport.formatDouble(Double.POSITIVE_INFINITY));
+        assertEquals("-Infinity", ComparisonExport.formatDouble(Double.NEGATIVE_INFINITY));
+        assertEquals("0.0", ComparisonExport.formatDouble(0.0));
+        assertEquals("12345.678", ComparisonExport.formatDouble(12345.678));
+        assertEquals("418189300", ComparisonExport.formatDouble(418189300.0));
+        assertEquals("0.00000123", ComparisonExport.formatDouble(0.00000123));
+        assertTrue(!ComparisonExport.formatDouble(418189300.0).contains("E"), "Must not contain scientific exponent");
+        assertTrue(!ComparisonExport.formatDouble(0.00000123).contains("E"), "Must not contain scientific exponent");
+    }
+
+    @Test
+    void testComparisonSummaryWritesFullDecimalNumbers(@TempDir Path tempDir) throws Exception {
+        CompletedRun baseRun = createCompletedRun(
+                "base-1", "Base", "group", "path/base", null, 50000000.0, 0);
+        CompletedRun candRun = createCompletedRun(
+                "cand-1", "Cand", "group", "path/cand", null, 75000000.0, 10);
+
+        PerformanceComparison perf = PerformanceComparisonCalculator.compare(
+                baseRun, candRun, ComparisonCompatibility.compatible());
+
+        CandidateComparison comp = new CandidateComparison(
+                baseRun.identity(),
+                candRun.identity(),
+                ComparisonCompatibility.compatible(),
+                List.of(),
+                perf,
+                List.of(),
+                null);
+
+        ComparisonResult result = new ComparisonResult(baseRun, List.of(candRun), List.of(comp));
+        ComparisonExport.exportComparisonSummaryTsv(tempDir, result);
+
+        Path summaryTsv = tempDir.resolve(Constants.COMPARISON_SUMMARY_TSV);
+        String content = Files.readString(summaryTsv, StandardCharsets.UTF_8);
+
+        assertTrue(!content.contains("E+"), "Summary TSV should not have scientific notation E+");
+        assertTrue(!content.contains("E-"), "Summary TSV should not have scientific notation E-");
+        assertTrue(content.contains("50000000") || content.contains("51250000"),
+                "Should contain full decimal number: " + content);
+    }
 }

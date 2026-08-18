@@ -14,6 +14,9 @@ public record TrialOrigin(
         @Nullable Integer candidateIndex,
         @Nullable Integer sampleIndex) {
 
+    public TrialOrigin(@NonNull OriginType type) {
+        this(type, null, 1738L, 0);
+    }
     /// Convenience constructor for TrialOrigin without sampleIndex.
     public TrialOrigin(
             @NonNull OriginType type,

@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
@@ -262,6 +263,7 @@ public class CalibrationRunner {
         opt = opt.forks(trial.forks());
         opt = opt.warmupIterations(trial.warmups());
         opt = opt.measurementIterations(trial.iterations());
+        opt = opt.timeUnit(TimeUnit.SECONDS);
         if (trial.warmupTime() != null) {
             opt = opt.warmupTime(TimeValue.fromString(trial.warmupTime()));
         }

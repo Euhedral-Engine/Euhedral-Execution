@@ -540,7 +540,7 @@ public record TrialConfig(
         this.tags = tags;
         this.labels = labels;
         this.enabled = enabled;
-        this.origin = origin;
+        this.origin = origin == null ? new TrialOrigin(OriginType.MANUAL) : origin;
         this.forks = forks;
         this.warmups = warmups;
         this.iterations = iterations;

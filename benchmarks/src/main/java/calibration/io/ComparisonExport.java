@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import java.io.BufferedWriter;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -145,17 +146,17 @@ public final class ComparisonExport {
                     writer.write(baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
-                            + perf.baselineForkSummary().mean() + "\t"
-                            + perf.candidateForkSummary().mean() + "\t"
+                            + formatDouble(perf.baselineForkSummary().mean()) + "\t"
+                            + formatDouble(perf.candidateForkSummary().mean()) + "\t"
                             + sanitizeString(perf.baseline().scoreUnit()) + "\t"
-                            + absDelta + "\t"
-                            + relDelta + "\t"
-                            + perf.baselineForkSummary().variance() + "\t"
-                            + perf.candidateForkSummary().variance() + "\t"
-                            + perf.baselineForkSummary().standardDeviation() + "\t"
-                            + perf.candidateForkSummary().standardDeviation() + "\t"
-                            + perf.baselineForkSummary().coefficientOfVariation() + "\t"
-                            + perf.candidateForkSummary().coefficientOfVariation() + "\t"
+                            + formatDouble(absDelta) + "\t"
+                            + formatDouble(relDelta) + "\t"
+                            + formatDouble(perf.baselineForkSummary().variance()) + "\t"
+                            + formatDouble(perf.candidateForkSummary().variance()) + "\t"
+                            + formatDouble(perf.baselineForkSummary().standardDeviation()) + "\t"
+                            + formatDouble(perf.candidateForkSummary().standardDeviation()) + "\t"
+                            + formatDouble(perf.baselineForkSummary().coefficientOfVariation()) + "\t"
+                            + formatDouble(perf.candidateForkSummary().coefficientOfVariation()) + "\t"
                             + perf.baselineForkSummary().count() + "\t"
                             + perf.candidateForkSummary().count() + "\t"
                             + outcome + "\n");
@@ -164,17 +165,17 @@ public final class ComparisonExport {
                     writer.write(baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
                             + "" + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
-                            + Double.NaN + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
+                            + formatDouble(Double.NaN) + "\t"
                             + 0 + "\t"
                             + 0 + "\t"
                             + outcome + "\n");
@@ -298,42 +299,42 @@ public final class ComparisonExport {
                 + metric + "\t"
                 + sc.baseline().count() + "\t"
                 + sc.candidate().count() + "\t"
-                + sc.baseline().mean() + "\t"
-                + sc.candidate().mean() + "\t"
-                + sc.meanDelta() + "\t"
-                + sc.baseline().median() + "\t"
-                + sc.candidate().median() + "\t"
-                + sc.medianDelta() + "\t"
-                + sc.baseline().variance() + "\t"
-                + sc.candidate().variance() + "\t"
-                + sc.varianceDelta() + "\t"
-                + sc.baseline().standardDeviation() + "\t"
-                + sc.candidate().standardDeviation() + "\t"
-                + sc.standardDeviationDelta() + "\t"
-                + sc.baseline().coefficientOfVariation() + "\t"
-                + sc.candidate().coefficientOfVariation() + "\t"
-                + sc.cvDelta() + "\t"
-                + sc.baseline().p25() + "\t"
-                + sc.candidate().p25() + "\t"
-                + sc.p25Delta() + "\t"
-                + sc.baseline().p50() + "\t"
-                + sc.candidate().p50() + "\t"
-                + sc.p50Delta() + "\t"
-                + sc.baseline().p75() + "\t"
-                + sc.candidate().p75() + "\t"
-                + sc.p75Delta() + "\t"
-                + sc.baseline().p95() + "\t"
-                + sc.candidate().p95() + "\t"
-                + sc.p95Delta() + "\t"
-                + sc.baseline().iqr() + "\t"
-                + sc.candidate().iqr() + "\t"
-                + sc.iqrDelta() + "\t"
-                + sc.baseline().normalizedIqr() + "\t"
-                + sc.candidate().normalizedIqr() + "\t"
-                + sc.normalizedIqrDelta() + "\t"
-                + sc.baseline().p95ToP50Ratio() + "\t"
-                + sc.candidate().p95ToP50Ratio() + "\t"
-                + sc.p95ToP50RatioDelta() + "\n");
+                + formatDouble(sc.baseline().mean()) + "\t"
+                + formatDouble(sc.candidate().mean()) + "\t"
+                + formatDouble(sc.meanDelta()) + "\t"
+                + formatDouble(sc.baseline().median()) + "\t"
+                + formatDouble(sc.candidate().median()) + "\t"
+                + formatDouble(sc.medianDelta()) + "\t"
+                + formatDouble(sc.baseline().variance()) + "\t"
+                + formatDouble(sc.candidate().variance()) + "\t"
+                + formatDouble(sc.varianceDelta()) + "\t"
+                + formatDouble(sc.baseline().standardDeviation()) + "\t"
+                + formatDouble(sc.candidate().standardDeviation()) + "\t"
+                + formatDouble(sc.standardDeviationDelta()) + "\t"
+                + formatDouble(sc.baseline().coefficientOfVariation()) + "\t"
+                + formatDouble(sc.candidate().coefficientOfVariation()) + "\t"
+                + formatDouble(sc.cvDelta()) + "\t"
+                + formatDouble(sc.baseline().p25()) + "\t"
+                + formatDouble(sc.candidate().p25()) + "\t"
+                + formatDouble(sc.p25Delta()) + "\t"
+                + formatDouble(sc.baseline().p50()) + "\t"
+                + formatDouble(sc.candidate().p50()) + "\t"
+                + formatDouble(sc.p50Delta()) + "\t"
+                + formatDouble(sc.baseline().p75()) + "\t"
+                + formatDouble(sc.candidate().p75()) + "\t"
+                + formatDouble(sc.p75Delta()) + "\t"
+                + formatDouble(sc.baseline().p95()) + "\t"
+                + formatDouble(sc.candidate().p95()) + "\t"
+                + formatDouble(sc.p95Delta()) + "\t"
+                + formatDouble(sc.baseline().iqr()) + "\t"
+                + formatDouble(sc.candidate().iqr()) + "\t"
+                + formatDouble(sc.iqrDelta()) + "\t"
+                + formatDouble(sc.baseline().normalizedIqr()) + "\t"
+                + formatDouble(sc.candidate().normalizedIqr()) + "\t"
+                + formatDouble(sc.normalizedIqrDelta()) + "\t"
+                + formatDouble(sc.baseline().p95ToP50Ratio()) + "\t"
+                + formatDouble(sc.candidate().p95ToP50Ratio()) + "\t"
+                + formatDouble(sc.p95ToP50RatioDelta()) + "\n");
     }
 
     /// Exports 5x5 branch occupancy comparisons to TSV.
@@ -380,29 +381,29 @@ public final class ComparisonExport {
                                     + baseCounts[c][b] + "\t"
                                     + candCounts[c][b] + "\t"
                                     + countDeltas[c][b] + "\t"
-                                    + baseProbs[c][b] + "\t"
-                                    + candProbs[c][b] + "\t"
-                                    + probDeltas[c][b] + "\t"
-                                    + base.contentionCentroid() + "\t"
-                                    + cand.contentionCentroid() + "\t"
-                                    + occ.contentionCentroidDelta() + "\t"
-                                    + base.bodyCentroid() + "\t"
-                                    + cand.bodyCentroid() + "\t"
-                                    + occ.bodyCentroidDelta() + "\t"
-                                    + occ.centroidDistance() + "\t"
-                                    + base.contentionVariance() + "\t"
-                                    + cand.contentionVariance() + "\t"
-                                    + occ.contentionVarianceDelta() + "\t"
-                                    + base.bodyVariance() + "\t"
-                                    + cand.bodyVariance() + "\t"
-                                    + occ.bodyVarianceDelta() + "\t"
-                                    + base.contentionBodyCovariance() + "\t"
-                                    + cand.contentionBodyCovariance() + "\t"
-                                    + occ.covarianceDelta() + "\t"
-                                    + base.radius() + "\t"
-                                    + cand.radius() + "\t"
-                                    + occ.radiusDelta() + "\t"
-                                    + occ.totalVariationDistance() + "\n");
+                                    + formatDouble(baseProbs[c][b]) + "\t"
+                                    + formatDouble(candProbs[c][b]) + "\t"
+                                    + formatDouble(probDeltas[c][b]) + "\t"
+                                    + formatDouble(base.contentionCentroid()) + "\t"
+                                    + formatDouble(cand.contentionCentroid()) + "\t"
+                                    + formatDouble(occ.contentionCentroidDelta()) + "\t"
+                                    + formatDouble(base.bodyCentroid()) + "\t"
+                                    + formatDouble(cand.bodyCentroid()) + "\t"
+                                    + formatDouble(occ.bodyCentroidDelta()) + "\t"
+                                    + formatDouble(occ.centroidDistance()) + "\t"
+                                    + formatDouble(base.contentionVariance()) + "\t"
+                                    + formatDouble(cand.contentionVariance()) + "\t"
+                                    + formatDouble(occ.contentionVarianceDelta()) + "\t"
+                                    + formatDouble(base.bodyVariance()) + "\t"
+                                    + formatDouble(cand.bodyVariance()) + "\t"
+                                    + formatDouble(occ.bodyVarianceDelta()) + "\t"
+                                    + formatDouble(base.contentionBodyCovariance()) + "\t"
+                                    + formatDouble(cand.contentionBodyCovariance()) + "\t"
+                                    + formatDouble(occ.covarianceDelta()) + "\t"
+                                    + formatDouble(base.radius()) + "\t"
+                                    + formatDouble(cand.radius()) + "\t"
+                                    + formatDouble(occ.radiusDelta()) + "\t"
+                                    + formatDouble(occ.totalVariationDistance()) + "\n");
                         }
                     }
                 }
@@ -489,18 +490,18 @@ public final class ComparisonExport {
                                         + bCount + "\t"
                                         + cCount + "\t"
                                         + cDelta + "\t"
-                                        + bProb + "\t"
-                                        + cProb + "\t"
-                                        + pDelta + "\t"
-                                        + baseSelf + "\t"
-                                        + candSelf + "\t"
-                                        + selfDelta + "\t"
+                                        + formatDouble(bProb) + "\t"
+                                        + formatDouble(cProb) + "\t"
+                                        + formatDouble(pDelta) + "\t"
+                                        + formatDouble(baseSelf) + "\t"
+                                        + formatDouble(candSelf) + "\t"
+                                        + formatDouble(selfDelta) + "\t"
                                         + baseDom + "\t"
                                         + candDom + "\t"
                                         + domChanged + "\t"
-                                        + baseDomProb + "\t"
-                                        + candDomProb + "\t"
-                                        + domProbDelta + "\n");
+                                        + formatDouble(baseDomProb) + "\t"
+                                        + formatDouble(candDomProb) + "\t"
+                                        + formatDouble(domProbDelta) + "\n");
                             }
                         }
                     }
@@ -555,15 +556,15 @@ public final class ComparisonExport {
                                         + baseCell.transitionCount() + "\t"
                                         + candCell.transitionCount() + "\t"
                                         + cell.transitionCountDelta() + "\t"
-                                        + baseCell.meanDeltaContention() + "\t"
-                                        + candCell.meanDeltaContention() + "\t"
-                                        + cell.meanDeltaContentionDelta() + "\t"
-                                        + baseCell.meanDeltaBody() + "\t"
-                                        + candCell.meanDeltaBody() + "\t"
-                                        + cell.meanDeltaBodyDelta() + "\t"
-                                        + baseCell.magnitude() + "\t"
-                                        + candCell.magnitude() + "\t"
-                                        + cell.magnitudeDelta() + "\n");
+                                        + formatDouble(baseCell.meanDeltaContention()) + "\t"
+                                        + formatDouble(candCell.meanDeltaContention()) + "\t"
+                                        + formatDouble(cell.meanDeltaContentionDelta()) + "\t"
+                                        + formatDouble(baseCell.meanDeltaBody()) + "\t"
+                                        + formatDouble(candCell.meanDeltaBody()) + "\t"
+                                        + formatDouble(cell.meanDeltaBodyDelta()) + "\t"
+                                        + formatDouble(baseCell.magnitude()) + "\t"
+                                        + formatDouble(candCell.magnitude()) + "\t"
+                                        + formatDouble(cell.magnitudeDelta()) + "\n");
                             }
                         }
                     }
@@ -636,9 +637,9 @@ public final class ComparisonExport {
                                         + method + "\t"
                                         + sanitizeString(cols[i]) + "\t"
                                         + sanitizeString(cols[j]) + "\t"
-                                        + baseVal + "\t"
-                                        + candVal + "\t"
-                                        + deltaVal + "\n");
+                                        + formatDouble(baseVal) + "\t"
+                                        + formatDouble(candVal) + "\t"
+                                        + formatDouble(deltaVal) + "\n");
                             }
                         }
                     }
@@ -713,5 +714,16 @@ public final class ComparisonExport {
             }
         }
         return sb.toString();
+    }
+
+    /// Formats a double value with its full decimal representation (without scientific notation).
+    public static String formatDouble(double val) {
+        if (Double.isNaN(val)) {
+            return "NaN";
+        }
+        if (Double.isInfinite(val)) {
+            return val > 0.0 ? "Infinity" : "-Infinity";
+        }
+        return BigDecimal.valueOf(val).toPlainString();
     }
 }

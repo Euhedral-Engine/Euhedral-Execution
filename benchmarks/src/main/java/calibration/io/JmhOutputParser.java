@@ -15,15 +15,20 @@ import java.util.regex.Pattern;
 import org.jspecify.annotations.NonNull;
 
 /// Parser for extracting JMH throughput results from raw console logs (benchmark_output.log).
+/// Prioritizes auxiliary counter throughput (e.g. executions) over primary benchmark invocation throughput.
 final class JmhOutputParser {
 
-    private static final Pattern ITERATION_PATTERN = Pattern.compile(
+    private static final Pattern PRIMARY_ITERATION_PATTERN = Pattern.compile(
             "^Iteration\\s+\\d+(?:\\s+\\(fork\\s+\\d+\\))?:\\s+([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\\s+([a-zA-Z/_]+)");
 
-    private static final Pattern SUMMARY_ROW_PATTERN = Pattern.compile(
-            "^([a-zA-Z0-9_.$]+)\\s+([a-zA-Z]+)\\s+(\\d+)\\s+([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?:\\s+(?:\\+/-|\\u00b1)?\\s*([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|N/A|\\?))?\\s+([a-zA-Z/_]+)$");
+    private static final Pattern AUX_ITERATION_PATTERN = Pattern.compile(
+            "^\\s*(?:[·\\u00b7\\.\\*]\\s*)?(?:[a-zA-Z0-9_.$]+:)?executions:\\s+([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\\s+([a-zA-Z/_]+)");
 
-    private static final Pattern RESULT_HEADER_PATTERN = Pattern.compile("^Result\\s+\"([^\"]+)\":");
+    private static final Pattern SUMMARY_ROW_PATTERN = Pattern.compile(
+            "^([a-zA-Z0-9_.$:]+)\\s+([a-zA-Z]+)\\s+(\\d+)\\s+([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?:\\s+(?:\\+/-|\\u00b1)?\\s*([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?|N/A|\\?))?\\s+([a-zA-Z/_]+)$");
+
+    private static final Pattern RESULT_HEADER_PATTERN =
+            Pattern.compile("^(?:Secondary\\s+result|Result)\\s+\"([^\"]+)\":");
 
     private static final Pattern RESULT_VALUE_PATTERN = Pattern.compile(
             "^\\s*([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)(?:\\s*(?:\\+/-|\\u00b1)?(?:\\([0-9.]+[%]\\))?\\s*([0-9]+(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?))?\\s+([a-zA-Z/_]+)(?:\\s+\\[Average\\])?");
@@ -45,14 +50,21 @@ final class JmhOutputParser {
             throw new MalformedArtifactException(runPath, logPath, "Benchmark output log is empty");
         }
 
-        List<Double> iterationScores = new ArrayList<>();
-        String detectedUnit = null;
-        Double summaryScore = null;
-        double summaryError = 0.0;
-        String summaryUnit = null;
+        List<Double> primaryIterationScores = new ArrayList<>();
+        String primaryDetectedUnit = null;
+        Double primarySummaryScore = null;
+        double primarySummaryError = 0.0;
+        String primarySummaryUnit = null;
+
+        List<Double> auxIterationScores = new ArrayList<>();
+        String auxDetectedUnit = null;
+        Double auxSummaryScore = null;
+        double auxSummaryError = 0.0;
+        String auxSummaryUnit = null;
 
         boolean inWarmup = false;
-        boolean inResultBlock = false;
+        boolean inPrimaryResultBlock = false;
+        boolean inAuxResultBlock = false;
 
         try (BufferedReader reader = new BufferedReader(new StringReader(content))) {
             String line;
@@ -69,53 +81,97 @@ final class JmhOutputParser {
                     inWarmup = false;
                 }
 
-                if (!inWarmup && !trimmed.contains("executions")) {
-                    Matcher iterMatcher = ITERATION_PATTERN.matcher(trimmed);
-                    if (iterMatcher.find()) {
-                        double score = Double.parseDouble(iterMatcher.group(1));
-                        iterationScores.add(score);
-                        if (detectedUnit == null) {
-                            detectedUnit = iterMatcher.group(2);
+                if (!inWarmup) {
+                    Matcher auxIterMatcher = AUX_ITERATION_PATTERN.matcher(line);
+                    if (auxIterMatcher.find()) {
+                        double score = Double.parseDouble(auxIterMatcher.group(1));
+                        auxIterationScores.add(score);
+                        if (auxDetectedUnit == null) {
+                            auxDetectedUnit = auxIterMatcher.group(2);
+                        }
+                    } else {
+                        Matcher primaryIterMatcher = PRIMARY_ITERATION_PATTERN.matcher(trimmed);
+                        if (primaryIterMatcher.find()) {
+                            double score = Double.parseDouble(primaryIterMatcher.group(1));
+                            primaryIterationScores.add(score);
+                            if (primaryDetectedUnit == null) {
+                                primaryDetectedUnit = primaryIterMatcher.group(2);
+                            }
                         }
                     }
                 }
 
                 Matcher resultHeaderMatcher = RESULT_HEADER_PATTERN.matcher(trimmed);
-                if (resultHeaderMatcher.find() && !resultHeaderMatcher.group(1).contains(":")) {
-                    inResultBlock = true;
+                if (resultHeaderMatcher.find()) {
+                    String target = resultHeaderMatcher.group(1);
+                    if (target.contains("executions") || target.contains(":")) {
+                        inAuxResultBlock = true;
+                        inPrimaryResultBlock = false;
+                    } else {
+                        inPrimaryResultBlock = true;
+                        inAuxResultBlock = false;
+                    }
                     continue;
                 }
 
-                if (inResultBlock) {
+                if (inAuxResultBlock) {
                     Matcher resultValMatcher = RESULT_VALUE_PATTERN.matcher(line);
                     if (resultValMatcher.find()) {
-                        summaryScore = Double.parseDouble(resultValMatcher.group(1));
+                        auxSummaryScore = Double.parseDouble(resultValMatcher.group(1));
                         String errStr = resultValMatcher.group(2);
                         if (errStr != null
                                 && !errStr.isBlank()
                                 && !errStr.equalsIgnoreCase("N/A")
                                 && !errStr.equals("?")) {
-                            summaryError = Double.parseDouble(errStr);
+                            auxSummaryError = Double.parseDouble(errStr);
                         }
-                        summaryUnit = resultValMatcher.group(3);
-                        inResultBlock = false;
+                        auxSummaryUnit = resultValMatcher.group(3);
+                        inAuxResultBlock = false;
                     } else if (trimmed.startsWith("#") || trimmed.isEmpty()) {
-                        inResultBlock = false;
+                        inAuxResultBlock = false;
+                    }
+                } else if (inPrimaryResultBlock) {
+                    Matcher resultValMatcher = RESULT_VALUE_PATTERN.matcher(line);
+                    if (resultValMatcher.find()) {
+                        primarySummaryScore = Double.parseDouble(resultValMatcher.group(1));
+                        String errStr = resultValMatcher.group(2);
+                        if (errStr != null
+                                && !errStr.isBlank()
+                                && !errStr.equalsIgnoreCase("N/A")
+                                && !errStr.equals("?")) {
+                            primarySummaryError = Double.parseDouble(errStr);
+                        }
+                        primarySummaryUnit = resultValMatcher.group(3);
+                        inPrimaryResultBlock = false;
+                    } else if (trimmed.startsWith("#") || trimmed.isEmpty()) {
+                        inPrimaryResultBlock = false;
                     }
                 }
 
-                if (!trimmed.startsWith("#") && !trimmed.startsWith("Benchmark") && !trimmed.contains(":")) {
+                if (!trimmed.startsWith("#") && !trimmed.startsWith("Benchmark")) {
                     Matcher summaryMatcher = SUMMARY_ROW_PATTERN.matcher(trimmed);
                     if (summaryMatcher.matches()) {
-                        summaryScore = Double.parseDouble(summaryMatcher.group(4));
+                        String benchmarkName = summaryMatcher.group(1);
+                        double score = Double.parseDouble(summaryMatcher.group(4));
+                        double error = 0.0;
                         String errStr = summaryMatcher.group(5);
                         if (errStr != null
                                 && !errStr.isBlank()
                                 && !errStr.equalsIgnoreCase("N/A")
                                 && !errStr.equals("?")) {
-                            summaryError = Double.parseDouble(errStr);
+                            error = Double.parseDouble(errStr);
                         }
-                        summaryUnit = summaryMatcher.group(6);
+                        String unit = summaryMatcher.group(6);
+
+                        if (benchmarkName.contains("executions") || benchmarkName.contains(":")) {
+                            auxSummaryScore = score;
+                            auxSummaryError = error;
+                            auxSummaryUnit = unit;
+                        } else {
+                            primarySummaryScore = score;
+                            primarySummaryError = error;
+                            primarySummaryUnit = unit;
+                        }
                     }
                 }
             }
@@ -123,20 +179,43 @@ final class JmhOutputParser {
             throw new MalformedArtifactException(runPath, logPath, "Error parsing JMH output log", e);
         }
 
-        double finalScore;
-        double finalError = summaryError;
-        String finalUnit;
+        boolean hasAux = (auxSummaryScore != null && auxSummaryUnit != null && !auxSummaryUnit.isBlank())
+                || (!auxIterationScores.isEmpty() && auxDetectedUnit != null);
 
-        if (summaryScore != null && summaryUnit != null && !summaryUnit.isBlank()) {
-            finalScore = summaryScore;
-            finalUnit = summaryUnit;
-        } else if (!iterationScores.isEmpty() && detectedUnit != null) {
+        double finalScore;
+        double finalError;
+        String finalUnit;
+        List<Double> iterationScores;
+
+        if (hasAux) {
+            if (auxSummaryScore != null && auxSummaryUnit != null && !auxSummaryUnit.isBlank()) {
+                finalScore = auxSummaryScore;
+                finalUnit = auxSummaryUnit;
+                finalError = auxSummaryError;
+            } else {
+                double sum = 0.0;
+                for (double s : auxIterationScores) {
+                    sum += s;
+                }
+                finalScore = sum / auxIterationScores.size();
+                finalUnit = auxDetectedUnit;
+                finalError = 0.0;
+            }
+            iterationScores = auxIterationScores;
+        } else if (primarySummaryScore != null && primarySummaryUnit != null && !primarySummaryUnit.isBlank()) {
+            finalScore = primarySummaryScore;
+            finalUnit = primarySummaryUnit;
+            finalError = primarySummaryError;
+            iterationScores = primaryIterationScores;
+        } else if (!primaryIterationScores.isEmpty() && primaryDetectedUnit != null) {
             double sum = 0.0;
-            for (double s : iterationScores) {
+            for (double s : primaryIterationScores) {
                 sum += s;
             }
-            finalScore = sum / iterationScores.size();
-            finalUnit = detectedUnit;
+            finalScore = sum / primaryIterationScores.size();
+            finalUnit = primaryDetectedUnit;
+            finalError = 0.0;
+            iterationScores = primaryIterationScores;
         } else {
             throw new MalformedArtifactException(
                     runPath, logPath, "No JMH throughput score found in benchmark output log");
