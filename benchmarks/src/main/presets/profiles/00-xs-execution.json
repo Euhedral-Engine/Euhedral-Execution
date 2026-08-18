@@ -1,0 +1,123 @@
+{
+  "decisionWeightProfiles": {
+    "forced-direct-no-idle": {
+      "idleContentionThresholds": {
+        "xsContention": 200000,
+        "sContention": 400000,
+        "mContention": 600000,
+        "hContention": 800000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 200000,
+        "sContention": 400000,
+        "mContention": 600000,
+        "hContention": 800000
+      },
+      "execBodyCostWeights": [
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    },
+
+    "forced-staged-no-idle": {
+      "idleContentionThresholds": {
+        "xsContention": 200000,
+        "sContention": 400000,
+        "mContention": 600000,
+        "hContention": 800000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 200000,
+        "sContention": 400000,
+        "mContention": 600000,
+        "hContention": 800000
+      },
+      "execBodyCostWeights": [
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        { "xs": 0, "s": 24, "m": 96, "h": 256 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    }
+  },
+
+  "calibrationProfiles": {
+    "xs-direct": {
+      "cpuSet": [1, 2, 3, 4],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 10000,
+      "decisionWeightProfile": "forced-direct-no-idle",
+      "rawSampleLimit": 2048,
+      "observeCycleStart": true,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+
+    "xs-staged": {
+      "cpuSet": [1, 2, 3, 4],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 10000,
+      "decisionWeightProfile": "forced-staged-no-idle",
+      "rawSampleLimit": 2048,
+      "observeCycleStart": true,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  }
+}

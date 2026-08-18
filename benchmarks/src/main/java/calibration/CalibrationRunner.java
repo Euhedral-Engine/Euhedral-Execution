@@ -42,7 +42,7 @@ public class CalibrationRunner {
     private static final String USAGE = """
             Usage:
               euhedral-calibration run <harness-config.json>
-              euhedral-calibration compare <comparison-config.json>""";
+              euhedral-calibration compare <comparison-config.json|experiment-directory>""";
 
     private static final List<String> DEFAULT_FLAGS = List.of(
             "-XX:+UseThreadPriorities",

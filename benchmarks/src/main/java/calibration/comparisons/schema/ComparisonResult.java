@@ -31,12 +31,8 @@ public record ComparisonResult(
         candidates = List.copyOf(candidates);
         comparisons = List.copyOf(comparisons);
 
-        String baselinePath = baseline.identity().sourcePath();
         for (CompletedRun candidate : candidates) {
             Objects.requireNonNull(candidate, "candidate completed run must not be null");
-            if (candidate.identity().sourcePath().equals(baselinePath)) {
-                throw new IllegalArgumentException("baseline run cannot also appear as candidate: " + baselinePath);
-            }
         }
 
         Set<String> candidatePaths = new HashSet<>();

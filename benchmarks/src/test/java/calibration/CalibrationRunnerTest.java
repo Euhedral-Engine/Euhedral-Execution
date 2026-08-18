@@ -761,11 +761,6 @@ class CalibrationRunnerTest {
         assertThrows(NullPointerException.class, () -> new ComparisonConfig(baseline, List.of(cand1), null));
         assertThrows(IllegalArgumentException.class, () -> new ComparisonConfig(baseline, List.of(cand1), "  "));
 
-        // Baseline appearing in candidates rejected
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new ComparisonConfig(baseline, List.of(RunReference.of("/path/to/baseline")), "outDir"));
-
         // Duplicate candidate rejected
         assertThrows(
                 IllegalArgumentException.class,
@@ -897,30 +892,40 @@ class CalibrationRunnerTest {
         // Verify summary TSV content and order
         List<String> summaryLines =
                 Files.readAllLines(comparisonOutDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
-        // Header + 3 candidate rows
-        assertEquals(4, summaryLines.size());
+        // Header + baseline row + 3 candidate rows
+        assertEquals(5, summaryLines.size());
 
-        // Row 1: cand-compat (COMPATIBLE)
+        // Row 1: baseline (base vs base, COMPATIBLE, BASELINE)
         String[] row1 = summaryLines.get(1).split("\t");
         assertEquals("base", row1[0]);
-        assertEquals("cand-compat", row1[1]);
+        assertEquals("base", row1[1]);
         assertEquals("COMPATIBLE", row1[2]);
         assertNotEquals("NaN", row1[3]);
+        assertEquals("0.0", row1[6]);
+        assertEquals("0.0", row1[7]);
+        assertEquals("BASELINE", row1[16]);
 
-        // Row 2: cand-partial (PARTIAL)
+        // Row 2: cand-compat (COMPATIBLE)
         String[] row2 = summaryLines.get(2).split("\t");
         assertEquals("base", row2[0]);
-        assertEquals("cand-partial", row2[1]);
-        assertEquals("PARTIAL", row2[2]);
+        assertEquals("cand-compat", row2[1]);
+        assertEquals("COMPATIBLE", row2[2]);
         assertNotEquals("NaN", row2[3]);
 
-        // Row 3: cand-incompat (INCOMPATIBLE)
+        // Row 3: cand-partial (PARTIAL)
         String[] row3 = summaryLines.get(3).split("\t");
         assertEquals("base", row3[0]);
-        assertEquals("cand-incompat", row3[1]);
-        assertEquals("INCOMPATIBLE", row3[2]);
-        assertEquals("NaN", row3[3]);
-        assertEquals("UNAVAILABLE", row3[16]);
+        assertEquals("cand-partial", row3[1]);
+        assertEquals("PARTIAL", row3[2]);
+        assertNotEquals("NaN", row3[3]);
+
+        // Row 4: cand-incompat (INCOMPATIBLE)
+        String[] row4 = summaryLines.get(4).split("\t");
+        assertEquals("base", row4[0]);
+        assertEquals("cand-incompat", row4[1]);
+        assertEquals("INCOMPATIBLE", row4[2]);
+        assertEquals("NaN", row4[3]);
+        assertEquals("UNAVAILABLE", row4[16]);
     }
 
     @Test
@@ -941,5 +946,53 @@ class CalibrationRunnerTest {
         Files.writeString(configFile, mapper.writeValueAsString(config), StandardCharsets.UTF_8);
 
         assertThrows(Exception.class, () -> CalibrationComparison.runComparison(configFile.toString()));
+    }
+
+    @Test
+    void testRunComparisonDirectlyOnExperimentDirectory(@TempDir Path tempDir) throws Exception {
+        Path expDir = tempDir.resolve("experiment_001");
+        Path baseDir = expDir.resolve("base_repeat_0");
+        Path candDir1 = expDir.resolve("cand1_repeat_0");
+        Path candDir2 = expDir.resolve("cand2_repeat_0");
+
+        TrialConfig baseConfig = dummyTrialConfig("base", true);
+        TrialConfig candConfig1 = dummyTrialConfig("cand1", true);
+        TrialConfig candConfig2 = dummyTrialConfig("cand2", true);
+
+        setupCompletedRunOnDisk(baseDir, baseConfig, 1000.0, 0);
+        setupCompletedRunOnDisk(candDir1, candConfig1, 1200.0, 5);
+        setupCompletedRunOnDisk(candDir2, candConfig2, 1100.0, 10);
+
+        CalibrationComparison.runComparison(expDir.toString());
+
+        Path outDir = expDir.resolve("comparisons");
+        assertTrue(Files.exists(outDir.resolve(Constants.COMPARISON_MANIFEST_JSON)));
+        assertTrue(Files.exists(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV)));
+
+        List<String> lines =
+                Files.readAllLines(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
+        assertEquals(4, lines.size()); // Header + baseline + 2 candidates
+    }
+
+    @Test
+    void testRunComparisonFromExperimentDirectoryJsonConfig(@TempDir Path tempDir) throws Exception {
+        Path expDir = tempDir.resolve("experiment_002");
+        Path baseDir = expDir.resolve("trial_a_repeat_0");
+        Path candDir = expDir.resolve("trial_b_repeat_0");
+
+        TrialConfig baseConfig = dummyTrialConfig("trial_a", true);
+        TrialConfig candConfig = dummyTrialConfig("trial_b", true);
+
+        setupCompletedRunOnDisk(baseDir, baseConfig, 1000.0, 0);
+        setupCompletedRunOnDisk(candDir, candConfig, 1200.0, 5);
+
+        ComparisonConfig config = ComparisonConfig.ofExperimentDirectory(expDir.toString(), "trial_a", null);
+        Path configFile = tempDir.resolve("experiment_comparison.json");
+        Files.writeString(configFile, mapper.writeValueAsString(config), StandardCharsets.UTF_8);
+
+        CalibrationComparison.runComparison(configFile.toString());
+
+        Path outDir = expDir.resolve("comparisons");
+        assertTrue(Files.exists(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV)));
     }
 }

@@ -16,17 +16,17 @@ transition matrices, displacement vector fields, and correlation analyses.
 Before creating or modifying trial configurations, inspect the canonical example:
 
 - [
-`src/main/presets/example_harness_config.json`](src/main/presets/examples/example_harness_config.json)
+`src/main/presets/examples/example_harness_config.json`](src/main/presets/examples/example_harness_config.json)
   is the reference configuration illustrating all available schema features and options.
 - [
-`src/main/presets/example_profile_library.json`](src/main/presets/examples/example_profile_library.json)
+`src/main/presets/examples/example_profile_library.json`](src/main/presets/examples/example_profile_library.json)
   is an example reusable profile library containing calibration and decision weight profiles.
 - [
-`src/main/presets/example_comparison_config.json`](src/main/presets/examples/example_comparison_config.json)
-  is an example comparison configuration referencing completed run directories.
+`src/main/presets/examples/example_comparison_config.json`](src/main/presets/examples/example_comparison_config.json)
+  is an example comparison configuration referencing an experiment directory or completed run directories.
 - [
-`src/main/presets/exec_contention_band_calibration.json`](src/main/presets/exec_contention_band_calibration.json)
-  is an example calibration preset for sweeping execution policies under heavy contention.
+`src/main/presets/comparisons/00-xs-execution-boundary.json`](src/main/presets/comparisons/00-xs-execution-boundary.json)
+  is an example comparison preset for comparing an experiment output suite.
 
 ### Configuration Schema Overview
 
@@ -166,11 +166,17 @@ The launcher supports two explicit, separate modes:
 benchmarks/build/bin/euhedral-calibration run <path-to-harness-config.json>
 
 # COMPARE mode: consumes completed immutable benchmark artifacts and produces comparison artifacts
+# 1. Directly comparing all runs in an experiment output directory:
+benchmarks/build/bin/euhedral-calibration compare <path-to-experiment-directory>
+
+# 2. Or using a comparison configuration JSON preset/file:
 benchmarks/build/bin/euhedral-calibration compare <path-to-comparison-config.json>
 ```
 
 - **`run`**: Loads harness configuration, resolves trial profiles and sweeps, executes JMH benchmark harness, and writes raw observations and statistics.
-- **`compare`**: Loads baseline and candidate completed run directories, validates checksums, evaluates compatibility, and exports comparison summary, diffs, scalar, occupancy, transition, vector, and correlation artifacts.
+- **`compare`**: Evaluates completed runs and produces comparison summaries and diagnostics.
+  - When given an **experiment directory** (e.g. `experiments/00-xs-execution-boundary`), it automatically discovers all completed trial runs in the folder, selects the baseline trial (preferring explicit baseline > trials named `*baseline*`/`*base*` > root non-sweep trial with `origin == null` > first trial), compares all remaining candidate trials against it, and exports results to `<experiment-directory>/comparisons`.
+  - When given a **comparison configuration JSON file**, it supports either an `experimentDirectory` field or explicit `baseline` and `candidates` run references.
 
 #### Command-Line Flags and Environment Variables
 
@@ -383,12 +389,27 @@ according to the configured artifact retention flags, alongside their SHA-256 in
 | `vector_fields.tsv` | 5x5 displacement vectors (Delta_C, Delta_B) and magnitudes | [`VectorField`](src/main/java/calibration/statistics/VectorField.java) |
 | `correlations.tsv` | Aligned Pearson and Spearman correlation matrices across observation dimensions | [`CorrelationResult`](src/main/java/calibration/statistics/iteration/CorrelationResult.java) |
 
+### Benchmark File Columns (In Order)
+
+1. **`raw_observations.tsv`**:
+   `iteration`, `scope`, `core`, `cycleStartTotal`, `batchProgressTotal`, `batchCompleteTotal`, `rawBodyCostTotal`, `idleDecisionTotal`, `execDecisionTotal`, `centroidDistance`
+2. **`statistics.tsv`**:
+   `iteration`, `scope`, `core`, `metric`, `segment`, `variable`, `count`, `mean`, `stdDev`, `variance`, `cv`, `min`, `max`, `median`, `p25`, `p50`, `p75`, `p95`, `iqr`, `normalizedIqr`, `p95ToP50Ratio`
+3. **`occupancy.tsv`**:
+   `iteration`, `scope`, `core`, `decisionType`, `contentionBand`, `bodyBand`, `count`, `probability`, `contentionCentroid`, `bodyCentroid`, `contentionVariance`, `bodyVariance`, `contentionBodyCovariance`, `radiusSquared`, `radius`
+4. **`transitions.tsv`**:
+   `iteration`, `scope`, `core`, `decisionType`, `segment`, `fromState`, `fromContention`, `fromBody`, `toState`, `toContention`, `toBody`, `count`, `probability`, `selfTransitionRate`, `dominantOutgoingState`, `dominantOutgoingProbability`
+5. **`vector_fields.tsv`**:
+   `iteration`, `scope`, `core`, `decisionType`, `segment`, `contentionBand`, `bodyBand`, `transitionCount`, `meanDeltaContention`, `meanDeltaBody`, `magnitude`
+6. **`correlations.tsv`**:
+   `iteration`, `scope`, `core`, `metric`, `segment`, `variable1`, `variable2`, `pearson`, `spearman`
+
 ---
 
 ## 5. Comparison Artifacts Summary
 
 Comparison artifacts are post-run outputs generated when contrasting a baseline calibration run
-against one or more candidate runs. Source baseline and candidate run directories remain immutable.
+against one or more candidate runs. The baseline run is always included as the first entry in comparison tables (marked with outcome `BASELINE` and `0.0` delta) to provide an absolute reference anchor. Source baseline and candidate run directories remain immutable.
 JMH throughput (`comparison_summary.tsv`) remains the authoritative performance result; diagnostic
 TSVs explain scheduler and fragment decision behavior without computing synthetic winners.
 
@@ -402,3 +423,51 @@ TSVs explain scheduler and fragment decision behavior without computing syntheti
 | `transition_comparisons.tsv` | 25x25 Markov transition count/probability deltas and dominant target shifts | [`TransitionComparison`](src/main/java/calibration/comparisons/schema/TransitionComparison.java) |
 | `vector_field_comparisons.tsv` | 5x5 displacement gradient and magnitude deltas for idle and exec policies | [`VectorFieldComparison`](src/main/java/calibration/comparisons/schema/VectorFieldComparison.java) |
 | `correlation_comparisons.tsv` | Aligned Pearson and Spearman correlation deltas between observation metrics | [`CorrelationComparison`](src/main/java/calibration/comparisons/schema/CorrelationComparison.java) |
+
+### Comparison File Columns (In Order)
+
+1. **`comparison_summary.tsv`**:
+   `baseline`, `candidate`, `compatibilityStatus`, `baselineMean`, `candidateMean`, `unit`, `absoluteDelta`, `relativeDeltaPercent`, `baselineVariance`, `candidateVariance`, `baselineStdDev`, `candidateStdDev`, `baselineCv`, `candidateCv`, `baselineForkCount`, `candidateForkCount`, `outcome`
+2. **`configuration_differences.tsv`**:
+   `baseline`, `candidate`, `compatibilityStatus`, `category`, `path`, `baselineValue`, `candidateValue`
+3. **`scalar_comparisons.tsv`**:
+   `baseline`, `candidate`, `scope`, `category`, `segment`, `metric`, `baselineCount`, `candidateCount`, `baselineMean`, `candidateMean`, `meanDelta`, `baselineMedian`, `candidateMedian`, `medianDelta`, `baselineVariance`, `candidateVariance`, `varianceDelta`, `baselineStdDev`, `candidateStdDev`, `stdDevDelta`, `baselineCv`, `candidateCv`, `cvDelta`, `baselineP25`, `candidateP25`, `p25Delta`, `baselineP50`, `candidateP50`, `p50Delta`, `baselineP75`, `candidateP75`, `p75Delta`, `baselineP95`, `candidateP95`, `p95Delta`, `baselineIqr`, `candidateIqr`, `iqrDelta`, `baselineNormalizedIqr`, `candidateNormalizedIqr`, `normalizedIqrDelta`, `baselineP95ToP50`, `candidateP95ToP50`, `p95ToP50Delta`
+4. **`occupancy_comparisons.tsv`**:
+   `baseline`, `candidate`, `decisionType`, `contentionBand`, `bodyBand`, `baselineCount`, `candidateCount`, `countDelta`, `baselineProbability`, `candidateProbability`, `probabilityDelta`, `baselineContentionCentroid`, `candidateContentionCentroid`, `contentionCentroidDelta`, `baselineBodyCentroid`, `candidateBodyCentroid`, `bodyCentroidDelta`, `centroidDistance`, `baselineContentionVariance`, `candidateContentionVariance`, `contentionVarianceDelta`, `baselineBodyVariance`, `candidateBodyVariance`, `bodyVarianceDelta`, `baselineCovariance`, `candidateCovariance`, `covarianceDelta`, `baselineRadius`, `candidateRadius`, `radiusDelta`, `totalVariationDistance`
+5. **`transition_comparisons.tsv`**:
+   `baseline`, `candidate`, `decisionType`, `segment`, `fromState`, `fromContention`, `fromBody`, `toState`, `toContention`, `toBody`, `baselineCount`, `candidateCount`, `countDelta`, `baselineProbability`, `candidateProbability`, `probabilityDelta`, `baselineSelfTransitionRate`, `candidateSelfTransitionRate`, `selfTransitionRateDelta`, `baselineDominantOutgoingState`, `candidateDominantOutgoingState`, `dominantStateChanged`, `baselineDominantProbability`, `candidateDominantProbability`, `dominantProbabilityDelta`
+6. **`vector_field_comparisons.tsv`**:
+   `baseline`, `candidate`, `decisionType`, `segment`, `contentionBand`, `bodyBand`, `baselineTransitionCount`, `candidateTransitionCount`, `transitionCountDelta`, `baselineMeanDeltaContention`, `candidateMeanDeltaContention`, `meanDeltaContentionDelta`, `baselineMeanDeltaBody`, `candidateMeanDeltaBody`, `meanDeltaBodyDelta`, `baselineMagnitude`, `candidateMagnitude`, `magnitudeDelta`
+7. **`correlation_comparisons.tsv`**:
+   `baseline`, `candidate`, `category`, `segment`, `method`, `rowVariable`, `columnVariable`, `baselineCorrelation`, `candidateCorrelation`, `correlationDelta`
+
+### Comparison Configuration Modes
+
+Comparison benchmarks can be configured in two ways via [`ComparisonConfig`](src/main/java/calibration/config/ComparisonConfig.java):
+
+1. **Experiment Directory Mode (Recommended for Suites)**:
+   Points to an entire experiment output directory. All trial runs in the folder are automatically loaded, the baseline is selected, and all remaining runs are compared against it:
+   ```json
+   {
+     "experimentDirectory": "experiments/00-xs-execution-boundary",
+     "baseline": "xs-direct_repeat_0",
+     "options": {
+       "includeDiagnostics": true,
+       "failFast": false
+     },
+     "outputDirectory": "experiments/00-xs-execution-boundary/comparisons"
+   }
+   ```
+   `baseline` and `outputDirectory` are optional; if omitted, baseline is determined automatically and exports go to `<experimentDirectory>/comparisons`.
+
+2. **Explicit Runs Mode**:
+   Specifies precise paths for `baseline` and `candidates`:
+   ```json
+   {
+     "baseline": { "path": "experiments/00-xs-execution-boundary/xs-direct_repeat_0" },
+     "candidates": [
+       { "path": "experiments/00-xs-execution-boundary/xs-staged_repeat_0" }
+     ],
+     "outputDirectory": "experiments/00-xs-execution-boundary/comparisons"
+   }
+   ```

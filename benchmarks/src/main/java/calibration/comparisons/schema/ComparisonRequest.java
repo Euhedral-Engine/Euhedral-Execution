@@ -33,9 +33,6 @@ public record ComparisonRequest(
 
         for (RunReference candidate : candidates) {
             Objects.requireNonNull(candidate, "candidate element must not be null");
-            if (candidate.equals(baseline) || candidate.path().equals(baseline.path())) {
-                throw new IllegalArgumentException("baseline cannot also appear as a candidate: " + candidate.path());
-            }
         }
 
         Set<String> seenPaths = new HashSet<>();

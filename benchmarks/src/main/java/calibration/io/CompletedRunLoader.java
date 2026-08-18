@@ -37,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -871,21 +872,112 @@ public final class CompletedRunLoader {
         return normalizedDir;
     }
 
-    private static Path resolveRunPath(Path path) {
+    public static @NonNull List<CompletedRun> loadExperiment(@NonNull String experimentDirPath) {
+        Objects.requireNonNull(experimentDirPath, "experimentDirPath must not be null");
+        return loadExperiment(Path.of(experimentDirPath));
+    }
+
+    public static @NonNull List<CompletedRun> loadExperiment(@NonNull Path experimentDir) {
+        Objects.requireNonNull(experimentDir, "experimentDir must not be null");
+
+        Path normalizedDir = resolveRunPath(experimentDir);
+        if (!Files.exists(normalizedDir)) {
+            throw new MissingArtifactException(normalizedDir, normalizedDir);
+        }
+        if (!Files.isDirectory(normalizedDir)) {
+            throw new MalformedArtifactException(normalizedDir, normalizedDir, "Path is not a directory");
+        }
+
+        List<CompletedRun> runs = new ArrayList<>();
+        try (var stream = Files.list(normalizedDir)) {
+            List<Path> subDirs = stream.filter(Files::isDirectory)
+                    .filter(p -> !p.getFileName().toString().startsWith("."))
+                    .filter(p -> !p.getFileName().toString().equals("comparisons"))
+                    .sorted()
+                    .toList();
+
+            for (Path subDir : subDirs) {
+                Path config = subDir.resolve("trial_config.json");
+                Path log = subDir.resolve(Constants.BENCHMARK_OUTPUT_LOG);
+                Path tsvDir = findTsvDir(subDir);
+                if (Files.exists(config)
+                        || Files.exists(log)
+                        || !tsvDir.equals(subDir)
+                        || Files.exists(subDir.resolve(Constants.RAW_OBSERVATION_TSV))) {
+                    try {
+                        CompletedRun run = load(subDir);
+                        runs.add(run);
+                    } catch (Exception ignored) {
+                        // Skip subdirectories that are not completed runs
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new MalformedArtifactException(
+                    normalizedDir, normalizedDir, "Failed to list experiment directory", e);
+        }
+
+        if (runs.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "No completed calibration runs found in experiment directory: " + normalizedDir);
+        }
+
+        return List.copyOf(runs);
+    }
+
+    public static @NonNull Path resolveRunPath(@NonNull Path path) {
+        Objects.requireNonNull(path, "path must not be null");
         Path normalized = path.toAbsolutePath().normalize();
-        if (Files.exists(normalized)) {
+        if (Files.exists(normalized) && hasTrialRunsOrFile(normalized)) {
             return normalized;
         }
 
-        List<Path> candidateBases =
-                List.of(Path.of(""), Path.of("benchmarks"), Path.of("benchmarks/experiments"), Path.of("experiments"));
+        List<Path> candidateBases = List.of(
+                Path.of(""),
+                Path.of("benchmarks"),
+                Path.of("benchmarks/experiments"),
+                Path.of("experiments"),
+                Path.of("benchmarks/src/main/presets/comparisons"),
+                Path.of("src/main/presets/comparisons"),
+                Path.of("benchmarks/src/main/presets/experiments"),
+                Path.of("src/main/presets/experiments"));
+
+        for (Path base : candidateBases) {
+            Path candidate = base.resolve(path).toAbsolutePath().normalize();
+            if (Files.exists(candidate) && hasTrialRunsOrFile(candidate)) {
+                return candidate;
+            }
+        }
+
         for (Path base : candidateBases) {
             Path candidate = base.resolve(path).toAbsolutePath().normalize();
             if (Files.exists(candidate)) {
                 return candidate;
             }
         }
+
         return normalized;
+    }
+
+    private static boolean hasTrialRunsOrFile(Path p) {
+        if (!Files.exists(p)) {
+            return false;
+        }
+        if (Files.isRegularFile(p)) {
+            return true;
+        }
+        if (Files.exists(p.resolve("trial_config.json")) || Files.exists(p.resolve(Constants.BENCHMARK_OUTPUT_LOG))) {
+            return true;
+        }
+        try (var stream = Files.list(p)) {
+            return stream.anyMatch(sub -> Files.isDirectory(sub)
+                    && !sub.getFileName().toString().equals("comparisons")
+                    && (Files.exists(sub.resolve("trial_config.json"))
+                            || Files.exists(sub.resolve(Constants.BENCHMARK_OUTPUT_LOG))
+                            || !findTsvDir(sub).equals(sub)));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private static String resolveExistingPath(Path runDir, String relativeName) {

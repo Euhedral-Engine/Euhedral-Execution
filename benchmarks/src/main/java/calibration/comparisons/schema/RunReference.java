@@ -19,6 +19,11 @@ public record RunReference(@NonNull String path, @Nullable String label) {
         this.label = label;
     }
 
+    @JsonCreator
+    public static RunReference fromString(String path) {
+        return RunReference.of(path);
+    }
+
     public static RunReference of(@NonNull String path) {
         return new RunReference(path, null);
     }

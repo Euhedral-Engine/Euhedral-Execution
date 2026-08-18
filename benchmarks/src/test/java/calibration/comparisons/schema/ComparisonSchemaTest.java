@@ -41,12 +41,6 @@ class ComparisonSchemaTest {
         assertThrows(NullPointerException.class, () -> new ComparisonRequest(baseline, null));
         assertThrows(IllegalArgumentException.class, () -> new ComparisonRequest(baseline, List.of()));
 
-        // Baseline cannot appear in candidates
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new ComparisonRequest(baseline, List.of(RunReference.of("/path/to/baseline"))));
-        assertThrows(IllegalArgumentException.class, () -> new ComparisonRequest(baseline, List.of(cand1, baseline)));
-
         // Duplicate candidates rejected
         assertThrows(
                 IllegalArgumentException.class,
@@ -529,10 +523,6 @@ class ComparisonSchemaTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ComparisonResult(baseRun, List.of(cand1Run), List.of(comp1, comp2)));
-
-        // Baseline appearing in candidates rejected
-        assertThrows(
-                IllegalArgumentException.class, () -> new ComparisonResult(baseRun, List.of(baseRun), List.of(comp1)));
 
         // Duplicate candidates rejected
         assertThrows(

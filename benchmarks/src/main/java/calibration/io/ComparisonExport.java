@@ -133,15 +133,23 @@ public final class ComparisonExport {
                 String candId = sanitizeString(comp.candidate().trialId());
                 String status = comp.compatibility().status().name();
                 PerformanceComparison perf = comp.performance();
+                boolean isBaselineSelf = comp.baseline()
+                                .trialId()
+                                .equals(comp.candidate().trialId())
+                        || comp.baseline().sourcePath().equals(comp.candidate().sourcePath());
                 if (perf != null) {
+                    double absDelta = isBaselineSelf ? 0.0 : perf.absoluteDelta();
+                    double relDelta = isBaselineSelf ? 0.0 : perf.relativeDeltaPercent();
+                    String outcome =
+                            isBaselineSelf ? "BASELINE" : perf.outcome().name();
                     writer.write(baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
                             + perf.baselineForkSummary().mean() + "\t"
                             + perf.candidateForkSummary().mean() + "\t"
                             + sanitizeString(perf.baseline().scoreUnit()) + "\t"
-                            + perf.absoluteDelta() + "\t"
-                            + perf.relativeDeltaPercent() + "\t"
+                            + absDelta + "\t"
+                            + relDelta + "\t"
                             + perf.baselineForkSummary().variance() + "\t"
                             + perf.candidateForkSummary().variance() + "\t"
                             + perf.baselineForkSummary().standardDeviation() + "\t"
@@ -150,8 +158,9 @@ public final class ComparisonExport {
                             + perf.candidateForkSummary().coefficientOfVariation() + "\t"
                             + perf.baselineForkSummary().count() + "\t"
                             + perf.candidateForkSummary().count() + "\t"
-                            + perf.outcome().name() + "\n");
+                            + outcome + "\n");
                 } else {
+                    String outcome = isBaselineSelf ? "BASELINE" : "UNAVAILABLE";
                     writer.write(baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
@@ -168,7 +177,7 @@ public final class ComparisonExport {
                             + Double.NaN + "\t"
                             + 0 + "\t"
                             + 0 + "\t"
-                            + "UNAVAILABLE\n");
+                            + outcome + "\n");
                 }
             }
         }
