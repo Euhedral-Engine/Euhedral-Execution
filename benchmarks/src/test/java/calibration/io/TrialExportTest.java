@@ -481,4 +481,111 @@ class TrialExportTest {
         assertTrue(Files.exists(iter1.resolve(Constants.VECTOR_FIELDS_TSV)));
         assertTrue(Files.exists(iter1.resolve(Constants.CORRELATIONS_TSV)));
     }
+
+    @Test
+    void testExportRawObservationsTsvSkipsUnobservedCores(@TempDir Path tempDir) throws Exception {
+        // Create an iteration with 1 active core (core 2) and 1 inactive core (core 0)
+        HighSpeedMetrics activeMetrics = createPopulatedMetrics();
+        CoreIterationResult activeCore = HighSpeedMetricsStatistics.calculate(0, 2, activeMetrics);
+        CoreIterationResult inactiveCore = CoreIterationResult.empty(0, 0);
+
+        SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(activeMetrics));
+        IterationResult iterationResult = new IterationResult(0, system, List.of(inactiveCore, activeCore));
+        SystemForkResult forkSystem =
+                HighSpeedMetricsStatistics.calculateSystemFork(0, List.of(List.of(activeMetrics)));
+        ForkCalculationResult forkResult = new ForkCalculationResult(forkSystem, List.of(iterationResult));
+
+        TrialExport.exportRawObservationsTsv(tempDir, forkResult);
+
+        Path tsv = tempDir.resolve(Constants.RAW_OBSERVATION_TSV);
+        List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
+
+        // Header (1) + FORK (1) + ITERATION 0 (1) + CORE 2 (1) = 4 lines (CORE 0 skipped)
+        assertEquals(4, lines.size());
+        assertTrue(lines.stream().anyMatch(l -> l.contains("\tCORE\t2\t")));
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\tCORE\t0\t")));
+    }
+
+    @Test
+    void testExportStatisticsTsvSkipsUnobservedMetrics(@TempDir Path tempDir) throws Exception {
+        // Metrics with only rawBodyCost recorded
+        HighSpeedMetrics metrics = new HighSpeedMetrics(8);
+        metrics.recordRawBodyCost(1, 1, 50);
+        metrics.recordRawBodyCost(2, 2, 70);
+
+        CoreIterationResult coreResult = HighSpeedMetricsStatistics.calculate(0, 1, metrics);
+        SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(metrics));
+        IterationResult iterationResult = new IterationResult(0, system, List.of(coreResult));
+        SystemForkResult forkSystem = HighSpeedMetricsStatistics.calculateSystemFork(0, List.of(List.of(metrics)));
+        ForkCalculationResult forkResult = new ForkCalculationResult(forkSystem, List.of(iterationResult));
+
+        TrialExport.exportStatisticsTsv(tempDir, forkResult);
+
+        Path tsv = tempDir.resolve(Constants.STATISTICS_TSV);
+        List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
+
+        assertTrue(lines.size() > 1);
+        // rawBodyCost should be present
+        assertTrue(lines.stream().anyMatch(l -> l.contains("\trawBodyCost\t")));
+        // Unobserved metrics should NOT have any rows
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\tcycleStart\t")));
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\tbatchProgress\t")));
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\tbatchComplete\t")));
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\tidleDecisions\t")));
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\texecDecisions\t")));
+    }
+
+    @Test
+    void testExportOccupancyTsvSkipsUnobservedDecisionTypes(@TempDir Path tempDir) throws Exception {
+        // Metrics with only exec decisions recorded (no idle decisions)
+        HighSpeedMetrics metrics = new HighSpeedMetrics(8);
+        metrics.recordExec(1, 1, 2, 3, 250, 30.0);
+        metrics.recordExec(2, 2, 3, 4, 350, 40.0);
+
+        CoreIterationResult coreResult = HighSpeedMetricsStatistics.calculate(0, 1, metrics);
+        SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(metrics));
+        IterationResult iterationResult = new IterationResult(0, system, List.of(coreResult));
+        SystemForkResult forkSystem = HighSpeedMetricsStatistics.calculateSystemFork(0, List.of(List.of(metrics)));
+        ForkCalculationResult forkResult = new ForkCalculationResult(forkSystem, List.of(iterationResult));
+
+        TrialExport.exportOccupancyTsv(tempDir, forkResult);
+
+        Path tsv = tempDir.resolve(Constants.OCCUPANCY_TSV);
+        List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
+
+        assertTrue(lines.size() > 1);
+        // exec should be present
+        assertTrue(lines.stream().anyMatch(l -> l.contains("\texec\t")));
+        // idle should NOT be present
+        assertFalse(lines.stream().anyMatch(l -> l.contains("\tidle\t")));
+    }
+
+    @Test
+    void testExportTransitionsAndVectorFieldsAndCorrelationsSkipUnobserved(@TempDir Path tempDir) throws Exception {
+        // Empty metrics
+        HighSpeedMetrics metrics = new HighSpeedMetrics(8);
+
+        CoreIterationResult coreResult = HighSpeedMetricsStatistics.calculate(0, 1, metrics);
+        SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(metrics));
+        IterationResult iterationResult = new IterationResult(0, system, List.of(coreResult));
+        SystemForkResult forkSystem = HighSpeedMetricsStatistics.calculateSystemFork(0, List.of(List.of(metrics)));
+        ForkCalculationResult forkResult = new ForkCalculationResult(forkSystem, List.of(iterationResult));
+
+        TrialExport.exportTransitionsTsv(tempDir, forkResult);
+        TrialExport.exportVectorFieldsTsv(tempDir, forkResult);
+        TrialExport.exportCorrelationsTsv(tempDir, forkResult);
+
+        // Files exist with header only (0 data rows)
+        List<String> transLines =
+                Files.readAllLines(tempDir.resolve(Constants.TRANSITIONS_TSV), StandardCharsets.UTF_8);
+        assertEquals(1, transLines.size());
+
+        List<String> vecLines =
+                Files.readAllLines(tempDir.resolve(Constants.VECTOR_FIELDS_TSV), StandardCharsets.UTF_8);
+        assertEquals(1, vecLines.size());
+
+        List<String> corrLines =
+                Files.readAllLines(tempDir.resolve(Constants.CORRELATIONS_TSV), StandardCharsets.UTF_8);
+        assertEquals(1, corrLines.size());
+    }
 }

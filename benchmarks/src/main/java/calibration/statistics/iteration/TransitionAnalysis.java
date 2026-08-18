@@ -189,6 +189,17 @@ public final class TransitionAnalysis {
         return (double) numerator / (double) denominator;
     }
 
+    public boolean isEmpty() {
+        for (int i = 0; i < Band.TOTAL_STATES; i++) {
+            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+                if (transitionCounts[i][j] > 0L) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
     private static void validateState(int state) {
         if (state < 0 || state >= Band.TOTAL_STATES) {
             throw new IllegalArgumentException(

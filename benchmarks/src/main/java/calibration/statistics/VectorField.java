@@ -99,4 +99,20 @@ public record VectorField(VectorCell[][] grid) {
 
         return new VectorField(grid);
     }
+
+    public boolean isEmpty() {
+        if (grid == null) {
+            return true;
+        }
+        for (int i = 0; i < grid.length; i++) {
+            if (grid[i] != null) {
+                for (int j = 0; j < grid[i].length; j++) {
+                    if (grid[i][j] != null && grid[i][j].transitionCount() > 0L) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
 }

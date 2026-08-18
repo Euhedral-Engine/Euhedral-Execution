@@ -821,13 +821,11 @@ class ComparisonExportTest {
 
     @Test
     void testComparisonSummaryWritesFullDecimalNumbers(@TempDir Path tempDir) throws Exception {
-        CompletedRun baseRun = createCompletedRun(
-                "base-1", "Base", "group", "path/base", null, 50000000.0, 0);
-        CompletedRun candRun = createCompletedRun(
-                "cand-1", "Cand", "group", "path/cand", null, 75000000.0, 10);
+        CompletedRun baseRun = createCompletedRun("base-1", "Base", "group", "path/base", null, 50000000.0, 0);
+        CompletedRun candRun = createCompletedRun("cand-1", "Cand", "group", "path/cand", null, 75000000.0, 10);
 
-        PerformanceComparison perf = PerformanceComparisonCalculator.compare(
-                baseRun, candRun, ComparisonCompatibility.compatible());
+        PerformanceComparison perf =
+                PerformanceComparisonCalculator.compare(baseRun, candRun, ComparisonCompatibility.compatible());
 
         CandidateComparison comp = new CandidateComparison(
                 baseRun.identity(),
@@ -846,7 +844,8 @@ class ComparisonExportTest {
 
         assertTrue(!content.contains("E+"), "Summary TSV should not have scientific notation E+");
         assertTrue(!content.contains("E-"), "Summary TSV should not have scientific notation E-");
-        assertTrue(content.contains("50000000") || content.contains("51250000"),
+        assertTrue(
+                content.contains("50000000") || content.contains("51250000"),
                 "Should contain full decimal number: " + content);
     }
 }

@@ -109,6 +109,15 @@ public record CoreIterationResult(
         return execDecisions.steadyStateVectorField();
     }
 
+    public boolean isEmpty() {
+        return cycleStartTotal == 0L
+                && batchProgressTotal == 0L
+                && batchCompleteTotal == 0L
+                && rawBodyCostTotal == 0L
+                && idleDecisionTotal == 0L
+                && execDecisionTotal == 0L;
+    }
+
     public String toTsvRow() {
         return iterationIndex + "\tCORE\t"
                 + core + "\t"

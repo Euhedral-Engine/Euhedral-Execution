@@ -117,7 +117,7 @@ public final class TrialExport {
                 }
                 writer.write(ir.system().toTsvRow() + "\n");
                 for (CoreIterationResult cr : ir.cores()) {
-                    if (cr != null) {
+                    if (cr != null && !cr.isEmpty()) {
                         writer.write(cr.toTsvRow() + "\n");
                     }
                 }
@@ -140,7 +140,7 @@ public final class TrialExport {
                 }
                 writer.write(ir.system().toTsvRow() + "\n");
                 for (CoreIterationResult cr : ir.cores()) {
-                    if (cr != null) {
+                    if (cr != null && !cr.isEmpty()) {
                         writer.write(cr.toTsvRow() + "\n");
                     }
                 }
@@ -368,6 +368,9 @@ public final class TrialExport {
             String variable,
             ScalarSummary s)
             throws Exception {
+        if (s == null || s.isEmpty()) {
+            return;
+        }
         writer.write(iteration + "\t"
                 + scope + "\t"
                 + core + "\t"
@@ -459,6 +462,9 @@ public final class TrialExport {
             throws Exception {
         for (String dt : DECISION_TYPES) {
             BranchOccupancyResult occ = "idle".equals(dt) ? idleOcc : execOcc;
+            if (occ == null || occ.isEmpty()) {
+                continue;
+            }
             OccupancySummary summary = occ.summary();
             long[][] counts = occ.exactCounts();
             double[][] probs = occ.normalizedOccupancy();
@@ -595,6 +601,9 @@ public final class TrialExport {
                             case "exec_head" -> execHead;
                             default -> execSteadyState;
                         };
+                if (ta == null || ta.isEmpty()) {
+                    continue;
+                }
                 long[][] counts = ta.transitionCounts();
                 double[][] probs = ta.transitionProbabilities();
                 for (int from = 0; from < Band.TOTAL_STATES; from++) {
@@ -747,6 +756,9 @@ public final class TrialExport {
                             case "exec_head" -> execHead;
                             default -> execSteadyState;
                         };
+                if (vf == null || vf.isEmpty()) {
+                    continue;
+                }
                 VectorCell[][] grid = vf.grid();
                 for (int c = 0; c < Band.GRID_SIZE; c++) {
                     for (int b = 0; b < Band.GRID_SIZE; b++) {
@@ -929,6 +941,9 @@ public final class TrialExport {
             String segment,
             CorrelationResult corr)
             throws Exception {
+        if (corr == null || corr.isEmpty()) {
+            return;
+        }
         String[] cols = corr.columnNames();
         if (cols.length == 0) {
             return;
