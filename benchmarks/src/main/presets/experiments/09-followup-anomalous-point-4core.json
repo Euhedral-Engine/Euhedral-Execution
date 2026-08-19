@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "id": "09-followup-anomalous-point-4core",
+  "name": "Phase 4 Follow-up: 4-Core S-Contention H-Body Replication",
+  "description": "Replicates the 4-core, 8 parallel sources, workUnits=216 condition across 3 independent JVM forks to test statistical stability of the STAGED advantage.",
+  "labels": {
+    "preset": "followup-anomalous-point-4core",
+    "phase": "4-followup"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/09-followup-anomalous-point-4core",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "forced-direct": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    },
+    "forced-staged": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-direct-4core-216": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 8,
+      "orderedSources": 0,
+      "workUnits": 216,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "forced-direct",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-staged-4core-216": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 8,
+      "orderedSources": 0,
+      "workUnits": 216,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "forced-staged",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  "trials": [
+    {
+      "id": "followup-4core-direct-216",
+      "name": "4-Core 8-Source Direct 216 Replicate",
+      "group": "followup-anomalous-point-4core",
+      "description": "3-fork forced DIRECT replicate at 4 cores, 8 sources, workUnits=216.",
+      "tags": ["phase4-followup", "direct", "4core", "3forks"],
+      "enabled": true,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-direct-4core-216"
+    },
+    {
+      "id": "followup-4core-staged-216",
+      "name": "4-Core 8-Source Staged 216 Replicate",
+      "group": "followup-anomalous-point-4core",
+      "description": "3-fork forced STAGED replicate at 4 cores, 8 sources, workUnits=216.",
+      "comparison": {
+        "baselineTrialId": "followup-4core-direct-216",
+        "comparisonGroup": "followup-anomalous-point-4core",
+        "purpose": "Verify if STAGED +15.59% advantage persists across 3 independent forks."
+      },
+      "tags": ["phase4-followup", "staged", "4core", "3forks"],
+      "enabled": true,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-staged-4core-216"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "strategy": "BASELINE",
+  "baseline": {
+    "runs": [
+      "experiments/09-followup-anomalous-point-4core/followup-4core-direct-216_repeat_0"
+    ]
+  },
+  "candidates": {
+    "runs": [
+      "experiments/09-followup-anomalous-point-4core/followup-4core-staged-216_repeat_0"
+    ]
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/09-followup-anomalous-point-4core/comparisons"
+}

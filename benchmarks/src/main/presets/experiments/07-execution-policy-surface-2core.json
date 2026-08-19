@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "id": "07-execution-policy-surface-2core",
+  "name": "Phase 4 Execution Policy Surface (2-Core)",
+  "description": "Maps DIRECT vs STAGED execution throughput across 2-core contention levels (XS: 16 sources, S: 4 sources, M: 2 sources, XH: 1 source) and all 5 calibrated body bands (XS: 0, S: 48, M: 144, H: 216, XH: 288).",
+  "labels": {
+    "preset": "execution-policy-surface-2core",
+    "phase": "4"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/07-execution-policy-surface-2core",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "forced-direct": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    },
+    "forced-staged": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-direct-2core": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "forced-direct",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-staged-2core": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "forced-staged",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "direct-2core-sweep",
+      "baseTrialId": "direct-2core-base",
+      "description": "Sweep body cost and parallel source count for forced DIRECT on 2 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        },
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 4, 2, 1]
+        }
+      ]
+    },
+    {
+      "id": "staged-2core-sweep",
+      "baseTrialId": "staged-2core-base",
+      "description": "Sweep body cost and parallel source count for forced STAGED on 2 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        },
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 4, 2, 1]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "direct-2core-base",
+      "name": "Direct 2-Core Execution Surface Base",
+      "group": "execution-policy-surface-2core",
+      "description": "Base trial for forced DIRECT execution surface mapping on 2 cores.",
+      "tags": ["phase4", "execution-policy", "direct", "2core"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-direct-2core"
+    },
+    {
+      "id": "staged-2core-base",
+      "name": "Staged 2-Core Execution Surface Base",
+      "group": "execution-policy-surface-2core",
+      "description": "Base trial for forced STAGED execution surface mapping on 2 cores.",
+      "tags": ["phase4", "execution-policy", "staged", "2core"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-staged-2core"
+    }
+  ]
+}
