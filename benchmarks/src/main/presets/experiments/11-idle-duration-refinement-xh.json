@@ -1,0 +1,355 @@
+{
+  "schemaVersion": 1,
+  "id": "11-idle-duration-refinement-xh",
+  "name": "Phase 5 Idle Duration Refinement under Severe Contention (XH)",
+  "description": "Refines idle park duration across 0ns, 500ns, 1us, 2.5us, 5us, 10us, 15us, 25us in Band 4 (XH contention: 1 source on 2 cores and 4 cores) across all 5 calibrated body bands (XS: 0, S: 48, M: 144, H: 216, XH: 288).",
+  "labels": {
+    "preset": "idle-duration-refinement-xh",
+    "phase": "5"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/11-idle-duration-refinement-xh",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "weights-xh-0ns": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-500ns": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 500, "sPark": 500, "mPark": 500, "hPark": 500, "xhPark": 500 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-1us": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 1000, "sPark": 1000, "mPark": 1000, "hPark": 1000, "xhPark": 1000 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-2.5us": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 2500, "sPark": 2500, "mPark": 2500, "hPark": 2500, "xhPark": 2500 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-5us": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-10us": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-15us": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 15000, "sPark": 15000, "mPark": 15000, "hPark": 15000, "xhPark": 15000 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-xh-25us": {
+      "idleContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 25000, "sPark": 25000, "mPark": 25000, "hPark": 25000, "xhPark": 25000 }
+      ],
+      "execContentionThresholds": { "xsContention": 50000, "sContention": 350000, "mContention": 650000, "hContention": 850000 },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-2core-xh-0ns": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-0ns", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-500ns": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-500ns", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-1us": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-1us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-2.5us": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-2.5us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-5us": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-5us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-10us": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-10us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-15us": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-15us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-2core-xh-25us": { "cpuSet": [2, 4], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-25us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-4core-xh-0ns": { "cpuSet": [2, 4, 6, 8], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-0ns", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-4core-xh-1us": { "cpuSet": [2, 4, 6, 8], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-1us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-4core-xh-5us": { "cpuSet": [2, 4, 6, 8], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-5us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true },
+    "profile-4core-xh-15us": { "cpuSet": [2, 4, 6, 8], "parallelSources": 1, "orderedSources": 0, "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000, "invocationTimeoutMillis": 30000, "decisionWeightProfile": "weights-xh-15us", "rawSampleLimit": 4096, "observeCycleStart": true, "observeBatchProgress": true, "observeBatchComplete": true, "observeRawBodyCost": true, "observeIdleDecision": true, "observeExecDecision": true }
+  },
+  "sweeps": [
+    {
+      "id": "sweep-2core-xh-0ns",
+      "baseTrialId": "base-2core-xh-0ns",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-500ns",
+      "baseTrialId": "base-2core-xh-500ns",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-1us",
+      "baseTrialId": "base-2core-xh-1us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-2.5us",
+      "baseTrialId": "base-2core-xh-2.5us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-5us",
+      "baseTrialId": "base-2core-xh-5us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-10us",
+      "baseTrialId": "base-2core-xh-10us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-15us",
+      "baseTrialId": "base-2core-xh-15us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-2core-xh-25us",
+      "baseTrialId": "base-2core-xh-25us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-4core-xh-0ns",
+      "baseTrialId": "base-4core-xh-0ns",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-4core-xh-1us",
+      "baseTrialId": "base-4core-xh-1us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-4core-xh-5us",
+      "baseTrialId": "base-4core-xh-5us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    },
+    {
+      "id": "sweep-4core-xh-15us",
+      "baseTrialId": "base-4core-xh-15us",
+      "parameters": [{ "path": "/calibrationConfig/workUnits", "values": [0, 48, 144, 216, 288] }]
+    }
+  ],
+  "trials": [
+    { "id": "base-2core-xh-0ns", "name": "Base 2Core XH 0ns", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-0ns" },
+    { "id": "base-2core-xh-500ns", "name": "Base 2Core XH 500ns", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-500ns" },
+    { "id": "base-2core-xh-1us", "name": "Base 2Core XH 1us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-1us" },
+    { "id": "base-2core-xh-2.5us", "name": "Base 2Core XH 2.5us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-2.5us" },
+    { "id": "base-2core-xh-5us", "name": "Base 2Core XH 5us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-5us" },
+    { "id": "base-2core-xh-10us", "name": "Base 2Core XH 10us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-10us" },
+    { "id": "base-2core-xh-15us", "name": "Base 2Core XH 15us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-15us" },
+    { "id": "base-2core-xh-25us", "name": "Base 2Core XH 25us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-2core-xh-25us" },
+    { "id": "base-4core-xh-0ns", "name": "Base 4Core XH 0ns", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-4core-xh-0ns" },
+    { "id": "base-4core-xh-1us", "name": "Base 4Core XH 1us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-4core-xh-1us" },
+    { "id": "base-4core-xh-5us", "name": "Base 4Core XH 5us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-4core-xh-5us" },
+    { "id": "base-4core-xh-15us", "name": "Base 4Core XH 15us", "group": "idle-duration-refinement", "enabled": false, "forks": 1, "warmups": 2, "iterations": 4, "warmupTime": "2s", "measurementTime": "2s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "profile-4core-xh-15us" }
+  ]
+}

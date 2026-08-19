@@ -1,0 +1,481 @@
+{
+  "schemaVersion": 1,
+  "id": "10-idle-contention-coarse-sweep",
+  "name": "Phase 5 Idle Contention and Park Duration Coarse Sweep",
+  "description": "Evaluates idle park durations (0 ns, 1 us, 5 us, 15 us, 50 us) across uncontended (16 sources / XS), balanced (2 sources / M), and severe deficit (1 source / XH) contention regimes on 2 cores across 4 calibrated body bands (XS: 0, S: 48, M: 144, XH: 288).",
+  "labels": {
+    "preset": "idle-contention-coarse-sweep",
+    "phase": "5"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/10-idle-contention-coarse-sweep",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "weights-idle-0ns": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-idle-1us": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 1000, "sPark": 1000, "mPark": 1000, "hPark": 1000, "xhPark": 1000 },
+        { "xsPark": 1000, "sPark": 1000, "mPark": 1000, "hPark": 1000, "xhPark": 1000 },
+        { "xsPark": 1000, "sPark": 1000, "mPark": 1000, "hPark": 1000, "xhPark": 1000 },
+        { "xsPark": 1000, "sPark": 1000, "mPark": 1000, "hPark": 1000, "xhPark": 1000 },
+        { "xsPark": 1000, "sPark": 1000, "mPark": 1000, "hPark": 1000, "xhPark": 1000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-idle-5us": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 },
+        { "xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 },
+        { "xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 },
+        { "xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 },
+        { "xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-idle-15us": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 15000, "sPark": 15000, "mPark": 15000, "hPark": 15000, "xhPark": 15000 },
+        { "xsPark": 15000, "sPark": 15000, "mPark": 15000, "hPark": 15000, "xhPark": 15000 },
+        { "xsPark": 15000, "sPark": 15000, "mPark": 15000, "hPark": 15000, "xhPark": 15000 },
+        { "xsPark": 15000, "sPark": 15000, "mPark": 15000, "hPark": 15000, "xhPark": 15000 },
+        { "xsPark": 15000, "sPark": 15000, "mPark": 15000, "hPark": 15000, "xhPark": 15000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "weights-idle-50us": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 50000, "sPark": 50000, "mPark": 50000, "hPark": 50000, "xhPark": 50000 },
+        { "xsPark": 50000, "sPark": 50000, "mPark": 50000, "hPark": 50000, "xhPark": 50000 },
+        { "xsPark": 50000, "sPark": 50000, "mPark": 50000, "hPark": 50000, "xhPark": 50000 },
+        { "xsPark": 50000, "sPark": 50000, "mPark": 50000, "hPark": 50000, "xhPark": 50000 },
+        { "xsPark": 50000, "sPark": 50000, "mPark": 50000, "hPark": 50000, "xhPark": 50000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-idle-0ns": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "weights-idle-0ns",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-idle-1us": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "weights-idle-1us",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-idle-5us": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "weights-idle-5us",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-idle-15us": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "weights-idle-15us",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-idle-50us": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "weights-idle-50us",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "sweep-idle-0ns",
+      "baseTrialId": "base-idle-0ns",
+      "description": "Sweep contention and body costs for 0ns (no idle) baseline.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 2, 1]
+        },
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 288]
+        }
+      ]
+    },
+    {
+      "id": "sweep-idle-1us",
+      "baseTrialId": "base-idle-1us",
+      "description": "Sweep contention and body costs for 1us park duration.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 2, 1]
+        },
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 288]
+        }
+      ]
+    },
+    {
+      "id": "sweep-idle-5us",
+      "baseTrialId": "base-idle-5us",
+      "description": "Sweep contention and body costs for 5us park duration.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 2, 1]
+        },
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 288]
+        }
+      ]
+    },
+    {
+      "id": "sweep-idle-15us",
+      "baseTrialId": "base-idle-15us",
+      "description": "Sweep contention and body costs for 15us park duration.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 2, 1]
+        },
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 288]
+        }
+      ]
+    },
+    {
+      "id": "sweep-idle-50us",
+      "baseTrialId": "base-idle-50us",
+      "description": "Sweep contention and body costs for 50us park duration.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 2, 1]
+        },
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 288]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "base-idle-0ns",
+      "name": "Base Idle 0ns",
+      "group": "idle-coarse-sweep",
+      "description": "Base trial for 0ns idle sweep.",
+      "tags": ["phase5", "idle", "0ns"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 4,
+      "warmupTime": "2s",
+      "measurementTime": "2s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-idle-0ns"
+    },
+    {
+      "id": "base-idle-1us",
+      "name": "Base Idle 1us",
+      "group": "idle-coarse-sweep",
+      "description": "Base trial for 1us idle sweep.",
+      "tags": ["phase5", "idle", "1us"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 4,
+      "warmupTime": "2s",
+      "measurementTime": "2s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-idle-1us"
+    },
+    {
+      "id": "base-idle-5us",
+      "name": "Base Idle 5us",
+      "group": "idle-coarse-sweep",
+      "description": "Base trial for 5us idle sweep.",
+      "tags": ["phase5", "idle", "5us"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 4,
+      "warmupTime": "2s",
+      "measurementTime": "2s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-idle-5us"
+    },
+    {
+      "id": "base-idle-15us",
+      "name": "Base Idle 15us",
+      "group": "idle-coarse-sweep",
+      "description": "Base trial for 15us idle sweep.",
+      "tags": ["phase5", "idle", "15us"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 4,
+      "warmupTime": "2s",
+      "measurementTime": "2s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-idle-15us"
+    },
+    {
+      "id": "base-idle-50us",
+      "name": "Base Idle 50us",
+      "group": "idle-coarse-sweep",
+      "description": "Base trial for 50us idle sweep.",
+      "tags": ["phase5", "idle", "50us"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 1,
+      "iterations": 4,
+      "warmupTime": "2s",
+      "measurementTime": "2s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-idle-50us"
+    }
+  ]
+}

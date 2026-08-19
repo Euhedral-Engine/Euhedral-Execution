@@ -1,0 +1,85 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "idle-0ns-baseline",
+    "runs": [
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__0_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__1_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__2_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__3_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__4_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__5_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__6_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__7_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__8_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__9_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__10_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-0ns__sweep-idle-0ns__11_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "idle-park-candidates",
+    "runs": [
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__0_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__1_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__2_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__3_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__4_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__5_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__6_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__7_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__8_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__9_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__10_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-1us__sweep-idle-1us__11_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__0_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__1_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__2_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__3_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__4_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__5_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__6_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__7_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__8_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__9_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__10_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-5us__sweep-idle-5us__11_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__0_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__1_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__2_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__3_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__4_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__5_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__6_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__7_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__8_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__9_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__10_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-15us__sweep-idle-15us__11_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__0_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__1_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__2_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__3_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__4_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__5_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__6_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__7_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__8_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__9_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__10_repeat_0",
+      "experiments/10-idle-contention-coarse-sweep/base-idle-50us__sweep-idle-50us__11_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/parallelSources",
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/10-idle-contention-coarse-sweep/comparisons"
+}

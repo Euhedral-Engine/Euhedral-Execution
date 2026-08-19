@@ -1,0 +1,34 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "4core-xh-baseline",
+    "runs": [
+      "experiments/12-idle-policy-verification-multifork/base-4core-baseline__sweep-4core-xh-baseline__0_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-baseline__sweep-4core-xh-baseline__1_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-baseline__sweep-4core-xh-baseline__2_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-baseline__sweep-4core-xh-baseline__3_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-baseline__sweep-4core-xh-baseline__4_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "4core-xh-calibrated",
+    "runs": [
+      "experiments/12-idle-policy-verification-multifork/base-4core-calibrated__sweep-4core-xh-calibrated__0_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-calibrated__sweep-4core-xh-calibrated__1_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-calibrated__sweep-4core-xh-calibrated__2_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-calibrated__sweep-4core-xh-calibrated__3_repeat_0",
+      "experiments/12-idle-policy-verification-multifork/base-4core-calibrated__sweep-4core-xh-calibrated__4_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/12-idle-policy-verification-multifork/comparisons-4core"
+}
