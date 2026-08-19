@@ -63,7 +63,7 @@
   },
   "calibrationProfiles": {
     "zero-work-direct": {
-      "cpuSet": [2, 3, 4, 5],
+      "cpuSet": [2, 3],
       "parallelSources": 2,
       "orderedSources": 0,
       "workUnits": 0,

@@ -1,5 +1,5 @@
 {
-  "strategy": "CROSS",
+  "strategy": "KEYED",
   "baseline": {
     "label": "direct-sweep",
     "runs": [
@@ -7,7 +7,10 @@
       "experiments/01-xh-body-boundary/body-direct__direct-body-work__1_repeat_0",
       "experiments/01-xh-body-boundary/body-direct__direct-body-work__2_repeat_0",
       "experiments/01-xh-body-boundary/body-direct__direct-body-work__3_repeat_0",
-      "experiments/01-xh-body-boundary/body-direct__direct-body-work__4_repeat_0"
+      "experiments/01-xh-body-boundary/body-direct__direct-body-work__4_repeat_0",
+      "experiments/01-xh-body-boundary/body-direct__direct-body-work__5_repeat_0",
+      "experiments/01-xh-body-boundary/body-direct__direct-body-work__6_repeat_0",
+      "experiments/01-xh-body-boundary/body-direct__direct-body-work__7_repeat_0"
     ]
   },
   "candidates": {
@@ -17,8 +20,17 @@
       "experiments/01-xh-body-boundary/body-staged__staged-body-work__1_repeat_0",
       "experiments/01-xh-body-boundary/body-staged__staged-body-work__2_repeat_0",
       "experiments/01-xh-body-boundary/body-staged__staged-body-work__3_repeat_0",
-      "experiments/01-xh-body-boundary/body-staged__staged-body-work__4_repeat_0"
+      "experiments/01-xh-body-boundary/body-staged__staged-body-work__4_repeat_0",
+      "experiments/01-xh-body-boundary/body-staged__staged-body-work__5_repeat_0",
+      "experiments/01-xh-body-boundary/body-staged__staged-body-work__6_repeat_0",
+      "experiments/01-xh-body-boundary/body-staged__staged-body-work__7_repeat_0"
     ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
   },
   "options": {
     "includeDiagnostics": true,

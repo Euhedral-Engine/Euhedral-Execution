@@ -105,13 +105,13 @@
   },
   "calibrationProfiles": {
     "direct": {
-      "cpuSet": [2, 3, 4, 5],
+      "cpuSet": [2, 3],
       "parallelSources": 2,
       "orderedSources": 0,
       "workUnits": 0,
       "randomizeWork": false,
-      "totalRequiredExecutions": 8000000,
-      "invocationTimeoutMillis": 10000,
+      "totalRequiredExecutions": 1000000,
+      "invocationTimeoutMillis": 30000,
       "decisionWeightProfile": "forced-direct",
       "rawSampleLimit": 4096,
       "observeCycleStart": false,
@@ -122,13 +122,13 @@
       "observeExecDecision": true
     },
     "staged": {
-      "cpuSet": [2, 3, 4, 5],
+      "cpuSet": [2, 3],
       "parallelSources": 2,
       "orderedSources": 0,
       "workUnits": 0,
       "randomizeWork": false,
-      "totalRequiredExecutions": 8000000,
-      "invocationTimeoutMillis": 10000,
+      "totalRequiredExecutions": 1000000,
+      "invocationTimeoutMillis": 30000,
       "decisionWeightProfile": "forced-staged",
       "rawSampleLimit": 4096,
       "observeCycleStart": false,
@@ -147,7 +147,7 @@
       "parameters": [
         {
           "path": "/calibrationConfig/workUnits",
-          "values": [208, 212, 216, 220, 224]
+          "values": [0, 48, 96, 144, 192, 216, 240, 288]
         }
       ]
     },
@@ -158,7 +158,7 @@
       "parameters": [
         {
           "path": "/calibrationConfig/workUnits",
-          "values": [208, 212, 216, 220, 224]
+          "values": [0, 48, 96, 144, 192, 216, 240, 288]
         }
       ]
     }
@@ -174,11 +174,11 @@
         "direct",
         "baseline"
       ],
-      "enabled": true,
-      "forks": 3,
+      "enabled": false,
+      "forks": 1,
       "warmups": 2,
       "iterations": 5,
-      "warmupTime": "2s",
+      "warmupTime": "3s",
       "measurementTime": "3s",
       "jvmArgs": [
         "-XX:+UseThreadPriorities",
@@ -201,11 +201,11 @@
         "staged",
         "candidate"
       ],
-      "enabled": true,
-      "forks": 3,
+      "enabled": false,
+      "forks": 1,
       "warmups": 2,
       "iterations": 5,
-      "warmupTime": "2s",
+      "warmupTime": "3s",
       "measurementTime": "3s",
       "jvmArgs": [
         "-XX:+UseThreadPriorities",

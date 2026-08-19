@@ -44,3 +44,4 @@ gradlew.bat
 **/.tool-versions
 **/.profileconfig.json
 benchmarks/experiments/*/
+experiments/*/
