@@ -1,4 +1,23 @@
 {
+  "calibrationProfiles": {
+    "standard-2core-fixture": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "default-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
   "decisionWeightProfiles": {
     "default-weights": {
       "idleContentionThresholds": {
@@ -8,10 +27,10 @@
         "hContention": 800000
       },
       "idleBodyCostWeights": [
-        { "xs": 128, "s": 128, "m": 128, "h": 128 },
-        { "xs": 128, "s": 128, "m": 128, "h": 128 },
-        { "xs": 128, "s": 128, "m": 128, "h": 128 },
-        { "xs": 128, "s": 128, "m": 128, "h": 128 }
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
       ],
       "idleTimeNs": [
         { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
@@ -27,10 +46,10 @@
         "hContention": 800000
       },
       "execBodyCostWeights": [
-        { "xs": 128, "s": 128, "m": 128, "h": 216 },
-        { "xs": 128, "s": 128, "m": 128, "h": 216 },
-        { "xs": 128, "s": 128, "m": 128, "h": 216 },
-        { "xs": 128, "s": 128, "m": 128, "h": 216 }
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
       ],
       "executionPolicies": [
         { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },

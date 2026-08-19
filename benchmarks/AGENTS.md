@@ -90,7 +90,7 @@ HarnessConfig
    - `calibrationProfile` (`string`): Reference to local or namespaced imported calibration profile (e.g. `"common.uniform-xs"`).
    - `calibrationConfig`
      ([`CalibrationBenchmarkConfig`](src/main/java/calibration/config/CalibrationBenchmarkConfig.java)):
-     - `cpuSet`: List of CPU IDs for fragment worker pinning (e.g. `[1, 2, 3, 4]`).
+     - `cpuSet`: List of CPU IDs for fragment worker pinning (e.g. `[2, 4]` or `[2, 3, 4, 5]`).
      - `parallelSources`: Number of unordered, parallel frame sources.
      - `orderedSources`: Number of sequential, ordered frame sources.
      - `workUnits`: Artificial synthetic load per frame.
@@ -107,6 +107,44 @@ HarnessConfig
        - `observeRawBodyCost`: Unfiltered execution cost samples.
        - `observeIdleDecision`: Idle action decision evaluations.
        - `observeExecDecision`: Execution action decision evaluations.
+
+#### Host Topology and CPU-to-Core Mapping (Intel Core i9-14900K)
+
+Euhedral allocates one worker fragment per physical core on a shard. In `FragmentDecisionTree`,
+branch decisions (`execBranchDecision` and `idleBranchDecision`) are evaluated only when
+`registeredWorkers > 1`. If `cpuSet` contains only logical CPUs mapping to a single physical core
+(such as `[2, 3]` which both map to Core 1), only 1 worker fragment is spawned, causing branch
+decisions to be bypassed (`DIRECT` fast-path).
+
+To configure a multi-core fixture (such as a 2-core fixture), select CPUs across distinct physical
+cores (e.g. `[2, 4]` or `[2, 3, 4, 5]` for 2 P-cores).
+
+| Physical Core ID | Core Type | Logical CPU IDs (Hyperthreads) | Threads | Role / Recommendation |
+|:---:|:---:|:---:|:---:|:---|
+| **0** | P-Core | `0`, `1` | 2 | Reserved (JMH driver / benchmark thread) |
+| **1** | P-Core | `2`, `3` | 2 | Worker P-Core (Primary) |
+| **2** | P-Core | `4`, `5` | 2 | Worker P-Core (Secondary for 2-core fixture) |
+| **3** | P-Core | `6`, `7` | 2 | Worker P-Core |
+| **4** | P-Core | `8`, `9` | 2 | Worker P-Core |
+| **5** | P-Core | `10`, `11` | 2 | Worker P-Core |
+| **6** | P-Core | `12`, `13` | 2 | Worker P-Core |
+| **7** | P-Core | `14`, `15` | 2 | Worker P-Core |
+| **8** | E-Core | `16` | 1 | Worker E-Core |
+| **9** | E-Core | `17` | 1 | Worker E-Core |
+| **10** | E-Core | `18` | 1 | Worker E-Core |
+| **11** | E-Core | `19` | 1 | Worker E-Core |
+| **12** | E-Core | `20` | 1 | Worker E-Core |
+| **13** | E-Core | `21` | 1 | Worker E-Core |
+| **14** | E-Core | `22` | 1 | Worker E-Core |
+| **15** | E-Core | `23` | 1 | Worker E-Core |
+| **16** | E-Core | `24` | 1 | Worker E-Core |
+| **17** | E-Core | `25` | 1 | Worker E-Core |
+| **18** | E-Core | `26` | 1 | Worker E-Core |
+| **19** | E-Core | `27` | 1 | Worker E-Core |
+| **20** | E-Core | `28` | 1 | Worker E-Core |
+| **21** | E-Core | `29` | 1 | Worker E-Core |
+| **22** | E-Core | `30` | 1 | Worker E-Core |
+| **23** | E-Core | `31` | 1 | Worker E-Core |
 
 #### Execution Path Strategies (`ExecutionPath`)
 

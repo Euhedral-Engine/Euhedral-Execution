@@ -1,0 +1,379 @@
+{
+  "schemaVersion": 1,
+  "id": "02-body-weight-mapping",
+  "name": "Phase 2 Body Weight to Runtime Threshold Mapping",
+  "description": "Determines the portable decision weights that reproduce the physical body landmarks established in Phase 1 (XS: 0, S: 48, M: 144, H: 192, XH: 216) across 2 physical P-cores.",
+  "labels": {
+    "preset": "body-weight-mapping",
+    "phase": "2"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/02-body-weight-mapping",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "direct-template": {
+      "idleContentionThresholds": {
+        "xsContention": 200000,
+        "sContention": 400000,
+        "mContention": 600000,
+        "hContention": 800000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 1024, "s": 1024, "m": 1024, "h": 1024 },
+        { "xs": 1024, "s": 1024, "m": 1024, "h": 1024 },
+        { "xs": 1024, "s": 1024, "m": 1024, "h": 1024 },
+        { "xs": 1024, "s": 1024, "m": 1024, "h": 1024 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 200000,
+        "sContention": 400000,
+        "mContention": 600000,
+        "hContention": 800000
+      },
+      "execBodyCostWeights": [
+        { "xs": 128, "s": 128, "m": 128, "h": 128 },
+        { "xs": 128, "s": 128, "m": 128, "h": 128 },
+        { "xs": 128, "s": 128, "m": 128, "h": 128 },
+        { "xs": 128, "s": 128, "m": 128, "h": 128 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-xs": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "direct-template",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-s": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "direct-template",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-m": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 144,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "direct-template",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-xh": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 216,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "direct-template",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "xs-weight-sweep",
+      "baseTrialId": "calibrate-xs-landmark",
+      "description": "Sweep collapsed threshold weights against XS landmark (workUnits = 0) to locate the threshold decision weight.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execBodyCostWeights",
+          "values": [
+            [
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 }
+            ],
+            [
+              { "xs": 128, "s": 128, "m": 128, "h": 128 },
+              { "xs": 128, "s": 128, "m": 128, "h": 128 },
+              { "xs": 128, "s": 128, "m": 128, "h": 128 },
+              { "xs": 128, "s": 128, "m": 128, "h": 128 }
+            ],
+            [
+              { "xs": 96, "s": 96, "m": 96, "h": 96 },
+              { "xs": 96, "s": 96, "m": 96, "h": 96 },
+              { "xs": 96, "s": 96, "m": 96, "h": 96 },
+              { "xs": 96, "s": 96, "m": 96, "h": 96 }
+            ],
+            [
+              { "xs": 64, "s": 64, "m": 64, "h": 64 },
+              { "xs": 64, "s": 64, "m": 64, "h": 64 },
+              { "xs": 64, "s": 64, "m": 64, "h": 64 },
+              { "xs": 64, "s": 64, "m": 64, "h": 64 }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s-weight-sweep",
+      "baseTrialId": "calibrate-s-landmark",
+      "description": "Sweep collapsed threshold weights against S landmark (workUnits = 48) to locate the threshold decision weight.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execBodyCostWeights",
+          "values": [
+            [
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 }
+            ],
+            [
+              { "xs": 192, "s": 192, "m": 192, "h": 192 },
+              { "xs": 192, "s": 192, "m": 192, "h": 192 },
+              { "xs": 192, "s": 192, "m": 192, "h": 192 },
+              { "xs": 192, "s": 192, "m": 192, "h": 192 }
+            ],
+            [
+              { "xs": 160, "s": 160, "m": 160, "h": 160 },
+              { "xs": 160, "s": 160, "m": 160, "h": 160 },
+              { "xs": 160, "s": 160, "m": 160, "h": 160 },
+              { "xs": 160, "s": 160, "m": 160, "h": 160 }
+            ],
+            [
+              { "xs": 144, "s": 144, "m": 144, "h": 144 },
+              { "xs": 144, "s": 144, "m": 144, "h": 144 },
+              { "xs": 144, "s": 144, "m": 144, "h": 144 },
+              { "xs": 144, "s": 144, "m": 144, "h": 144 }
+            ],
+            [
+              { "xs": 128, "s": 128, "m": 128, "h": 128 },
+              { "xs": 128, "s": 128, "m": 128, "h": 128 },
+              { "xs": 128, "s": 128, "m": 128, "h": 128 },
+              { "xs": 128, "s": 128, "m": 128, "h": 128 }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m-weight-sweep",
+      "baseTrialId": "calibrate-m-landmark",
+      "description": "Sweep collapsed threshold weights against M landmark (workUnits = 144) to locate the threshold decision weight.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execBodyCostWeights",
+          "values": [
+            [
+              { "xs": 384, "s": 384, "m": 384, "h": 384 },
+              { "xs": 384, "s": 384, "m": 384, "h": 384 },
+              { "xs": 384, "s": 384, "m": 384, "h": 384 },
+              { "xs": 384, "s": 384, "m": 384, "h": 384 }
+            ],
+            [
+              { "xs": 288, "s": 288, "m": 288, "h": 288 },
+              { "xs": 288, "s": 288, "m": 288, "h": 288 },
+              { "xs": 288, "s": 288, "m": 288, "h": 288 },
+              { "xs": 288, "s": 288, "m": 288, "h": 288 }
+            ],
+            [
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 }
+            ],
+            [
+              { "xs": 216, "s": 216, "m": 216, "h": 216 },
+              { "xs": 216, "s": 216, "m": 216, "h": 216 },
+              { "xs": 216, "s": 216, "m": 216, "h": 216 },
+              { "xs": 216, "s": 216, "m": 216, "h": 216 }
+            ],
+            [
+              { "xs": 192, "s": 192, "m": 192, "h": 192 },
+              { "xs": 192, "s": 192, "m": 192, "h": 192 },
+              { "xs": 192, "s": 192, "m": 192, "h": 192 },
+              { "xs": 192, "s": 192, "m": 192, "h": 192 }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "xh-weight-sweep",
+      "baseTrialId": "calibrate-xh-landmark",
+      "description": "Sweep collapsed threshold weights against XH landmark (workUnits = 216) to locate the threshold decision weight.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execBodyCostWeights",
+          "values": [
+            [
+              { "xs": 512, "s": 512, "m": 512, "h": 512 },
+              { "xs": 512, "s": 512, "m": 512, "h": 512 },
+              { "xs": 512, "s": 512, "m": 512, "h": 512 },
+              { "xs": 512, "s": 512, "m": 512, "h": 512 }
+            ],
+            [
+              { "xs": 384, "s": 384, "m": 384, "h": 384 },
+              { "xs": 384, "s": 384, "m": 384, "h": 384 },
+              { "xs": 384, "s": 384, "m": 384, "h": 384 },
+              { "xs": 384, "s": 384, "m": 384, "h": 384 }
+            ],
+            [
+              { "xs": 320, "s": 320, "m": 320, "h": 320 },
+              { "xs": 320, "s": 320, "m": 320, "h": 320 },
+              { "xs": 320, "s": 320, "m": 320, "h": 320 },
+              { "xs": 320, "s": 320, "m": 320, "h": 320 }
+            ],
+            [
+              { "xs": 288, "s": 288, "m": 288, "h": 288 },
+              { "xs": 288, "s": 288, "m": 288, "h": 288 },
+              { "xs": 288, "s": 288, "m": 288, "h": 288 },
+              { "xs": 288, "s": 288, "m": 288, "h": 288 }
+            ],
+            [
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 },
+              { "xs": 256, "s": 256, "m": 256, "h": 256 }
+            ],
+            [
+              { "xs": 216, "s": 216, "m": 216, "h": 216 },
+              { "xs": 216, "s": 216, "m": 216, "h": 216 },
+              { "xs": 216, "s": 216, "m": 216, "h": 216 },
+              { "xs": 216, "s": 216, "m": 216, "h": 216 }
+            ]
+          ]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "calibrate-xs-landmark",
+      "name": "XS Landmark Weight Calibration",
+      "group": "xs-weight-sweep",
+      "description": "Baseline trial for finding the decision weight for the XS physical body landmark (workUnits = 0).",
+      "tags": ["xs-band", "weight-calibration"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-xs"
+    },
+    {
+      "id": "calibrate-s-landmark",
+      "name": "S Landmark Weight Calibration",
+      "group": "s-weight-sweep",
+      "description": "Baseline trial for finding the decision weight for the S physical body landmark (workUnits = 48).",
+      "tags": ["s-band", "weight-calibration"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-s"
+    },
+    {
+      "id": "calibrate-m-landmark",
+      "name": "M Landmark Weight Calibration",
+      "group": "m-weight-sweep",
+      "description": "Baseline trial for finding the decision weight for the M physical body landmark (workUnits = 144).",
+      "tags": ["m-band", "weight-calibration"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-m"
+    },
+    {
+      "id": "calibrate-xh-landmark",
+      "name": "XH Landmark Weight Calibration",
+      "group": "xh-weight-sweep",
+      "description": "Baseline trial for finding the decision weight for the XH physical body landmark (workUnits = 216).",
+      "tags": ["xh-band", "weight-calibration"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-xh"
+    }
+  ]
+}
