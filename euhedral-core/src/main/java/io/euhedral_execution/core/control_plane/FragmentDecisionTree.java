@@ -24,6 +24,7 @@ final class FragmentDecisionTree {
 
     // Measurement Variables
     static final int BODY_COST_WINDOW_SAMPLES = 32;
+    static final int BODY_COST_WINDOW_MASK = BODY_COST_WINDOW_SAMPLES - 1;
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
     static final int SPIN_MISSES = 64;
@@ -297,7 +298,7 @@ final class FragmentDecisionTree {
         }
 
         this.bodyCostWindow[this.bodyCostWindowIndex] = (double) elapsedNs;
-        this.bodyCostWindowIndex = (this.bodyCostWindowIndex + 1) % BODY_COST_WINDOW_SAMPLES;
+        this.bodyCostWindowIndex = (this.bodyCostWindowIndex + 1) & BODY_COST_WINDOW_MASK;
         if (this.bodyCostHistoryCount < Integer.MAX_VALUE) {
             this.bodyCostHistoryCount++;
         }

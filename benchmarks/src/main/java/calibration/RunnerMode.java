@@ -6,7 +6,8 @@ import org.jspecify.annotations.NonNull;
 /// Execution modes supported by CalibrationRunner.
 public enum RunnerMode {
     RUN,
-    COMPARE;
+    COMPARE,
+    CALIBRATE_WORK;
 
     /// Parses a string into a RunnerMode using case-insensitive matching.
     ///
@@ -17,7 +18,7 @@ public enum RunnerMode {
         Objects.requireNonNull(value, "value must not be null");
         String trimmed = value.trim();
         for (RunnerMode mode : values()) {
-            if (mode.name().equalsIgnoreCase(trimmed)) {
+            if (mode.name().equalsIgnoreCase(trimmed) || mode.name().equalsIgnoreCase(trimmed.replace('-', '_'))) {
                 return mode;
             }
         }

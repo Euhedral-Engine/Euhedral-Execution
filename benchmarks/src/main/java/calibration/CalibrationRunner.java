@@ -43,7 +43,8 @@ public class CalibrationRunner {
     private static final String USAGE = """
             Usage:
               euhedral-calibration run <harness-config.json>
-              euhedral-calibration compare <comparison-config.json|experiment-directory>""";
+              euhedral-calibration compare <comparison-config.json|experiment-directory>
+              euhedral-calibration calibrate-work <harness-config.json>""";
 
     private static final List<String> DEFAULT_FLAGS = List.of(
             "-XX:+UseThreadPriorities",
@@ -70,6 +71,7 @@ public class CalibrationRunner {
         switch (mode) {
             case RUN -> runCalibration(configPath);
             case COMPARE -> CalibrationComparison.runComparison(configPath);
+            case CALIBRATE_WORK -> runWorkCalibration(configPath);
         }
     }
 
@@ -78,13 +80,21 @@ public class CalibrationRunner {
     }
 
     static void runCalibration(String configPath) throws Exception {
+        runCalibration(configPath, CalibrationBenchmark.class);
+    }
+
+    static void runWorkCalibration(String configPath) throws Exception {
+        runCalibration(configPath, WeightBenchmark.class);
+    }
+
+    static void runCalibration(String configPath, Class<?> benchmarkClass) throws Exception {
         ObjectMapper mapper = new ObjectMapper();
         HarnessConfig harnessConfig = loadConfig(configPath, mapper);
 
         List<TrialConfig> activeTrials = resolveTrials(harnessConfig, mapper);
         File baseOutputDir = resolveOutputDirectory(harnessConfig.artifacts());
 
-        runHarness(harnessConfig, activeTrials, baseOutputDir, mapper);
+        runHarness(harnessConfig, activeTrials, baseOutputDir, mapper, benchmarkClass);
     }
 
     static HarnessConfig loadConfig(String path, ObjectMapper mapper) throws Exception {
@@ -197,6 +207,16 @@ public class CalibrationRunner {
     static void runHarness(
             HarnessConfig harnessConfig, List<TrialConfig> activeTrials, File baseOutputDir, ObjectMapper mapper)
             throws Exception {
+        runHarness(harnessConfig, activeTrials, baseOutputDir, mapper, CalibrationBenchmark.class);
+    }
+
+    static void runHarness(
+            HarnessConfig harnessConfig,
+            List<TrialConfig> activeTrials,
+            File baseOutputDir,
+            ObjectMapper mapper,
+            Class<?> benchmarkClass)
+            throws Exception {
         HarnessRunOptions runOptions = harnessConfig.runOptions();
         int repeatCount = (runOptions != null && runOptions.repeatCount() != null) ? runOptions.repeatCount() : 1;
         boolean failFast = runOptions == null || runOptions.failFast() == null || runOptions.failFast();
@@ -208,10 +228,10 @@ public class CalibrationRunner {
             for (int trial = 0; trial < activeTrials.size(); trial++) {
                 TrialConfig trialConfig = activeTrials.get(trial);
                 if (failFast) {
-                    runTrial(trialConfig, trial, repeat, mapper, artifacts, baseOutputDir);
+                    runTrial(trialConfig, trial, repeat, mapper, artifacts, baseOutputDir, benchmarkClass);
                 } else {
                     try {
-                        runTrial(trialConfig, trial, repeat, mapper, artifacts, baseOutputDir);
+                        runTrial(trialConfig, trial, repeat, mapper, artifacts, baseOutputDir, benchmarkClass);
                     } catch (Exception e) {
                         String idStr = getTrialIdentifier(trialConfig);
                         LOGGER.error("[Failed trial] repeat={} trial={} {}", repeat, trial, idStr, e);
@@ -234,6 +254,18 @@ public class CalibrationRunner {
             ArtifactConfig artifacts,
             File baseOutputDir)
             throws Exception {
+        runTrial(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir, CalibrationBenchmark.class);
+    }
+
+    static void runTrial(
+            TrialConfig trial,
+            int trialIndex,
+            int repeatIndex,
+            ObjectMapper mapper,
+            ArtifactConfig artifacts,
+            File baseOutputDir,
+            Class<?> benchmarkClass)
+            throws Exception {
         logTrialStart(trial, trialIndex, repeatIndex);
 
         File tempConfigFile = File.createTempFile("trial_config_", ".json");
@@ -246,7 +278,7 @@ public class CalibrationRunner {
             List<String> jvmArgs = buildJvmArgs(
                     trial, trialIndex, repeatIndex, tempConfigFile.getCanonicalPath(), invocationDir, artifacts);
 
-            Options options = buildOptions(trial, jvmArgs, artifacts, invocationDir);
+            Options options = buildOptions(trial, jvmArgs, artifacts, invocationDir, benchmarkClass);
             new Runner(options).run();
 
             logTrialCompletion(trial, trialIndex, repeatIndex);
@@ -257,8 +289,17 @@ public class CalibrationRunner {
     }
 
     static Options buildOptions(TrialConfig trial, List<String> jvmArgs, ArtifactConfig artifacts, File invocationDir) {
+        return buildOptions(trial, jvmArgs, artifacts, invocationDir, CalibrationBenchmark.class);
+    }
+
+    static Options buildOptions(
+            TrialConfig trial,
+            List<String> jvmArgs,
+            ArtifactConfig artifacts,
+            File invocationDir,
+            Class<?> benchmarkClass) {
         ChainedOptionsBuilder opt = new OptionsBuilder();
-        opt = opt.include(CalibrationBenchmark.class.getName());
+        opt = opt.include(benchmarkClass.getName());
         opt = opt.jvmArgsAppend(jvmArgs.toArray(new String[0]));
         opt = opt.forks(trial.forks());
         opt = opt.warmupIterations(trial.warmups());

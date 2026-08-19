@@ -159,24 +159,28 @@ This compiles the code and generates the runtime distribution under `benchmarks/
 
 ### Script Usage
 
-The launcher supports two explicit, separate modes:
+The launcher supports three explicit, separate modes:
 
 ```bash
 # RUN mode: executes configured calibration benchmarks
 benchmarks/build/bin/euhedral-calibration run <path-to-harness-config.json>
 
 # COMPARE mode: consumes completed immutable benchmark artifacts and produces comparison artifacts
-# 1. Directly comparing all runs in an experiment output directory:
+### 1. Directly comparing all runs in an experiment output directory:
 benchmarks/build/bin/euhedral-calibration compare <path-to-experiment-directory>
 
-# 2. Or using a comparison configuration JSON preset/file:
+### 2. Or using a comparison configuration JSON preset/file:
 benchmarks/build/bin/euhedral-calibration compare <path-to-comparison-config.json>
+
+# CALIBRATE-WORK mode: executes micro-calibrator latency benchmark across configured trials to find the weight value for work units
+benchmarks/build/bin/euhedral-calibration calibrate-work <path-to-harness-config.json>
 ```
 
 - **`run`**: Loads harness configuration, resolves trial profiles and sweeps, executes JMH benchmark harness, and writes raw observations and statistics.
 - **`compare`**: Evaluates completed runs and produces comparison summaries and diagnostics.
   - When given an **experiment directory** (e.g. `experiments/00-xs-execution-boundary`), it automatically discovers all completed trial runs in the folder, selects the baseline trial (preferring explicit baseline > trials named `*baseline*`/`*base*` > root non-sweep trial with `origin == null` > first trial), compares all remaining candidate trials against it, and exports results to `<experiment-directory>/comparisons`.
   - When given a **comparison configuration JSON file**, it supports either an `experimentDirectory` field or explicit `baseline` and `candidates` run references.
+- **`calibrate-work`**: Executes the `WeightBenchmark` across the resolved trial configurations to calibrate unit work duration.
 
 #### Command-Line Flags and Environment Variables
 

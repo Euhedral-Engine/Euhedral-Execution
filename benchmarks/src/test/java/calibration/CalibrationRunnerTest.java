@@ -547,6 +547,18 @@ class CalibrationRunnerTest {
     }
 
     @Test
+    void buildOptionsIncludesWeightBenchmarkClassWhenSpecified() {
+        TrialConfig trial = dummyTrialConfig("t1", true);
+        List<String> jvmArgs = List.of("-Xmx1g");
+
+        Options defaultOptions = CalibrationRunner.buildOptions(trial, jvmArgs, null, null);
+        assertTrue(defaultOptions.getIncludes().contains(CalibrationBenchmark.class.getName()));
+
+        Options weightOptions = CalibrationRunner.buildOptions(trial, jvmArgs, null, null, WeightBenchmark.class);
+        assertTrue(weightOptions.getIncludes().contains(WeightBenchmark.class.getName()));
+    }
+
+    @Test
     void buildJvmArgsIncludesRetainPerForkAndIterationWhenConfigured(@TempDir Path tempDir) throws Exception {
         TrialConfig trial = dummyTrialConfig("t1", true);
         File invocationDir = tempDir.resolve("inv_0").toFile();
@@ -663,6 +675,7 @@ class CalibrationRunnerTest {
         assertTrue(err.getMessage().contains("Usage:"));
         assertTrue(err.getMessage().contains("euhedral-calibration run"));
         assertTrue(err.getMessage().contains("euhedral-calibration compare"));
+        assertTrue(err.getMessage().contains("euhedral-calibration calibrate-work"));
     }
 
     @Test
@@ -696,6 +709,11 @@ class CalibrationRunnerTest {
         assertEquals(RunnerMode.COMPARE, RunnerMode.parse("compare"));
         assertEquals(RunnerMode.COMPARE, RunnerMode.parse("COMPARE"));
         assertEquals(RunnerMode.COMPARE, RunnerMode.parse("Compare"));
+        assertEquals(RunnerMode.CALIBRATE_WORK, RunnerMode.parse("calibrate-work"));
+        assertEquals(RunnerMode.CALIBRATE_WORK, RunnerMode.parse("CALIBRATE-WORK"));
+        assertEquals(RunnerMode.CALIBRATE_WORK, RunnerMode.parse("Calibrate-Work"));
+        assertEquals(RunnerMode.CALIBRATE_WORK, RunnerMode.parse("calibrate_work"));
+        assertEquals(RunnerMode.CALIBRATE_WORK, RunnerMode.parse("CALIBRATE_WORK"));
 
         assertThrows(IllegalArgumentException.class, () -> RunnerMode.parse("invalid"));
         assertThrows(IllegalArgumentException.class, () -> RunnerMode.parse(""));
