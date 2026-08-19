@@ -1,0 +1,163 @@
+{
+  "schemaVersion": 1,
+  "id": "06-multiband-contention-verification",
+  "name": "Phase 3 Multi-Band Contention Threshold Verification",
+  "description": "Verifies that calibrated contention thresholds [xs: 50000, s: 350000, m: 650000, h: 850000] partition the physical contention landmarks cleanly across all 5 discrete contention bands.",
+  "labels": {
+    "preset": "multiband-contention-verification",
+    "phase": "3"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/06-multiband-contention-verification",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "calibrated-contention-weights": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-2core-template": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "calibrated-contention-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-4core-template": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "calibrated-contention-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "2core-sources-sweep",
+      "baseTrialId": "verify-2core-base",
+      "description": "Sweep 2-core source configurations across XS (16), S (4), M (2), and XH (1) contention landmarks.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [16, 4, 2, 1]
+        }
+      ]
+    },
+    {
+      "id": "4core-sources-sweep",
+      "baseTrialId": "verify-4core-base",
+      "description": "Sweep 4-core source configurations across S (8), H (4), and XH (2, 1) contention landmarks.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [8, 4, 2, 1]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "verify-2core-base",
+      "name": "2-Core Contention Verification Base",
+      "group": "multiband-contention-verification",
+      "description": "Base trial for 2-core multi-band contention verification.",
+      "tags": ["verification", "phase3", "2core"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-2core-template"
+    },
+    {
+      "id": "verify-4core-base",
+      "name": "4-Core Contention Verification Base",
+      "group": "multiband-contention-verification",
+      "description": "Base trial for 4-core multi-band contention verification.",
+      "tags": ["verification", "phase3", "4core"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-4core-template"
+    }
+  ]
+}

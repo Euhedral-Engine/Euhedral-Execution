@@ -21,10 +21,10 @@
   "decisionWeightProfiles": {
     "default-weights": {
       "idleContentionThresholds": {
-        "xsContention": 200000,
-        "sContention": 400000,
-        "mContention": 600000,
-        "hContention": 800000
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
       },
       "idleBodyCostWeights": [
         { "xs": 96, "s": 128, "m": 216, "h": 288 },
@@ -40,10 +40,10 @@
         { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
       ],
       "execContentionThresholds": {
-        "xsContention": 200000,
-        "sContention": 400000,
-        "mContention": 600000,
-        "hContention": 800000
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
       },
       "execBodyCostWeights": [
         { "xs": 96, "s": 128, "m": 216, "h": 288 },

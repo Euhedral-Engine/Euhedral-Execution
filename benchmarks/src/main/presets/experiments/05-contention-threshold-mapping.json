@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "id": "05-contention-threshold-mapping",
+  "name": "Phase 3 Contention Threshold to Runtime Band Mapping",
+  "description": "Sweeps collapsed contention thresholds across identified physical contention landmarks (XS: 16-sources/2-core, S: 4-sources/2-core, M: 2-sources/2-core, H: 4-sources/4-core, XH: 1-source/2-core) to determine precise contention threshold boundaries.",
+  "labels": {
+    "preset": "contention-threshold-mapping",
+    "phase": "3"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/05-contention-threshold-mapping",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "base-weights": {
+      "idleContentionThresholds": {
+        "xsContention": 500000,
+        "sContention": 500000,
+        "mContention": 500000,
+        "hContention": 500000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 500000,
+        "sContention": 500000,
+        "mContention": 500000,
+        "hContention": 500000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
+        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-xs-contention": {
+      "cpuSet": [2, 4],
+      "parallelSources": 16,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "base-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-s-contention": {
+      "cpuSet": [2, 4],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "base-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-m-contention": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "base-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-h-contention": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "base-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    },
+    "profile-xh-contention": {
+      "cpuSet": [2, 4],
+      "parallelSources": 1,
+      "orderedSources": 0,
+      "workUnits": 48,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "base-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "xs-contention-sweep",
+      "baseTrialId": "calibrate-xs-contention-landmark",
+      "description": "Sweep collapsed contention thresholds against XS contention landmark (16 sources, 2 cores).",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execContentionThresholds",
+          "values": [
+            { "xsContention": 200000, "sContention": 200000, "mContention": 200000, "hContention": 200000 },
+            { "xsContention": 150000, "sContention": 150000, "mContention": 150000, "hContention": 150000 },
+            { "xsContention": 120000, "sContention": 120000, "mContention": 120000, "hContention": 120000 },
+            { "xsContention": 80000, "sContention": 80000, "mContention": 80000, "hContention": 80000 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "s-contention-sweep",
+      "baseTrialId": "calibrate-s-contention-landmark",
+      "description": "Sweep collapsed contention thresholds against S contention landmark (4 sources, 2 cores).",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execContentionThresholds",
+          "values": [
+            { "xsContention": 400000, "sContention": 400000, "mContention": 400000, "hContention": 400000 },
+            { "xsContention": 300000, "sContention": 300000, "mContention": 300000, "hContention": 300000 },
+            { "xsContention": 200000, "sContention": 200000, "mContention": 200000, "hContention": 200000 },
+            { "xsContention": 120000, "sContention": 120000, "mContention": 120000, "hContention": 120000 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "m-contention-sweep",
+      "baseTrialId": "calibrate-m-contention-landmark",
+      "description": "Sweep collapsed contention thresholds against M contention landmark (2 sources, 2 cores).",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execContentionThresholds",
+          "values": [
+            { "xsContention": 700000, "sContention": 700000, "mContention": 700000, "hContention": 700000 },
+            { "xsContention": 600000, "sContention": 600000, "mContention": 600000, "hContention": 600000 },
+            { "xsContention": 500000, "sContention": 500000, "mContention": 500000, "hContention": 500000 },
+            { "xsContention": 400000, "sContention": 400000, "mContention": 400000, "hContention": 400000 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "h-contention-sweep",
+      "baseTrialId": "calibrate-h-contention-landmark",
+      "description": "Sweep collapsed contention thresholds against H contention landmark (4 sources, 4 cores).",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execContentionThresholds",
+          "values": [
+            { "xsContention": 900000, "sContention": 900000, "mContention": 900000, "hContention": 900000 },
+            { "xsContention": 850000, "sContention": 850000, "mContention": 850000, "hContention": 850000 },
+            { "xsContention": 800000, "sContention": 800000, "mContention": 800000, "hContention": 800000 },
+            { "xsContention": 700000, "sContention": 700000, "mContention": 700000, "hContention": 700000 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "xh-contention-sweep",
+      "baseTrialId": "calibrate-xh-contention-landmark",
+      "description": "Sweep collapsed contention thresholds against XH contention landmark (1 source, 2 cores).",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/execContentionThresholds",
+          "values": [
+            { "xsContention": 995000, "sContention": 995000, "mContention": 995000, "hContention": 995000 },
+            { "xsContention": 980000, "sContention": 980000, "mContention": 980000, "hContention": 980000 },
+            { "xsContention": 900000, "sContention": 900000, "mContention": 900000, "hContention": 900000 },
+            { "xsContention": 850000, "sContention": 850000, "mContention": 850000, "hContention": 850000 }
+          ]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "calibrate-xs-contention-landmark",
+      "name": "XS Contention Landmark Threshold Calibration",
+      "group": "xs-contention-sweep",
+      "description": "Baseline trial for finding the threshold for XS contention landmark.",
+      "tags": ["phase3", "xs-contention"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-xs-contention"
+    },
+    {
+      "id": "calibrate-s-contention-landmark",
+      "name": "S Contention Landmark Threshold Calibration",
+      "group": "s-contention-sweep",
+      "description": "Baseline trial for finding the threshold for S contention landmark.",
+      "tags": ["phase3", "s-contention"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-s-contention"
+    },
+    {
+      "id": "calibrate-m-contention-landmark",
+      "name": "M Contention Landmark Threshold Calibration",
+      "group": "m-contention-sweep",
+      "description": "Baseline trial for finding the threshold for M contention landmark.",
+      "tags": ["phase3", "m-contention"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-m-contention"
+    },
+    {
+      "id": "calibrate-h-contention-landmark",
+      "name": "H Contention Landmark Threshold Calibration",
+      "group": "h-contention-sweep",
+      "description": "Baseline trial for finding the threshold for H contention landmark.",
+      "tags": ["phase3", "h-contention"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-h-contention"
+    },
+    {
+      "id": "calibrate-xh-contention-landmark",
+      "name": "XH Contention Landmark Threshold Calibration",
+      "group": "xh-contention-sweep",
+      "description": "Baseline trial for finding the threshold for XH contention landmark.",
+      "tags": ["phase3", "xh-contention"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-xh-contention"
+    }
+  ]
+}
