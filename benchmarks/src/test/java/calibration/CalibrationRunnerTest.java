@@ -9,17 +9,21 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import calibration.comparisons.schema.ComparisonRequest;
+import calibration.comparisons.schema.ComparisonSet;
 import calibration.comparisons.schema.RunReference;
 import calibration.config.ArtifactConfig;
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.ComparisonConfig;
+import calibration.config.ComparisonKeyConfig;
 import calibration.config.ComparisonOptions;
+import calibration.config.ComparisonStrategy;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessRunOptions;
 import calibration.config.OriginType;
 import calibration.config.SweepConfig;
 import calibration.config.SweepParameter;
 import calibration.config.TrialConfig;
+import calibration.config.TrialOrigin;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
 import calibration.io.TrialExport;
@@ -725,8 +729,9 @@ class CalibrationRunnerTest {
 
         ComparisonConfig config = mapper.readValue(json, ComparisonConfig.class);
         assertNotNull(config);
-        assertEquals("build/results/baseline", config.baseline().path());
-        assertEquals("baseline-label", config.baseline().label());
+        assertEquals(
+                "build/results/baseline", config.baseline().runs().getFirst().path());
+        assertEquals("baseline-label", config.baseline().runs().getFirst().label());
         assertEquals(2, config.candidates().size());
         assertEquals("build/results/candidate-a", config.candidates().get(0).path());
         assertEquals("cand-a", config.candidates().get(0).label());
@@ -738,8 +743,33 @@ class CalibrationRunnerTest {
 
         ComparisonRequest request = config.toRequest();
         assertNotNull(request);
-        assertEquals(config.baseline(), request.baseline());
+        assertEquals(config.baseline().runs().getFirst(), request.baseline());
         assertEquals(config.candidates(), request.candidates());
+    }
+
+    @Test
+    void testPresetComparisonConfigsDeserializeValidly() throws Exception {
+        Path presetsDir = Path.of("src/main/presets/comparisons");
+        if (Files.exists(presetsDir)) {
+            try (var stream = Files.list(presetsDir)) {
+                for (Path p : stream.filter(f -> f.toString().endsWith(".json")).toList()) {
+                    ComparisonConfig config = mapper.readValue(p.toFile(), ComparisonConfig.class);
+                    assertNotNull(config, "Failed parsing preset: " + p);
+                }
+            }
+        }
+
+        Path examplesDir = Path.of("src/main/presets/examples");
+        if (Files.exists(examplesDir)) {
+            try (var stream = Files.list(examplesDir)) {
+                for (Path p : stream.filter(f -> f.getFileName().toString().contains("comparison")
+                                && f.toString().endsWith(".json"))
+                        .toList()) {
+                    ComparisonConfig config = mapper.readValue(p.toFile(), ComparisonConfig.class);
+                    assertNotNull(config, "Failed parsing example comparison: " + p);
+                }
+            }
+        }
     }
 
     @Test
@@ -892,40 +922,39 @@ class CalibrationRunnerTest {
         // Verify summary TSV content and order
         List<String> summaryLines =
                 Files.readAllLines(comparisonOutDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
-        // Header + baseline row + 3 candidate rows
-        assertEquals(5, summaryLines.size());
+        // Header + 3 candidate rows
+        assertEquals(4, summaryLines.size());
 
-        // Row 1: baseline (base vs base, COMPATIBLE, BASELINE)
+        // Row 1: cand-compat (COMPATIBLE)
         String[] row1 = summaryLines.get(1).split("\t");
-        assertEquals("base", row1[0]);
-        assertEquals("base", row1[1]);
-        assertEquals("COMPATIBLE", row1[2]);
-        assertNotEquals("NaN", row1[3]);
-        assertEquals("0.0", row1[6]);
-        assertEquals("0.0", row1[7]);
-        assertEquals("BASELINE", row1[16]);
+        assertEquals("BASELINE", row1[0]);
+        assertEquals("0", row1[1]);
+        assertEquals("", row1[2]);
+        assertEquals("base", row1[3]);
+        assertEquals("cand-compat", row1[4]);
+        assertEquals("COMPATIBLE", row1[5]);
+        assertNotEquals("NaN", row1[6]);
 
-        // Row 2: cand-compat (COMPATIBLE)
+        // Row 2: cand-partial (PARTIAL)
         String[] row2 = summaryLines.get(2).split("\t");
-        assertEquals("base", row2[0]);
-        assertEquals("cand-compat", row2[1]);
-        assertEquals("COMPATIBLE", row2[2]);
-        assertNotEquals("NaN", row2[3]);
+        assertEquals("BASELINE", row2[0]);
+        assertEquals("1", row2[1]);
+        assertEquals("", row2[2]);
+        assertEquals("base", row2[3]);
+        assertEquals("cand-partial", row2[4]);
+        assertEquals("PARTIAL", row2[5]);
+        assertNotEquals("NaN", row2[6]);
 
-        // Row 3: cand-partial (PARTIAL)
+        // Row 3: cand-incompat (INCOMPATIBLE)
         String[] row3 = summaryLines.get(3).split("\t");
-        assertEquals("base", row3[0]);
-        assertEquals("cand-partial", row3[1]);
-        assertEquals("PARTIAL", row3[2]);
-        assertNotEquals("NaN", row3[3]);
-
-        // Row 4: cand-incompat (INCOMPATIBLE)
-        String[] row4 = summaryLines.get(4).split("\t");
-        assertEquals("base", row4[0]);
-        assertEquals("cand-incompat", row4[1]);
-        assertEquals("INCOMPATIBLE", row4[2]);
-        assertEquals("NaN", row4[3]);
-        assertEquals("UNAVAILABLE", row4[16]);
+        assertEquals("BASELINE", row3[0]);
+        assertEquals("2", row3[1]);
+        assertEquals("", row3[2]);
+        assertEquals("base", row3[3]);
+        assertEquals("cand-incompat", row3[4]);
+        assertEquals("INCOMPATIBLE", row3[5]);
+        assertEquals("NaN", row3[6]);
+        assertEquals("UNAVAILABLE", row3[19]);
     }
 
     @Test
@@ -971,7 +1000,7 @@ class CalibrationRunnerTest {
 
         List<String> lines =
                 Files.readAllLines(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
-        assertEquals(4, lines.size()); // Header + baseline + 2 candidates
+        assertEquals(3, lines.size()); // Header + 2 candidates
     }
 
     @Test
@@ -994,5 +1023,325 @@ class CalibrationRunnerTest {
 
         Path outDir = expDir.resolve("comparisons");
         assertTrue(Files.exists(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV)));
+
+        List<String> lines =
+                Files.readAllLines(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
+        assertEquals(2, lines.size()); // Header + 1 candidate
+    }
+
+    @Test
+    void testRunKeyedComparisonDirectVsStagedSweeps(@TempDir Path tempDir) throws Exception {
+        Path direct0Dir = tempDir.resolve("experiments/direct-0_repeat_0");
+        Path direct1Dir = tempDir.resolve("experiments/direct-1_repeat_0");
+        Path direct2Dir = tempDir.resolve("experiments/direct-2_repeat_0");
+
+        Path staged0Dir = tempDir.resolve("experiments/staged-0_repeat_0");
+        Path staged1Dir = tempDir.resolve("experiments/staged-1_repeat_0");
+        Path staged2Dir = tempDir.resolve("experiments/staged-2_repeat_0");
+
+        Path outDir = tempDir.resolve("experiments/direct-vs-staged");
+
+        TrialConfig dir0Config = new TrialConfig(
+                "direct-0",
+                "Direct 24",
+                "grp",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new TrialOrigin(OriginType.SWEEP, "base", 1738L, 0),
+                1,
+                1,
+                1,
+                "1s",
+                "1s",
+                List.of(),
+                null,
+                new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        2,
+                        1,
+                        24,
+                        false,
+                        1000L,
+                        5000L,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        1024,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true));
+        TrialConfig dir1Config = new TrialConfig(
+                "direct-1",
+                "Direct 48",
+                "grp",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new TrialOrigin(OriginType.SWEEP, "base", 1738L, 1),
+                1,
+                1,
+                1,
+                "1s",
+                "1s",
+                List.of(),
+                null,
+                new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        2,
+                        1,
+                        48,
+                        false,
+                        1000L,
+                        5000L,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        1024,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true));
+        TrialConfig dir2Config = new TrialConfig(
+                "direct-2",
+                "Direct 96",
+                "grp",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new TrialOrigin(OriginType.SWEEP, "base", 1738L, 2),
+                1,
+                1,
+                1,
+                "1s",
+                "1s",
+                List.of(),
+                null,
+                new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        2,
+                        1,
+                        96,
+                        false,
+                        1000L,
+                        5000L,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        1024,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true));
+
+        TrialConfig stg0Config = new TrialConfig(
+                "staged-0",
+                "Staged 24",
+                "grp",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new TrialOrigin(OriginType.SWEEP, "base", 1738L, 0),
+                1,
+                1,
+                1,
+                "1s",
+                "1s",
+                List.of(),
+                null,
+                new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        2,
+                        1,
+                        24,
+                        false,
+                        1000L,
+                        5000L,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        1024,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true));
+        TrialConfig stg1Config = new TrialConfig(
+                "staged-1",
+                "Staged 48",
+                "grp",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new TrialOrigin(OriginType.SWEEP, "base", 1738L, 1),
+                1,
+                1,
+                1,
+                "1s",
+                "1s",
+                List.of(),
+                null,
+                new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        2,
+                        1,
+                        48,
+                        false,
+                        1000L,
+                        5000L,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        1024,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true));
+        TrialConfig stg2Config = new TrialConfig(
+                "staged-2",
+                "Staged 96",
+                "grp",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                new TrialOrigin(OriginType.SWEEP, "base", 1738L, 2),
+                1,
+                1,
+                1,
+                "1s",
+                "1s",
+                List.of(),
+                null,
+                new CalibrationBenchmarkConfig(
+                        List.of(1, 2),
+                        2,
+                        1,
+                        96,
+                        false,
+                        1000L,
+                        5000L,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        1024,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true,
+                        true));
+
+        setupCompletedRunOnDisk(direct0Dir, dir0Config, 1000.0, 0);
+        setupCompletedRunOnDisk(direct1Dir, dir1Config, 2000.0, 5);
+        setupCompletedRunOnDisk(direct2Dir, dir2Config, 3000.0, 10);
+
+        setupCompletedRunOnDisk(staged0Dir, stg0Config, 1200.0, 0);
+        setupCompletedRunOnDisk(staged1Dir, stg1Config, 2200.0, 5);
+        setupCompletedRunOnDisk(staged2Dir, stg2Config, 3500.0, 10);
+
+        ComparisonConfig comparisonConfig = new ComparisonConfig(
+                ComparisonStrategy.KEYED,
+                ComparisonSet.ofRuns(List.of(
+                        RunReference.of(direct0Dir.toString()),
+                        RunReference.of(direct1Dir.toString()),
+                        RunReference.of(direct2Dir.toString()))),
+                ComparisonSet.ofRuns(List.of(
+                        RunReference.of(staged0Dir.toString()),
+                        RunReference.of(staged1Dir.toString()),
+                        RunReference.of(staged2Dir.toString()))),
+                ComparisonKeyConfig.ofPath("/origin/candidateIndex"),
+                outDir.toString());
+
+        Path configFile = tempDir.resolve("keyed_comparison.json");
+        Files.writeString(configFile, mapper.writeValueAsString(comparisonConfig), StandardCharsets.UTF_8);
+
+        CalibrationComparison.runComparison(configFile.toString());
+
+        assertTrue(Files.exists(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV)));
+        List<String> lines =
+                Files.readAllLines(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
+        assertEquals(4, lines.size()); // Header + 3 keyed pairs
+
+        String[] row0 = lines.get(1).split("\t");
+        assertEquals("KEYED", row0[0]);
+        assertEquals("0", row0[1]);
+        assertEquals("0", row0[2]);
+        assertEquals("direct-0", row0[3]);
+        assertEquals("staged-0", row0[4]);
+        assertEquals("COMPATIBLE", row0[5]);
+
+        String[] row1 = lines.get(2).split("\t");
+        assertEquals("KEYED", row1[0]);
+        assertEquals("1", row1[1]);
+        assertEquals("1", row1[2]);
+        assertEquals("direct-1", row1[3]);
+        assertEquals("staged-1", row1[4]);
+        assertEquals("COMPATIBLE", row1[5]);
+
+        String[] row2 = lines.get(3).split("\t");
+        assertEquals("KEYED", row2[0]);
+        assertEquals("2", row2[1]);
+        assertEquals("2", row2[2]);
+        assertEquals("direct-2", row2[3]);
+        assertEquals("staged-2", row2[4]);
+        assertEquals("COMPATIBLE", row2[5]);
+    }
+
+    @Test
+    void testRunCrossComparison(@TempDir Path tempDir) throws Exception {
+        Path dirADir = tempDir.resolve("experiments/dir-a_repeat_0");
+        Path dirBDir = tempDir.resolve("experiments/dir-b_repeat_0");
+        Path stgXDir = tempDir.resolve("experiments/stg-x_repeat_0");
+        Path stgYDir = tempDir.resolve("experiments/stg-y_repeat_0");
+        Path outDir = tempDir.resolve("experiments/cross-out");
+
+        TrialConfig configA = dummyTrialConfig("dir-a", true);
+        TrialConfig configB = dummyTrialConfig("dir-b", true);
+        TrialConfig configX = dummyTrialConfig("stg-x", true);
+        TrialConfig configY = dummyTrialConfig("stg-y", true);
+
+        setupCompletedRunOnDisk(dirADir, configA, 1000.0, 0);
+        setupCompletedRunOnDisk(dirBDir, configB, 1100.0, 5);
+        setupCompletedRunOnDisk(stgXDir, configX, 1200.0, 10);
+        setupCompletedRunOnDisk(stgYDir, configY, 1300.0, 15);
+
+        ComparisonConfig config = new ComparisonConfig(
+                ComparisonStrategy.CROSS,
+                ComparisonSet.ofRuns(List.of(RunReference.of(dirADir.toString()), RunReference.of(dirBDir.toString()))),
+                ComparisonSet.ofRuns(List.of(RunReference.of(stgXDir.toString()), RunReference.of(stgYDir.toString()))),
+                null,
+                outDir.toString());
+
+        Path configFile = tempDir.resolve("cross_comparison.json");
+        Files.writeString(configFile, mapper.writeValueAsString(config), StandardCharsets.UTF_8);
+
+        CalibrationComparison.runComparison(configFile.toString());
+
+        assertTrue(Files.exists(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV)));
+        List<String> lines =
+                Files.readAllLines(outDir.resolve(Constants.COMPARISON_SUMMARY_TSV), StandardCharsets.UTF_8);
+        assertEquals(5, lines.size()); // Header + 2x2 = 4 pairs
     }
 }

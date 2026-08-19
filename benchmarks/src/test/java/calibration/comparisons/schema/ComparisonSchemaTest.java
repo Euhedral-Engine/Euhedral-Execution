@@ -506,27 +506,21 @@ class ComparisonSchemaTest {
                 ComparisonOutcome.B_BETTER);
 
         CandidateComparison comp1 = new CandidateComparison(
-                baseId, cand1Id, ComparisonCompatibility.compatible(), List.of(), perf1, List.of(), null);
+                0, baseId, cand1Id, null, ComparisonCompatibility.compatible(), List.of(), perf1, List.of(), null);
         CandidateComparison comp2 = new CandidateComparison(
-                baseId, cand2Id, ComparisonCompatibility.compatible(), List.of(), perf2, List.of(), null);
+                1, baseId, cand2Id, null, ComparisonCompatibility.compatible(), List.of(), perf2, List.of(), null);
 
-        // Top-level comparison supports one baseline with multiple candidates
-        ComparisonResult result = new ComparisonResult(baseRun, List.of(cand1Run, cand2Run), List.of(comp1, comp2));
-        assertSame(baseRun, result.baseline());
-        assertEquals(2, result.candidates().size());
+        // Top-level comparison represents strategy and pair comparisons
+        ComparisonResult result =
+                new ComparisonResult(calibration.config.ComparisonStrategy.BASELINE, List.of(comp1, comp2));
+        assertEquals(calibration.config.ComparisonStrategy.BASELINE, result.strategy());
         assertEquals(2, result.comparisons().size());
+        assertSame(comp1, result.comparisons().get(0));
+        assertSame(comp2, result.comparisons().get(1));
 
-        // Empty candidates or comparisons rejected
-        assertThrows(IllegalArgumentException.class, () -> new ComparisonResult(baseRun, List.of(), List.of()));
-
-        // Size mismatch rejected
+        // Empty comparisons rejected
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new ComparisonResult(baseRun, List.of(cand1Run), List.of(comp1, comp2)));
-
-        // Duplicate candidates rejected
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new ComparisonResult(baseRun, List.of(cand1Run, cand1Run), List.of(comp1, comp1)));
+                () -> new ComparisonResult(calibration.config.ComparisonStrategy.BASELINE, List.of()));
     }
 }

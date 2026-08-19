@@ -21,6 +21,7 @@ import calibration.comparisons.schema.RunIdentity;
 import calibration.comparisons.schema.ScalarComparison;
 import calibration.comparisons.schema.ThroughputResult;
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.ComparisonStrategy;
 import calibration.config.TrialConfig;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
@@ -213,16 +214,16 @@ class ComparisonExportTest {
         PerformanceComparison perf1 = PerformanceComparisonCalculator.compare(baseline, candidate1, compat1);
         var agg1 = SystemTelemetryComparisonCalculator.compare(baseline, candidate1, compat1);
         CandidateComparison comp1 = new CandidateComparison(
-                baseline.identity(), candidate1.identity(), compat1, diffs1, perf1, List.of(), agg1);
+                0, baseline.identity(), candidate1.identity(), null, compat1, diffs1, perf1, List.of(), agg1);
 
         ComparisonCompatibility compat2 = ComparisonCompatibilityAnalyzer.analyze(baseline, candidate2);
         List<ConfigurationDifference> diffs2 = TrialConfigDiffer.diff(baseline.trialConfig(), candidate2.trialConfig());
         PerformanceComparison perf2 = PerformanceComparisonCalculator.compare(baseline, candidate2, compat2);
         var agg2 = SystemTelemetryComparisonCalculator.compare(baseline, candidate2, compat2);
         CandidateComparison comp2 = new CandidateComparison(
-                baseline.identity(), candidate2.identity(), compat2, diffs2, perf2, List.of(), agg2);
+                1, baseline.identity(), candidate2.identity(), null, compat2, diffs2, perf2, List.of(), agg2);
 
-        return new ComparisonResult(baseline, List.of(candidate1, candidate2), List.of(comp1, comp2));
+        return new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp1, comp2));
     }
 
     @Test
@@ -266,29 +267,35 @@ class ComparisonExportTest {
         // Header + 2 candidate rows
         assertEquals(3, lines.size());
         assertEquals(
-                "baseline\tcandidate\tcompatibilityStatus\tbaselineMean\tcandidateMean\tunit\tabsoluteDelta\trelativeDeltaPercent\tbaselineVariance\tcandidateVariance\tbaselineStdDev\tcandidateStdDev\tbaselineCv\tcandidateCv\tbaselineForkCount\tcandidateForkCount\toutcome",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tcompatibilityStatus\tbaselineMean\tcandidateMean\tunit\tabsoluteDelta\trelativeDeltaPercent\tbaselineVariance\tcandidateVariance\tbaselineStdDev\tcandidateStdDev\tbaselineCv\tcandidateCv\tbaselineForkCount\tcandidateForkCount\toutcome",
                 lines.get(0));
 
         String[] row1 = lines.get(1).split("\t");
-        assertEquals("base-trial", row1[0]);
-        assertEquals("cand-trial-1", row1[1]);
-        assertEquals("COMPATIBLE", row1[2]);
-        assertEquals("1025.0", row1[3]);
-        assertEquals("1230.0", row1[4]);
-        assertEquals("ops/s", row1[5]);
-        assertEquals("205.0", row1[6]);
-        assertEquals("20.0", row1[7]); // relative delta %
-        assertEquals("2", row1[14]); // baselineForkCount
-        assertEquals("2", row1[15]); // candidateForkCount
-        assertEquals(ComparisonOutcome.B_BETTER.name(), row1[16]);
+        assertEquals("BASELINE", row1[0]);
+        assertEquals("0", row1[1]);
+        assertEquals("", row1[2]);
+        assertEquals("base-trial", row1[3]);
+        assertEquals("cand-trial-1", row1[4]);
+        assertEquals("COMPATIBLE", row1[5]);
+        assertEquals("1025.0", row1[6]);
+        assertEquals("1230.0", row1[7]);
+        assertEquals("ops/s", row1[8]);
+        assertEquals("205.0", row1[9]);
+        assertEquals("20.0", row1[10]); // relative delta %
+        assertEquals("2", row1[17]); // baselineForkCount
+        assertEquals("2", row1[18]); // candidateForkCount
+        assertEquals(ComparisonOutcome.B_BETTER.name(), row1[19]);
 
         String[] row2 = lines.get(2).split("\t");
-        assertEquals("base-trial", row2[0]);
-        assertEquals("cand-trial-2", row2[1]);
-        assertEquals("COMPATIBLE", row2[2]);
-        assertEquals("1025.0", row2[3]);
-        assertEquals("922.5", row2[4]);
-        assertEquals(ComparisonOutcome.A_BETTER.name(), row2[16]);
+        assertEquals("BASELINE", row2[0]);
+        assertEquals("1", row2[1]);
+        assertEquals("", row2[2]);
+        assertEquals("base-trial", row2[3]);
+        assertEquals("cand-trial-2", row2[4]);
+        assertEquals("COMPATIBLE", row2[5]);
+        assertEquals("1025.0", row2[6]);
+        assertEquals("922.5", row2[7]);
+        assertEquals(ComparisonOutcome.A_BETTER.name(), row2[19]);
     }
 
     @Test
@@ -301,7 +308,7 @@ class ComparisonExportTest {
 
         assertTrue(lines.size() > 1);
         assertEquals(
-                "baseline\tcandidate\tcompatibilityStatus\tcategory\tpath\tbaselineValue\tcandidateValue",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tcompatibilityStatus\tcategory\tpath\tbaselineValue\tcandidateValue",
                 lines.get(0));
 
         // Check paths and determinism
@@ -309,8 +316,8 @@ class ComparisonExportTest {
         String prevCand = "";
         for (int i = 1; i < lines.size(); i++) {
             String[] tokens = lines.get(i).split("\t");
-            String cand = tokens[1];
-            String path = tokens[4];
+            String cand = tokens[4];
+            String path = tokens[7];
 
             if (cand.equals(prevCand)) {
                 assertTrue(path.compareTo(prevPath) >= 0, "Diff paths must be sorted: " + path + " vs " + prevPath);
@@ -332,7 +339,7 @@ class ComparisonExportTest {
 
         assertTrue(lines.size() > 1);
         assertEquals(
-                "baseline\tcandidate\tscope\tcategory\tsegment\tmetric\tbaselineCount\tcandidateCount\tbaselineMean\tcandidateMean\tmeanDelta\tbaselineMedian\tcandidateMedian\tmedianDelta\tbaselineVariance\tcandidateVariance\tvarianceDelta\tbaselineStdDev\tcandidateStdDev\tstdDevDelta\tbaselineCv\tcandidateCv\tcvDelta\tbaselineP25\tcandidateP25\tp25Delta\tbaselineP50\tcandidateP50\tp50Delta\tbaselineP75\tcandidateP75\tp75Delta\tbaselineP95\tcandidateP95\tp95Delta\tbaselineIqr\tcandidateIqr\tiqrDelta\tbaselineNormalizedIqr\tcandidateNormalizedIqr\tnormalizedIqrDelta\tbaselineP95ToP50\tcandidateP95ToP50\tp95ToP50Delta",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tscope\tcategory\tsegment\tmetric\tbaselineCount\tcandidateCount\tbaselineMean\tcandidateMean\tmeanDelta\tbaselineMedian\tcandidateMedian\tmedianDelta\tbaselineVariance\tcandidateVariance\tvarianceDelta\tbaselineStdDev\tcandidateStdDev\tstdDevDelta\tbaselineCv\tcandidateCv\tcvDelta\tbaselineP25\tcandidateP25\tp25Delta\tbaselineP50\tcandidateP50\tp50Delta\tbaselineP75\tcandidateP75\tp75Delta\tbaselineP95\tcandidateP95\tp95Delta\tbaselineIqr\tcandidateIqr\tiqrDelta\tbaselineNormalizedIqr\tcandidateNormalizedIqr\tnormalizedIqrDelta\tbaselineP95ToP50\tcandidateP95ToP50\tp95ToP50Delta",
                 lines.get(0));
 
         boolean foundHead = false;
@@ -343,8 +350,8 @@ class ComparisonExportTest {
 
         for (int i = 1; i < lines.size(); i++) {
             String[] tokens = lines.get(i).split("\t");
-            String category = tokens[3];
-            String segment = tokens[4];
+            String category = tokens[6];
+            String segment = tokens[7];
 
             if ("head".equals(segment)) foundHead = true;
             if ("steady_state".equals(segment)) foundSteadyState = true;
@@ -371,16 +378,16 @@ class ComparisonExportTest {
         // Header + 2 candidates * 2 decisionTypes (idle, exec) * 25 cells = 1 + 100 = 101 lines
         assertEquals(101, lines.size());
         assertEquals(
-                "baseline\tcandidate\tdecisionType\tcontentionBand\tbodyBand\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineContentionCentroid\tcandidateContentionCentroid\tcontentionCentroidDelta\tbaselineBodyCentroid\tcandidateBodyCentroid\tbodyCentroidDelta\tcentroidDistance\tbaselineContentionVariance\tcandidateContentionVariance\tcontentionVarianceDelta\tbaselineBodyVariance\tcandidateBodyVariance\tbodyVarianceDelta\tbaselineCovariance\tcandidateCovariance\tcovarianceDelta\tbaselineRadius\tcandidateRadius\tradiusDelta\ttotalVariationDistance",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tcontentionBand\tbodyBand\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineContentionCentroid\tcandidateContentionCentroid\tcontentionCentroidDelta\tbaselineBodyCentroid\tcandidateBodyCentroid\tbodyCentroidDelta\tcentroidDistance\tbaselineContentionVariance\tcandidateContentionVariance\tcontentionVarianceDelta\tbaselineBodyVariance\tcandidateBodyVariance\tbodyVarianceDelta\tbaselineCovariance\tcandidateCovariance\tcovarianceDelta\tbaselineRadius\tcandidateRadius\tradiusDelta\ttotalVariationDistance",
                 lines.get(0));
 
         // Verify count and probability not swapped: probability must be in [0.0, 1.0]
         for (int i = 1; i < lines.size(); i++) {
             String[] tokens = lines.get(i).split("\t");
-            long baseCount = Long.parseLong(tokens[5]);
-            long candCount = Long.parseLong(tokens[6]);
-            double baseProb = Double.parseDouble(tokens[8]);
-            double candProb = Double.parseDouble(tokens[9]);
+            long baseCount = Long.parseLong(tokens[8]);
+            long candCount = Long.parseLong(tokens[9]);
+            double baseProb = Double.parseDouble(tokens[11]);
+            double candProb = Double.parseDouble(tokens[12]);
             double tvd = Double.parseDouble(tokens[tokens.length - 1]);
 
             assertTrue(baseCount >= 0L);
@@ -403,16 +410,16 @@ class ComparisonExportTest {
         // 5001 lines
         assertEquals(5001, lines.size());
         assertEquals(
-                "baseline\tcandidate\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineSelfTransitionRate\tcandidateSelfTransitionRate\tselfTransitionRateDelta\tbaselineDominantOutgoingState\tcandidateDominantOutgoingState\tdominantStateChanged\tbaselineDominantProbability\tcandidateDominantProbability\tdominantProbabilityDelta",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineSelfTransitionRate\tcandidateSelfTransitionRate\tselfTransitionRateDelta\tbaselineDominantOutgoingState\tcandidateDominantOutgoingState\tdominantStateChanged\tbaselineDominantProbability\tcandidateDominantProbability\tdominantProbabilityDelta",
                 lines.get(0));
 
         String[] row1 = lines.get(1).split("\t");
-        assertEquals("0", row1[4]); // fromState 0
-        assertEquals("0", row1[5]); // fromContention 0
-        assertEquals("0", row1[6]); // fromBody 0
-        assertEquals("0", row1[7]); // toState 0
-        assertEquals("0", row1[8]); // toContention 0
-        assertEquals("0", row1[9]); // toBody 0
+        assertEquals("0", row1[7]); // fromState 0
+        assertEquals("0", row1[8]); // fromContention 0
+        assertEquals("0", row1[9]); // fromBody 0
+        assertEquals("0", row1[10]); // toState 0
+        assertEquals("0", row1[11]); // toContention 0
+        assertEquals("0", row1[12]); // toBody 0
     }
 
     @Test
@@ -426,7 +433,7 @@ class ComparisonExportTest {
         // Header + 2 candidates * 2 decisionTypes * 2 segments * 25 cells = 1 + 200 = 201 lines
         assertEquals(201, lines.size());
         assertEquals(
-                "baseline\tcandidate\tdecisionType\tsegment\tcontentionBand\tbodyBand\tbaselineTransitionCount\tcandidateTransitionCount\ttransitionCountDelta\tbaselineMeanDeltaContention\tcandidateMeanDeltaContention\tmeanDeltaContentionDelta\tbaselineMeanDeltaBody\tcandidateMeanDeltaBody\tmeanDeltaBodyDelta\tbaselineMagnitude\tcandidateMagnitude\tmagnitudeDelta",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tsegment\tcontentionBand\tbodyBand\tbaselineTransitionCount\tcandidateTransitionCount\ttransitionCountDelta\tbaselineMeanDeltaContention\tcandidateMeanDeltaContention\tmeanDeltaContentionDelta\tbaselineMeanDeltaBody\tcandidateMeanDeltaBody\tmeanDeltaBodyDelta\tbaselineMagnitude\tcandidateMagnitude\tmagnitudeDelta",
                 lines.get(0));
     }
 
@@ -440,14 +447,14 @@ class ComparisonExportTest {
 
         assertTrue(lines.size() > 1);
         assertEquals(
-                "baseline\tcandidate\tcategory\tsegment\tmethod\trowVariable\tcolumnVariable\tbaselineCorrelation\tcandidateCorrelation\tcorrelationDelta",
+                "strategy\tpairIndex\tkey\tbaseline\tcandidate\tcategory\tsegment\tmethod\trowVariable\tcolumnVariable\tbaselineCorrelation\tcandidateCorrelation\tcorrelationDelta",
                 lines.get(0));
 
         boolean foundPearson = false;
         boolean foundSpearman = false;
         for (int i = 1; i < lines.size(); i++) {
             String[] tokens = lines.get(i).split("\t");
-            String method = tokens[4];
+            String method = tokens[7];
             if ("PEARSON".equals(method)) foundPearson = true;
             if ("SPEARMAN".equals(method)) foundSpearman = true;
         }
@@ -465,15 +472,21 @@ class ComparisonExportTest {
         assertTrue(Files.exists(jsonFile));
 
         JsonNode root = MAPPER.readTree(jsonFile.toFile());
-        assertEquals(1, root.get("schemaVersion").asInt());
-        assertEquals("base-trial", root.get("baselineIdentity").get("trialId").asText());
-        assertEquals("/runs/base", root.get("baselineSourcePath").asText());
+        assertEquals(2, root.get("schemaVersion").asInt());
+        assertEquals("BASELINE", root.get("strategy").asText());
+        assertEquals(2, root.get("pairCount").asInt());
 
-        JsonNode cands = root.get("candidates");
-        assertEquals(2, cands.size());
-        assertEquals("cand-trial-1", cands.get(0).get("identity").get("trialId").asText());
-        assertEquals("/runs/cand1", cands.get(0).get("sourcePath").asText());
-        assertEquals("COMPATIBLE", cands.get(0).get("compatibilityStatus").asText());
+        JsonNode pairs = root.get("pairs");
+        assertEquals(2, pairs.size());
+        assertEquals(
+                "base-trial",
+                pairs.get(0).get("baselineIdentity").get("trialId").asText());
+        assertEquals("/runs/base", pairs.get(0).get("baselineSourcePath").asText());
+        assertEquals(
+                "cand-trial-1",
+                pairs.get(0).get("candidateIdentity").get("trialId").asText());
+        assertEquals("/runs/cand1", pairs.get(0).get("candidateSourcePath").asText());
+        assertEquals("COMPATIBLE", pairs.get(0).get("compatibilityStatus").asText());
 
         JsonNode exportedArtifacts = root.get("exportedArtifacts");
         assertTrue(exportedArtifacts.size() >= 7);
@@ -492,15 +505,17 @@ class ComparisonExportTest {
                 List.of("JVM argument differences are incompatible"));
 
         CandidateComparison comp = new CandidateComparison(
+                0,
                 baseline.identity(),
                 incompatibleCand.identity(),
+                null,
                 incompatCompat,
                 incompatCompat.differences(),
                 null,
                 List.of(),
                 null);
 
-        ComparisonResult result = new ComparisonResult(baseline, List.of(incompatibleCand), List.of(comp));
+        ComparisonResult result = new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp));
 
         ComparisonExport.export(tempDir, result);
 
@@ -509,11 +524,14 @@ class ComparisonExportTest {
         List<String> summaryLines = Files.readAllLines(summaryFile, StandardCharsets.UTF_8);
         assertEquals(2, summaryLines.size());
         String[] row = summaryLines.get(1).split("\t");
-        assertEquals("base-trial", row[0]);
-        assertEquals("incompat-cand", row[1]);
-        assertEquals("INCOMPATIBLE", row[2]);
-        assertEquals("NaN", row[3]);
-        assertEquals("UNAVAILABLE", row[16]);
+        assertEquals("BASELINE", row[0]);
+        assertEquals("0", row[1]);
+        assertEquals("", row[2]);
+        assertEquals("base-trial", row[3]);
+        assertEquals("incompat-cand", row[4]);
+        assertEquals("INCOMPATIBLE", row[5]);
+        assertEquals("NaN", row[6]);
+        assertEquals("UNAVAILABLE", row[19]);
 
         // Check config differences still exported
         Path diffFile = tempDir.resolve(Constants.CONFIGURATION_DIFFERENCES_TSV);
@@ -526,14 +544,10 @@ class ComparisonExportTest {
         JsonNode manifest = MAPPER.readTree(manifestFile.toFile());
         assertEquals(
                 "INCOMPATIBLE",
-                manifest.get("candidates").get(0).get("compatibilityStatus").asText());
+                manifest.get("pairs").get(0).get("compatibilityStatus").asText());
         assertEquals(
                 "JVM argument differences are incompatible",
-                manifest.get("candidates")
-                        .get(0)
-                        .get("compatibilityReasons")
-                        .get(0)
-                        .asText());
+                manifest.get("pairs").get(0).get("compatibilityReasons").get(0).asText());
     }
 
     @Test
@@ -583,10 +597,10 @@ class ComparisonExportTest {
         PerformanceComparison perf = PerformanceComparisonCalculator.compare(baseline, cand, compat);
         var agg = SystemTelemetryComparisonCalculator.compare(baseline, cand, compat);
 
-        CandidateComparison comp =
-                new CandidateComparison(baseline.identity(), cand.identity(), compat, diffs, perf, List.of(), agg);
+        CandidateComparison comp = new CandidateComparison(
+                0, baseline.identity(), cand.identity(), null, compat, diffs, perf, List.of(), agg);
 
-        ComparisonResult result = new ComparisonResult(baseline, List.of(cand), List.of(comp));
+        ComparisonResult result = new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp));
 
         ComparisonExport.export(tempDir, result);
 
@@ -594,9 +608,9 @@ class ComparisonExportTest {
         List<String> lines = Files.readAllLines(diffTsv, StandardCharsets.UTF_8);
         assertEquals(2, lines.size()); // Header + 1 row (no extra lines caused by embedded newlines)
         String[] tokens = lines.get(1).split("\t");
-        assertEquals(7, tokens.length); // 7 columns
-        assertEquals("base\\ttab", tokens[0]);
-        assertEquals("cand\\twith\\ttabs", tokens[1]);
+        assertEquals(10, tokens.length); // 10 columns
+        assertEquals("base\\ttab", tokens[3]);
+        assertEquals("cand\\twith\\ttabs", tokens[4]);
     }
 
     @Test
@@ -675,15 +689,17 @@ class ComparisonExportTest {
                         java.util.Map.of());
 
         CandidateComparison comp = new CandidateComparison(
+                0,
                 baseline.identity(),
                 cand.identity(),
+                null,
                 partialCompat,
                 partialCompat.differences(),
                 perf,
                 List.of(),
                 partialAgg);
 
-        ComparisonResult result = new ComparisonResult(baseline, List.of(cand), List.of(comp));
+        ComparisonResult result = new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp));
 
         ComparisonExport.export(tempDir, result);
 
@@ -718,15 +734,14 @@ class ComparisonExportTest {
         PerformanceComparison perf3 = PerformanceComparisonCalculator.compare(baseline, cand3, compat);
 
         CandidateComparison comp1 = new CandidateComparison(
-                baseline.identity(), cand1.identity(), compat, List.of(), perf1, List.of(), null);
+                0, baseline.identity(), cand1.identity(), null, compat, List.of(), perf1, List.of(), null);
         CandidateComparison comp2 = new CandidateComparison(
-                baseline.identity(), cand2.identity(), compat, List.of(), perf2, List.of(), null);
+                1, baseline.identity(), cand2.identity(), null, compat, List.of(), perf2, List.of(), null);
         CandidateComparison comp3 = new CandidateComparison(
-                baseline.identity(), cand3.identity(), compat, List.of(), perf3, List.of(), null);
+                2, baseline.identity(), cand3.identity(), null, compat, List.of(), perf3, List.of(), null);
 
         // Feed in order: cand-mid, cand-low, cand-high
-        ComparisonResult result =
-                new ComparisonResult(baseline, List.of(cand1, cand2, cand3), List.of(comp1, comp2, comp3));
+        ComparisonResult result = new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp1, comp2, comp3));
 
         ComparisonExport.exportComparisonSummaryTsv(tempDir, result);
 
@@ -735,9 +750,9 @@ class ComparisonExportTest {
         assertEquals(4, lines.size());
 
         // Must preserve order (comp1 -> comp2 -> comp3) and not rank by throughput!
-        assertEquals("cand-mid", lines.get(1).split("\t")[1]);
-        assertEquals("cand-low", lines.get(2).split("\t")[1]);
-        assertEquals("cand-high", lines.get(3).split("\t")[1]);
+        assertEquals("cand-mid", lines.get(1).split("\t")[4]);
+        assertEquals("cand-low", lines.get(2).split("\t")[4]);
+        assertEquals("cand-high", lines.get(3).split("\t")[4]);
     }
 
     @Test
@@ -783,15 +798,17 @@ class ComparisonExportTest {
                 java.util.Map.of());
 
         CandidateComparison comp = new CandidateComparison(
+                0,
                 baseline.identity(),
                 cand.identity(),
+                null,
                 ComparisonCompatibility.compatible(),
                 List.of(),
                 PerformanceComparisonCalculator.compare(baseline, cand, ComparisonCompatibility.compatible()),
                 List.of(),
                 agg);
 
-        ComparisonResult result = new ComparisonResult(baseline, List.of(cand), List.of(comp));
+        ComparisonResult result = new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp));
 
         ComparisonExport.exportScalarComparisonsTsv(tempDir, result);
 
@@ -800,10 +817,10 @@ class ComparisonExportTest {
         assertEquals(2, lines.size());
         String[] tokens = lines.get(1).split("\t");
 
-        // tokens[8] is baselineMean, tokens[9] is candidateMean
-        assertEquals("NaN", tokens[8]);
-        assertEquals("NaN", tokens[9]);
-        assertEquals("NaN", tokens[10]); // meanDelta
+        // tokens[11] is baselineMean, tokens[12] is candidateMean
+        assertEquals("NaN", tokens[11]);
+        assertEquals("NaN", tokens[12]);
+        assertEquals("NaN", tokens[13]); // meanDelta
     }
 
     @Test
@@ -828,15 +845,17 @@ class ComparisonExportTest {
                 PerformanceComparisonCalculator.compare(baseRun, candRun, ComparisonCompatibility.compatible());
 
         CandidateComparison comp = new CandidateComparison(
+                0,
                 baseRun.identity(),
                 candRun.identity(),
+                null,
                 ComparisonCompatibility.compatible(),
                 List.of(),
                 perf,
                 List.of(),
                 null);
 
-        ComparisonResult result = new ComparisonResult(baseRun, List.of(candRun), List.of(comp));
+        ComparisonResult result = new ComparisonResult(ComparisonStrategy.BASELINE, List.of(comp));
         ComparisonExport.exportComparisonSummaryTsv(tempDir, result);
 
         Path summaryTsv = tempDir.resolve(Constants.COMPARISON_SUMMARY_TSV);

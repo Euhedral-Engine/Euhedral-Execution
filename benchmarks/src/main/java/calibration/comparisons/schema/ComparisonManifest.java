@@ -1,40 +1,53 @@
 package calibration.comparisons.schema;
 
+import calibration.config.ComparisonStrategy;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
-/// Manifest describing comparison metadata, baseline/candidate identities, source artifacts, and exported files.
+/// Manifest describing post-run comparison metadata, strategy, resolved pairs, and exported artifacts.
 public record ComparisonManifest(
         int schemaVersion,
-        @NonNull RunIdentity baselineIdentity,
-        @NonNull String baselineSourcePath,
-        @NonNull RunArtifacts baselineArtifacts,
-        @NonNull List<CandidateManifestEntry> candidates,
+        @NonNull ComparisonStrategy strategy,
+        @Nullable List<String> keyPaths,
+        int pairCount,
+        @NonNull List<ComparisonPairManifestEntry> pairs,
+        @NonNull List<String> unmatchedBaselineKeys,
+        @NonNull List<String> unmatchedCandidateKeys,
         @NonNull List<String> exportedArtifacts) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     public ComparisonManifest {
-        Objects.requireNonNull(baselineIdentity, "baselineIdentity must not be null");
-        Objects.requireNonNull(baselineSourcePath, "baselineSourcePath must not be null");
-        Objects.requireNonNull(baselineArtifacts, "baselineArtifacts must not be null");
-        candidates = candidates == null ? List.of() : List.copyOf(candidates);
-        exportedArtifacts = exportedArtifacts == null ? List.of() : List.copyOf(exportedArtifacts);
+        Objects.requireNonNull(strategy, "strategy must not be null");
+        keyPaths = keyPaths != null ? List.copyOf(keyPaths) : null;
+        pairs = pairs != null ? List.copyOf(pairs) : List.of();
+        unmatchedBaselineKeys = unmatchedBaselineKeys != null ? List.copyOf(unmatchedBaselineKeys) : List.of();
+        unmatchedCandidateKeys = unmatchedCandidateKeys != null ? List.copyOf(unmatchedCandidateKeys) : List.of();
+        exportedArtifacts = exportedArtifacts != null ? List.copyOf(exportedArtifacts) : List.of();
     }
 
-    /// Single candidate entry inside the comparison manifest.
-    public record CandidateManifestEntry(
-            @NonNull RunIdentity identity,
-            @NonNull String sourcePath,
-            @NonNull RunArtifacts artifacts,
+    /// Single resolved comparison pair entry inside the manifest.
+    public record ComparisonPairManifestEntry(
+            int pairIndex,
+            @Nullable String key,
+            @NonNull RunIdentity baselineIdentity,
+            @NonNull String baselineSourcePath,
+            @NonNull RunArtifacts baselineArtifacts,
+            @NonNull RunIdentity candidateIdentity,
+            @NonNull String candidateSourcePath,
+            @NonNull RunArtifacts candidateArtifacts,
             @NonNull CompatibilityStatus compatibilityStatus,
             @NonNull List<String> compatibilityReasons) {
 
-        public CandidateManifestEntry {
-            Objects.requireNonNull(identity, "identity must not be null");
-            Objects.requireNonNull(sourcePath, "sourcePath must not be null");
-            Objects.requireNonNull(artifacts, "artifacts must not be null");
+        public ComparisonPairManifestEntry {
+            Objects.requireNonNull(baselineIdentity, "baselineIdentity must not be null");
+            Objects.requireNonNull(baselineSourcePath, "baselineSourcePath must not be null");
+            Objects.requireNonNull(baselineArtifacts, "baselineArtifacts must not be null");
+            Objects.requireNonNull(candidateIdentity, "candidateIdentity must not be null");
+            Objects.requireNonNull(candidateSourcePath, "candidateSourcePath must not be null");
+            Objects.requireNonNull(candidateArtifacts, "candidateArtifacts must not be null");
             Objects.requireNonNull(compatibilityStatus, "compatibilityStatus must not be null");
             compatibilityReasons = compatibilityReasons == null ? List.of() : List.copyOf(compatibilityReasons);
         }

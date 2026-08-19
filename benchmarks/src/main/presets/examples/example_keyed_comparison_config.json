@@ -1,0 +1,30 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "direct-sweep",
+    "runs": [
+      "experiments/direct-sweep/direct-24_repeat_0",
+      "experiments/direct-sweep/direct-48_repeat_0",
+      "experiments/direct-sweep/direct-96_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "staged-sweep",
+    "runs": [
+      "experiments/staged-sweep/staged-24_repeat_0",
+      "experiments/staged-sweep/staged-48_repeat_0",
+      "experiments/staged-sweep/staged-96_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/origin/candidateIndex"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/direct-vs-staged/comparisons"
+}

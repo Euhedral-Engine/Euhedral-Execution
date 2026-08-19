@@ -1,46 +1,50 @@
 package calibration.comparisons.schema;
 
-import java.util.HashSet;
+import calibration.comparisons.ComparisonKey;
+import calibration.config.ComparisonKeyConfig;
+import calibration.config.ComparisonStrategy;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
-/// Top-level comparison result for a baseline and one or more candidate runs.
+/// Top-level post-run calibration comparison result encapsulating the strategy and all evaluated comparison pairs.
 public record ComparisonResult(
-        @NonNull CompletedRun baseline,
-        @NonNull List<CompletedRun> candidates,
-        @NonNull List<CandidateComparison> comparisons) {
+        @NonNull ComparisonStrategy strategy,
+        @NonNull List<CandidateComparison> comparisons,
+        @Nullable ComparisonKeyConfig keyConfig,
+        @NonNull List<ComparisonKey> unmatchedBaselineKeys,
+        @NonNull List<ComparisonKey> unmatchedCandidateKeys) {
 
     public ComparisonResult {
-        Objects.requireNonNull(baseline, "baseline must not be null");
-        Objects.requireNonNull(candidates, "candidates must not be null");
+        Objects.requireNonNull(strategy, "strategy must not be null");
         Objects.requireNonNull(comparisons, "comparisons must not be null");
 
-        if (candidates.isEmpty()) {
-            throw new IllegalArgumentException("candidates list must not be empty");
-        }
         if (comparisons.isEmpty()) {
             throw new IllegalArgumentException("comparisons list must not be empty");
         }
-        if (candidates.size() != comparisons.size()) {
-            throw new IllegalArgumentException("candidates size (" + candidates.size()
-                    + ") must match comparisons size (" + comparisons.size() + ")");
-        }
 
-        candidates = List.copyOf(candidates);
         comparisons = List.copyOf(comparisons);
-
-        for (CompletedRun candidate : candidates) {
-            Objects.requireNonNull(candidate, "candidate completed run must not be null");
+        for (CandidateComparison comp : comparisons) {
+            Objects.requireNonNull(comp, "comparison element must not be null");
         }
 
-        Set<String> candidatePaths = new HashSet<>();
-        for (CompletedRun candidate : candidates) {
-            if (!candidatePaths.add(candidate.identity().sourcePath())) {
-                throw new IllegalArgumentException(
-                        "duplicate candidate run path: " + candidate.identity().sourcePath());
-            }
-        }
+        unmatchedBaselineKeys = unmatchedBaselineKeys != null ? List.copyOf(unmatchedBaselineKeys) : List.of();
+        unmatchedCandidateKeys = unmatchedCandidateKeys != null ? List.copyOf(unmatchedCandidateKeys) : List.of();
+    }
+
+    public ComparisonResult(@NonNull ComparisonStrategy strategy, @NonNull List<CandidateComparison> comparisons) {
+        this(strategy, comparisons, null, List.of(), List.of());
+    }
+
+    public ComparisonResult(@NonNull List<CandidateComparison> comparisons) {
+        this(ComparisonStrategy.BASELINE, comparisons, null, List.of(), List.of());
+    }
+
+    public ComparisonResult(
+            @NonNull CompletedRun baseline,
+            @NonNull List<CompletedRun> candidates,
+            @NonNull List<CandidateComparison> comparisons) {
+        this(ComparisonStrategy.BASELINE, comparisons, null, List.of(), List.of());
     }
 }

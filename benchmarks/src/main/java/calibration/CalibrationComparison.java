@@ -1,12 +1,16 @@
 package calibration;
 
 import calibration.comparisons.ComparisonCompatibilityAnalyzer;
+import calibration.comparisons.ComparisonPair;
+import calibration.comparisons.ComparisonPairPlan;
+import calibration.comparisons.ComparisonPairPlanner;
 import calibration.comparisons.PerformanceComparisonCalculator;
 import calibration.comparisons.SystemTelemetryComparisonCalculator;
 import calibration.comparisons.schema.AggregateComparison;
 import calibration.comparisons.schema.CandidateComparison;
 import calibration.comparisons.schema.ComparisonCompatibility;
 import calibration.comparisons.schema.ComparisonResult;
+import calibration.comparisons.schema.ComparisonSet;
 import calibration.comparisons.schema.CompletedRun;
 import calibration.comparisons.schema.PerformanceComparison;
 import calibration.comparisons.schema.RunReference;
@@ -59,87 +63,63 @@ public final class CalibrationComparison {
         List<CompletedRun> allRuns = CompletedRunLoader.loadExperiment(resolvedExperimentDir);
         LOGGER.info("Discovered {} completed run(s) in experiment directory", allRuns.size());
 
-        CompletedRun baselineRun = selectBaselineRun(allRuns, config != null ? config.baseline() : null);
-        LOGGER.info(
-                "Selected baseline run: trialId={}, sourcePath={}",
-                baselineRun.identity().trialId(),
-                baselineRun.identity().sourcePath());
-
+        List<CompletedRun> baselineRuns = selectBaselineRuns(allRuns, config != null ? config.baseline() : null);
         List<CompletedRun> candidateRuns =
-                selectCandidateRuns(allRuns, baselineRun, config != null ? config.candidates() : null);
-        LOGGER.info("Comparing against {} candidate run(s)...", candidateRuns.size());
+                selectCandidateRuns(allRuns, baselineRuns, config != null ? config.candidate() : null);
 
-        List<CandidateComparison> candidateComparisons = new ArrayList<>(candidateRuns.size());
+        ComparisonConfig effectiveConfig =
+                config != null ? config : ComparisonConfig.ofExperimentDirectory(resolvedExperimentDir.toString());
 
-        for (CompletedRun candidateRun : candidateRuns) {
-            ComparisonCompatibility compatibility = ComparisonCompatibilityAnalyzer.analyze(baselineRun, candidateRun);
-            LOGGER.info(
-                    "Candidate {}: compatibility={}", candidateRun.identity().trialId(), compatibility.status());
-
-            PerformanceComparison performance =
-                    PerformanceComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
-            AggregateComparison aggregate =
-                    SystemTelemetryComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
-
-            CandidateComparison candidateComparison = new CandidateComparison(
-                    baselineRun.identity(),
-                    candidateRun.identity(),
-                    compatibility,
-                    compatibility.differences(),
-                    performance,
-                    List.of(),
-                    aggregate);
-
-            candidateComparisons.add(candidateComparison);
-        }
-
-        ComparisonResult comparisonResult = new ComparisonResult(baselineRun, candidateRuns, candidateComparisons);
-
-        Path outputDir = (config != null
-                        && config.outputDirectory() != null
-                        && !config.outputDirectory().isBlank())
-                ? Path.of(config.outputDirectory()).toAbsolutePath().normalize()
-                : resolvedExperimentDir.resolve("comparisons").toAbsolutePath().normalize();
-
-        LOGGER.info("Exporting comparison results to: {}", outputDir);
-        ComparisonExport.export(outputDir, comparisonResult);
+        executeComparisonPipeline(effectiveConfig, baselineRuns, candidateRuns, resolvedExperimentDir);
     }
 
     static void runExplicitComparison(@NonNull ComparisonConfig comparisonConfig) throws Exception {
         Objects.requireNonNull(comparisonConfig.baseline(), "baseline must not be null");
-        Objects.requireNonNull(comparisonConfig.candidates(), "candidates must not be null");
+        Objects.requireNonNull(comparisonConfig.candidate(), "candidate must not be null");
 
-        LOGGER.info(
-                "Running comparison for baseline: {}",
-                comparisonConfig.baseline().path());
-        CompletedRun baselineRun =
-                CompletedRunLoader.load(comparisonConfig.baseline().path());
-        LOGGER.info(
-                "Loaded baseline run: trialId={}, sourcePath={}",
-                baselineRun.identity().trialId(),
-                baselineRun.identity().sourcePath());
-
-        List<RunReference> candidateRefs = comparisonConfig.candidates();
-        LOGGER.info("Comparing against {} candidate run(s)...", candidateRefs.size());
-
-        List<CompletedRun> candidateRuns = new ArrayList<>(candidateRefs.size() + 1);
-        candidateRuns.add(baselineRun);
-        for (RunReference candidateRef : candidateRefs) {
-            CompletedRun candidateRun = CompletedRunLoader.load(candidateRef.path());
-            if (!candidateRun
-                    .identity()
-                    .sourcePath()
-                    .equals(baselineRun.identity().sourcePath())) {
-                candidateRuns.add(candidateRun);
-            }
+        List<CompletedRun> baselineRuns = new ArrayList<>();
+        for (RunReference ref : comparisonConfig.baseline().runs()) {
+            baselineRuns.add(CompletedRunLoader.load(ref.path()));
         }
 
-        List<CandidateComparison> candidateComparisons = new ArrayList<>(candidateRuns.size());
+        List<CompletedRun> candidateRuns = new ArrayList<>();
+        for (RunReference ref : comparisonConfig.candidate().runs()) {
+            candidateRuns.add(CompletedRunLoader.load(ref.path()));
+        }
 
-        for (CompletedRun candidateRun : candidateRuns) {
+        executeComparisonPipeline(comparisonConfig, baselineRuns, candidateRuns, null);
+    }
+
+    private static void executeComparisonPipeline(
+            @NonNull ComparisonConfig config,
+            @NonNull List<CompletedRun> baselineRuns,
+            @NonNull List<CompletedRun> candidateRuns,
+            @Nullable Path fallbackBaseDir)
+            throws Exception {
+
+        LOGGER.info(
+                "Planning comparison pairs using strategy={}: {} baseline run(s), {} candidate run(s)",
+                config.strategy(),
+                baselineRuns.size(),
+                candidateRuns.size());
+
+        ComparisonPairPlan plan = ComparisonPairPlanner.plan(config, baselineRuns, candidateRuns);
+        LOGGER.info("Constructed {} comparison pair(s)", plan.pairs().size());
+
+        List<CandidateComparison> candidateComparisons =
+                new ArrayList<>(plan.pairs().size());
+
+        for (ComparisonPair pair : plan.pairs()) {
+            CompletedRun baselineRun = pair.baseline();
+            CompletedRun candidateRun = pair.candidate();
+
             ComparisonCompatibility compatibility = ComparisonCompatibilityAnalyzer.analyze(baselineRun, candidateRun);
             LOGGER.info(
-                    "Candidate {}: compatibility={}", candidateRun.identity().trialId(), compatibility.status());
+                    "Pair #{}: {} vs {} -> compatibility={}",
+                    pair.pairIndex(),
+                    baselineRun.identity().trialId(),
+                    candidateRun.identity().trialId(),
+                    compatibility.status());
 
             PerformanceComparison performance =
                     PerformanceComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
@@ -147,8 +127,10 @@ public final class CalibrationComparison {
                     SystemTelemetryComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
 
             CandidateComparison candidateComparison = new CandidateComparison(
+                    pair.pairIndex(),
                     baselineRun.identity(),
                     candidateRun.identity(),
+                    pair.key(),
                     compatibility,
                     compatibility.differences(),
                     performance,
@@ -158,36 +140,75 @@ public final class CalibrationComparison {
             candidateComparisons.add(candidateComparison);
         }
 
-        ComparisonResult comparisonResult = new ComparisonResult(baselineRun, candidateRuns, candidateComparisons);
+        ComparisonResult comparisonResult = new ComparisonResult(
+                plan.strategy(),
+                candidateComparisons,
+                plan.keyConfig(),
+                plan.unmatchedBaselineKeys(),
+                plan.unmatchedCandidateKeys());
 
-        Path outputDir = Path.of(
-                        Objects.requireNonNull(comparisonConfig.outputDirectory(), "outputDirectory must not be null"))
-                .toAbsolutePath()
-                .normalize();
+        Path outputDir;
+        if (config.outputDirectory() != null && !config.outputDirectory().isBlank()) {
+            outputDir = Path.of(config.outputDirectory()).toAbsolutePath().normalize();
+        } else if (fallbackBaseDir != null) {
+            outputDir = fallbackBaseDir.resolve("comparisons").toAbsolutePath().normalize();
+        } else {
+            throw new IllegalArgumentException("Comparison outputDirectory must not be null");
+        }
+
         LOGGER.info("Exporting comparison results to: {}", outputDir);
         ComparisonExport.export(outputDir, comparisonResult);
     }
 
-    static CompletedRun selectBaselineRun(List<CompletedRun> allRuns, @Nullable RunReference explicitBaseline) {
-        if (explicitBaseline != null
-                && explicitBaseline.path() != null
-                && !explicitBaseline.path().isBlank()) {
-            String query = explicitBaseline.path().trim();
-            for (CompletedRun run : allRuns) {
-                if (matchesRun(run, query)) {
-                    return run;
+    static List<CompletedRun> selectBaselineRuns(List<CompletedRun> allRuns, @Nullable ComparisonSet explicitBaseline) {
+        if (explicitBaseline != null && !explicitBaseline.runs().isEmpty()) {
+            List<CompletedRun> resolved = new ArrayList<>();
+            for (RunReference ref : explicitBaseline.runs()) {
+                String query = ref.path().trim();
+                CompletedRun found = findMatchingRun(allRuns, query);
+                if (found == null) {
+                    found = CompletedRunLoader.load(query);
                 }
+                resolved.add(found);
             }
-            try {
-                return CompletedRunLoader.load(query);
-            } catch (Exception e) {
-                throw new IllegalArgumentException(
-                        "Specified baseline '" + query + "' was not found among runs in experiment directory");
-            }
+            return List.copyOf(resolved);
         }
 
-        // Automatic baseline selection:
-        // 1. Run with id/name containing "baseline"
+        // Automatic single baseline selection
+        return List.of(selectSingleBaseline(allRuns));
+    }
+
+    static List<CompletedRun> selectCandidateRuns(
+            List<CompletedRun> allRuns, List<CompletedRun> baselineRuns, @Nullable ComparisonSet explicitCandidates) {
+        if (explicitCandidates != null && !explicitCandidates.runs().isEmpty()) {
+            List<CompletedRun> resolved = new ArrayList<>();
+            for (RunReference ref : explicitCandidates.runs()) {
+                String query = ref.path().trim();
+                CompletedRun found = findMatchingRun(allRuns, query);
+                if (found == null) {
+                    found = CompletedRunLoader.load(query);
+                }
+                resolved.add(found);
+            }
+            return List.copyOf(resolved);
+        }
+
+        // Default: all runs not in the baseline set (or all runs if multiple baselines)
+        List<CompletedRun> resolved = new ArrayList<>();
+        List<String> basePaths =
+                baselineRuns.stream().map(r -> r.identity().sourcePath()).toList();
+        for (CompletedRun run : allRuns) {
+            if (!basePaths.contains(run.identity().sourcePath())) {
+                resolved.add(run);
+            }
+        }
+        if (resolved.isEmpty()) {
+            resolved.addAll(allRuns);
+        }
+        return List.copyOf(resolved);
+    }
+
+    private static CompletedRun selectSingleBaseline(List<CompletedRun> allRuns) {
         for (CompletedRun run : allRuns) {
             if (containsIgnoreCase(run.identity().trialId(), "baseline")
                     || containsIgnoreCase(run.identity().trialName(), "baseline")
@@ -196,7 +217,6 @@ public final class CalibrationComparison {
             }
         }
 
-        // 2. Run with id/name containing "base"
         for (CompletedRun run : allRuns) {
             if (containsIgnoreCase(run.identity().trialId(), "base")
                     || containsIgnoreCase(run.identity().trialName(), "base")
@@ -205,51 +225,22 @@ public final class CalibrationComparison {
             }
         }
 
-        // 3. Run with origin == null (explicit non-sweep base trial)
         for (CompletedRun run : allRuns) {
             if (run.trialConfig().origin() == null) {
                 return run;
             }
         }
 
-        // 4. First run
         return allRuns.getFirst();
     }
 
-    static List<CompletedRun> selectCandidateRuns(
-            List<CompletedRun> allRuns, CompletedRun baselineRun, @Nullable List<RunReference> explicitCandidates) {
-        List<CompletedRun> resolved = new ArrayList<>();
-        // Baseline first so it appears at the top of the comparison data
-        resolved.add(baselineRun);
-
-        if (explicitCandidates != null && !explicitCandidates.isEmpty()) {
-            for (RunReference ref : explicitCandidates) {
-                String query = ref.path().trim();
-                CompletedRun found = null;
-                for (CompletedRun run : allRuns) {
-                    if (matchesRun(run, query)) {
-                        found = run;
-                        break;
-                    }
-                }
-                if (found == null) {
-                    found = CompletedRunLoader.load(query);
-                }
-                if (!found.identity().sourcePath().equals(baselineRun.identity().sourcePath())) {
-                    resolved.add(found);
-                }
-            }
-            return List.copyOf(resolved);
-        }
-
-        // Default: all runs in the experiment
-        String baselineSource = baselineRun.identity().sourcePath();
+    private static CompletedRun findMatchingRun(List<CompletedRun> allRuns, String query) {
         for (CompletedRun run : allRuns) {
-            if (!run.identity().sourcePath().equals(baselineSource)) {
-                resolved.add(run);
+            if (matchesRun(run, query)) {
+                return run;
             }
         }
-        return List.copyOf(resolved);
+        return null;
     }
 
     private static boolean matchesRun(CompletedRun run, String query) {

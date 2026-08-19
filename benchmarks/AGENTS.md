@@ -408,15 +408,23 @@ according to the configured artifact retention flags, alongside their SHA-256 in
 
 ## 5. Comparison Artifacts Summary
 
-Comparison artifacts are post-run outputs generated when contrasting a baseline calibration run
-against one or more candidate runs. The baseline run is always included as the first entry in comparison tables (marked with outcome `BASELINE` and `0.0` delta) to provide an absolute reference anchor. Source baseline and candidate run directories remain immutable.
+Comparison artifacts are post-run outputs generated when comparing calibration runs across three explicit strategies: `BASELINE`, `KEYED`, and `CROSS`. Source baseline and candidate run directories remain immutable.
 JMH throughput (`comparison_summary.tsv`) remains the authoritative performance result; diagnostic
 TSVs explain scheduler and fragment decision behavior without computing synthetic winners.
 
+### Comparison Strategies
+
+1. **`BASELINE` (Default)**:
+   Contrasts a single baseline calibration run against one or more candidate runs (1-vs-N).
+2. **`KEYED`**:
+   Pairs baseline and candidate runs by matching exact key values extracted from resolved `TrialConfig` via JSON Pointer paths (e.g. `/origin/candidateIndex` or `["/calibrationConfig/workUnits", "/calibrationConfig/parallelSources"]`). Supports sweep-vs-sweep evaluation (such as DIRECT(24) vs STAGED(24), DIRECT(48) vs STAGED(48)). Enforces 1-to-1 matching, rejects duplicate keys within each set, and naturally orders output pairs by comparison key.
+3. **`CROSS`**:
+   Evaluates the full Cartesian product ($M \times N$) between a baseline set and a candidate set. No intra-set comparisons are generated. Pairs are ordered deterministically by baseline order $\times$ candidate order.
+
 | Export File | Description | Source Structure |
 |-------------|-------------|------------------|
-| `comparison_manifest.json` | Provenance manifest with identities, paths, compatibility status, and checksums | [`ComparisonManifest`](src/main/java/calibration/comparisons/schema/ComparisonManifest.java) |
-| `comparison_summary.tsv` | Authoritative performance comparison summary across candidates | [`PerformanceComparison`](src/main/java/calibration/comparisons/schema/PerformanceComparison.java) |
+| `comparison_manifest.json` | Provenance manifest with strategy, key paths, pairs, compatibility status, and checksums | [`ComparisonManifest`](src/main/java/calibration/comparisons/schema/ComparisonManifest.java) |
+| `comparison_summary.tsv` | Authoritative performance comparison summary across pairs | [`PerformanceComparison`](src/main/java/calibration/comparisons/schema/PerformanceComparison.java) |
 | `configuration_differences.tsv` | Structural JSON pointer configuration diffs sorted deterministically | [`ConfigurationDifference`](src/main/java/calibration/comparisons/schema/ConfigurationDifference.java) |
 | `scalar_comparisons.tsv` | Aggregate and per-core continuous scalar telemetry deltas across categories | [`ScalarComparison`](src/main/java/calibration/comparisons/schema/ScalarComparison.java) |
 | `occupancy_comparisons.tsv` | 5x5 branch occupancy deltas, centroid displacement, and total variation distance | [`OccupancyComparison`](src/main/java/calibration/comparisons/schema/OccupancyComparison.java) |
@@ -426,29 +434,32 @@ TSVs explain scheduler and fragment decision behavior without computing syntheti
 
 ### Comparison File Columns (In Order)
 
+All comparison TSV files start with `strategy`, `pairIndex`, `key`, `baseline`, `candidate`:
+
 1. **`comparison_summary.tsv`**:
-   `baseline`, `candidate`, `compatibilityStatus`, `baselineMean`, `candidateMean`, `unit`, `absoluteDelta`, `relativeDeltaPercent`, `baselineVariance`, `candidateVariance`, `baselineStdDev`, `candidateStdDev`, `baselineCv`, `candidateCv`, `baselineForkCount`, `candidateForkCount`, `outcome`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `compatibilityStatus`, `baselineMean`, `candidateMean`, `unit`, `absoluteDelta`, `relativeDeltaPercent`, `baselineVariance`, `candidateVariance`, `baselineStdDev`, `candidateStdDev`, `baselineCv`, `candidateCv`, `baselineForkCount`, `candidateForkCount`, `outcome`
 2. **`configuration_differences.tsv`**:
-   `baseline`, `candidate`, `compatibilityStatus`, `category`, `path`, `baselineValue`, `candidateValue`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `compatibilityStatus`, `category`, `path`, `baselineValue`, `candidateValue`
 3. **`scalar_comparisons.tsv`**:
-   `baseline`, `candidate`, `scope`, `category`, `segment`, `metric`, `baselineCount`, `candidateCount`, `baselineMean`, `candidateMean`, `meanDelta`, `baselineMedian`, `candidateMedian`, `medianDelta`, `baselineVariance`, `candidateVariance`, `varianceDelta`, `baselineStdDev`, `candidateStdDev`, `stdDevDelta`, `baselineCv`, `candidateCv`, `cvDelta`, `baselineP25`, `candidateP25`, `p25Delta`, `baselineP50`, `candidateP50`, `p50Delta`, `baselineP75`, `candidateP75`, `p75Delta`, `baselineP95`, `candidateP95`, `p95Delta`, `baselineIqr`, `candidateIqr`, `iqrDelta`, `baselineNormalizedIqr`, `candidateNormalizedIqr`, `normalizedIqrDelta`, `baselineP95ToP50`, `candidateP95ToP50`, `p95ToP50Delta`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `scope`, `category`, `segment`, `metric`, `baselineCount`, `candidateCount`, `baselineMean`, `candidateMean`, `meanDelta`, `baselineMedian`, `candidateMedian`, `medianDelta`, `baselineVariance`, `candidateVariance`, `varianceDelta`, `baselineStdDev`, `candidateStdDev`, `stdDevDelta`, `baselineCv`, `candidateCv`, `cvDelta`, `baselineP25`, `candidateP25`, `p25Delta`, `baselineP50`, `candidateP50`, `p50Delta`, `baselineP75`, `candidateP75`, `p75Delta`, `baselineP95`, `candidateP95`, `p95Delta`, `baselineIqr`, `candidateIqr`, `iqrDelta`, `baselineNormalizedIqr`, `candidateNormalizedIqr`, `normalizedIqrDelta`, `baselineP95ToP50`, `candidateP95ToP50`, `p95ToP50Delta`
 4. **`occupancy_comparisons.tsv`**:
-   `baseline`, `candidate`, `decisionType`, `contentionBand`, `bodyBand`, `baselineCount`, `candidateCount`, `countDelta`, `baselineProbability`, `candidateProbability`, `probabilityDelta`, `baselineContentionCentroid`, `candidateContentionCentroid`, `contentionCentroidDelta`, `baselineBodyCentroid`, `candidateBodyCentroid`, `bodyCentroidDelta`, `centroidDistance`, `baselineContentionVariance`, `candidateContentionVariance`, `contentionVarianceDelta`, `baselineBodyVariance`, `candidateBodyVariance`, `bodyVarianceDelta`, `baselineCovariance`, `candidateCovariance`, `covarianceDelta`, `baselineRadius`, `candidateRadius`, `radiusDelta`, `totalVariationDistance`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `decisionType`, `contentionBand`, `bodyBand`, `baselineCount`, `candidateCount`, `countDelta`, `baselineProbability`, `candidateProbability`, `probabilityDelta`, `baselineContentionCentroid`, `candidateContentionCentroid`, `contentionCentroidDelta`, `baselineBodyCentroid`, `candidateBodyCentroid`, `bodyCentroidDelta`, `centroidDistance`, `baselineContentionVariance`, `candidateContentionVariance`, `contentionVarianceDelta`, `baselineBodyVariance`, `candidateBodyVariance`, `bodyVarianceDelta`, `baselineCovariance`, `candidateCovariance`, `covarianceDelta`, `baselineRadius`, `candidateRadius`, `radiusDelta`, `totalVariationDistance`
 5. **`transition_comparisons.tsv`**:
-   `baseline`, `candidate`, `decisionType`, `segment`, `fromState`, `fromContention`, `fromBody`, `toState`, `toContention`, `toBody`, `baselineCount`, `candidateCount`, `countDelta`, `baselineProbability`, `candidateProbability`, `probabilityDelta`, `baselineSelfTransitionRate`, `candidateSelfTransitionRate`, `selfTransitionRateDelta`, `baselineDominantOutgoingState`, `candidateDominantOutgoingState`, `dominantStateChanged`, `baselineDominantProbability`, `candidateDominantProbability`, `dominantProbabilityDelta`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `decisionType`, `segment`, `fromState`, `fromContention`, `fromBody`, `toState`, `toContention`, `toBody`, `baselineCount`, `candidateCount`, `countDelta`, `baselineProbability`, `candidateProbability`, `probabilityDelta`, `baselineSelfTransitionRate`, `candidateSelfTransitionRate`, `selfTransitionRateDelta`, `baselineDominantOutgoingState`, `candidateDominantOutgoingState`, `dominantStateChanged`, `baselineDominantProbability`, `candidateDominantProbability`, `dominantProbabilityDelta`
 6. **`vector_field_comparisons.tsv`**:
-   `baseline`, `candidate`, `decisionType`, `segment`, `contentionBand`, `bodyBand`, `baselineTransitionCount`, `candidateTransitionCount`, `transitionCountDelta`, `baselineMeanDeltaContention`, `candidateMeanDeltaContention`, `meanDeltaContentionDelta`, `baselineMeanDeltaBody`, `candidateMeanDeltaBody`, `meanDeltaBodyDelta`, `baselineMagnitude`, `candidateMagnitude`, `magnitudeDelta`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `decisionType`, `segment`, `contentionBand`, `bodyBand`, `baselineTransitionCount`, `candidateTransitionCount`, `transitionCountDelta`, `baselineMeanDeltaContention`, `candidateMeanDeltaContention`, `meanDeltaContentionDelta`, `baselineMeanDeltaBody`, `candidateMeanDeltaBody`, `meanDeltaBodyDelta`, `baselineMagnitude`, `candidateMagnitude`, `magnitudeDelta`
 7. **`correlation_comparisons.tsv`**:
-   `baseline`, `candidate`, `category`, `segment`, `method`, `rowVariable`, `columnVariable`, `baselineCorrelation`, `candidateCorrelation`, `correlationDelta`
+   `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `category`, `segment`, `method`, `rowVariable`, `columnVariable`, `baselineCorrelation`, `candidateCorrelation`, `correlationDelta`
 
 ### Comparison Configuration Modes
 
-Comparison benchmarks can be configured in two ways via [`ComparisonConfig`](src/main/java/calibration/config/ComparisonConfig.java):
+Comparison benchmarks can be configured via [`ComparisonConfig`](src/main/java/calibration/config/ComparisonConfig.java):
 
-1. **Experiment Directory Mode (Recommended for Suites)**:
+1. **Experiment Directory Mode (BASELINE)**:
    Points to an entire experiment output directory. All trial runs in the folder are automatically loaded, the baseline is selected, and all remaining runs are compared against it:
    ```json
    {
+     "strategy": "BASELINE",
      "experimentDirectory": "experiments/00-xs-execution-boundary",
      "baseline": "xs-direct_repeat_0",
      "options": {
@@ -458,16 +469,51 @@ Comparison benchmarks can be configured in two ways via [`ComparisonConfig`](src
      "outputDirectory": "experiments/00-xs-execution-boundary/comparisons"
    }
    ```
-   `baseline` and `outputDirectory` are optional; if omitted, baseline is determined automatically and exports go to `<experimentDirectory>/comparisons`.
 
-2. **Explicit Runs Mode**:
-   Specifies precise paths for `baseline` and `candidates`:
+2. **Keyed Sweep-vs-Sweep Mode (`KEYED`)**:
+   Pairs runs with identical key values extracted from resolved `TrialConfig`:
    ```json
    {
-     "baseline": { "path": "experiments/00-xs-execution-boundary/xs-direct_repeat_0" },
-     "candidates": [
-       { "path": "experiments/00-xs-execution-boundary/xs-staged_repeat_0" }
-     ],
-     "outputDirectory": "experiments/00-xs-execution-boundary/comparisons"
+     "strategy": "KEYED",
+     "baseline": {
+       "label": "direct-sweep",
+       "runs": [
+         "experiments/direct-sweep/direct-24_repeat_0",
+         "experiments/direct-sweep/direct-48_repeat_0"
+       ]
+     },
+     "candidates": {
+       "label": "staged-sweep",
+       "runs": [
+         "experiments/staged-sweep/staged-24_repeat_0",
+         "experiments/staged-sweep/staged-48_repeat_0"
+       ]
+     },
+     "key": {
+       "paths": ["/origin/candidateIndex"],
+       "requireCompleteMatch": true
+     },
+     "outputDirectory": "experiments/direct-vs-staged/comparisons"
+   }
+   ```
+
+3. **Cross Matrix Mode (`CROSS`)**:
+   Evaluates Cartesian product across sets:
+   ```json
+   {
+     "strategy": "CROSS",
+     "baseline": {
+       "runs": [
+         "experiments/matrix/base-a_repeat_0",
+         "experiments/matrix/base-b_repeat_0"
+       ]
+     },
+     "candidates": {
+       "runs": [
+         "experiments/matrix/cand-x_repeat_0",
+         "experiments/matrix/cand-y_repeat_0"
+       ]
+     },
+     "outputDirectory": "experiments/matrix-cross/comparisons"
    }
    ```

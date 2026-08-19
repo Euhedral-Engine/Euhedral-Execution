@@ -1,16 +1,17 @@
 package calibration.io;
 
+import calibration.comparisons.ComparisonKey;
 import calibration.comparisons.schema.CandidateComparison;
 import calibration.comparisons.schema.ComparisonCompatibility;
 import calibration.comparisons.schema.ComparisonManifest;
-import calibration.comparisons.schema.ComparisonManifest.CandidateManifestEntry;
+import calibration.comparisons.schema.ComparisonManifest.ComparisonPairManifestEntry;
 import calibration.comparisons.schema.ComparisonResult;
-import calibration.comparisons.schema.CompletedRun;
 import calibration.comparisons.schema.ConfigurationDifference;
 import calibration.comparisons.schema.CoreComparison;
 import calibration.comparisons.schema.CorrelationComparison;
 import calibration.comparisons.schema.OccupancyComparison;
 import calibration.comparisons.schema.PerformanceComparison;
+import calibration.comparisons.schema.RunArtifacts;
 import calibration.comparisons.schema.RunIdentity;
 import calibration.comparisons.schema.ScalarComparison;
 import calibration.comparisons.schema.TransitionComparison;
@@ -47,6 +48,7 @@ public final class ComparisonExport {
     private static final String[] CORRELATION_METHODS = {"PEARSON", "SPEARMAN"};
 
     private static final List<String> EXPORTED_ARTIFACT_FILENAMES = List.of(
+            Constants.COMPARISON_MANIFEST_JSON,
             Constants.COMPARISON_SUMMARY_TSV,
             Constants.CONFIGURATION_DIFFERENCES_TSV,
             Constants.SCALAR_COMPARISONS_TSV,
@@ -86,29 +88,45 @@ public final class ComparisonExport {
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.COMPARISON_MANIFEST_JSON);
 
-        CompletedRun baselineRun = result.baseline();
-        RunIdentity baselineId = baselineRun.identity();
+        List<ComparisonPairManifestEntry> pairEntries =
+                new ArrayList<>(result.comparisons().size());
+        for (CandidateComparison comp : result.comparisons()) {
+            RunIdentity baseId = comp.baseline();
+            RunIdentity candId = comp.candidate();
+            ComparisonCompatibility compat = comp.compatibility();
+            RunArtifacts baseArtifacts = RunArtifacts.standard(baseId.sourcePath());
+            RunArtifacts candArtifacts = RunArtifacts.standard(candId.sourcePath());
+            String keyStr = comp.comparisonKey() != null ? comp.comparisonKey().format() : null;
 
-        List<CandidateManifestEntry> candidateEntries = new ArrayList<>();
-        List<CandidateComparison> comparisons = result.comparisons();
-        for (int i = 0; i < result.candidates().size(); i++) {
-            CompletedRun candRun = result.candidates().get(i);
-            CandidateComparison comp = (i < comparisons.size()) ? comparisons.get(i) : null;
-            ComparisonCompatibility compat = comp != null ? comp.compatibility() : ComparisonCompatibility.compatible();
-            candidateEntries.add(new CandidateManifestEntry(
-                    candRun.identity(),
-                    candRun.identity().sourcePath(),
-                    candRun.artifacts(),
+            pairEntries.add(new ComparisonPairManifestEntry(
+                    comp.pairIndex(),
+                    keyStr,
+                    baseId,
+                    baseId.sourcePath(),
+                    baseArtifacts,
+                    candId,
+                    candId.sourcePath(),
+                    candArtifacts,
                     compat.status(),
                     compat.reasons()));
         }
 
+        List<String> keyPaths = result.keyConfig() != null ? result.keyConfig().paths() : null;
+        List<String> unmatchedBase = result.unmatchedBaselineKeys().stream()
+                .map(ComparisonKey::format)
+                .toList();
+        List<String> unmatchedCand = result.unmatchedCandidateKeys().stream()
+                .map(ComparisonKey::format)
+                .toList();
+
         ComparisonManifest manifest = new ComparisonManifest(
                 ComparisonManifest.CURRENT_SCHEMA_VERSION,
-                baselineId,
-                baselineId.sourcePath(),
-                baselineRun.artifacts(),
-                candidateEntries,
+                result.strategy(),
+                keyPaths,
+                pairEntries.size(),
+                pairEntries,
+                unmatchedBase,
+                unmatchedCand,
                 EXPORTED_ARTIFACT_FILENAMES);
 
         OBJECT_MAPPER.writeValue(file.toFile(), manifest);
@@ -123,13 +141,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.COMPARISON_SUMMARY_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "baseline\tcandidate\tcompatibilityStatus\tbaselineMean\tcandidateMean\tunit\tabsoluteDelta\trelativeDeltaPercent\tbaselineVariance\tcandidateVariance\tbaselineStdDev\tcandidateStdDev\tbaselineCv\tcandidateCv\tbaselineForkCount\tcandidateForkCount\toutcome\n");
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tcompatibilityStatus\tbaselineMean\tcandidateMean\tunit\tabsoluteDelta\trelativeDeltaPercent\tbaselineVariance\tcandidateVariance\tbaselineStdDev\tcandidateStdDev\tbaselineCv\tcandidateCv\tbaselineForkCount\tcandidateForkCount\toutcome\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
                 String status = comp.compatibility().status().name();
@@ -137,13 +161,16 @@ public final class ComparisonExport {
                 boolean isBaselineSelf = comp.baseline()
                                 .trialId()
                                 .equals(comp.candidate().trialId())
-                        || comp.baseline().sourcePath().equals(comp.candidate().sourcePath());
+                        && comp.baseline().sourcePath().equals(comp.candidate().sourcePath());
                 if (perf != null) {
                     double absDelta = isBaselineSelf ? 0.0 : perf.absoluteDelta();
                     double relDelta = isBaselineSelf ? 0.0 : perf.relativeDeltaPercent();
                     String outcome =
                             isBaselineSelf ? "BASELINE" : perf.outcome().name();
-                    writer.write(baseId + "\t"
+                    writer.write(strategyStr + "\t"
+                            + pairIndexStr + "\t"
+                            + keyStr + "\t"
+                            + baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
                             + formatDouble(perf.baselineForkSummary().mean()) + "\t"
@@ -162,7 +189,10 @@ public final class ComparisonExport {
                             + outcome + "\n");
                 } else {
                     String outcome = isBaselineSelf ? "BASELINE" : "UNAVAILABLE";
-                    writer.write(baseId + "\t"
+                    writer.write(strategyStr + "\t"
+                            + pairIndexStr + "\t"
+                            + keyStr + "\t"
+                            + baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
                             + formatDouble(Double.NaN) + "\t"
@@ -193,12 +223,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.CONFIGURATION_DIFFERENCES_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
-            writer.write("baseline\tcandidate\tcompatibilityStatus\tcategory\tpath\tbaselineValue\tcandidateValue\n");
+            writer.write(
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tcompatibilityStatus\tcategory\tpath\tbaselineValue\tcandidateValue\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
                 String status = comp.compatibility().status().name();
@@ -210,7 +247,10 @@ public final class ComparisonExport {
                     if (diff == null) {
                         continue;
                     }
-                    writer.write(baseId + "\t"
+                    writer.write(strategyStr + "\t"
+                            + pairIndexStr + "\t"
+                            + keyStr + "\t"
+                            + baseId + "\t"
                             + candId + "\t"
                             + status + "\t"
                             + diff.category().name() + "\t"
@@ -231,13 +271,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.SCALAR_COMPARISONS_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "baseline\tcandidate\tscope\tcategory\tsegment\tmetric\tbaselineCount\tcandidateCount\tbaselineMean\tcandidateMean\tmeanDelta\tbaselineMedian\tcandidateMedian\tmedianDelta\tbaselineVariance\tcandidateVariance\tvarianceDelta\tbaselineStdDev\tcandidateStdDev\tstdDevDelta\tbaselineCv\tcandidateCv\tcvDelta\tbaselineP25\tcandidateP25\tp25Delta\tbaselineP50\tcandidateP50\tp50Delta\tbaselineP75\tcandidateP75\tp75Delta\tbaselineP95\tcandidateP95\tp95Delta\tbaselineIqr\tcandidateIqr\tiqrDelta\tbaselineNormalizedIqr\tcandidateNormalizedIqr\tnormalizedIqrDelta\tbaselineP95ToP50\tcandidateP95ToP50\tp95ToP50Delta\n");
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tscope\tcategory\tsegment\tmetric\tbaselineCount\tcandidateCount\tbaselineMean\tcandidateMean\tmeanDelta\tbaselineMedian\tcandidateMedian\tmedianDelta\tbaselineVariance\tcandidateVariance\tvarianceDelta\tbaselineStdDev\tcandidateStdDev\tstdDevDelta\tbaselineCv\tcandidateCv\tcvDelta\tbaselineP25\tcandidateP25\tp25Delta\tbaselineP50\tcandidateP50\tp50Delta\tbaselineP75\tcandidateP75\tp75Delta\tbaselineP95\tcandidateP95\tp95Delta\tbaselineIqr\tcandidateIqr\tiqrDelta\tbaselineNormalizedIqr\tcandidateNormalizedIqr\tnormalizedIqrDelta\tbaselineP95ToP50\tcandidateP95ToP50\tp95ToP50Delta\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
 
@@ -253,7 +299,18 @@ public final class ComparisonExport {
                         String category = parts.length > 0 ? normalizeCategory(parts[0]) : "";
                         String segment = parts.length > 1 ? normalizeSegment(parts[1]) : "";
                         String metric = parts.length > 2 ? normalizeMetric(parts[2]) : "";
-                        writeScalarComparisonRow(writer, baseId, candId, "SYSTEM", category, segment, metric, sc);
+                        writeScalarComparisonRow(
+                                writer,
+                                strategyStr,
+                                pairIndexStr,
+                                keyStr,
+                                baseId,
+                                candId,
+                                "SYSTEM",
+                                category,
+                                segment,
+                                metric,
+                                sc);
                     }
                 }
 
@@ -273,7 +330,18 @@ public final class ComparisonExport {
                         String category = parts.length > 0 ? normalizeCategory(parts[0]) : "";
                         String segment = parts.length > 1 ? normalizeSegment(parts[1]) : "";
                         String metric = parts.length > 2 ? normalizeMetric(parts[2]) : "";
-                        writeScalarComparisonRow(writer, baseId, candId, coreScope, category, segment, metric, sc);
+                        writeScalarComparisonRow(
+                                writer,
+                                strategyStr,
+                                pairIndexStr,
+                                keyStr,
+                                baseId,
+                                candId,
+                                coreScope,
+                                category,
+                                segment,
+                                metric,
+                                sc);
                     }
                 }
             }
@@ -283,6 +351,9 @@ public final class ComparisonExport {
 
     private static void writeScalarComparisonRow(
             BufferedWriter writer,
+            String strategy,
+            String pairIndex,
+            String comparisonKey,
             String baseId,
             String candId,
             String scope,
@@ -291,7 +362,10 @@ public final class ComparisonExport {
             String metric,
             ScalarComparison sc)
             throws Exception {
-        writer.write(baseId + "\t"
+        writer.write(strategy + "\t"
+                + pairIndex + "\t"
+                + comparisonKey + "\t"
+                + baseId + "\t"
                 + candId + "\t"
                 + scope + "\t"
                 + category + "\t"
@@ -345,13 +419,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.OCCUPANCY_COMPARISONS_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "baseline\tcandidate\tdecisionType\tcontentionBand\tbodyBand\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineContentionCentroid\tcandidateContentionCentroid\tcontentionCentroidDelta\tbaselineBodyCentroid\tcandidateBodyCentroid\tbodyCentroidDelta\tcentroidDistance\tbaselineContentionVariance\tcandidateContentionVariance\tcontentionVarianceDelta\tbaselineBodyVariance\tcandidateBodyVariance\tbodyVarianceDelta\tbaselineCovariance\tcandidateCovariance\tcovarianceDelta\tbaselineRadius\tcandidateRadius\tradiusDelta\ttotalVariationDistance\n");
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tcontentionBand\tbodyBand\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineContentionCentroid\tcandidateContentionCentroid\tcontentionCentroidDelta\tbaselineBodyCentroid\tcandidateBodyCentroid\tbodyCentroidDelta\tcentroidDistance\tbaselineContentionVariance\tcandidateContentionVariance\tcontentionVarianceDelta\tbaselineBodyVariance\tcandidateBodyVariance\tbodyVarianceDelta\tbaselineCovariance\tcandidateCovariance\tcovarianceDelta\tbaselineRadius\tcandidateRadius\tradiusDelta\ttotalVariationDistance\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null || comp.aggregate() == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
 
@@ -373,7 +453,10 @@ public final class ComparisonExport {
 
                     for (int c = 0; c < Band.GRID_SIZE; c++) {
                         for (int b = 0; b < Band.GRID_SIZE; b++) {
-                            writer.write(baseId + "\t"
+                            writer.write(strategyStr + "\t"
+                                    + pairIndexStr + "\t"
+                                    + keyStr + "\t"
+                                    + baseId + "\t"
                                     + candId + "\t"
                                     + dt + "\t"
                                     + c + "\t"
@@ -420,13 +503,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.TRANSITION_COMPARISONS_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "baseline\tcandidate\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineSelfTransitionRate\tcandidateSelfTransitionRate\tselfTransitionRateDelta\tbaselineDominantOutgoingState\tcandidateDominantOutgoingState\tdominantStateChanged\tbaselineDominantProbability\tcandidateDominantProbability\tdominantProbabilityDelta\n");
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineSelfTransitionRate\tcandidateSelfTransitionRate\tselfTransitionRateDelta\tbaselineDominantOutgoingState\tcandidateDominantOutgoingState\tdominantStateChanged\tbaselineDominantProbability\tcandidateDominantProbability\tdominantProbabilityDelta\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null || comp.aggregate() == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
 
@@ -477,7 +566,10 @@ public final class ComparisonExport {
                                 double cProb = candProbs[from][to];
                                 double pDelta = probDeltas[from][to];
 
-                                writer.write(baseId + "\t"
+                                writer.write(strategyStr + "\t"
+                                        + pairIndexStr + "\t"
+                                        + keyStr + "\t"
+                                        + baseId + "\t"
                                         + candId + "\t"
                                         + dt + "\t"
                                         + seg + "\t"
@@ -519,13 +611,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.VECTOR_FIELD_COMPARISONS_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "baseline\tcandidate\tdecisionType\tsegment\tcontentionBand\tbodyBand\tbaselineTransitionCount\tcandidateTransitionCount\ttransitionCountDelta\tbaselineMeanDeltaContention\tcandidateMeanDeltaContention\tmeanDeltaContentionDelta\tbaselineMeanDeltaBody\tcandidateMeanDeltaBody\tmeanDeltaBodyDelta\tbaselineMagnitude\tcandidateMagnitude\tmagnitudeDelta\n");
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tsegment\tcontentionBand\tbodyBand\tbaselineTransitionCount\tcandidateTransitionCount\ttransitionCountDelta\tbaselineMeanDeltaContention\tcandidateMeanDeltaContention\tmeanDeltaContentionDelta\tbaselineMeanDeltaBody\tcandidateMeanDeltaBody\tmeanDeltaBodyDelta\tbaselineMagnitude\tcandidateMagnitude\tmagnitudeDelta\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null || comp.aggregate() == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
 
@@ -547,7 +645,10 @@ public final class ComparisonExport {
                                 VectorCell baseCell = cell.baseline();
                                 VectorCell candCell = cell.candidate();
 
-                                writer.write(baseId + "\t"
+                                writer.write(strategyStr + "\t"
+                                        + pairIndexStr + "\t"
+                                        + keyStr + "\t"
+                                        + baseId + "\t"
                                         + candId + "\t"
                                         + dt + "\t"
                                         + seg + "\t"
@@ -582,13 +683,19 @@ public final class ComparisonExport {
 
         Files.createDirectories(outputDir);
         Path file = outputDir.resolve(Constants.CORRELATION_COMPARISONS_TSV);
+        String strategyStr = result.strategy().name();
+
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "baseline\tcandidate\tcategory\tsegment\tmethod\trowVariable\tcolumnVariable\tbaselineCorrelation\tcandidateCorrelation\tcorrelationDelta\n");
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tcategory\tsegment\tmethod\trowVariable\tcolumnVariable\tbaselineCorrelation\tcandidateCorrelation\tcorrelationDelta\n");
             for (CandidateComparison comp : result.comparisons()) {
                 if (comp == null || comp.aggregate() == null) {
                     continue;
                 }
+                String pairIndexStr = Integer.toString(comp.pairIndex());
+                String keyStr = comp.comparisonKey() != null
+                        ? sanitizeString(comp.comparisonKey().format())
+                        : "";
                 String baseId = sanitizeString(comp.baseline().trialId());
                 String candId = sanitizeString(comp.candidate().trialId());
 
@@ -630,7 +737,10 @@ public final class ComparisonExport {
                                     deltaVal =
                                             (i < sDeltas.length && j < sDeltas[i].length) ? sDeltas[i][j] : Double.NaN;
                                 }
-                                writer.write(baseId + "\t"
+                                writer.write(strategyStr + "\t"
+                                        + pairIndexStr + "\t"
+                                        + keyStr + "\t"
+                                        + baseId + "\t"
                                         + candId + "\t"
                                         + category + "\t"
                                         + segment + "\t"
