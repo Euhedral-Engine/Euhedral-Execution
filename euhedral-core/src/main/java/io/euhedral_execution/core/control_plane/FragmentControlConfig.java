@@ -22,8 +22,6 @@ public final class FragmentControlConfig {
     public static final int POLICY_COUNT = 5;
 
     public static final long DEFAULT_PARK_NS = 15_000L;
-    public static final long DEFAULT_LOW_CONTENTION_THRESHOLD = 650_000L; // 65%
-    public static final long DEFAULT_HIGH_CONTENTION_THRESHOLD = 980_000L; // 98%
 
     public final ContentionThresholds idleContentionThresholds;
     public final List<BodyCostThresholds> idleBodyCostThresholds;
@@ -83,10 +81,10 @@ public final class FragmentControlConfig {
                 }
             } else {
                 IDLE_DEFAULTS = new ContentionThresholds(
-                        DEFAULT_LOW_CONTENTION_THRESHOLD,
-                        DEFAULT_LOW_CONTENTION_THRESHOLD,
-                        DEFAULT_LOW_CONTENTION_THRESHOLD,
-                        DEFAULT_HIGH_CONTENTION_THRESHOLD);
+                        50_000, // 5%
+                        350_000, // 35%
+                        650_000, // 65%
+                        850_000); // 85%
             }
 
             prop = System.getProperty(EXEC_CONTENTION_THRESHOLDS);
@@ -99,10 +97,10 @@ public final class FragmentControlConfig {
                 }
             } else {
                 EXEC_DEFAULTS = new ContentionThresholds(
-                        DEFAULT_LOW_CONTENTION_THRESHOLD,
-                        DEFAULT_LOW_CONTENTION_THRESHOLD,
-                        DEFAULT_LOW_CONTENTION_THRESHOLD,
-                        DEFAULT_HIGH_CONTENTION_THRESHOLD);
+                        50_000, // 5%
+                        350_000, // 35%
+                        650_000, // 65%
+                        850_000); // 85%
             }
         }
 
@@ -185,10 +183,10 @@ public final class FragmentControlConfig {
                 }
             } else {
                 IDLE_DEFAULTS = List.of(
-                        new BodyCostWeights(0, 0, 24, 256), // XS Contention
-                        new BodyCostWeights(0, 0, 24, 256), // S Contention
-                        new BodyCostWeights(0, 0, 24, 256), // M Contention
-                        new BodyCostWeights(0, 24, 96, 256)); // H Contention
+                        new BodyCostWeights(96, 128, 216, 288), // XS Contention
+                        new BodyCostWeights(96, 128, 216, 288), // S Contention
+                        new BodyCostWeights(96, 128, 216, 288), // M Contention
+                        new BodyCostWeights(96, 128, 216, 288)); // H Contention
             }
 
             prop = System.getProperty(EXEC_BODY_COST_WEIGHTS);
@@ -205,10 +203,10 @@ public final class FragmentControlConfig {
                 }
             } else {
                 EXEC_DEFAULTS = List.of(
-                        new BodyCostWeights(0, 24, 96, 256), // XS Contention
-                        new BodyCostWeights(0, 24, 96, 256), // S Contention
-                        new BodyCostWeights(0, 24, 96, 256), // M Contention
-                        new BodyCostWeights(0, 24, 96, 256)); // H Contention
+                        new BodyCostWeights(96, 128, 216, 288), // XS Contention
+                        new BodyCostWeights(96, 128, 216, 288), // S Contention
+                        new BodyCostWeights(96, 128, 216, 288), // M Contention
+                        new BodyCostWeights(96, 128, 216, 288)); // H Contention
             }
         }
 
@@ -242,7 +240,7 @@ public final class FragmentControlConfig {
                         new IdlePolicy(0, 0, 0, 0, 0), // S Contention
                         new IdlePolicy(0, 0, 0, 0, 0), // M Contention
                         new IdlePolicy(0, 0, 0, 0, 0), // H Contention
-                        new IdlePolicy(DEFAULT_PARK_NS, DEFAULT_PARK_NS, 0, 0, 0) // XH Contention
+                        new IdlePolicy(1_000, 15_000, 5_000, 5_000, 5_000) // XH Contention
                         );
             }
         }
@@ -275,30 +273,30 @@ public final class FragmentControlConfig {
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
-                                ExecutionPath.STAGED),
+                                ExecutionPath.DIRECT),
                         new ExecutionPolicy(
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
-                                ExecutionPath.STAGED),
+                                ExecutionPath.DIRECT),
                         new ExecutionPolicy(
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
-                                ExecutionPath.STAGED),
+                                ExecutionPath.DIRECT),
                         new ExecutionPolicy(
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
                                 ExecutionPath.DIRECT,
-                                ExecutionPath.STAGED),
+                                ExecutionPath.DIRECT),
                         new ExecutionPolicy(
-                                ExecutionPath.DIRECT,
-                                ExecutionPath.DIRECT,
-                                ExecutionPath.DIRECT,
-                                ExecutionPath.DIRECT,
+                                ExecutionPath.STAGED,
+                                ExecutionPath.STAGED,
+                                ExecutionPath.STAGED,
+                                ExecutionPath.STAGED,
                                 ExecutionPath.STAGED));
             }
         }
