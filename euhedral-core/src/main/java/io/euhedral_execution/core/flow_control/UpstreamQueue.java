@@ -1,5 +1,6 @@
 package io.euhedral_execution.core.flow_control;
 
+import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -11,8 +12,13 @@ import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hashing.HasherApi;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import lombok.Getter;
 
 /// ## The upstream aggregation and scheduling layer
 ///
@@ -37,17 +43,38 @@ public class UpstreamQueue {
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
     public final int core;
     private final MpscQueue<UpstreamHandle> upstreams;
+    private final UpstreamHandle[] buffer = new UpstreamHandle[SystemInfo.getCoreCount()];
+
     private final PaddedAtomicLong upstreamCount;
     private final AverageFlow acquireContention = new AverageFlow();
     long cachedUpCount = 0L;
     long nonproductiveCount = 0L;
     private boolean acquireDiagnosticsEnabled;
+
+    @Getter
     private long contentionObservationCount;
+
+    @Getter
     private long lastRawContention = -1L;
+
+    @Getter
     private long lastContentionObservationNs = -1L;
+
+    @Getter
     private long successfulAcquisitionCount;
+
+    @Getter
     private long failedAcquisitionCount;
+
+    @Getter
     private long totalAcquisitionAttempts;
+
+    private long pullBucketTarget = 2_048L;
+    private PullBucketDivisionMode pullBucketDivisionMode = PullBucketDivisionMode.FLOOR;
+    private FragmentObserver pullConvoyObserver;
+
+    private long seed = ThreadLocalRandom.current().nextLong();
+    private int bufferIndex = 0;
 
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
@@ -126,34 +153,35 @@ public class UpstreamQueue {
         this.totalAcquisitionAttempts = 0L;
     }
 
+    /// Restores owner-local scheduler and handle order at a drained benchmark boundary.
+    public void resetForNextTrial() {
+        resetAcquireContention();
+        fillQueue();
+        long queued = this.upstreams.sizeLong();
+        if (queued > Integer.MAX_VALUE) {
+            throw new IllegalStateException("Too many upstream handles to reset");
+        }
+        UpstreamHandle[] handles = new UpstreamHandle[(int) queued];
+        int live = 0;
+        for (int i = 0; i < handles.length; i++) {
+            UpstreamHandle handle = this.upstreams.poll();
+            if (handle != null && !handle.isComplete()) {
+                handle.setProductivity(true);
+                handles[live++] = handle;
+            }
+        }
+        Arrays.sort(handles, 0, live, Comparator.comparingLong(UpstreamHandle::getSequence));
+        for (int i = 0; i < live; i++) {
+            this.upstreams.offer(handles[i]);
+        }
+        this.cachedUpCount = this.upstreamCount.getAcquire();
+        this.nonproductiveCount = 0L;
+    }
+
     /// Enables owner-local acquisition diagnostics for calibration runs.
     public void setAcquireDiagnosticsEnabled(boolean enabled) {
         this.acquireDiagnosticsEnabled = enabled;
         resetAcquireContention();
-    }
-
-    public long getContentionObservationCount() {
-        return this.contentionObservationCount;
-    }
-
-    public long getLastRawContention() {
-        return this.lastRawContention;
-    }
-
-    public long getLastContentionObservationNs() {
-        return this.lastContentionObservationNs;
-    }
-
-    public long getSuccessfulAcquisitionCount() {
-        return this.successfulAcquisitionCount;
-    }
-
-    public long getFailedAcquisitionCount() {
-        return this.failedAcquisitionCount;
-    }
-
-    public long getTotalAcquisitionAttempts() {
-        return this.totalAcquisitionAttempts;
     }
 
     /// Returns live handles minus handles this worker last observed as nonproductive.
@@ -164,6 +192,20 @@ public class UpstreamQueue {
         getTrueUpstreamCount();
         removeCompletedHandles();
         return this.cachedUpCount - Math.min(this.cachedUpCount, this.nonproductiveCount);
+    }
+
+    /// Applies an owner-local experimental bucketing treatment while the lattice is drained.
+    public void setPullBucketTreatment(long target, PullBucketDivisionMode divisionMode) {
+        if (target <= 0L) {
+            throw new IllegalArgumentException("Pull bucket target must be positive");
+        }
+        this.pullBucketTarget = target;
+        this.pullBucketDivisionMode = java.util.Objects.requireNonNull(divisionMode);
+    }
+
+    /// Enables bounded calibration-only source-handle observations.
+    public void setPullConvoyObserver(FragmentObserver observer) {
+        this.pullConvoyObserver = observer;
     }
 
     public void request(long demand) {
@@ -191,6 +233,11 @@ public class UpstreamQueue {
         while (cycles < this.cachedUpCount && limit > 0) {
             UpstreamHandle handle = this.upstreams.poll();
 
+            if (handle == null && this.bufferIndex > 0) {
+                fillQueue();
+                continue;
+            }
+
             if (handle == null) {
                 cycles++;
                 continue;
@@ -204,17 +251,24 @@ public class UpstreamQueue {
             attempts++;
             if (!handle.acquireLock()) {
                 failedAcquires++;
-                this.upstreams.offer(handle);
+                recordPullConvoy(handle, -1, demand, Math.min(limit, bucketSize), 0L, false, 0L);
+                bufferHandle(handle);
                 cycles++;
                 continue;
             }
 
+            long holdStartNs = this.pullConvoyObserver == null ? 0L : System.nanoTime();
+            long request = 0L;
+            long producedFrameCount = 0L;
             try {
                 long requestBefore = context == null || consumer != null ? 0L : context.satisfiedRequest;
-                long request = Math.min(limit, bucketSize);
+                request = Math.min(limit, bucketSize);
                 limit -= request;
 
                 long drainCount = drain(handle, consumer, stopCondition, request);
+                producedFrameCount = consumer != null
+                        ? drainCount
+                        : context == null ? 0L : Math.max(0L, context.satisfiedRequest - requestBefore);
                 totalPull += drainCount;
                 if (context != null) {
                     context.satisfiedPull += drainCount;
@@ -240,10 +294,12 @@ public class UpstreamQueue {
                 }
             } finally {
                 handle.releaseLock();
+                long holdDurationNs =
+                        this.pullConvoyObserver == null ? 0L : Math.max(0L, System.nanoTime() - holdStartNs);
+                recordPullConvoy(handle, this.core, demand, request, producedFrameCount, true, holdDurationNs);
+                bufferHandle(handle);
             }
             cycles = 0;
-
-            this.upstreams.offer(handle);
         }
         if (attempts > 0L) {
             long rawContention = scaleAcquireContentionUnchecked(failedAcquires, attempts);
@@ -257,7 +313,62 @@ public class UpstreamQueue {
                 this.totalAcquisitionAttempts += attempts;
             }
         }
+        fillQueue();
         return totalPull;
+    }
+
+    /// Returns every dequeued live handle through the owner-local shuffle buffer.
+    private void bufferHandle(UpstreamHandle handle) {
+        if (this.bufferIndex == this.buffer.length) {
+            fillQueue();
+        }
+        this.buffer[this.bufferIndex++] = handle;
+    }
+
+    private void recordPullConvoy(
+            UpstreamHandle handle,
+            int ownerCore,
+            long requestedDemand,
+            long calculatedPullSize,
+            long producedFrameCount,
+            boolean acquired,
+            long lockHoldDurationNs) {
+        FragmentObserver observer = this.pullConvoyObserver;
+        if (observer == null) {
+            return;
+        }
+        observer.pullConvoyState(
+                System.nanoTime(),
+                handle.getId(),
+                this.core,
+                ownerCore,
+                requestedDemand,
+                calculatedPullSize,
+                producedFrameCount,
+                acquired,
+                lockHoldDurationNs);
+    }
+
+    void fillQueue() {
+        while (this.bufferIndex > 1) {
+            this.seed = HasherApi.mix(this.seed + 1);
+
+            int idx = (int) Math.unsignedMultiplyHigh(this.seed, this.bufferIndex);
+
+            this.bufferIndex--;
+
+            UpstreamHandle handle = this.buffer[idx];
+            this.buffer[idx] = this.buffer[this.bufferIndex];
+            this.buffer[this.bufferIndex] = null;
+
+            this.upstreams.offer(handle);
+        }
+
+        if (this.bufferIndex == 1) {
+            this.bufferIndex = 0;
+            this.upstreams.offer(this.buffer[0]);
+            this.buffer[0] = null;
+        }
     }
 
     /// Scales a valid failed/attempt count for deterministic boundary tests and diagnostics.
@@ -302,6 +413,7 @@ public class UpstreamQueue {
 
     /// Removes completed queue entries when lifecycle changes occur without another pull.
     private void removeCompletedHandles() {
+        fillQueue();
         long queued = this.upstreams.sizeLong();
         long surplus = queued - this.cachedUpCount;
         while (queued > 0L && surplus > 0L) {
@@ -325,26 +437,31 @@ public class UpstreamQueue {
         }
     }
 
-    /// Performs a binary search to calculate even buckets of 32 items or more per [UpstreamHandle]
-    /// ```
-    /// pullBucket[0] = Number of buckets
-    /// pullBucket[1] = Size of each bucket
-    /// ```
+    /// Calculates an even per-handle pull using the configured experimental bucket rule.
     protected long calculatePullBuckets(long demand) {
-        if (demand <= 2048 || this.cachedUpCount < 2) {
+        if (demand <= 0L || this.cachedUpCount < 2) {
             return demand;
         }
 
-        int buckets = (int) MathFunctions.clampLong(demand / 2048, 1L, this.cachedUpCount);
-        buckets = Math.max(buckets, 1);
+        long bucketsNeeded =
+                switch (this.pullBucketDivisionMode) {
+                    case FLOOR -> demand / this.pullBucketTarget;
+                    case CEIL -> 1L + (demand - 1L) / this.pullBucketTarget;
+                };
+        long buckets = MathFunctions.clampLong(bucketsNeeded, 1L, this.cachedUpCount);
 
-        return (demand + buckets - 1) / buckets;
+        return 1L + (demand - 1L) / buckets;
     }
 
     /// A wrapper for an upstream source.
     public abstract static class UpstreamHandle implements LatticeInterceptor {
 
         public abstract long getId();
+
+        /// Returns stable source-registration order for benchmark reset; other handles fall back to identity.
+        public long getSequence() {
+            return getId();
+        }
 
         public void addUpstream(LatticeSource upstream) {
             upstream.complete();

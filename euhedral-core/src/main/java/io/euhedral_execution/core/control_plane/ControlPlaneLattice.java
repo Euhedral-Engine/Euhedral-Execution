@@ -443,7 +443,13 @@ public final class ControlPlaneLattice implements LatticeTerminal {
      * benchmark policy is activated. Ingest sources should be paused before calling this method.
      */
     public CacheReset clear(Duration timeout) {
+        return clear(timeout, () -> {});
+    }
+
+    /// Performs the benchmark reset and invokes an additional state reset while ingest remains frozen.
+    public CacheReset clear(Duration timeout, Runnable resetWhileDrained) {
         Objects.requireNonNull(timeout);
+        Objects.requireNonNull(resetWhileDrained);
         if (timeout.isZero() || timeout.isNegative()) {
             throw new IllegalArgumentException("Reset timeout must be positive");
         }
@@ -476,6 +482,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                     cleared += shard.resetForNextTrial(deadline);
                 }
             }
+            resetWhileDrained.run();
             return new CacheReset(cleared, getActiveWorkers());
         } finally {
             if (controller != null) {

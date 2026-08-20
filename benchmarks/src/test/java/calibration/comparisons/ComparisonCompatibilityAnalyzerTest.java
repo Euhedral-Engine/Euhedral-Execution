@@ -91,8 +91,8 @@ class ComparisonCompatibilityAnalyzerTest {
         TrialConfig baseConfig = baseTrialConfig();
 
         List<ExecutionPolicy> policies = new ArrayList<>(FragmentDecisionWeights.DEFAULT.executionPolicies());
-        ExecutionPolicy p4 = policies.get(4);
-        policies.set(4, new ExecutionPolicy(ExecutionPath.STAGED, p4.sBody(), p4.mBody(), p4.hBody(), p4.xhBody()));
+        ExecutionPolicy p0 = policies.getFirst();
+        policies.set(0, new ExecutionPolicy(ExecutionPath.STAGED, p0.sBody(), p0.mBody(), p0.hBody(), p0.xhBody()));
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
                 FragmentDecisionWeights.DEFAULT.idleContentionThresholds(),
                 FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),

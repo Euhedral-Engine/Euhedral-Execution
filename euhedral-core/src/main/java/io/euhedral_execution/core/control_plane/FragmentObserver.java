@@ -1,6 +1,23 @@
 package io.euhedral_execution.core.control_plane;
 
+import io.euhedral_execution.core.flow_control.PullBucketDivisionMode;
+
 public abstract class FragmentObserver {
+
+    /// Returns the production pull-bucketing baseline unless an experiment explicitly overrides it.
+    public long pullBucketTarget() {
+        return 2_048L;
+    }
+
+    /// Returns the production pull-bucketing baseline unless an experiment explicitly overrides it.
+    public PullBucketDivisionMode pullBucketDivisionMode() {
+        return PullBucketDivisionMode.FLOOR;
+    }
+
+    /// Returns whether benchmark-only source-lock convoy diagnostics should be collected.
+    public boolean observesPullConvoy() {
+        return false;
+    }
 
     /// Returns whether benchmark-only contention-staleness diagnostics should be collected.
     public boolean observesContentionStaleness() {
@@ -114,4 +131,16 @@ public abstract class FragmentObserver {
             long productiveHandleCount,
             int registeredWorkers,
             int workerRank) {}
+
+    /// Records one bounded source-handle acquisition observation for calibration runs.
+    public void pullConvoyState(
+            long eventNs,
+            long handleId,
+            int attemptingCore,
+            int ownerCore,
+            long requestedDemand,
+            long calculatedPullSize,
+            long producedFrameCount,
+            boolean acquired,
+            long lockHoldDurationNs) {}
 }

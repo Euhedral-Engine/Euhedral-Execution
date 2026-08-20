@@ -99,6 +99,50 @@ class CalibrationRunnerTest {
     }
 
     @Test
+    void phase13ShuffleRecheckPresetResolvesBalancedTreatments() throws Exception {
+        File preset = new File("src/main/presets/experiments/28-phase13-handle-shuffle-recheck.json");
+        HarnessConfig config = CalibrationRunner.loadConfig(preset.getPath(), this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(config, this.mapper);
+
+        assertEquals(8, trials.size());
+        for (int position = 0; position < 8; position++) {
+            int iterationPosition = position;
+            assertEquals(
+                    8,
+                    trials.stream()
+                            .map(t -> t.calibrationConfig()
+                                    .pullBucketTreatments()
+                                    .get(iterationPosition)
+                                    .id())
+                            .distinct()
+                            .count());
+        }
+        for (TrialConfig trial : trials) {
+            assertEquals(1, trial.forks());
+            assertEquals(2, trial.warmups());
+            assertEquals(8, trial.iterations());
+            assertEquals(8, trial.calibrationConfig().pullBucketTreatments().size());
+            assertTrue(trial.calibrationConfig().observePullConvoy());
+        }
+    }
+
+    @Test
+    void phase13ShuffleComparisonPresetsAreValid() throws Exception {
+        ComparisonConfig forkMatrix = this.mapper.readValue(
+                new File("src/main/presets/comparisons/28-phase13-handle-shuffle-fork-matrix.json"),
+                ComparisonConfig.class);
+        ComparisonConfig prePost = this.mapper.readValue(
+                new File("src/main/presets/comparisons/28-phase13-pre-post-cross.json"), ComparisonConfig.class);
+
+        assertEquals(ComparisonStrategy.CROSS, forkMatrix.strategy());
+        assertEquals(8, forkMatrix.baseline().runs().size());
+        assertEquals(8, forkMatrix.candidate().runs().size());
+        assertEquals(ComparisonStrategy.CROSS, prePost.strategy());
+        assertEquals(8, prePost.baseline().runs().size());
+        assertEquals(8, prePost.candidate().runs().size());
+    }
+
+    @Test
     void resolveOutputDirectoryCreatesAndReturnsCanonicalDirWhenConfigured(@TempDir Path tempDir) throws Exception {
         Path targetPath = tempDir.resolve("reports/benchmarks");
         ArtifactConfig artifacts = new ArtifactConfig(targetPath.toString(), true, false, false, false, false);

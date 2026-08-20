@@ -117,4 +117,25 @@ class BenchmarkObserverTest {
         assertEquals(6_000L, metrics.contentionStalenessSteadyState[3][7]);
         assertEquals(18L, metrics.contentionStalenessSteadyState[3][12]);
     }
+
+    @Test
+    void testPullConvoySamplesAndPerHandleAggregatesAreBounded() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(7, 4, false, true);
+        for (int i = 1; i <= 6; i++) {
+            metrics.recordPullConvoy(i * 100L, 42L, 7, i % 2 == 0 ? 7 : -1, 3_000L, 1_500L, i, i % 2 == 0, i * 10L);
+        }
+
+        metrics.align();
+
+        assertEquals(6L, metrics.pullConvoyObservations);
+        assertEquals(1L, metrics.pullConvoyHandleCount);
+        assertEquals(6L, metrics.pullConvoyHandleAttempts[0]);
+        assertEquals(3L, metrics.pullConvoyHandleSuccesses[0]);
+        assertEquals(3L, metrics.pullConvoyHandleFailures[0]);
+        assertEquals(12L, metrics.pullConvoyHandleProducedFrames[0]);
+        assertEquals(120L, metrics.pullConvoyHandleHoldTimeNs[0]);
+        assertEquals(60L, metrics.pullConvoyHandleMaxHoldTimeNs[0]);
+        assertEquals(300L, metrics.pullConvoySteadyState[0][0]);
+        assertEquals(600L, metrics.pullConvoySteadyState[3][0]);
+    }
 }

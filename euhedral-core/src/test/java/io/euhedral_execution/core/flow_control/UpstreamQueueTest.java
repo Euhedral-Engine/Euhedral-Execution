@@ -234,7 +234,7 @@ class UpstreamQueueTest {
     void shouldTrackAcquireDiagnosticsOnlyWhenEnabled() {
         TestUpstreamHandle unavailable = addHandle();
         unavailable.available = false;
-        addHandle();
+        TestUpstreamHandle available = addHandle();
 
         queue.pull(frame -> {}, frame -> false, 64L);
 
@@ -242,6 +242,10 @@ class UpstreamQueueTest {
         assertEquals(-1L, queue.getLastRawContention());
         assertEquals(-1L, queue.getLastContentionObservationNs());
 
+        handles.poll();
+        handles.poll();
+        handles.offer(unavailable);
+        handles.offer(available);
         queue.setAcquireDiagnosticsEnabled(true);
         queue.pull(frame -> {}, frame -> false, 64L);
 
@@ -322,6 +326,38 @@ class UpstreamQueueTest {
         assertThrows(IllegalArgumentException.class, () -> UpstreamQueue.scaleAcquireContention(2L, 1L));
     }
 
+    @Test
+    void shouldPreserveFloor2048AsTheProductionBaseline() {
+        queue.cachedUpCount = 4L;
+
+        assertEquals(2_048L, queue.calculatePullBuckets(2_048L));
+        assertEquals(2_049L, queue.calculatePullBuckets(2_049L));
+        assertEquals(4_095L, queue.calculatePullBuckets(4_095L));
+        assertEquals(2_048L, queue.calculatePullBuckets(4_096L));
+    }
+
+    @Test
+    void shouldApplyFloorAndCeilTreatmentsWithoutOverflow() {
+        queue.cachedUpCount = 4L;
+
+        queue.setPullBucketTreatment(2_048L, PullBucketDivisionMode.CEIL);
+        assertEquals(1_025L, queue.calculatePullBuckets(2_049L));
+        assertEquals(1_500L, queue.calculatePullBuckets(3_000L));
+
+        queue.setPullBucketTreatment(512L, PullBucketDivisionMode.FLOOR);
+        assertEquals(1_024L, queue.calculatePullBuckets(4_096L));
+
+        queue.setPullBucketTreatment(1L, PullBucketDivisionMode.CEIL);
+        assertEquals(2_305_843_009_213_693_952L, queue.calculatePullBuckets(Long.MAX_VALUE));
+    }
+
+    @Test
+    void shouldRejectInvalidPullBucketTreatments() {
+        assertThrows(
+                IllegalArgumentException.class, () -> queue.setPullBucketTreatment(0L, PullBucketDivisionMode.FLOOR));
+        assertThrows(NullPointerException.class, () -> queue.setPullBucketTreatment(512L, null));
+    }
+
     /// Verifies unavailable live handles remain bounded to one attempt per pull cycle.
     @Test
     void shouldBoundRetriesWhileRetainingUnavailableHandles() {
@@ -338,6 +374,51 @@ class UpstreamQueueTest {
         assertEquals(2L, handles.sizeLong());
         assertEquals(1L, first.acquisitionAttempts);
         assertEquals(1L, second.acquisitionAttempts);
+    }
+
+    @Test
+    void shouldGiveWorkerQueuesIndependentShuffleSeeds() throws Exception {
+        long[] seeds = new long[8];
+        for (int i = 0; i < seeds.length; i++) {
+            UpstreamQueue workerQueue = new UpstreamQueue(i, new MpscQueue<>(64), new PaddedAtomicLong());
+            seeds[i] = shuffleSeed(workerQueue);
+        }
+
+        for (int i = 0; i < seeds.length; i++) {
+            for (int j = i + 1; j < seeds.length; j++) {
+                assertTrue(seeds[i] != seeds[j], "worker shuffle seeds must differ");
+            }
+        }
+    }
+
+    @Test
+    void shouldAdvanceShuffleWhenMultipleSuccessfulHandlesAreDequeued() throws Exception {
+        TestUpstreamHandle first = addHandle();
+        TestUpstreamHandle second = addHandle();
+        long initialSeed = shuffleSeed(queue);
+
+        queue.pull(frame -> {}, frame -> false, 4_096L);
+
+        assertTrue(initialSeed != shuffleSeed(queue));
+        assertEquals(1L, first.acquisitionAttempts);
+        assertEquals(1L, second.acquisitionAttempts);
+        assertEquals(2L, handles.sizeLong());
+    }
+
+    @Test
+    void shouldAdvanceShuffleWhenMultipleFailedHandlesAreDequeued() throws Exception {
+        TestUpstreamHandle first = addHandle();
+        TestUpstreamHandle second = addHandle();
+        first.available = false;
+        second.available = false;
+        long initialSeed = shuffleSeed(queue);
+
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertTrue(initialSeed != shuffleSeed(queue));
+        assertEquals(1L, first.acquisitionAttempts);
+        assertEquals(1L, second.acquisitionAttempts);
+        assertEquals(2L, handles.sizeLong());
     }
 
     @Test
@@ -451,6 +532,12 @@ class UpstreamQueueTest {
         handles.offer(handle);
         count.incrementAndGet();
         return handle;
+    }
+
+    private static long shuffleSeed(UpstreamQueue target) throws Exception {
+        java.lang.reflect.Field seed = UpstreamQueue.class.getDeclaredField("seed");
+        seed.setAccessible(true);
+        return seed.getLong(target);
     }
 
     private static UpstreamQueue queueWith(UpstreamHandle handle, PaddedAtomicLong count) {

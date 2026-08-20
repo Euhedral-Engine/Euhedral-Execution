@@ -228,6 +228,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
             this.upstreamQueue = context.upstream;
+            applyPullBucketTreatment();
             if (this.observeContentionStaleness) {
                 this.upstreamQueue.setAcquireDiagnosticsEnabled(true);
             }
@@ -582,9 +583,28 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
 
         long cleared = super.clearLocalCacheOnOwnerThread();
+        super.resetAdaptiveCacheStateOnOwnerThread();
         this.state.reset();
+        FlowThread.FlowContext context = FlowThread.getContext();
+        if (context != null) {
+            context.clearCounters();
+        }
+        long maxBatch = this.config.maxBatchSize();
+        long quota = super.getFrameQuota();
+        ADAPTIVE_BATCH_CAP.setRelease(this, Math.max(2L, Math.min(maxBatch, quota)));
+        LAST_ACCEPTED_TIMESTAMP_NS.setRelease(this, 0L);
+        applyPullBucketTreatment();
         this.resetCleared.setRelease(cleared);
         this.resetCompleted.setRelease(requested);
+    }
+
+    private void applyPullBucketTreatment() {
+        if (this.upstreamQueue == null || this.observer == null) {
+            return;
+        }
+        this.upstreamQueue.setPullBucketTreatment(
+                this.observer.pullBucketTarget(), this.observer.pullBucketDivisionMode());
+        this.upstreamQueue.setPullConvoyObserver(this.observer.observesPullConvoy() ? this.observer : null);
     }
 
     @Override
@@ -689,11 +709,13 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.registeredWorkers = 0;
             this.productiveHandleCount = 0;
             this.workerRank = -1;
+            this.cycleEpoch = -1L;
+            this.batchEpoch = 0L;
             this.lastContentionObservationCount = 0L;
             this.lastContentionObservationCycle = -1L;
             this.consecutiveIdleDecisions = 0L;
             if (ControlPlaneFragment.this.upstreamQueue != null) {
-                ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();
+                ControlPlaneFragment.this.upstreamQueue.resetForNextTrial();
             }
             if (ControlPlaneFragment.this.controlPolicy != null) {
                 ControlPlaneFragment.this.controlPolicy.reset();

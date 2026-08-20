@@ -70,11 +70,11 @@ class TrialConfigDifferTest {
         TrialConfig base = baseConfig();
 
         List<ExecutionPolicy> policies = new ArrayList<>(FragmentDecisionWeights.DEFAULT.executionPolicies());
-        // Modify cell 4 (band 4): xsBody from DIRECT to STAGED
-        ExecutionPolicy p4 = policies.get(4);
-        ExecutionPolicy modifiedP4 =
-                new ExecutionPolicy(ExecutionPath.STAGED, p4.sBody(), p4.mBody(), p4.hBody(), p4.xhBody());
-        policies.set(4, modifiedP4);
+        // Modify cell 0 (band 0): xsBody from DIRECT to STAGED
+        ExecutionPolicy p0 = policies.getFirst();
+        ExecutionPolicy modifiedP0 =
+                new ExecutionPolicy(ExecutionPath.STAGED, p0.sBody(), p0.mBody(), p0.hBody(), p0.xhBody());
+        policies.set(0, modifiedP0);
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
                 FragmentDecisionWeights.DEFAULT.idleContentionThresholds(),
@@ -90,7 +90,7 @@ class TrialConfigDifferTest {
         assertEquals(1, diffs.size());
 
         ConfigurationDifference diff = diffs.getFirst();
-        assertEquals("/calibrationConfig/decisionWeights/executionPolicies/4/xsBody", diff.path());
+        assertEquals("/calibrationConfig/decisionWeights/executionPolicies/0/xsBody", diff.path());
         assertEquals(DifferenceCategory.POLICY, diff.category());
         assertEquals(TextNode.valueOf("DIRECT"), diff.baselineValue());
         assertEquals(TextNode.valueOf("STAGED"), diff.candidateValue());

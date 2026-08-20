@@ -1,5 +1,6 @@
 package calibration.io;
 
+import calibration.config.PullBucketTreatment;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
 import calibration.statistics.Band;
@@ -177,6 +178,110 @@ public final class TrialExport {
                     + sample[15] + "\t"
                     + sample[16] + "\t"
                     + sample[17] + "\n");
+        }
+    }
+
+    /// Exports the exact treatment order, bounded per-attempt samples, and exact per-core/handle counts.
+    public static void exportPullConvoyTsv(
+            Path outputDir,
+            int fork,
+            List<PullBucketTreatment> treatments,
+            List<? extends List<HighSpeedMetrics>> measurementIterations)
+            throws Exception {
+        if (outputDir == null
+                || treatments == null
+                || measurementIterations == null
+                || treatments.size() != measurementIterations.size()) {
+            throw new IllegalArgumentException("Pull-convoy export requires one treatment per measurement iteration");
+        }
+        Files.createDirectories(outputDir);
+        Path manifest = outputDir.resolve(Constants.PULL_BUCKET_TREATMENTS_TSV);
+        String order =
+                treatments.stream().map(PullBucketTreatment::id).collect(java.util.stream.Collectors.joining(","));
+        try (BufferedWriter writer = Files.newBufferedWriter(manifest, StandardCharsets.UTF_8)) {
+            writer.write("fork\titeration\ttreatmentOrder\ttreatment\tpullBucketTarget\tpullBucketDivisionMode\n");
+            for (int iteration = 0; iteration < treatments.size(); iteration++) {
+                PullBucketTreatment treatment = treatments.get(iteration);
+                writer.write(fork + "\t" + iteration + "\t" + order + "\t" + treatment.id() + "\t" + treatment.target()
+                        + "\t" + treatment.divisionMode() + "\n");
+            }
+        }
+        writeChecksum(manifest);
+
+        Path samples = outputDir.resolve(Constants.PULL_CONVOY_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(samples, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "rowType\tfork\titeration\ttreatmentOrder\ttreatment\tpullBucketTarget\tpullBucketDivisionMode\tcore\tsegment\tsampleIndex\teventNs\thandleId\tattemptingCore\townerCore\trequestedDemand\tcalculatedPullSize\tproducedFrameCount\tacquired\tlockHoldDurationNs\tattempts\tsuccesses\tfailures\ttotalProducedFrames\ttotalHoldDurationNs\tmaxHoldDurationNs\n");
+            for (int iteration = 0; iteration < measurementIterations.size(); iteration++) {
+                PullBucketTreatment treatment = treatments.get(iteration);
+                List<HighSpeedMetrics> metrics = measurementIterations.get(iteration);
+                if (metrics == null) {
+                    continue;
+                }
+                for (HighSpeedMetrics coreMetrics : metrics) {
+                    if (coreMetrics == null) {
+                        continue;
+                    }
+                    coreMetrics.align();
+                    int sampleCount = (int) Math.min(coreMetrics.pullConvoyObservations, coreMetrics.rawSampleLimit);
+                    writePullConvoySamples(
+                            writer,
+                            fork,
+                            iteration,
+                            order,
+                            treatment,
+                            coreMetrics.core,
+                            "head",
+                            coreMetrics.pullConvoyHead,
+                            sampleCount);
+                    writePullConvoySamples(
+                            writer,
+                            fork,
+                            iteration,
+                            order,
+                            treatment,
+                            coreMetrics.core,
+                            "steadyState",
+                            coreMetrics.pullConvoySteadyState,
+                            sampleCount);
+                    for (int slot = 0; slot < coreMetrics.pullConvoyHandleCount; slot++) {
+                        writer.write("AGGREGATE\t" + fork + "\t" + iteration + "\t" + order + "\t"
+                                + treatment.id() + "\t" + treatment.target() + "\t"
+                                + treatment.divisionMode() + "\t" + coreMetrics.core
+                                + "\tall\t-1\t-1\t" + coreMetrics.pullConvoyHandleIds[slot]
+                                + "\t" + coreMetrics.core + "\t-1\t-1\t-1\t-1\t-1\t-1\t"
+                                + coreMetrics.pullConvoyHandleAttempts[slot] + "\t"
+                                + coreMetrics.pullConvoyHandleSuccesses[slot] + "\t"
+                                + coreMetrics.pullConvoyHandleFailures[slot] + "\t"
+                                + coreMetrics.pullConvoyHandleProducedFrames[slot] + "\t"
+                                + coreMetrics.pullConvoyHandleHoldTimeNs[slot] + "\t"
+                                + coreMetrics.pullConvoyHandleMaxHoldTimeNs[slot] + "\n");
+                    }
+                }
+            }
+        }
+        writeChecksum(samples);
+    }
+
+    private static void writePullConvoySamples(
+            BufferedWriter writer,
+            int fork,
+            int iteration,
+            String order,
+            PullBucketTreatment treatment,
+            int core,
+            String segment,
+            long[][] samples,
+            int sampleCount)
+            throws Exception {
+        for (int sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+            long[] sample = samples[sampleIndex];
+            writer.write("SAMPLE\t" + fork + "\t" + iteration + "\t" + order + "\t" + treatment.id()
+                    + "\t" + treatment.target() + "\t" + treatment.divisionMode() + "\t" + core + "\t"
+                    + segment + "\t" + sampleIndex + "\t" + sample[0] + "\t" + sample[1] + "\t"
+                    + sample[2] + "\t" + sample[3] + "\t" + sample[4] + "\t" + sample[5] + "\t"
+                    + sample[6] + "\t" + sample[7] + "\t" + sample[8]
+                    + "\t-1\t-1\t-1\t-1\t-1\t-1\n");
         }
     }
 

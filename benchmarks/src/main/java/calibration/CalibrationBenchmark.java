@@ -1,6 +1,7 @@
 package calibration;
 
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.PullBucketTreatment;
 import calibration.config.TrialConfig;
 import calibration.infra.BenchmarkObserver;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
@@ -68,6 +69,7 @@ public class CalibrationBenchmark {
     private BenchmarkObserver observer;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
+    private final List<PullBucketTreatment> measurementTreatments = new ArrayList<>();
 
     private static TrialConfig getConfig() {
         String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
@@ -123,6 +125,10 @@ public class CalibrationBenchmark {
             throw new IllegalArgumentException("Cpu set cannot be empty");
         }
         this.observer = new BenchmarkObserver(this.calibrationConfig);
+        if (this.calibrationConfig.observePullConvoy()
+                && this.calibrationConfig.pullBucketTreatments().size() != this.trialConfig.iterations()) {
+            throw new IllegalArgumentException("Pull-bucket treatment count must equal measurement iteration count");
+        }
         this.sinks =
                 new RepeatingSink[this.calibrationConfig.parallelSources() + this.calibrationConfig.orderedSources()];
 
@@ -154,8 +160,22 @@ public class CalibrationBenchmark {
         IterationType type = iterationParams != null ? iterationParams.getType() : IterationType.MEASUREMENT;
         int index = type == IterationType.WARMUP ? this.warmupObservations.size() : this.measurementObservations.size();
         int count = type == IterationType.WARMUP ? this.trialConfig.warmups() : this.trialConfig.iterations();
-        LOGGER.info("Iteration start: type={}, index={}, count={}", type, index, count);
-        this.controlPlane.clear(Duration.ofSeconds(1));
+        PullBucketTreatment treatment = type == IterationType.WARMUP
+                ? PullBucketTreatment.BASELINE
+                : this.calibrationConfig.pullBucketTreatments().isEmpty()
+                        ? PullBucketTreatment.BASELINE
+                        : this.calibrationConfig.pullBucketTreatments().get(index);
+        this.observer.setPullBucketTreatment(treatment);
+        if (type == IterationType.MEASUREMENT) {
+            this.measurementTreatments.add(treatment);
+        }
+        LOGGER.info(
+                "Iteration start: type={}, index={}, count={}, pullBucketTreatment={}",
+                type,
+                index,
+                count,
+                treatment.id());
+        this.controlPlane.clear(Duration.ofSeconds(1), this::resetBenchmarkSources);
         this.observer.startObserving();
     }
 
@@ -183,7 +203,13 @@ public class CalibrationBenchmark {
         } else {
             this.measurementObservations.add(obs);
         }
-        this.controlPlane.clear(Duration.ofSeconds(1));
+        this.controlPlane.clear(Duration.ofSeconds(1), this::resetBenchmarkSources);
+    }
+
+    private void resetBenchmarkSources() {
+        for (RepeatingSink sink : this.sinks) {
+            sink.resetForNextIteration();
+        }
     }
 
     @TearDown(Level.Trial)
@@ -247,6 +273,13 @@ public class CalibrationBenchmark {
         TrialExport.exportAll(targetPath, this.forkCalculationResult, retainPerIteration);
         if (this.calibrationConfig.observeContentionStaleness()) {
             TrialExport.exportContentionStalenessTsv(targetPath, forkMeasurementMetrics);
+        }
+        if (this.calibrationConfig.observePullConvoy()) {
+            TrialExport.exportPullConvoyTsv(
+                    targetPath,
+                    this.calibrationConfig.pullBucketFork(),
+                    this.measurementTreatments,
+                    forkMeasurementMetrics);
         }
     }
 

@@ -21,6 +21,7 @@ import java.lang.invoke.VarHandle;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Getter;
@@ -65,6 +66,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
     protected RoutingState routingState = new RoutingState(new int[0]);
     private boolean closed = false;
+    private final AtomicLong upstreamSequence = new AtomicLong();
 
     public LatticeVertex(String name, int downstreamCount) {
         this(name, downstreamCount, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
@@ -384,6 +386,9 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Getter
         private final long id = HasherApi.mix(ThreadLocalRandom.current().nextLong());
+
+        @Getter
+        private final long sequence = LatticeVertex.this.upstreamSequence.getAndIncrement();
 
         private final ThreadLocal<ProductivityObservation> productivity = new ThreadLocal<>();
 

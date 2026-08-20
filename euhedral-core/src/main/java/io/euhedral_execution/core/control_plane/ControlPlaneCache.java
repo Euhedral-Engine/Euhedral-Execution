@@ -252,6 +252,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return cleared;
     }
 
+    /// Restores owner-local adaptive cache state at a drained benchmark boundary.
+    protected final void resetAdaptiveCacheStateOnOwnerThread() {
+        CAP_FACTOR.setRelease(this, 1.0);
+    }
+
     public final long getMaxLocalCacheCount() {
         double cap = (double) CAP_FACTOR.getAcquire(this);
         return (long) (this.frameQuota * cap);

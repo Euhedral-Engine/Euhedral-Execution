@@ -1,7 +1,9 @@
 package calibration.infra;
 
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.PullBucketTreatment;
 import io.euhedral_execution.core.control_plane.FragmentObserver;
+import io.euhedral_execution.core.flow_control.PullBucketDivisionMode;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import java.util.BitSet;
@@ -12,6 +14,8 @@ public class BenchmarkObserver extends FragmentObserver {
 
     private final CalibrationBenchmarkConfig config;
     private final AtomicReference<PaddedAtomicReferenceArray<HighSpeedMetrics>> metrics = new AtomicReference<>();
+    private final AtomicReference<PullBucketTreatment> pullBucketTreatment =
+            new AtomicReference<>(PullBucketTreatment.BASELINE);
 
     public BenchmarkObserver(CalibrationBenchmarkConfig config) {
         this.config = config;
@@ -23,13 +27,37 @@ public class BenchmarkObserver extends FragmentObserver {
         BitSet cores = SystemInfo.getCoreSet();
         for (int i = cores.nextSetBit(0); i >= 0; i = cores.nextSetBit(i + 1)) {
             metrics.setPlain(
-                    i, new HighSpeedMetrics(i, this.config.rawSampleLimit(), this.config.observeContentionStaleness()));
+                    i,
+                    new HighSpeedMetrics(
+                            i,
+                            this.config.rawSampleLimit(),
+                            this.config.observeContentionStaleness(),
+                            this.config.observePullConvoy()));
         }
         this.metrics.set(metrics);
     }
 
     public PaddedAtomicReferenceArray<HighSpeedMetrics> stopObserving() {
         return this.metrics.getAndSet(null);
+    }
+
+    public void setPullBucketTreatment(PullBucketTreatment treatment) {
+        this.pullBucketTreatment.set(java.util.Objects.requireNonNull(treatment));
+    }
+
+    @Override
+    public long pullBucketTarget() {
+        return this.pullBucketTreatment.get().target();
+    }
+
+    @Override
+    public PullBucketDivisionMode pullBucketDivisionMode() {
+        return this.pullBucketTreatment.get().divisionMode();
+    }
+
+    @Override
+    public boolean observesPullConvoy() {
+        return this.config.observePullConvoy();
     }
 
     @Override
@@ -242,6 +270,35 @@ public class BenchmarkObserver extends FragmentObserver {
                 workerRank);
     }
 
+    @Override
+    public void pullConvoyState(
+            long eventNs,
+            long handleId,
+            int attemptingCore,
+            int ownerCore,
+            long requestedDemand,
+            long calculatedPullSize,
+            long producedFrameCount,
+            boolean acquired,
+            long lockHoldDurationNs) {
+        if (!this.config.observePullConvoy()) {
+            return;
+        }
+        HighSpeedMetrics coreMetrics = getCoreMetrics(attemptingCore);
+        if (coreMetrics != null) {
+            coreMetrics.recordPullConvoy(
+                    eventNs,
+                    handleId,
+                    attemptingCore,
+                    ownerCore,
+                    requestedDemand,
+                    calculatedPullSize,
+                    producedFrameCount,
+                    acquired,
+                    lockHoldDurationNs);
+        }
+    }
+
     private @Nullable HighSpeedMetrics getCoreMetrics(int core) {
         PaddedAtomicReferenceArray<HighSpeedMetrics> metricArray = this.metrics.getOpaque();
         if (metricArray == null) {
@@ -290,6 +347,15 @@ public class BenchmarkObserver extends FragmentObserver {
 
         public final long[][] contentionStalenessHead;
         public final long[][] contentionStalenessSteadyState;
+        public final long[][] pullConvoyHead;
+        public final long[][] pullConvoySteadyState;
+        public final long[] pullConvoyHandleIds = new long[16];
+        public final long[] pullConvoyHandleAttempts = new long[16];
+        public final long[] pullConvoyHandleSuccesses = new long[16];
+        public final long[] pullConvoyHandleFailures = new long[16];
+        public final long[] pullConvoyHandleProducedFrames = new long[16];
+        public final long[] pullConvoyHandleHoldTimeNs = new long[16];
+        public final long[] pullConvoyHandleMaxHoldTimeNs = new long[16];
 
         public long cycleStartObservations = 0;
         public long batchProgressObservations = 0;
@@ -299,6 +365,8 @@ public class BenchmarkObserver extends FragmentObserver {
         public long idleDecisionObservations = 0;
         public long execDecisionObservations = 0;
         public long contentionStalenessObservations = 0;
+        public long pullConvoyObservations = 0;
+        public int pullConvoyHandleCount = 0;
 
         public final int rawSampleLimit;
         private final int mask;
@@ -306,14 +374,19 @@ public class BenchmarkObserver extends FragmentObserver {
         private boolean aligned = false;
 
         public HighSpeedMetrics(int rawSampleLimit) {
-            this(-1, rawSampleLimit, true);
+            this(-1, rawSampleLimit, true, false);
         }
 
         public HighSpeedMetrics(int core, int rawSampleLimit) {
-            this(core, rawSampleLimit, true);
+            this(core, rawSampleLimit, true, false);
         }
 
         public HighSpeedMetrics(int core, int rawSampleLimit, boolean observeContentionStaleness) {
+            this(core, rawSampleLimit, observeContentionStaleness, false);
+        }
+
+        public HighSpeedMetrics(
+                int core, int rawSampleLimit, boolean observeContentionStaleness, boolean observePullConvoy) {
             rawSampleLimit = Integer.highestOneBit((rawSampleLimit - 1) << 1);
             this.core = core;
             this.rawSampleLimit = rawSampleLimit;
@@ -352,6 +425,93 @@ public class BenchmarkObserver extends FragmentObserver {
             this.contentionStalenessHead = observeContentionStaleness ? new long[rawSampleLimit][18] : new long[0][];
             this.contentionStalenessSteadyState =
                     observeContentionStaleness ? new long[rawSampleLimit][18] : new long[0][];
+            this.pullConvoyHead = observePullConvoy ? new long[rawSampleLimit][9] : new long[0][];
+            this.pullConvoySteadyState = observePullConvoy ? new long[rawSampleLimit][9] : new long[0][];
+        }
+
+        public void recordPullConvoy(
+                long eventNs,
+                long handleId,
+                int attemptingCore,
+                int ownerCore,
+                long requestedDemand,
+                long calculatedPullSize,
+                long producedFrameCount,
+                boolean acquired,
+                long lockHoldDurationNs) {
+            int idx = (int) (this.pullConvoyObservations & this.mask);
+            if (this.pullConvoyObservations++ < this.rawSampleLimit) {
+                recordPullConvoySample(
+                        this.pullConvoyHead[idx],
+                        eventNs,
+                        handleId,
+                        attemptingCore,
+                        ownerCore,
+                        requestedDemand,
+                        calculatedPullSize,
+                        producedFrameCount,
+                        acquired,
+                        lockHoldDurationNs);
+            }
+            recordPullConvoySample(
+                    this.pullConvoySteadyState[idx],
+                    eventNs,
+                    handleId,
+                    attemptingCore,
+                    ownerCore,
+                    requestedDemand,
+                    calculatedPullSize,
+                    producedFrameCount,
+                    acquired,
+                    lockHoldDurationNs);
+
+            int handleSlot = findPullConvoyHandle(handleId);
+            this.pullConvoyHandleAttempts[handleSlot]++;
+            if (acquired) {
+                this.pullConvoyHandleSuccesses[handleSlot]++;
+                this.pullConvoyHandleProducedFrames[handleSlot] += producedFrameCount;
+                this.pullConvoyHandleHoldTimeNs[handleSlot] += lockHoldDurationNs;
+                this.pullConvoyHandleMaxHoldTimeNs[handleSlot] =
+                        Math.max(this.pullConvoyHandleMaxHoldTimeNs[handleSlot], lockHoldDurationNs);
+            } else {
+                this.pullConvoyHandleFailures[handleSlot]++;
+            }
+        }
+
+        private int findPullConvoyHandle(long handleId) {
+            for (int i = 0; i < this.pullConvoyHandleCount; i++) {
+                if (this.pullConvoyHandleIds[i] == handleId) {
+                    return i;
+                }
+            }
+            if (this.pullConvoyHandleCount >= this.pullConvoyHandleIds.length) {
+                throw new IllegalStateException("Pull-convoy handle telemetry exceeded its bounded slot count");
+            }
+            int slot = this.pullConvoyHandleCount++;
+            this.pullConvoyHandleIds[slot] = handleId;
+            return slot;
+        }
+
+        private static void recordPullConvoySample(
+                long[] sample,
+                long eventNs,
+                long handleId,
+                int attemptingCore,
+                int ownerCore,
+                long requestedDemand,
+                long calculatedPullSize,
+                long producedFrameCount,
+                boolean acquired,
+                long lockHoldDurationNs) {
+            sample[0] = eventNs;
+            sample[1] = handleId;
+            sample[2] = attemptingCore;
+            sample[3] = ownerCore;
+            sample[4] = requestedDemand;
+            sample[5] = calculatedPullSize;
+            sample[6] = producedFrameCount;
+            sample[7] = acquired ? 1L : 0L;
+            sample[8] = lockHoldDurationNs;
         }
 
         public void recordCycleStart(
@@ -699,6 +859,9 @@ public class BenchmarkObserver extends FragmentObserver {
             align(longAligner, execSteadyStateDecisionState, execDecisionObservations);
             if (contentionStalenessSteadyState.length > 0) {
                 align(longAligner, contentionStalenessSteadyState, contentionStalenessObservations);
+            }
+            if (pullConvoySteadyState.length > 0) {
+                align(longAligner, pullConvoySteadyState, pullConvoyObservations);
             }
 
             double[] doubleAligner = new double[rawSampleLimit];

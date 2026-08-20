@@ -36,6 +36,11 @@ public class RepeatingSink extends AbstractIngestSink {
         return this.delegate.isComplete();
     }
 
+    /// Restores deterministic source position while the owning lattice has ingest frozen.
+    public void resetForNextIteration() {
+        this.delegate.resetForNextIteration();
+    }
+
     protected static final class Delegate extends AbstractIngestSink.Delegate {
 
         final AtomicBoolean complete = new AtomicBoolean();
@@ -44,6 +49,11 @@ public class RepeatingSink extends AbstractIngestSink {
 
         public Delegate(AbstractFrame[] array) {
             this.array = array;
+        }
+
+        void resetForNextIteration() {
+            this.start = 0;
+            this.demand.setRelease(0L);
         }
 
         @Override

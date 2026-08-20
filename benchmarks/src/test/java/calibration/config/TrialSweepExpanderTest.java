@@ -135,14 +135,14 @@ class TrialSweepExpanderTest {
     void nestedObjectProperty() {
         SweepParameter param = new SweepParameter(
                 "/calibrationConfig/decisionWeights/execContentionThresholds/xsContention",
-                List.of(new LongNode(500_000L), new LongNode(600_000L)));
+                List.of(new LongNode(10_000L), new LongNode(20_000L)));
         SweepConfig sweep = new SweepConfig("sweep-nested", "trial-001", List.of(param));
 
         List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
         assertEquals(2, generated.size());
 
         assertEquals(
-                500_000L,
+                10_000L,
                 generated
                         .get(0)
                         .calibrationConfig()
@@ -150,7 +150,7 @@ class TrialSweepExpanderTest {
                         .execContentionThresholds()
                         .xsContention());
         assertEquals(
-                600_000L,
+                20_000L,
                 generated
                         .get(1)
                         .calibrationConfig()

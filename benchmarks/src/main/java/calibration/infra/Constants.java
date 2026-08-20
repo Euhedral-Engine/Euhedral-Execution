@@ -41,6 +41,10 @@ public final class Constants {
 
     public static final String CONTENTION_STALENESS_TSV = "contention_staleness.tsv";
     public static final String CONTENTION_STALENESS_CHECKSUM = "contention_staleness.tsv.sha256";
+    public static final String PULL_CONVOY_TSV = "pull_convoy.tsv";
+    public static final String PULL_CONVOY_CHECKSUM = "pull_convoy.tsv.sha256";
+    public static final String PULL_BUCKET_TREATMENTS_TSV = "pull_bucket_treatments.tsv";
+    public static final String PULL_BUCKET_TREATMENTS_CHECKSUM = "pull_bucket_treatments.tsv.sha256";
 
     public static final String COMPARISON_MANIFEST_JSON = "comparison_manifest.json";
     public static final String COMPARISON_MANIFEST_CHECKSUM = "comparison_manifest.json.sha256";

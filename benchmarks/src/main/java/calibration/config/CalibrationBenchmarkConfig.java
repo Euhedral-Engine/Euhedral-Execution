@@ -25,7 +25,10 @@ public record CalibrationBenchmarkConfig(
         boolean observeRawBodyCost,
         boolean observeIdleDecision,
         boolean observeExecDecision,
-        boolean observeContentionStaleness) {
+        boolean observeContentionStaleness,
+        int pullBucketFork,
+        List<PullBucketTreatment> pullBucketTreatments,
+        boolean observePullConvoy) {
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
 
@@ -63,6 +66,9 @@ public record CalibrationBenchmarkConfig(
                 observeRawBodyCost,
                 observeIdleDecision,
                 observeExecDecision,
+                false,
+                0,
+                List.of(),
                 false);
     }
 
@@ -100,6 +106,9 @@ public record CalibrationBenchmarkConfig(
                 observeRawBodyCost,
                 observeIdleDecision,
                 observeExecDecision,
+                false,
+                0,
+                List.of(),
                 false);
     }
 
@@ -138,6 +147,9 @@ public record CalibrationBenchmarkConfig(
                 observeRawBodyCost,
                 observeIdleDecision,
                 observeExecDecision,
+                false,
+                0,
+                List.of(),
                 false);
     }
 
@@ -159,7 +171,10 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("observeRawBodyCost") boolean observeRawBodyCost,
             @JsonProperty("observeIdleDecision") boolean observeIdleDecision,
             @JsonProperty("observeExecDecision") boolean observeExecDecision,
-            @JsonProperty("observeContentionStaleness") boolean observeContentionStaleness) {
+            @JsonProperty("observeContentionStaleness") boolean observeContentionStaleness,
+            @JsonProperty("pullBucketFork") int pullBucketFork,
+            @JsonProperty("pullBucketTreatments") @Nullable List<PullBucketTreatment> pullBucketTreatments,
+            @JsonProperty("observePullConvoy") boolean observePullConvoy) {
         Objects.requireNonNull(cpuSet, "CalibrationBenchmarkConfig cpuSet cannot be null");
         this.cpuSet = List.copyOf(cpuSet);
         this.parallelSources = parallelSources;
@@ -178,6 +193,9 @@ public record CalibrationBenchmarkConfig(
         this.observeIdleDecision = observeIdleDecision;
         this.observeExecDecision = observeExecDecision;
         this.observeContentionStaleness = observeContentionStaleness;
+        this.pullBucketFork = pullBucketFork;
+        this.pullBucketTreatments = pullBucketTreatments == null ? List.of() : List.copyOf(pullBucketTreatments);
+        this.observePullConvoy = observePullConvoy;
         validate();
     }
 
@@ -198,6 +216,12 @@ public record CalibrationBenchmarkConfig(
         if (this.decisionWeights == null && this.decisionWeightProfile == null) {
             throw new IllegalArgumentException(
                     "CalibrationBenchmarkConfig must specify either decisionWeights or decisionWeightProfile");
+        }
+        if (this.pullBucketFork < 0) {
+            throw new IllegalArgumentException("pullBucketFork must not be negative");
+        }
+        if (this.observePullConvoy && this.pullBucketTreatments.isEmpty()) {
+            throw new IllegalArgumentException("Pull-convoy observation requires a non-empty treatment order");
         }
     }
 
@@ -221,7 +245,10 @@ public record CalibrationBenchmarkConfig(
                 this.observeRawBodyCost,
                 this.observeIdleDecision,
                 this.observeExecDecision,
-                this.observeContentionStaleness);
+                this.observeContentionStaleness,
+                this.pullBucketFork,
+                this.pullBucketTreatments,
+                this.observePullConvoy);
     }
 
     /// Returns a copy of this CalibrationBenchmarkConfig with the given decisionWeightProfile reference set.
@@ -243,6 +270,9 @@ public record CalibrationBenchmarkConfig(
                 this.observeRawBodyCost,
                 this.observeIdleDecision,
                 this.observeExecDecision,
-                this.observeContentionStaleness);
+                this.observeContentionStaleness,
+                this.pullBucketFork,
+                this.pullBucketTreatments,
+                this.observePullConvoy);
     }
 }
