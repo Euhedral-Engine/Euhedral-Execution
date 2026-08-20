@@ -51,12 +51,14 @@ final class JmhOutputParser {
         }
 
         List<Double> primaryIterationScores = new ArrayList<>();
+        List<List<Double>> primaryForkIterationScores = new ArrayList<>();
         String primaryDetectedUnit = null;
         Double primarySummaryScore = null;
         double primarySummaryError = 0.0;
         String primarySummaryUnit = null;
 
         List<Double> auxIterationScores = new ArrayList<>();
+        List<List<Double>> auxForkIterationScores = new ArrayList<>();
         String auxDetectedUnit = null;
         Double auxSummaryScore = null;
         double auxSummaryError = 0.0;
@@ -65,6 +67,7 @@ final class JmhOutputParser {
         boolean inWarmup = false;
         boolean inPrimaryResultBlock = false;
         boolean inAuxResultBlock = false;
+        int currentForkIndex = -1;
 
         try (BufferedReader reader = new BufferedReader(new StringReader(content))) {
             String line;
@@ -74,6 +77,11 @@ final class JmhOutputParser {
                 if (trimmed.startsWith("# Warmup Iteration") || trimmed.startsWith("Warmup Iteration")) {
                     inWarmup = true;
                     continue;
+                }
+                if (trimmed.startsWith("# Fork:")) {
+                    currentForkIndex++;
+                    primaryForkIterationScores.add(new ArrayList<>());
+                    auxForkIterationScores.add(new ArrayList<>());
                 }
                 if (trimmed.startsWith("# Measurement:")
                         || trimmed.startsWith("Iteration ")
@@ -86,6 +94,9 @@ final class JmhOutputParser {
                     if (auxIterMatcher.find()) {
                         double score = Double.parseDouble(auxIterMatcher.group(1));
                         auxIterationScores.add(score);
+                        if (currentForkIndex >= 0) {
+                            auxForkIterationScores.get(currentForkIndex).add(score);
+                        }
                         if (auxDetectedUnit == null) {
                             auxDetectedUnit = auxIterMatcher.group(2);
                         }
@@ -94,6 +105,9 @@ final class JmhOutputParser {
                         if (primaryIterMatcher.find()) {
                             double score = Double.parseDouble(primaryIterMatcher.group(1));
                             primaryIterationScores.add(score);
+                            if (currentForkIndex >= 0) {
+                                primaryForkIterationScores.get(currentForkIndex).add(score);
+                            }
                             if (primaryDetectedUnit == null) {
                                 primaryDetectedUnit = primaryIterMatcher.group(2);
                             }
@@ -186,6 +200,7 @@ final class JmhOutputParser {
         double finalError;
         String finalUnit;
         List<Double> iterationScores;
+        List<List<Double>> forkIterationScores;
 
         if (hasAux) {
             if (auxSummaryScore != null && auxSummaryUnit != null && !auxSummaryUnit.isBlank()) {
@@ -202,11 +217,13 @@ final class JmhOutputParser {
                 finalError = 0.0;
             }
             iterationScores = auxIterationScores;
+            forkIterationScores = auxForkIterationScores;
         } else if (primarySummaryScore != null && primarySummaryUnit != null && !primarySummaryUnit.isBlank()) {
             finalScore = primarySummaryScore;
             finalUnit = primarySummaryUnit;
             finalError = primarySummaryError;
             iterationScores = primaryIterationScores;
+            forkIterationScores = primaryForkIterationScores;
         } else if (!primaryIterationScores.isEmpty() && primaryDetectedUnit != null) {
             double sum = 0.0;
             for (double s : primaryIterationScores) {
@@ -216,6 +233,7 @@ final class JmhOutputParser {
             finalUnit = primaryDetectedUnit;
             finalError = 0.0;
             iterationScores = primaryIterationScores;
+            forkIterationScores = primaryForkIterationScores;
         } else {
             throw new MalformedArtifactException(
                     runPath, logPath, "No JMH throughput score found in benchmark output log");
@@ -228,8 +246,26 @@ final class JmhOutputParser {
             finalError = 0.0;
         }
 
-        List<Double> forkScores = List.of(finalScore);
+        List<Double> forkScores = averageForkScores(forkIterationScores);
+        if (forkScores.isEmpty()) {
+            forkScores = List.of(finalScore);
+        }
 
         return new ThroughputResult(finalScore, finalError, finalUnit, forkScores, iterationScores);
+    }
+
+    private static @NonNull List<Double> averageForkScores(@NonNull List<List<Double>> forkIterationScores) {
+        List<Double> forkScores = new ArrayList<>(forkIterationScores.size());
+        for (List<Double> scores : forkIterationScores) {
+            if (scores.isEmpty()) {
+                continue;
+            }
+            double sum = 0.0;
+            for (double score : scores) {
+                sum += score;
+            }
+            forkScores.add(sum / scores.size());
+        }
+        return forkScores;
     }
 }

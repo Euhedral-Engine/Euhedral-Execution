@@ -1,0 +1,31 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "staged-pcore-verification",
+    "runs": [
+      "experiments/24-contention-productivity-multifork-verification/staged-pcore-verification-base__staged-pcore-ratio-025-verification__0_repeat_0",
+      "experiments/24-contention-productivity-multifork-verification/staged-pcore-verification-base__staged-pcore-ratio-025-verification__1_repeat_0",
+      "experiments/24-contention-productivity-multifork-verification/staged-pcore-verification-base__staged-pcore-ratio-025-verification__2_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "skip-staged-pcore-verification",
+    "runs": [
+      "experiments/24-contention-productivity-multifork-verification/skip-staged-pcore-verification-base__skip-staged-pcore-ratio-025-verification__0_repeat_0",
+      "experiments/24-contention-productivity-multifork-verification/skip-staged-pcore-verification-base__skip-staged-pcore-ratio-025-verification__1_repeat_0",
+      "experiments/24-contention-productivity-multifork-verification/skip-staged-pcore-verification-base__skip-staged-pcore-ratio-025-verification__2_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/parallelSources",
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/24-contention-productivity-multifork-verification/comparisons-pcore-fork-aware"
+}

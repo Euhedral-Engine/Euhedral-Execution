@@ -1,0 +1,56 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "staged-ecore-surface",
+    "runs": [
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__0_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__1_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__2_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__3_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__4_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__5_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__6_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__7_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__8_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__9_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__10_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__11_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__12_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__13_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-ecore-surface-base__staged-ecore-surface__14_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "skip-staged-ecore-surface",
+    "runs": [
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__0_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__1_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__2_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__3_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__4_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__5_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__6_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__7_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__8_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__9_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__10_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__11_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__12_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__13_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-ecore-surface-base__skip-staged-ecore-surface__14_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/parallelSources",
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/23-contention-productivity-surface/comparisons-ecore"
+}
+

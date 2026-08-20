@@ -739,379 +739,533 @@ Phase 10 is complete when:
 
 ---
 
-## 14. Phase 11 - Determine Whether Contention and Productivity Can Be Compressed
+````markdown
+## 14. Phase 11 - Stabilize Policy-Conditioned State and Identify Dynamic Effects
 
-Only after the 2D contention/productivity surface is understood should a composite signal be
-considered.
+Phase 10 established that `productiveHandleRatio` is a real independent description of opportunity geometry, but it did not produce a stable static policy boundary.
 
-Do not invent a formula first.
+The more important finding was that `STAGED` and `SKIP_THEN_STAGED` frequently drove the scheduler into materially different contention/body state populations.
 
-The objective is to determine whether:
+Therefore, do not add another threshold, another decision-tree axis, or a composite pressure signal yet.
 
-    f(contention, productiveHandleRatio)
+Phase 11 must determine whether the remaining policy differences are:
 
-can preserve the relevant policy boundaries.
+1. measurement/run variance;
+2. performance differences at approximately equivalent runtime state;
+3. benefits caused by the policy deliberately moving the scheduler into a different state distribution.
 
-### Requirements for compression
+This distinction is required before further policy design.
 
-A composite signal is justified only if:
+### Treat Phase 10 as the starting evidence
 
-- similar composite values imply similar preferred actions
-- STAGED/SKIP_THEN_STAGED crossover geometry collapses cleanly
-- topology-specific effects are not being hidden
-- body interactions remain representable
-- the new scalar performs at least as well as the two-signal interpretation
+Do not rerun the full Phase 10 surface.
 
-Potential conceptual structure:
+Reuse:
 
-effective acquisition pressure = contention adjusted by productive opportunity
+- Experiment 23 surface artifacts;
+- Experiment 24 fork-aware replication artifacts;
+- exact occupancy distributions;
+- transition matrices;
+- contention/body centroids;
+- `productiveHandleRatio`;
+- independent JMH fork means;
+- policy-conditioned throughput.
 
-But do not assume addition, multiplication, or any specific transform.
+The fork-aware comparison artifacts are authoritative.
 
-Use the measured surface to infer the shape.
+Ignore older comparison outputs that incorrectly collapsed multiple JMH forks into one sample for statistical conclusions.
 
-Candidate approaches may include:
+### Define the identification problem explicitly
 
-simple ratio transforms piecewise functions logistic transforms small regression models decision
-boundaries
+The remaining question is not simply:
 
-Use Apache Commons Math where appropriate.
+```text
+At state S, is STAGED or SKIP_THEN_STAGED faster?
+````
 
-The production implementation should remain cheap.
+because Phase 10 showed:
 
-### Prefer interpretability
+```text
+initial state
++
+policy
+->
+different steady-state population
+->
+different throughput
+```
 
-If the relationship is simple enough to express directly, prefer that over a learned model.
+A policy comparison can therefore represent either:
 
-A small explicit function is preferable to introducing ML into the hot control loop.
+```text
+A. same-state action economics
 
-### Do not force compression
+or
 
-If contention and productiveHandleRatio independently encode necessary information, retain them as
-separate control inputs.
+B. beneficial/harmful state movement caused by the action
+```
 
-Compression is an optimization, not a requirement.
+Phase 11 must distinguish these cases.
 
+Do not treat policy-induced state movement as invalid behavior.
 
----
+If `SKIP_THEN_STAGED` deliberately changes contention dynamics and thereby improves throughput, that is potentially the control mechanism itself.
 
-## 15. Phase 12 - Rebuild the High-Contention Thresholds
+The mistake would be interpreting that result as a static boundary such as:
 
-Only after productivity has been incorporated into the analysis should the Phase 8 candidate
-contention thresholds be finalized.
+```text
+contention = 82% -> SKIP_THEN_STAGED
+```
 
-Current Phase 8 candidate vector:
+when the action does not remain near 82% after being selected.
 
-    [650000, 800000, 900000, 970000]
+### Build a state-comparability classification
 
-Treat this as provisional.
+Extend the analysis layer so matched policy comparisons can be classified by how similar their resulting runtime state distributions are.
 
-Re-evaluate whether these thresholds remain useful once productiveHandleRatio explains part of the
-observed behavior.
+At minimum compare:
 
-Ask:
+```text
+productiveHandleRatio
+contention centroid
+body centroid
+contention/body occupancy distribution
+occupancy total variation distance
+dominant state
+dominant self-transition rate
+transition matrix behavior
+```
 
-Does a contention threshold itself mark a policy transition?
+Use existing exact aggregated telemetry.
 
-or:
+Do not invent a single synthetic "state similarity score" unless necessary.
 
-Did that apparent transition actually correspond to a change in productiveHandleRatio?
+Prefer explicit component metrics.
 
-### Redistribute resolution only where useful
+Classify comparisons into categories such as:
 
-If contention below approximately 65% remains behaviorally uniform:
+```text
+STATE_COMPARABLE
 
-keep that region coarse
+STATE_SHIFTED
 
-If meaningful behavior is concentrated above it:
+STATE_DIVERGENT
+```
 
-retain finer resolution there
+The exact names may differ.
 
-But do not spend contention tiers distinguishing regions that productivity already separates more
-cleanly.
+The classification should be based on empirical tolerances derived from the existing data rather than arbitrary precision requirements.
 
-### Body dependence
+A starting interpretation could be:
 
-Perform this analysis across body bands.
+```text
+STATE_COMPARABLE:
+    productive ratio equivalent
+    body population equivalent
+    contention population reasonably close
+    occupancy TV distance small
 
-A contention/productivity boundary may be body-dependent.
+STATE_SHIFTED:
+    same opportunity geometry
+    but policy causes a noticeable contention/occupancy shift
 
-Do not collapse body resolution unless all control actions support doing so.
+STATE_DIVERGENT:
+    policies settle into substantially different state populations
+```
 
+Do not make the initial thresholds permanent policy constants.
 
----
+They are analysis criteria.
 
-## 16. Phase 13 - Build the Combined Effective Policy
+### Use the Phase 10 clean result as the reference case
 
-Combine:
+The strongest interpretable Phase 10 comparison was:
 
-execution path idle duration skip behavior contention productiveHandleRatio body cost
+```text
+8 E-cores
+productiveHandleRatio = 0.125
+XH body
 
-into the smallest supported control policy.
+STAGED:
+    12.270M ops/s
 
-Do not think in terms of independently filling multiple 5x5 tables.
+SKIP_THEN_STAGED:
+    12.015M ops/s
 
-For each physical regime determine the effective action.
+delta:
+    STAGED +2.07%
 
-Example conceptual form:
+occupancy TV distance:
+    0.074
 
-low acquisition contention:
-DIRECT no idle no skip
+dominant state:
+    24 for both policies
 
-high contention high productive availability:
-STAGED bounded idle no skip
+dominant self-transition:
+    0.978 vs 0.968
+```
 
-high contention moderate productive deficit:
-SKIP_THEN_STAGED calibrated idle
+Treat this as an example of approximately same-state policy comparison.
 
-near-total productive starvation:
-STAGED calibrated idle
+Use it to understand what a well-controlled policy comparison looks like.
 
-These are examples only.
+Do not assume its exact TV distance is the universal cutoff.
 
-Encode only observed relationships.
+### Identify strongly state-shifted Phase 10 cases
 
-### Evidence reuse rule
+Use the existing Phase 10 artifacts to identify comparisons where policy changes the runtime state substantially.
 
-Before any benchmark is scheduled:
+Examples already observed include:
 
-1. Search existing artifacts.
-2. Reuse exact compatible results.
-3. Reuse compatible DIRECT/STAGED baselines from earlier phases.
-4. Run only missing policy legs.
-5. Replicate only candidate policy changes or unstable regions.
+```text
+P-core / ratio 0.25 / XS:
+    TV = 0.675
 
-Do not reconstruct previously established surfaces.
+P-core / ratio 0.25 / S:
+    TV = 0.750
 
+E-core / ratio 0.25 / XS:
+    TV = 0.818
 
----
+E-core / ratio 0.50 / M:
+    TV = 0.875
+```
 
-## 17. Phase 14 - Joint Local Refinement
+For these cases, analyze:
 
-After the major contention/productivity/action relationships are established, refine only real
-boundaries.
+```text
+STAGED state distribution
+SKIP_THEN_STAGED state distribution
+transition matrices
+vector fields
+contention centroid movement
+body centroid movement
+throughput delta
+```
 
-Focus on regions where:
+Determine whether the action produces a repeatable directional state displacement.
 
-policy winner changes throughput delta changes slope productiveHandleRatio crosses a candidate
-boundary contention crosses a candidate boundary body changes the winner occupancy repeatedly
-crosses a boundary transition behavior oscillates similar measured state produces different results
-on different core topologies
+The key question is:
 
-Possible local variables:
+```text
+Does SKIP_THEN_STAGED consistently move the system toward a different attractor?
+```
 
-contention threshold productiveHandleRatio threshold body threshold idle duration STAGED vs
-SKIP_THEN_STAGED assignment
+Do not assume that different means better.
 
-Change one relationship at a time.
+### Separate steady-state location from transition dynamics
 
-### Zoom rule
+Two policies may have similar centroids but very different motion.
 
-Use:
+For each focused comparison inspect:
 
-coarse surface ->
-identify boundary ->
-dense local sweep ->
-multi-fork replication ->
-encode
+```text
+occupancy
+transition matrix
+self-transition probability
+oscillation indicators
+vector field
+contention displacement
+body displacement
+```
 
-Do not incrementally probe isolated points when a bounded local surface can be generated
-declaratively.
+Look for patterns such as:
 
-Stop narrowing when the local slope disappears into benchmark variance.
+```text
+STAGED:
+    highly sticky high-contention attractor
 
+SKIP_THEN_STAGED:
+    lower self-transition
+    stronger movement away from the attractor
+```
 
----
+or the reverse.
 
-## 18. Phase 15 - Evaluate Tier and State Simplification
+A one-cycle skip is specifically intended to alter phase alignment, so transition behavior may carry more information than a static centroid.
 
-Only after all active controls are understood should the representation be simplified.
+Do not reduce the analysis to mean contention.
 
-For every existing boundary and state variable ask:
+### Create a minimal targeted benchmark set
 
-Does this distinction ever change:
+After re-analyzing existing artifacts, run only the minimum new experiments necessary to answer unresolved questions.
 
-execution path? idle duration? skip behavior? another meaningful control response?
+Do not generate another broad Cartesian surface.
 
-If not, it may be removable.
+Select a small set of representative cases from Phase 10:
 
-### Evaluate all signals together
+```text
+one clean STATE_COMPARABLE case
 
-Do not remove body tiers because DIRECT/STAGED ignores them.
+one strongly STATE_SHIFTED case where STAGED appears better
 
-Do not remove contention tiers because productivity explains some high-contention behavior.
+one strongly STATE_SHIFTED case where SKIP_THEN_STAGED appears better or previously appeared better
 
-Do not retain productiveHandleRatio merely because it was useful experimentally if the final
-composite policy makes it redundant.
+one high-variance/inconclusive case
+```
 
-The final state representation should be determined by the union of information required by all
-actions.
+Prefer P-core fixtures where possible to reduce E-core/cache-topology confounding.
 
-### Possible outcomes
+Use E-core cases only when they are specifically needed to test topology sensitivity.
 
-The final controller may use:
+Use at least 3 independent forks for all Phase 11 performance claims.
 
-fewer contention tiers
+Reuse existing fork-aware results when sufficient.
 
-or:
+### Improve fixture stability where possible
 
-finer high-contention tiers
+The purpose of the new targeted runs is not to force contention to an exact percentage.
 
-or:
+Instead, reduce uncontrolled variation so policy-conditioned dynamics can be interpreted.
 
-contention + productivity
+Keep fixed:
 
-or:
+```text
+cpuSet
+worker count
+productive handle count
+productiveHandleRatio
+body workload
+randomizeWork = false
+idle policy
+JVM configuration
+source type
+ordered/parallel behavior
+```
 
-a composite pressure signal
+Avoid mixed P-core/E-core fixtures.
 
-or:
+Avoid changing more than one physical dimension at a time.
 
-different simplified conditions for different actions
+If host isolation, affinity, background-load control, or benchmark ordering can reduce fork variance, use them.
 
-Do not force all actions to share identical quantization.
+Do not alter scheduler behavior merely to make the benchmark easier to interpret.
 
-### Regression requirement
+### Analyze each JMH fork independently before pooling
 
-Any structural simplification must be benchmarked against the previously calibrated policy before
-adoption.
+Phase 10 exposed a parser problem that previously hid true fork variation.
 
+For Phase 11:
 
----
+1. retain each JMH fork as an independent replicate;
+2. compute one throughput mean per fork;
+3. retain per-fork state telemetry;
+4. compare whether the same policy-conditioned state movement appears across forks;
+5. pool only after fork-level consistency is understood.
 
-## 19. Phase 16 - Validate Uniform Workloads
+A policy-state effect is much stronger if:
 
-After the effective policy and state representation are stable, validate representative uniform
-workloads.
+```text
+fork 1:
+    same state displacement
 
-Cover all body regimes and representative combinations of:
+fork 2:
+    same state displacement
 
-low contention / high productivity high contention / high productivity high contention / moderate
-productivity high contention / low productivity extreme contention / starvation
+fork 3:
+    same state displacement
+```
 
-Verify:
+than if aggregate telemetry hides three different behaviors.
 
-throughput occupancy productive ratio behavior idle interaction skip frequency batch-size behavior
-policy stability
+Add or extend artifacts if necessary so fork-level occupancy and transition evidence can be inspected directly.
 
-Do not tune aggressively against validation workloads.
+### Determine whether skip creates a repeatable state transition
 
-Use failures to identify missing relationships.
+For each targeted fixture classify the result into one of these outcomes.
 
+#### Outcome A - No reliable policy difference
 
----
+```text
+throughput inconclusive
+state movement inconsistent
+fork behavior inconsistent
+```
 
-## 20. Phase 17 - Validate Mixed and Dynamic Workloads
+Interpretation:
 
-Move beyond static fixtures.
+No policy relationship is established.
+
+Do not encode anything.
+
+#### Outcome B - Same-state performance difference
+
+```text
+state populations comparable
+throughput winner replicates
+```
+
+Interpretation:
+
+There is a genuine local action-cost difference between `STAGED` and `SKIP_THEN_STAGED`.
+
+This can potentially become a normal decision boundary.
+
+#### Outcome C - Repeatable beneficial state movement
+
+```text
+policies settle into different states
+state displacement repeats across forks
+SKIP_THEN_STAGED produces higher throughput
+```
+
+Interpretation:
+
+Skip is useful as a dynamic control action because it changes the scheduler trajectory.
+
+Do not encode this as a static contention threshold yet.
+
+Document:
+
+```text
+starting regime
+action
+resulting state movement
+throughput effect
+```
+
+#### Outcome D - Repeatable harmful state movement
+
+```text
+SKIP_THEN_STAGED changes state
+throughput decreases
+```
+
+Interpretation:
+
+The skip action destabilizes or pushes the system toward a worse attractor in that regime.
+
+Document this as an exclusion region.
+
+### Do not introduce a new state axis yet
+
+Even if `productiveHandleRatio` correlates with the dynamic behavior, Phase 11 must not immediately add:
+
+```text
+contention x productivity x body
+```
+
+as a production tree.
+
+Likewise, do not create:
+
+```text
+effectivePressure = f(contention, productivity)
+```
+
+yet.
+
+The immediate problem is determining whether the controller is primarily selecting actions based on state or managing transitions between states.
+
+That distinction comes first.
+
+### Do not refine contention thresholds yet
+
+Keep the current candidate execution contention thresholds available for experimentation:
+
+```text
+[650000, 800000, 900000, 970000]
+```
+
+but do not promote them to final boundaries during Phase 11.
+
+Phase 10 showed that the policy itself can move contention substantially.
+
+A more precise static contention threshold is not useful until the dynamic behavior is understood.
+
+### Preserve productiveHandleRatio telemetry
+
+Regardless of whether productivity becomes a production control input, retain it in the calibration harness.
+
+Phase 10 established that it measures a real physical property distinct from contention.
+
+It remains valuable for:
+
+```text
+fixture characterization
+state interpretation
+cross-topology comparison
+future policy research
+ML/research datasets
+```
+
+Do not remove it merely because Phase 10 did not establish a policy threshold.
+
+### Revisit the Phase 8 skip interpretation
+
+Update the interpretation of Phase 8 using Phase 10/11 evidence.
+
+The earlier apparent:
+
+```text
+80% - 90% contention
+->
+SKIP_THEN_STAGED
+```
+
+relationship is no longer established as a static policy band.
+
+The revised interpretation should be:
+
+```text
+Phase 8 discovered a region where skip could materially change throughput.
+
+Phase 10 showed that:
+    those effects were not reliably determined by contention alone
+    productive ratio alone was also insufficient
+    policy-conditioned state movement and fork variance were substantial
+
+Phase 11 determines whether the original effect was:
+    static action superiority
+    dynamic state realignment
+    topology-specific behavior
+    or instability/noise
+```
+
+Do not erase Phase 8.
+
+Preserve it as the experiment that exposed the phenomenon.
+
+### Phase 11 completion gate
+
+Phase 11 is complete when:
+
+1. Policy comparisons are classified by resulting state comparability.
+2. Existing Phase 10 occupancy and transition evidence has been re-analyzed.
+3. A minimal set of representative cases has been selected.
+4. Any required new runs use independent forks and stable fixtures.
+5. Fork-level state movement is inspected rather than only aggregate state.
+6. At least one clean same-state comparison is characterized.
+7. Strongly state-shifted cases are characterized.
+8. Any repeatable skip-induced state movement is classified as beneficial, harmful, or inconclusive.
+9. No new decision-tree axis or composite pressure formula is introduced.
+10. No contention thresholds are finalized.
+11. Productive-handle telemetry remains available.
+12. The next phase is derived from the Phase 11 outcome rather than predetermined.
+
+### Required final report
+
+At completion, produce:
+
+```text
+Phase 11 Findings: Policy-Conditioned State Dynamics
+```
 
 Include:
 
-mixed body costs randomized work changing productive-handle availability changing source
-availability ordered and parallel mixtures bursty ingestion contention transitions productivity
-transitions
+* authoritative fork-aware throughput results;
+* per-fork state-comparability evidence;
+* occupancy TV distances;
+* contention/body centroid changes;
+* `productiveHandleRatio`;
+* transition/self-transition differences;
+* vector-field observations where useful;
+* classification of each targeted comparison as Outcome A/B/C/D;
+* whether `SKIP_THEN_STAGED` has any repeatable dynamic effect;
+* whether the remaining problem looks static or transition-driven;
+* the minimum justified next research question.
 
-Observe:
-
-boundary oscillation idle overreaction repeated skip activation stale contention stale productivity
-batch-size feedback recovery after state transitions
-
-Pay particular attention to cases where:
-
-contention stays similar but productivity changes
-
-and:
-
-productivity stays similar but contention changes
-
-These tests validate that the two measurements represent genuinely different physical conditions.
-
-Throughput remains authoritative.
-
-Telemetry explains failures.
-
-
----
-
-## 21. Phase 18 - Validate Hardware and Cache Topology
-
-Revisit the P-core/E-core differences seen in Phase 8.
-
-Before treating them as generic hardware variation, characterize the relevant topology:
-
-core type shared cache boundaries E-core clustering socket placement SMT relationships NUMA
-placement where relevant
-
-### Controlled topology comparison
-
-Construct fixtures where worker count and productiveHandleRatio are similar but cache/core topology
-differs.
-
-Compare:
-
-P-core only E-core within one shared cluster E-cores across clusters if possible mixed core types
-only if production may use them
-
-Determine whether the large E-core SKIP_THEN_STAGED gains are driven primarily by:
-
-contention/productivity state
-
-or:
-
-cache/core topology
-
-or:
-
-an interaction between them
-
-Do not bake E-core-specific behavior into a portable baseline until this is understood.
-
-
----
-
-## 22. Phase 19 - Validate Additional Machines
-
-Once the control relationships are stable on the current host, test representative additional
-hardware.
-
-Do not recalibrate everything immediately.
-
-Compare transferability of:
-
-body weight -> runtime threshold contention measurement productiveHandleRatio
-contention/productivity policy surface idle timing STAGED vs SKIP_THEN_STAGED region cache-topology
-sensitivity
-
-Classify each relationship as:
-
-portable hardware-scaled topology-specific hardware-specific
-
-Only add hardware-dependent calibration where the data demonstrates it is necessary.
-
-
----
-
-## 23. Phase 20 - Freeze and Simplify the Production Policy
-
-Once workload, topology, and hardware validation are complete:
-
-1. Remove branches that never demonstrated useful behavior.
-2. Collapse tiers that do not influence any action.
-3. Preserve or increase resolution only where real crossover behavior exists.
-4. Decide whether contention and productivity remain separate or can be safely compressed.
-5. Remove experimental telemetry from the hot path if it is not required for production decisions.
-6. Encode only repeatable relationships.
-7. Record the provenance of each retained threshold and action.
-8. Preserve all calibration artifacts unchanged.
-
-The production controller should contain only the complexity justified by observed physical
-behavior.
-
-The calibration harness should remain richer than the production controller.
-
-It should continue to expose contention, productivity, body behavior, topology, and policy outcomes
-independently so future scheduler behavior can be investigated without redesigning the experimental
-system.
+Do not propose a broad Phase 12 plan until the Phase 11 result is known.
 
 ---
 

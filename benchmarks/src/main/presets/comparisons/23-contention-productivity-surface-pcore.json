@@ -1,0 +1,66 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "staged-pcore-surface",
+    "runs": [
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__0_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__1_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__2_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__3_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__4_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__5_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__6_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__7_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__8_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__9_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__10_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__11_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__12_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__13_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__14_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__15_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__16_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__17_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__18_repeat_0",
+      "experiments/23-contention-productivity-surface/staged-pcore-surface-base__staged-pcore-surface__19_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "skip-staged-pcore-surface",
+    "runs": [
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__0_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__1_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__2_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__3_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__4_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__5_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__6_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__7_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__8_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__9_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__10_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__11_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__12_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__13_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__14_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__15_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__16_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__17_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__18_repeat_0",
+      "experiments/23-contention-productivity-surface/skip-staged-pcore-surface-base__skip-staged-pcore-surface__19_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/parallelSources",
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/23-contention-productivity-surface/comparisons-pcore"
+}
+

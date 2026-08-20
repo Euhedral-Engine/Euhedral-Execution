@@ -55,7 +55,7 @@ class JmhOutputParserTest {
         assertEquals(1234.567, result.scoreError(), 1e-6);
         assertEquals("ops/ms", result.scoreUnit());
         assertEquals(List.of(412345.678, 423456.789, 418765.432), result.iterationScores());
-        assertEquals(List.of(418189.300), result.forkScores());
+        assertEquals(List.of((412345.678 + 423456.789 + 418765.432) / 3.0), result.forkScores());
     }
 
     @Test
@@ -98,6 +98,37 @@ class JmhOutputParserTest {
         assertEquals(150000.0, result.score(), 1e-6);
         assertEquals("ops/ms", result.scoreUnit());
         assertEquals(List.of(100000.0, 200000.0), result.iterationScores());
+    }
+
+    @Test
+    void testCalculatesIndependentAuxiliaryMeansForEachFork(@TempDir Path tempDir) throws Exception {
+        Path logPath = tempDir.resolve("benchmark_output.log");
+        String logContent = """
+                # Fork: 1 of 2
+                # Warmup Iteration   1: 0.050 ops/s
+                                 executions: 900.0 ops/s
+                Iteration   1: 0.052 ops/s
+                                 executions: 1000.0 ops/s
+                Iteration   2: 0.054 ops/s
+                                 executions: 1200.0 ops/s
+
+                # Fork: 2 of 2
+                # Warmup Iteration   1: 0.051 ops/s
+                                 executions: 950.0 ops/s
+                Iteration   1: 0.053 ops/s
+                                 executions: 1400.0 ops/s
+                Iteration   2: 0.055 ops/s
+                                 executions: 1600.0 ops/s
+
+                Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
+                  1300.0 +/- 100.0 ops/s [Average]
+                """;
+        Files.writeString(logPath, logContent);
+
+        ThroughputResult result = JmhOutputParser.parse(tempDir, logPath);
+
+        assertEquals(List.of(1100.0, 1500.0), result.forkScores());
+        assertEquals(List.of(1000.0, 1200.0, 1400.0, 1600.0), result.iterationScores());
     }
 
     @Test
