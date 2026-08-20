@@ -132,6 +132,32 @@ class JmhOutputParserTest {
     }
 
     @Test
+    void testSelectsOneIndependentForkAndItsIterations(@TempDir Path tempDir) throws Exception {
+        Path logPath = tempDir.resolve("benchmark_output.log");
+        String logContent = """
+                # Fork: 1 of 2
+                Iteration   1: 1.0 ops/s
+                                 executions: 1000.0 ops/s
+                Iteration   2: 1.0 ops/s
+                                 executions: 1200.0 ops/s
+                # Fork: 2 of 2
+                Iteration   1: 1.0 ops/s
+                                 executions: 1400.0 ops/s
+                Iteration   2: 1.0 ops/s
+                                 executions: 1600.0 ops/s
+                Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
+                  1300.0 +/- 100.0 ops/s [Average]
+                """;
+        Files.writeString(logPath, logContent);
+
+        ThroughputResult result = JmhOutputParser.parse(tempDir, logPath, 1);
+
+        assertEquals(1500.0, result.score(), 1e-6);
+        assertEquals(List.of(1500.0), result.forkScores());
+        assertEquals(List.of(1400.0, 1600.0), result.iterationScores());
+    }
+
+    @Test
     void testEmptyLogThrowsMalformedArtifactException(@TempDir Path tempDir) throws Exception {
         Path logPath = tempDir.resolve("benchmark_output.log");
         Files.writeString(logPath, "   \n\t  ");

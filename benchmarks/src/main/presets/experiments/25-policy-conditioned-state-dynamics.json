@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "id": "25-policy-conditioned-state-dynamics",
+  "name": "Phase 11 Policy-Conditioned State Dynamics",
+  "description": "Runs only the three Phase 10 cases whose fork-level state evidence remains unresolved: the E-core ratio-0.125/XH clean reference and the P-core ratio-0.25 XS/S state-shift cases.",
+  "labels": {
+    "preset": "policy-conditioned-state-dynamics",
+    "phase": "11"
+  },
+  "imports": [
+    {
+      "path": "../profiles/phase-11-policy-conditioned-state.json",
+      "namespace": "phase11"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": true,
+    "randomSeed": 2511,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/25-policy-conditioned-state-dynamics",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "staged-pcore-phase11",
+      "baseTrialId": "staged-pcore-phase11-base",
+      "description": "P-core ratio-0.25 cases: XS showed a shifted STAGED advantage; S previously showed a shifted SKIP advantage.",
+      "parameters": [
+        {"path": "/calibrationConfig/workUnits", "values": [0, 48]}
+      ]
+    },
+    {
+      "id": "skip-staged-pcore-phase11",
+      "baseTrialId": "skip-staged-pcore-phase11-base",
+      "description": "Matched SKIP_THEN_STAGED P-core ratio-0.25 XS/S cases.",
+      "parameters": [
+        {"path": "/calibrationConfig/workUnits", "values": [0, 48]}
+      ]
+    },
+    {
+      "id": "staged-ecore-clean-phase11",
+      "baseTrialId": "staged-ecore-phase11-base",
+      "description": "E-core ratio-0.125/XH clean-reference replication.",
+      "parameters": [
+        {"path": "/calibrationConfig/workUnits", "values": [288]}
+      ]
+    },
+    {
+      "id": "skip-staged-ecore-clean-phase11",
+      "baseTrialId": "skip-staged-ecore-phase11-base",
+      "description": "Matched SKIP_THEN_STAGED E-core ratio-0.125/XH clean-reference replication.",
+      "parameters": [
+        {"path": "/calibrationConfig/workUnits", "values": [288]}
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "staged-pcore-phase11-base",
+      "name": "STAGED P-Core Phase 11 Base",
+      "group": "phase11-policy-conditioned-state",
+      "description": "Four P-core workers and one productive parallel handle with the Phase 10 policy and JVM configuration.",
+      "tags": ["phase11", "staged", "pcore", "targeted"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "phase11.staged-pcore"
+    },
+    {
+      "id": "skip-staged-pcore-phase11-base",
+      "name": "SKIP_THEN_STAGED P-Core Phase 11 Base",
+      "group": "phase11-policy-conditioned-state",
+      "description": "Matched four-P-core, one-handle fixture with only the staged-family action changed.",
+      "tags": ["phase11", "skip-staged", "pcore", "targeted"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "phase11.skip-staged-pcore"
+    },
+    {
+      "id": "staged-ecore-phase11-base",
+      "name": "STAGED E-Core Phase 11 Base",
+      "group": "phase11-policy-conditioned-state",
+      "description": "Eight E-core workers, one productive parallel handle, and XH body for the clean-reference replication.",
+      "tags": ["phase11", "staged", "ecore", "clean-reference"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "phase11.staged-ecore"
+    },
+    {
+      "id": "skip-staged-ecore-phase11-base",
+      "name": "SKIP_THEN_STAGED E-Core Phase 11 Base",
+      "group": "phase11-policy-conditioned-state",
+      "description": "Matched E-core clean-reference fixture with only the staged-family action changed.",
+      "tags": ["phase11", "skip-staged", "ecore", "clean-reference"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "phase11.skip-staged-ecore"
+    }
+  ]
+}

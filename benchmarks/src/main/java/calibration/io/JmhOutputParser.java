@@ -36,6 +36,11 @@ final class JmhOutputParser {
     private JmhOutputParser() {}
 
     public static @NonNull ThroughputResult parse(@NonNull Path runPath, @NonNull Path logPath) {
+        return parse(runPath, logPath, null);
+    }
+
+    public static @NonNull ThroughputResult parse(
+            @NonNull Path runPath, @NonNull Path logPath, Integer selectedForkIndex) {
         Objects.requireNonNull(runPath, "runPath must not be null");
         Objects.requireNonNull(logPath, "logPath must not be null");
 
@@ -251,7 +256,34 @@ final class JmhOutputParser {
             forkScores = List.of(finalScore);
         }
 
+        if (selectedForkIndex != null) {
+            if (selectedForkIndex < 0 || selectedForkIndex >= forkIterationScores.size()) {
+                throw new MalformedArtifactException(
+                        runPath,
+                        logPath,
+                        "Selected JMH fork index " + selectedForkIndex + " is outside the parsed fork range 0.."
+                                + (forkIterationScores.size() - 1));
+            }
+            List<Double> selectedIterationScores = List.copyOf(forkIterationScores.get(selectedForkIndex));
+            if (selectedIterationScores.isEmpty()) {
+                throw new MalformedArtifactException(
+                        runPath,
+                        logPath,
+                        "Selected JMH fork " + (selectedForkIndex + 1) + " has no measurement scores");
+            }
+            double selectedScore = average(selectedIterationScores);
+            return new ThroughputResult(selectedScore, 0.0, finalUnit, List.of(selectedScore), selectedIterationScores);
+        }
+
         return new ThroughputResult(finalScore, finalError, finalUnit, forkScores, iterationScores);
+    }
+
+    private static double average(@NonNull List<Double> scores) {
+        double sum = 0.0;
+        for (double score : scores) {
+            sum += score;
+        }
+        return sum / scores.size();
     }
 
     private static @NonNull List<Double> averageForkScores(@NonNull List<List<Double>> forkIterationScores) {

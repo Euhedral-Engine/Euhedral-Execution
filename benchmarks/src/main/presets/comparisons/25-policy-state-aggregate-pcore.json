@@ -1,0 +1,27 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "id": "phase11-staged-pcore",
+    "runs": [
+      "experiments/25-policy-conditioned-state-dynamics/staged-pcore-phase11-base__staged-pcore-phase11__0_repeat_0",
+      "experiments/25-policy-conditioned-state-dynamics/staged-pcore-phase11-base__staged-pcore-phase11__1_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "phase11-skip-staged-pcore",
+    "runs": [
+      "experiments/25-policy-conditioned-state-dynamics/skip-staged-pcore-phase11-base__skip-staged-pcore-phase11__0_repeat_0",
+      "experiments/25-policy-conditioned-state-dynamics/skip-staged-pcore-phase11-base__skip-staged-pcore-phase11__1_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": ["/calibrationConfig/workUnits"],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true,
+    "scope": "RUN"
+  },
+  "outputDirectory": "experiments/25-policy-conditioned-state-dynamics/comparisons-aggregate-pcore"
+}

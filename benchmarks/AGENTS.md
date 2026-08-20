@@ -466,6 +466,11 @@ TSVs explain scheduler and fragment decision behavior without computing syntheti
 3. **`CROSS`**:
    Evaluates the full Cartesian product ($M \times N$) between a baseline set and a candidate set. No intra-set comparisons are generated. Pairs are ordered deterministically by baseline order $\times$ candidate order.
 
+Set `options.scope` to `FORK` to expand each referenced completed run into its retained `fork-*`
+directories before planning pairs. Use `CROSS` for independent fork replicates unless a real
+fork-matching relationship exists. `RUN` is the default and preserves whole-run throughput
+comparison behavior.
+
 | Export File | Description | Source Structure |
 |-------------|-------------|------------------|
 | `comparison_manifest.json` | Provenance manifest with strategy, key paths, pairs, compatibility status, and checksums | [`ComparisonManifest`](src/main/java/calibration/comparisons/schema/ComparisonManifest.java) |
@@ -476,6 +481,7 @@ TSVs explain scheduler and fragment decision behavior without computing syntheti
 | `transition_comparisons.tsv` | 25x25 Markov transition count/probability deltas and dominant target shifts | [`TransitionComparison`](src/main/java/calibration/comparisons/schema/TransitionComparison.java) |
 | `vector_field_comparisons.tsv` | 5x5 displacement gradient and magnitude deltas for idle and exec policies | [`VectorFieldComparison`](src/main/java/calibration/comparisons/schema/VectorFieldComparison.java) |
 | `correlation_comparisons.tsv` | Aligned Pearson and Spearman correlation deltas between observation metrics | [`CorrelationComparison`](src/main/java/calibration/comparisons/schema/CorrelationComparison.java) |
+| `state_comparability.tsv` | Analysis-only productive-ratio, occupancy, centroid, dominant-state, transition, oscillation, and dominant-vector evidence with a state-comparability classification | [`StateComparabilityComparison`](src/main/java/calibration/comparisons/schema/StateComparabilityComparison.java) |
 
 ### Comparison File Columns (In Order)
 
@@ -495,6 +501,11 @@ All comparison TSV files start with `strategy`, `pairIndex`, `key`, `baseline`, 
    `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `decisionType`, `segment`, `contentionBand`, `bodyBand`, `baselineTransitionCount`, `candidateTransitionCount`, `transitionCountDelta`, `baselineMeanDeltaContention`, `candidateMeanDeltaContention`, `meanDeltaContentionDelta`, `baselineMeanDeltaBody`, `candidateMeanDeltaBody`, `meanDeltaBodyDelta`, `baselineMagnitude`, `candidateMagnitude`, `magnitudeDelta`
 7. **`correlation_comparisons.tsv`**:
    `strategy`, `pairIndex`, `key`, `baseline`, `candidate`, `category`, `segment`, `method`, `rowVariable`, `columnVariable`, `baselineCorrelation`, `candidateCorrelation`, `correlationDelta`
+8. **`state_comparability.tsv`**:
+   One row per pair with fork identity, `productiveHandleRatio`, contention/body centroids,
+   occupancy TV distance, dominant state and self-transition, transition TV distance, maximum
+   oscillation, dominant-state vectors, and `STATE_COMPARABLE`, `STATE_SHIFTED`, or
+   `STATE_DIVERGENT` classification.
 
 ### Comparison Configuration Modes
 

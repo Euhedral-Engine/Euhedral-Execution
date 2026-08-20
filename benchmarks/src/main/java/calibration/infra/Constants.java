@@ -62,6 +62,8 @@ public final class Constants {
 
     public static final String CORRELATION_COMPARISONS_TSV = "correlation_comparisons.tsv";
     public static final String CORRELATION_COMPARISONS_CHECKSUM = "correlation_comparisons.tsv.sha256";
+    public static final String STATE_COMPARABILITY_TSV = "state_comparability.tsv";
+    public static final String STATE_COMPARABILITY_CHECKSUM = "state_comparability.tsv.sha256";
 
     private Constants() {}
 }

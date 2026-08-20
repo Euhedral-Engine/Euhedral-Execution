@@ -57,7 +57,6 @@ public final class CompletedRunLoader {
     private static final String[] SEGMENTS_2 = {"head", "steadyState"};
     private static final String[] DECISION_TYPES = {"idle", "exec"};
     private static final Pattern REPEAT_PATTERN = Pattern.compile(".*_repeat_(\\d+)$");
-    private static final Pattern FORK_PATTERN = Pattern.compile(".*fork-(\\d+).*");
 
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -110,7 +109,8 @@ public final class CompletedRunLoader {
         if (!Files.exists(logPath)) {
             throw new MissingArtifactException(normalizedDir, logPath);
         }
-        ThroughputResult throughput = JmhOutputParser.parse(normalizedDir, logPath);
+        Integer forkIndex = extractForkIndex(normalizedDir);
+        ThroughputResult throughput = JmhOutputParser.parse(normalizedDir, logPath, forkIndex);
 
         Path tsvDir = findTsvDir(normalizedDir);
 
@@ -797,8 +797,11 @@ public final class CompletedRunLoader {
             trialId = extractTrialIdFromDirName(dirName);
         }
 
-        int repeatIndex = extractRepeatIndexFromDirName(dirName);
-        Integer forkIndex = extractForkIndexFromDirName(dirName);
+        String repeatDirectoryName = dirName.startsWith("fork-") && runDir.getParent() != null
+                ? runDir.getParent().getFileName().toString()
+                : dirName;
+        int repeatIndex = extractRepeatIndexFromDirName(repeatDirectoryName);
+        Integer forkIndex = extractForkIndex(runDir);
 
         return new RunIdentity(
                 trialId,
@@ -828,15 +831,48 @@ public final class CompletedRunLoader {
         return 0;
     }
 
-    private static Integer extractForkIndexFromDirName(String dirName) {
-        Matcher m = FORK_PATTERN.matcher(dirName);
-        if (m.matches()) {
-            try {
-                return Integer.parseInt(m.group(1));
-            } catch (NumberFormatException ignored) {
-            }
+    private static Integer extractForkIndex(Path runDir) {
+        if (runDir.getFileName() == null || !runDir.getFileName().toString().startsWith("fork-")) {
+            return null;
         }
-        return null;
+        Path parent = runDir.getParent();
+        if (parent == null) {
+            return null;
+        }
+        List<Path> forkDirectories = findForkDirectories(parent);
+        int index = forkDirectories.indexOf(runDir.toAbsolutePath().normalize());
+        return index >= 0 ? index : null;
+    }
+
+    public static @NonNull List<Path> findForkDirectories(@NonNull Path runDirectory) {
+        Objects.requireNonNull(runDirectory, "runDirectory must not be null");
+        Path normalizedDir = resolveRunPath(runDirectory);
+        if (normalizedDir.getFileName() != null
+                && normalizedDir.getFileName().toString().startsWith("fork-")
+                && Files.exists(normalizedDir.resolve(Constants.RAW_OBSERVATION_TSV))) {
+            return List.of(normalizedDir);
+        }
+        try (var stream = Files.list(normalizedDir)) {
+            return stream.filter(Files::isDirectory)
+                    .filter(path -> path.getFileName().toString().startsWith("fork-"))
+                    .filter(path -> Files.exists(path.resolve(Constants.RAW_OBSERVATION_TSV)))
+                    .map(path -> path.toAbsolutePath().normalize())
+                    .sorted()
+                    .toList();
+        } catch (Exception e) {
+            throw new MalformedArtifactException(
+                    normalizedDir, normalizedDir, "Failed to discover retained JMH fork artifacts", e);
+        }
+    }
+
+    public static @NonNull List<CompletedRun> loadForks(@NonNull String runDirectoryPath) {
+        Objects.requireNonNull(runDirectoryPath, "runDirectoryPath must not be null");
+        List<Path> forkDirectories = findForkDirectories(Path.of(runDirectoryPath));
+        if (forkDirectories.isEmpty()) {
+            throw new MissingArtifactException(
+                    Path.of(runDirectoryPath), Path.of(runDirectoryPath).resolve("fork-*"));
+        }
+        return forkDirectories.stream().map(CompletedRunLoader::load).toList();
     }
 
     private static RunArtifacts buildArtifacts(Path runDir, Path tsvDir) {

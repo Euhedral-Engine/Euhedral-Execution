@@ -16,7 +16,8 @@ public record CandidateComparison(
         @NonNull List<ConfigurationDifference> configurationDifferences,
         @Nullable PerformanceComparison performance,
         @NonNull List<CoreComparison> cores,
-        @Nullable AggregateComparison aggregate) {
+        @Nullable AggregateComparison aggregate,
+        @Nullable StateComparabilityComparison stateComparability) {
 
     public CandidateComparison {
         Objects.requireNonNull(baseline, "baseline must not be null");
@@ -27,6 +28,29 @@ public record CandidateComparison(
     }
 
     public CandidateComparison(
+            int pairIndex,
+            @NonNull RunIdentity baseline,
+            @NonNull RunIdentity candidate,
+            @Nullable ComparisonKey comparisonKey,
+            @NonNull ComparisonCompatibility compatibility,
+            @NonNull List<ConfigurationDifference> configurationDifferences,
+            @Nullable PerformanceComparison performance,
+            @NonNull List<CoreComparison> cores,
+            @Nullable AggregateComparison aggregate) {
+        this(
+                pairIndex,
+                baseline,
+                candidate,
+                comparisonKey,
+                compatibility,
+                configurationDifferences,
+                performance,
+                cores,
+                aggregate,
+                null);
+    }
+
+    public CandidateComparison(
             @NonNull RunIdentity baseline,
             @NonNull RunIdentity candidate,
             @NonNull ComparisonCompatibility compatibility,
@@ -34,6 +58,16 @@ public record CandidateComparison(
             @Nullable PerformanceComparison performance,
             @NonNull List<CoreComparison> cores,
             @Nullable AggregateComparison aggregate) {
-        this(0, baseline, candidate, null, compatibility, configurationDifferences, performance, cores, aggregate);
+        this(
+                0,
+                baseline,
+                candidate,
+                null,
+                compatibility,
+                configurationDifferences,
+                performance,
+                cores,
+                aggregate,
+                null);
     }
 }

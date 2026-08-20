@@ -1269,6 +1269,493 @@ Do not propose a broad Phase 12 plan until the Phase 11 result is known.
 
 ---
 
+````markdown
+## 15. Phase 12 - Investigate Fork-Level Multistability and Contention Staleness
+
+Phase 11 established that the remaining instability is not a repeatable `SKIP_THEN_STAGED` state transition.
+
+Instead, otherwise identical forks can settle into different contention/body attractors under the same policy.
+
+The leading hypotheses are:
+
+1. a genuine scheduler/control-loop bug;
+2. stale contention feedback caused by idling suppressing the acquisition attempts required to update the contention estimate.
+
+Phase 12 must distinguish these before any further policy tuning.
+
+Do not refine skip thresholds, productivity thresholds, or contention bands in this phase.
+
+### Core suspected feedback loop
+
+Contention currently measures:
+
+```text
+failed lock acquisitions
+/
+total lock acquisition attempts
+````
+
+Idling occurs before execution/acquisition.
+
+If an idle decision is selected, no new acquisition attempt may occur and therefore no new contention observation may be produced.
+
+This can potentially create:
+
+```text
+high measured contention
+->
+idle selected
+->
+no acquisition attempt
+->
+no contention update
+->
+old high contention remains
+->
+idle selected again
+->
+high-contention state becomes sticky
+```
+
+This is a hypothesis.
+
+Phase 12 must first determine whether this sequence actually occurs.
+
+### Start from a known multistable fixture
+
+Prefer a fixture where Phase 11 showed that the same policy independently entered multiple attractors.
+
+Primary candidate:
+
+```text
+E-core
+productiveHandleRatio = 0.500
+M body
+```
+
+Phase 11 showed that both policies independently reached states 7 and 22 in this fixture.
+
+This makes it useful for studying scheduler multistability without attributing the behavior to skip.
+
+Prefer a single fixed execution policy initially.
+
+Use whichever policy reproduces the split most clearly and with the least additional control complexity.
+
+Do not compare multiple policies until the underlying stability behavior is understood.
+
+### Reuse existing evidence first
+
+Before running anything new, inspect the retained per-fork artifacts from Experiments 24 and 25.
+
+For forks that settled into different attractors, compare:
+
+```text
+contention history
+contention centroid
+dominant state
+self-transition probability
+idle decisions
+execution decisions
+transition matrices
+vector fields
+productiveHandleRatio
+throughput
+```
+
+Determine whether the existing telemetry already shows evidence of contention becoming stale during long idle sequences.
+
+If required information is missing, add only the minimum diagnostic telemetry needed.
+
+### Add contention-staleness diagnostics
+
+Instrument enough information to observe the relationship between idling and contention updates.
+
+Useful per-core diagnostics include:
+
+```text
+current contention EWMA
+last raw contention observation
+cycles since last contention observation
+time since last contention observation
+consecutive idle decisions
+idle duration selected
+successful acquisition count
+failed acquisition count
+total acquisition attempts
+execution decisions
+local cache availability
+productiveHandleRatio
+```
+
+Keep this diagnostic instrumentation bounded and outside the production hot path where practical.
+
+Do not redesign the telemetry system.
+
+### Preserve measurement semantics
+
+Do not modify the existing measured contention value during the diagnostic stage.
+
+The existing contention signal represents observed acquisition failures.
+
+No acquisition attempt does not imply that physical contention actually decreased.
+
+Therefore distinguish:
+
+```text
+measuredContention:
+    existing observed contention EWMA
+
+decisionContention:
+    optional aged or confidence-adjusted value used only by the controller
+```
+
+Do not silently decay the authoritative measured contention telemetry.
+
+### Reproduce the attractor split
+
+Run a controlled replication of the known multistable fixture.
+
+Keep fixed:
+
+```text
+cpuSet
+core type
+worker count
+productive handles
+productiveHandleRatio
+body workload
+source topology
+idle policy
+execution policy
+JVM configuration
+randomizeWork = false
+```
+
+Use enough independent forks to determine whether both attractors continue to appear.
+
+For each fork record:
+
+```text
+throughput
+dominant state
+occupancy
+contention centroid
+body centroid
+self-transition probability
+idle streak distribution
+time/cycles between contention updates
+```
+
+The first question is:
+
+```text
+Do high-contention attractor forks exhibit materially longer contention-staleness and idle streaks than low-contention attractor forks?
+```
+
+### Outcome A - Staleness strongly correlates with attractor selection
+
+Evidence would look like:
+
+```text
+high-state forks:
+    enter high contention
+    begin repeated idling
+    contention observations become sparse
+    contention EWMA remains elevated
+    high-state occupancy becomes sticky
+
+low-state forks:
+    continue producing contention observations
+    contention estimate moves normally
+```
+
+If this pattern repeats across forks, proceed to controlled contention-aging experiments.
+
+### Outcome B - Attractor selection occurs without contention staleness
+
+If both attractors continue receiving fresh contention observations at similar rates, the stale-feedback hypothesis is weakened.
+
+Do not tune decay in that case.
+
+Proceed toward investigation of scheduler/control bugs or another missing dynamic variable.
+
+### Test decision-only contention aging
+
+Only if Outcome A is supported, test whether aging stale contention changes the attractor behavior.
+
+Do not alter `measuredContention`.
+
+Derive a temporary decision value from:
+
+```text
+measured contention
++
+time or cycles since last real contention observation
+```
+
+Prefer a time-based formulation because configured idle durations differ.
+
+Conceptual form:
+
+```text
+decisionContention =
+    measuredContention * decay(staleness)
+```
+
+A candidate family may use exponential aging:
+
+```text
+decisionContention =
+    measuredContention * exp(-dt / tau)
+```
+
+where:
+
+```text
+dt  = time since last real contention observation
+tau = experimental decay constant
+```
+
+Do not assume this formula is correct for production.
+
+It is an experimental probe.
+
+### Use a bounded decay sweep
+
+Test only a small set of clearly separated aging strengths.
+
+For example:
+
+```text
+baseline:
+    no aging
+
+slow aging
+
+medium aging
+
+fast aging
+```
+
+Choose actual `tau` values from the observed contention-update and idle timing data.
+
+Do not guess nanosecond values before measuring the natural timescale.
+
+The purpose is not to optimize throughput yet.
+
+The purpose is to determine whether breaking stale positive feedback collapses the multiple attractors.
+
+### Evaluate attractor geometry before peak throughput
+
+For each aging configuration compare:
+
+```text
+number of distinct attractors reached
+fork-to-fork throughput CV
+fork-to-fork occupancy TV
+contention centroid spread
+dominant-state distribution
+dominant self-transition
+idle streak distribution
+time between contention observations
+mean throughput
+```
+
+The strongest evidence for stale-feedback causality would be:
+
+```text
+baseline:
+    forks split across multiple attractors
+
+aging:
+    forks converge toward one state population
+    contention-update staleness decreases
+    fork variance decreases
+    throughput remains equal or improves
+```
+
+Do not select the fastest decay solely because it has the highest one-run throughput.
+
+### Add a forced-refresh diagnostic
+
+If useful, test a second mechanism that does not continuously decay the signal.
+
+Example diagnostic behavior:
+
+```text
+after N consecutive idle decisions
+or
+after contention has been stale for T time
+
+allow or force one acquisition/execution opportunity
+to obtain a fresh contention observation
+```
+
+This is a diagnostic intervention, not a proposed production policy.
+
+If periodic refresh destroys the multistability, that is strong evidence that the controller's own idling suppresses the observations required to escape the high-contention state.
+
+### Compare aging and forced refresh
+
+If both mechanisms stabilize the same fixture, determine what they have in common.
+
+The important property may be:
+
+```text
+old contention evidence eventually loses authority
+```
+
+rather than any particular decay formula.
+
+Do not prematurely encode either mechanism.
+
+### Investigate genuine bugs if staleness is not sufficient
+
+If:
+
+```text
+contention remains fresh
+or
+aging/refresh does not collapse the attractors
+```
+
+investigate the scheduler for a genuine state bug.
+
+Focus on differences that could survive across otherwise identical forks:
+
+```text
+worker initialization order
+handle registration order
+cache ownership
+worker-rank state
+local cache state
+batch-size state
+contention EWMA initialization
+idle-state initialization
+source iteration order
+lock/acquisition ordering
+stale per-worker control state
+```
+
+Do not perform broad refactoring.
+
+Use the attractor telemetry to narrow the suspected subsystem first.
+
+### Per-fork analysis remains mandatory
+
+Do not collapse independent forks into aggregate state before interpretation.
+
+For every experiment retain:
+
+```text
+one throughput mean per fork
+per-fork occupancy
+per-fork contention/body centroids
+per-fork idle/staleness diagnostics
+per-fork transition data
+```
+
+A stability mechanism is established only if its effect repeats across independent forks.
+
+### Phase 12 outcome classification
+
+Classify the phase into one of the following outcomes.
+
+#### Outcome A - Stale contention causes multistability
+
+```text
+idle suppresses contention observations
+stale high contention sustains additional idling
+aging or forced refresh collapses the attractor split
+```
+
+Next research should focus on the smallest correct freshness mechanism.
+
+#### Outcome B - Staleness contributes but is not sufficient
+
+```text
+aging reduces instability
+but multiple attractors remain
+```
+
+Next research should isolate the remaining state variable or scheduler mechanism.
+
+#### Outcome C - Staleness is not causal
+
+```text
+contention remains fresh
+or
+aging/refresh does not materially affect attractor selection
+```
+
+Next research should investigate an implementation/state bug or another dynamic mechanism.
+
+#### Outcome D - No reproducible multistability
+
+```text
+the known fixture no longer reliably produces multiple attractors
+```
+
+Do not invent a fix.
+
+Document the negative result and identify the next fixture with repeatable fork-level splitting.
+
+### Do not change the production policy yet
+
+During Phase 12 do not finalize:
+
+```text
+contention decay
+forced refresh
+new contention thresholds
+productiveHandleRatio thresholds
+skip assignments
+new decision-tree axes
+```
+
+Any aging or refresh behavior is experimental until the causal relationship is demonstrated.
+
+### Phase 12 completion gate
+
+Phase 12 is complete when:
+
+1. A known multistable fixture has been reproduced or ruled out.
+2. Per-core contention staleness and idle streaks are observable.
+3. High- and low-attractor forks have been compared directly.
+4. The correlation between idling, missing contention updates, and attractor selection is known.
+5. Decision-only contention aging has been tested if justified by the diagnostic evidence.
+6. Forced refresh has been tested if useful as a causal probe.
+7. Attractor count and fork variance are compared before and after interventions.
+8. Any remaining evidence for a genuine implementation bug is documented.
+9. No production decay rule is adopted without causal evidence.
+10. The next phase is derived from the result rather than predetermined.
+
+### Required final report
+
+At completion produce:
+
+```text
+Phase 12 Findings: Multistability and Contention Staleness
+```
+
+Include:
+
+* fixture used to reproduce multistability;
+* per-fork attractor assignments;
+* per-fork throughput;
+* contention-update staleness;
+* idle streak behavior;
+* contention/body occupancy;
+* transition/self-transition behavior;
+* effect of decision-only aging;
+* effect of forced refresh if tested;
+* whether attractor multiplicity changed;
+* classification as Outcome A/B/C/D;
+* whether the evidence points toward stale feedback, a genuine bug, or another mechanism;
+* the minimum justified next research question.
+
+---
+
 ## 12. Reading the Telemetry
 
 ### Occupancy

@@ -236,6 +236,44 @@ class CompletedRunLoaderTest {
     }
 
     @Test
+    void testLoadsRetainedForksWithIndependentThroughput(@TempDir Path tempDir) throws Exception {
+        Path runDir = tempDir.resolve("multifork_repeat_2");
+        Files.createDirectories(runDir);
+        TrialConfig config = createTrialConfig("multifork", "Multi Fork", "phase11");
+        Files.writeString(
+                runDir.resolve("trial_config.json"), MAPPER.writeValueAsString(config), StandardCharsets.UTF_8);
+        Files.writeString(runDir.resolve(Constants.BENCHMARK_OUTPUT_LOG), """
+                # Fork: 1 of 2
+                Iteration   1: 1.0 ops/s
+                                 executions: 1000.0 ops/s
+                Iteration   2: 1.0 ops/s
+                                 executions: 1200.0 ops/s
+                # Fork: 2 of 2
+                Iteration   1: 1.0 ops/s
+                                 executions: 1400.0 ops/s
+                Iteration   2: 1.0 ops/s
+                                 executions: 1600.0 ops/s
+                Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
+                  1300.0 +/- 100.0 ops/s [Average]
+                """, StandardCharsets.UTF_8);
+
+        Path firstFork = runDir.resolve("fork-100-200");
+        Path secondFork = runDir.resolve("fork-300-400");
+        TrialExport.exportAll(firstFork, createForkResult(2, 2), false);
+        TrialExport.exportAll(secondFork, createForkResult(2, 2), false);
+
+        List<CompletedRun> forks = CompletedRunLoader.loadForks(runDir.toString());
+
+        assertEquals(2, forks.size());
+        assertEquals(0, forks.get(0).identity().forkIndex());
+        assertEquals(1, forks.get(1).identity().forkIndex());
+        assertEquals(2, forks.get(0).identity().repeatIndex());
+        assertEquals(1100.0, forks.get(0).throughput().score(), 1e-6);
+        assertEquals(1500.0, forks.get(1).throughput().score(), 1e-6);
+        assertEquals(List.of(1400.0, 1600.0), forks.get(1).throughput().iterationScores());
+    }
+
+    @Test
     void testSystemForkResultReconstructedCorrectly(@TempDir Path tempDir) throws Exception {
         Path runDir = tempDir.resolve("t1_repeat_0");
         TrialConfig config = createTrialConfig("t1", "T1", "g");

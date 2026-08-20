@@ -14,6 +14,7 @@ import calibration.comparisons.schema.PerformanceComparison;
 import calibration.comparisons.schema.RunArtifacts;
 import calibration.comparisons.schema.RunIdentity;
 import calibration.comparisons.schema.ScalarComparison;
+import calibration.comparisons.schema.StateComparabilityComparison;
 import calibration.comparisons.schema.TransitionComparison;
 import calibration.comparisons.schema.VectorCellComparison;
 import calibration.comparisons.schema.VectorFieldComparison;
@@ -55,7 +56,8 @@ public final class ComparisonExport {
             Constants.OCCUPANCY_COMPARISONS_TSV,
             Constants.TRANSITION_COMPARISONS_TSV,
             Constants.VECTOR_FIELD_COMPARISONS_TSV,
-            Constants.CORRELATION_COMPARISONS_TSV);
+            Constants.CORRELATION_COMPARISONS_TSV,
+            Constants.STATE_COMPARABILITY_TSV);
 
     private ComparisonExport() {}
 
@@ -73,6 +75,71 @@ public final class ComparisonExport {
         exportTransitionComparisonsTsv(outputDir, result);
         exportVectorFieldComparisonsTsv(outputDir, result);
         exportCorrelationComparisonsTsv(outputDir, result);
+        exportStateComparabilityTsv(outputDir, result);
+    }
+
+    /// Exports one explicit policy-conditioned state comparison row per planned pair.
+    public static void exportStateComparabilityTsv(@NonNull Path outputDir, @NonNull ComparisonResult result)
+            throws Exception {
+        Objects.requireNonNull(outputDir, "outputDir must not be null");
+        Objects.requireNonNull(result, "result must not be null");
+
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.STATE_COMPARABILITY_TSV);
+        String strategy = result.strategy().name();
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "strategy\tpairIndex\tkey\tbaseline\tcandidate\tbaselineForkIndex\tcandidateForkIndex\tbaselineSourcePath\tcandidateSourcePath\tclassification\tbaselineProductiveHandleRatio\tcandidateProductiveHandleRatio\tproductiveHandleRatioDelta\tbaselineContentionCentroid\tcandidateContentionCentroid\tcontentionCentroidDelta\tbaselineBodyCentroid\tcandidateBodyCentroid\tbodyCentroidDelta\toccupancyTotalVariationDistance\tbaselineDominantState\tcandidateDominantState\tbaselineDominantProbability\tcandidateDominantProbability\tbaselineDominantSelfTransitionRate\tcandidateDominantSelfTransitionRate\tdominantSelfTransitionRateDelta\ttransitionTotalVariationDistance\tbaselineMaximumOscillation\tcandidateMaximumOscillation\tmaximumOscillationDelta\tbaselineDominantVectorContention\tcandidateDominantVectorContention\tbaselineDominantVectorBody\tcandidateDominantVectorBody\tbaselineDominantVectorMagnitude\tcandidateDominantVectorMagnitude\n");
+            for (CandidateComparison comparison : result.comparisons()) {
+                StateComparabilityComparison state = comparison.stateComparability();
+                if (state == null) {
+                    continue;
+                }
+                RunIdentity baseline = comparison.baseline();
+                RunIdentity candidate = comparison.candidate();
+                String key = comparison.comparisonKey() != null
+                        ? sanitizeString(comparison.comparisonKey().format())
+                        : "";
+                writer.write(strategy + "\t"
+                        + comparison.pairIndex() + "\t"
+                        + key + "\t"
+                        + sanitizeString(baseline.trialId()) + "\t"
+                        + sanitizeString(candidate.trialId()) + "\t"
+                        + formatInteger(baseline.forkIndex()) + "\t"
+                        + formatInteger(candidate.forkIndex()) + "\t"
+                        + sanitizeString(baseline.sourcePath()) + "\t"
+                        + sanitizeString(candidate.sourcePath()) + "\t"
+                        + state.classification().name() + "\t"
+                        + formatDouble(state.baselineProductiveHandleRatio()) + "\t"
+                        + formatDouble(state.candidateProductiveHandleRatio()) + "\t"
+                        + formatDouble(state.productiveHandleRatioDelta()) + "\t"
+                        + formatDouble(state.baselineContentionCentroid()) + "\t"
+                        + formatDouble(state.candidateContentionCentroid()) + "\t"
+                        + formatDouble(state.contentionCentroidDelta()) + "\t"
+                        + formatDouble(state.baselineBodyCentroid()) + "\t"
+                        + formatDouble(state.candidateBodyCentroid()) + "\t"
+                        + formatDouble(state.bodyCentroidDelta()) + "\t"
+                        + formatDouble(state.occupancyTotalVariationDistance()) + "\t"
+                        + state.baselineDominantState() + "\t"
+                        + state.candidateDominantState() + "\t"
+                        + formatDouble(state.baselineDominantProbability()) + "\t"
+                        + formatDouble(state.candidateDominantProbability()) + "\t"
+                        + formatDouble(state.baselineDominantSelfTransitionRate()) + "\t"
+                        + formatDouble(state.candidateDominantSelfTransitionRate()) + "\t"
+                        + formatDouble(state.dominantSelfTransitionRateDelta()) + "\t"
+                        + formatDouble(state.transitionTotalVariationDistance()) + "\t"
+                        + formatDouble(state.baselineMaximumOscillation()) + "\t"
+                        + formatDouble(state.candidateMaximumOscillation()) + "\t"
+                        + formatDouble(state.maximumOscillationDelta()) + "\t"
+                        + formatDouble(state.baselineDominantVectorContention()) + "\t"
+                        + formatDouble(state.candidateDominantVectorContention()) + "\t"
+                        + formatDouble(state.baselineDominantVectorBody()) + "\t"
+                        + formatDouble(state.candidateDominantVectorBody()) + "\t"
+                        + formatDouble(state.baselineDominantVectorMagnitude()) + "\t"
+                        + formatDouble(state.candidateDominantVectorMagnitude()) + "\n");
+            }
+        }
+        TrialExport.writeChecksum(file);
     }
 
     /// Alias for export.
@@ -774,6 +841,10 @@ public final class ComparisonExport {
             return "";
         }
         return s.replace("\t", "\\t").replace("\n", "\\n").replace("\r", "\\r");
+    }
+
+    private static String formatInteger(@Nullable Integer value) {
+        return value != null ? value.toString() : "";
     }
 
     private static String normalizeCategory(String cat) {

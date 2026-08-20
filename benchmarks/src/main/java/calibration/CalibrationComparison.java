@@ -5,6 +5,7 @@ import calibration.comparisons.ComparisonPair;
 import calibration.comparisons.ComparisonPairPlan;
 import calibration.comparisons.ComparisonPairPlanner;
 import calibration.comparisons.PerformanceComparisonCalculator;
+import calibration.comparisons.StateComparabilityCalculator;
 import calibration.comparisons.SystemTelemetryComparisonCalculator;
 import calibration.comparisons.schema.AggregateComparison;
 import calibration.comparisons.schema.CandidateComparison;
@@ -14,7 +15,9 @@ import calibration.comparisons.schema.ComparisonSet;
 import calibration.comparisons.schema.CompletedRun;
 import calibration.comparisons.schema.PerformanceComparison;
 import calibration.comparisons.schema.RunReference;
+import calibration.comparisons.schema.StateComparabilityComparison;
 import calibration.config.ComparisonConfig;
+import calibration.config.ComparisonScope;
 import calibration.io.ComparisonExport;
 import calibration.io.CompletedRunLoader;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -79,15 +82,23 @@ public final class CalibrationComparison {
 
         List<CompletedRun> baselineRuns = new ArrayList<>();
         for (RunReference ref : comparisonConfig.baseline().runs()) {
-            baselineRuns.add(CompletedRunLoader.load(ref.path()));
+            loadReference(baselineRuns, ref, comparisonConfig.options().scope());
         }
 
         List<CompletedRun> candidateRuns = new ArrayList<>();
         for (RunReference ref : comparisonConfig.candidate().runs()) {
-            candidateRuns.add(CompletedRunLoader.load(ref.path()));
+            loadReference(candidateRuns, ref, comparisonConfig.options().scope());
         }
 
         executeComparisonPipeline(comparisonConfig, baselineRuns, candidateRuns, null);
+    }
+
+    private static void loadReference(List<CompletedRun> destination, RunReference reference, ComparisonScope scope) {
+        if (scope == ComparisonScope.FORK) {
+            destination.addAll(CompletedRunLoader.loadForks(reference.path()));
+        } else {
+            destination.add(CompletedRunLoader.load(reference.path()));
+        }
     }
 
     private static void executeComparisonPipeline(
@@ -125,6 +136,11 @@ public final class CalibrationComparison {
                     PerformanceComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
             AggregateComparison aggregate =
                     SystemTelemetryComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
+            StateComparabilityComparison stateComparability = compatibility.isComparable()
+                            && baselineRun.throughput().forkScores().size() == 1
+                            && candidateRun.throughput().forkScores().size() == 1
+                    ? StateComparabilityCalculator.compare(baselineRun.system(), candidateRun.system())
+                    : null;
 
             CandidateComparison candidateComparison = new CandidateComparison(
                     pair.pairIndex(),
@@ -135,7 +151,8 @@ public final class CalibrationComparison {
                     compatibility.differences(),
                     performance,
                     List.of(),
-                    aggregate);
+                    aggregate,
+                    stateComparability);
 
             candidateComparisons.add(candidateComparison);
         }
