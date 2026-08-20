@@ -1,0 +1,31 @@
+{
+  "strategy": "CROSS",
+  "baseline": {
+    "id": "phase13-collision-only-shuffle",
+    "runs": [
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-1_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-2_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-3_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-4_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-5_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-6_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-7_repeat_0",
+      "experiments/28-phase13-handle-shuffle-recheck/phase13-williams-fork-8_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "phase13-full-handle-shuffle",
+    "runs": [
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-1_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-2_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-3_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-4_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-5_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-6_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-7_repeat_0",
+      "experiments/29-phase13-full-handle-shuffle-recheck/phase13-williams-fork-8_repeat_0"
+    ]
+  },
+  "options": {"includeDiagnostics": true, "failFast": true, "scope": "RUN"},
+  "outputDirectory": "experiments/29-phase13-full-handle-shuffle-recheck/comparisons-recheck1-recheck2-cross"
+}

@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "question": "After collision-triggered handle shuffling, does the Phase 13 fixture still enter the state-22 high-contention attractor?",
+  "preChangeExperiment": "experiments/27-pull-bucketing-convoy-coarse",
+  "postChangeExperiment": "experiments/28-phase13-handle-shuffle-recheck",
+  "baselineTreatment": "FLOOR_2048",
+  "treatmentOrderArtifact": "phase13-williams-fork-*_repeat_0/fork-*/pull_bucket_treatments.tsv",
+  "mechanismArtifact": "phase13-williams-fork-*_repeat_0/fork-*/pull_convoy.tsv",
+  "schedulerArtifacts": [
+    "phase13-williams-fork-*_repeat_0/fork-*/statistics.tsv",
+    "phase13-williams-fork-*_repeat_0/fork-*/occupancy.tsv",
+    "phase13-williams-fork-*_repeat_0/fork-*/transitions.tsv"
+  ],
+  "authoritativeThroughputArtifact": "phase13-williams-fork-*_repeat_0/benchmark_output.log",
+  "sampleSegment": "steadyState",
+  "treatments": [
+    "FLOOR_512", "CEIL_512", "FLOOR_1024", "CEIL_1024",
+    "FLOOR_2048", "CEIL_2048", "FLOOR_4096", "CEIL_4096"
+  ],
+  "replication": {
+    "unit": "independent JMH fork",
+    "preChangeForks": 8,
+    "postChangeForks": 8,
+    "measurementIterationsPerFork": 8,
+    "poolIterationsAsReplicates": false
+  },
+  "primaryEvidence": [
+    "state22DominantForkTreatmentCount",
+    "state22OccupancyByForkTreatment",
+    "dominantStateByForkTreatment",
+    "dominantSelfTransitionByForkTreatment"
+  ],
+  "secondaryEvidence": [
+    "acquisitionAttempts",
+    "successfulAcquisitions",
+    "failedAcquisitions",
+    "successfulAcquisitionShare",
+    "contentionCentroid",
+    "bodyCentroid",
+    "ownerTurnoverRate",
+    "sameOwnerRunLength",
+    "calculatedPullSize",
+    "lockHoldDurationNs",
+    "throughput",
+    "withinForkVariance",
+    "acrossForkVariance",
+    "floorCeilTreatmentEffects"
+  ],
+  "validityChecks": [
+    "allEightPreAndPostForksPresent",
+    "eachPostForkHasTwoWarmupsAndEightMeasurements",
+    "eachTreatmentOccursOncePerPostFork",
+    "eachTreatmentOccursOnceAtEveryPostIterationPosition",
+    "allArtifactChecksumsPass",
+    "postFixtureFieldsMatchRetainedPhase13ConfigsExceptIdentityFields",
+    "configuredTreatmentMatchesManifestAndConvoyRows",
+    "observedPullSizesDifferWhereBucketRulePredicts",
+    "fourLiveHandlesAndEightWorkersObserved",
+    "noWarmupRowsIncluded",
+    "noBenchmarkErrorsOrTimeouts"
+  ],
+  "interpretationRules": [
+    "Preserve every prescribed iteration, including pathological rows.",
+    "Treat disappearance of state 22 as evidence for handle-order correlation, not proof of optimality.",
+    "Treat lower contention without lower fork or iteration variance as partial evidence only.",
+    "Report throughput direction separately from stability direction.",
+    "Do not infer a pull-bucketing recalibration from this matrix."
+  ]
+}

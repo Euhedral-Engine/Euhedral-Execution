@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "question": "When every dequeued live handle is shuffled before returning to its worker-local queue, does the Phase 13 fixture still enter the state-22 high-contention attractor?",
+  "originalExperiment": "experiments/27-pull-bucketing-convoy-coarse",
+  "collisionOnlyExperiment": "experiments/28-phase13-handle-shuffle-recheck",
+  "fullShuffleExperiment": "experiments/29-phase13-full-handle-shuffle-recheck",
+  "primaryComparison": "collisionOnlyExperiment versus fullShuffleExperiment",
+  "baselineTreatment": "FLOOR_2048",
+  "sampleSegment": "steadyState",
+  "replication": {
+    "unit": "independent JMH fork",
+    "forksPerImplementation": 8,
+    "measurementIterationsPerFork": 8,
+    "poolIterationsAsReplicates": false
+  },
+  "primaryEvidence": [
+    "state22DominantForkTreatmentCount",
+    "state22OccupancyByForkTreatment",
+    "dominantStateByForkTreatment",
+    "dominantSelfTransitionByForkTreatment"
+  ],
+  "secondaryEvidence": [
+    "acquisitionAttempts",
+    "successfulAcquisitions",
+    "failedAcquisitions",
+    "successfulAcquisitionShare",
+    "contentionCentroid",
+    "bodyCentroid",
+    "ownerTurnoverRate",
+    "sameOwnerRunLength",
+    "calculatedPullSize",
+    "lockHoldDurationNs",
+    "throughput",
+    "withinForkVariance",
+    "acrossForkVariance",
+    "floorCeilTreatmentEffects"
+  ],
+  "validityChecks": [
+    "allEightFullShuffleForksPresent",
+    "eachFullShuffleForkHasTwoWarmupsAndEightMeasurements",
+    "eachTreatmentOccursOncePerForkAndPosition",
+    "allArtifactChecksumsPass",
+    "fullShuffleFixtureMatchesRecheck1ExceptExperimentIdentity",
+    "configuredTreatmentMatchesManifestAndConvoyRows",
+    "fourLiveHandlesAndEightWorkersObservedOrAnomalyPreserved",
+    "productiveHandleRatioIsPointFiveOrAnomalyPreserved",
+    "noWarmupRowsIncluded",
+    "noBenchmarkErrorsOrTimeouts"
+  ],
+  "interpretationRules": [
+    "Preserve every prescribed iteration, including pathological rows.",
+    "Use independent forks as the replication unit.",
+    "Treat disappearance of state 22 as evidence for handle-order correlation, not proof of optimality.",
+    "Treat reduced ordinary contention without improved stability as partial evidence only.",
+    "Report throughput separately from stability.",
+    "Do not infer a pull-bucketing recalibration from this matrix."
+  ]
+}
