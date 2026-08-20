@@ -22,7 +22,8 @@ public class BenchmarkObserver extends FragmentObserver {
                 new PaddedAtomicReferenceArray<>(SystemInfo.getMaxCoreId() + 1, true, true);
         BitSet cores = SystemInfo.getCoreSet();
         for (int i = cores.nextSetBit(0); i >= 0; i = cores.nextSetBit(i + 1)) {
-            metrics.setPlain(i, new HighSpeedMetrics(this.config.rawSampleLimit()));
+            metrics.setPlain(
+                    i, new HighSpeedMetrics(i, this.config.rawSampleLimit(), this.config.observeContentionStaleness()));
         }
         this.metrics.set(metrics);
     }
@@ -185,6 +186,62 @@ public class BenchmarkObserver extends FragmentObserver {
         coreMetrics.recordExec(cycleEpoch, batchEpoch, contentionPolicy, bodyPolicy, contention, smoothedBodyCost);
     }
 
+    @Override
+    public boolean observesContentionStaleness() {
+        return this.config.observeContentionStaleness();
+    }
+
+    @Override
+    protected void contentionStalenessState(
+            int core,
+            int socket,
+            long cycleEpoch,
+            long batchEpoch,
+            long measuredContention,
+            long lastRawContention,
+            long contentionObservationCount,
+            long lastContentionObservationNs,
+            long cyclesSinceContentionObservation,
+            long nanosSinceContentionObservation,
+            long consecutiveIdleDecisions,
+            long idleDurationSelectedNs,
+            long successfulAcquisitionCount,
+            long failedAcquisitionCount,
+            long totalAcquisitionAttempts,
+            int executionPath,
+            long localCacheCount,
+            long productiveHandleCount,
+            int registeredWorkers,
+            int workerRank) {
+        if (!this.config.observeContentionStaleness()) {
+            return;
+        }
+
+        HighSpeedMetrics coreMetrics = getCoreMetrics(core);
+        if (coreMetrics == null) {
+            return;
+        }
+        coreMetrics.recordContentionStaleness(
+                cycleEpoch,
+                batchEpoch,
+                measuredContention,
+                lastRawContention,
+                contentionObservationCount,
+                lastContentionObservationNs,
+                cyclesSinceContentionObservation,
+                nanosSinceContentionObservation,
+                consecutiveIdleDecisions,
+                idleDurationSelectedNs,
+                successfulAcquisitionCount,
+                failedAcquisitionCount,
+                totalAcquisitionAttempts,
+                executionPath,
+                localCacheCount,
+                productiveHandleCount,
+                registeredWorkers,
+                workerRank);
+    }
+
     private @Nullable HighSpeedMetrics getCoreMetrics(int core) {
         PaddedAtomicReferenceArray<HighSpeedMetrics> metricArray = this.metrics.getOpaque();
         if (metricArray == null) {
@@ -194,6 +251,8 @@ public class BenchmarkObserver extends FragmentObserver {
     }
 
     public static final class HighSpeedMetrics {
+
+        public final int core;
 
         public final long[][] cycleStartWarmupState;
         public final double[] cycleStartWarmupThroughput;
@@ -229,6 +288,9 @@ public class BenchmarkObserver extends FragmentObserver {
         public final long[][] execSteadyStateDecisionState;
         public final double[] execSteadyStateSmoothedBodyCost;
 
+        public final long[][] contentionStalenessHead;
+        public final long[][] contentionStalenessSteadyState;
+
         public long cycleStartObservations = 0;
         public long batchProgressObservations = 0;
         public long batchCompleteObservations = 0;
@@ -236,6 +298,7 @@ public class BenchmarkObserver extends FragmentObserver {
         public long rawBodyCostObservations = 0;
         public long idleDecisionObservations = 0;
         public long execDecisionObservations = 0;
+        public long contentionStalenessObservations = 0;
 
         public final int rawSampleLimit;
         private final int mask;
@@ -243,7 +306,16 @@ public class BenchmarkObserver extends FragmentObserver {
         private boolean aligned = false;
 
         public HighSpeedMetrics(int rawSampleLimit) {
+            this(-1, rawSampleLimit, true);
+        }
+
+        public HighSpeedMetrics(int core, int rawSampleLimit) {
+            this(core, rawSampleLimit, true);
+        }
+
+        public HighSpeedMetrics(int core, int rawSampleLimit, boolean observeContentionStaleness) {
             rawSampleLimit = Integer.highestOneBit((rawSampleLimit - 1) << 1);
+            this.core = core;
             this.rawSampleLimit = rawSampleLimit;
             this.mask = rawSampleLimit - 1;
 
@@ -276,6 +348,10 @@ public class BenchmarkObserver extends FragmentObserver {
             this.execWarmupSmoothedBodyCost = new double[rawSampleLimit];
             this.execSteadyStateDecisionState = new long[rawSampleLimit][5];
             this.execSteadyStateSmoothedBodyCost = new double[rawSampleLimit];
+
+            this.contentionStalenessHead = observeContentionStaleness ? new long[rawSampleLimit][18] : new long[0][];
+            this.contentionStalenessSteadyState =
+                    observeContentionStaleness ? new long[rawSampleLimit][18] : new long[0][];
         }
 
         public void recordCycleStart(
@@ -506,6 +582,110 @@ public class BenchmarkObserver extends FragmentObserver {
             execBranchDecisionTotal[contentionPolicy][bodyPolicy]++;
         }
 
+        public void recordContentionStaleness(
+                long cycleEpoch,
+                long batchEpoch,
+                long measuredContention,
+                long lastRawContention,
+                long contentionObservationCount,
+                long lastContentionObservationNs,
+                long cyclesSinceContentionObservation,
+                long nanosSinceContentionObservation,
+                long consecutiveIdleDecisions,
+                long idleDurationSelectedNs,
+                long successfulAcquisitionCount,
+                long failedAcquisitionCount,
+                long totalAcquisitionAttempts,
+                int executionPath,
+                long localCacheCount,
+                long productiveHandleCount,
+                int registeredWorkers,
+                int workerRank) {
+            int idx = (int) (this.contentionStalenessObservations & this.mask);
+            if (this.contentionStalenessObservations++ < this.rawSampleLimit) {
+                recordContentionStalenessSample(
+                        this.contentionStalenessHead[idx],
+                        cycleEpoch,
+                        batchEpoch,
+                        measuredContention,
+                        lastRawContention,
+                        contentionObservationCount,
+                        lastContentionObservationNs,
+                        cyclesSinceContentionObservation,
+                        nanosSinceContentionObservation,
+                        consecutiveIdleDecisions,
+                        idleDurationSelectedNs,
+                        successfulAcquisitionCount,
+                        failedAcquisitionCount,
+                        totalAcquisitionAttempts,
+                        executionPath,
+                        localCacheCount,
+                        productiveHandleCount,
+                        registeredWorkers,
+                        workerRank);
+            }
+            recordContentionStalenessSample(
+                    this.contentionStalenessSteadyState[idx],
+                    cycleEpoch,
+                    batchEpoch,
+                    measuredContention,
+                    lastRawContention,
+                    contentionObservationCount,
+                    lastContentionObservationNs,
+                    cyclesSinceContentionObservation,
+                    nanosSinceContentionObservation,
+                    consecutiveIdleDecisions,
+                    idleDurationSelectedNs,
+                    successfulAcquisitionCount,
+                    failedAcquisitionCount,
+                    totalAcquisitionAttempts,
+                    executionPath,
+                    localCacheCount,
+                    productiveHandleCount,
+                    registeredWorkers,
+                    workerRank);
+        }
+
+        private static void recordContentionStalenessSample(
+                long[] sample,
+                long cycleEpoch,
+                long batchEpoch,
+                long measuredContention,
+                long lastRawContention,
+                long contentionObservationCount,
+                long lastContentionObservationNs,
+                long cyclesSinceContentionObservation,
+                long nanosSinceContentionObservation,
+                long consecutiveIdleDecisions,
+                long idleDurationSelectedNs,
+                long successfulAcquisitionCount,
+                long failedAcquisitionCount,
+                long totalAcquisitionAttempts,
+                int executionPath,
+                long localCacheCount,
+                long productiveHandleCount,
+                int registeredWorkers,
+                int workerRank) {
+            sample[0] = cycleEpoch;
+            sample[1] = batchEpoch;
+            sample[2] = measuredContention;
+            sample[3] = lastRawContention;
+            sample[4] = contentionObservationCount;
+            sample[5] = lastContentionObservationNs;
+            sample[6] = cyclesSinceContentionObservation;
+            sample[7] = nanosSinceContentionObservation;
+            sample[8] = consecutiveIdleDecisions;
+            sample[9] = idleDurationSelectedNs;
+            sample[10] = successfulAcquisitionCount;
+            sample[11] = failedAcquisitionCount;
+            sample[12] = totalAcquisitionAttempts;
+            sample[13] = executionPath;
+            sample[14] = localCacheCount;
+            sample[15] = productiveHandleCount;
+            sample[16] = registeredWorkers;
+            sample[17] = workerRank;
+        }
+
         public void align() {
             if (aligned) {
                 return;
@@ -517,6 +697,9 @@ public class BenchmarkObserver extends FragmentObserver {
             align(longAligner, rawBodyCostSteadyStateState, rawBodyCostObservations);
             align(longAligner, idleSteadyStateDecisionState, idleDecisionObservations);
             align(longAligner, execSteadyStateDecisionState, execDecisionObservations);
+            if (contentionStalenessSteadyState.length > 0) {
+                align(longAligner, contentionStalenessSteadyState, contentionStalenessObservations);
+            }
 
             double[] doubleAligner = new double[rawSampleLimit];
             align(doubleAligner, cycleStartSteadyStateThroughput, cycleStartObservations);

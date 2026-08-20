@@ -2,6 +2,11 @@ package io.euhedral_execution.core.control_plane;
 
 public abstract class FragmentObserver {
 
+    /// Returns whether benchmark-only contention-staleness diagnostics should be collected.
+    public boolean observesContentionStaleness() {
+        return false;
+    }
+
     /// This method will be called concurrently by fragments.
     ///
     /// Doubles are not sanitized before publishing.
@@ -83,4 +88,30 @@ public abstract class FragmentObserver {
             int bodyPolicy,
             long contention,
             double smoothedBodyCost);
+
+    /// This method will be called concurrently by fragments when contention-staleness diagnostics are enabled.
+    ///
+    /// The acquisition counters are cumulative within the current fragment reset interval. A negative idle duration
+    /// means that no idle branch was selected during this cycle.
+    protected void contentionStalenessState(
+            int core,
+            int socket,
+            long cycleEpoch,
+            long batchEpoch,
+            long measuredContention,
+            long lastRawContention,
+            long contentionObservationCount,
+            long lastContentionObservationNs,
+            long cyclesSinceContentionObservation,
+            long nanosSinceContentionObservation,
+            long consecutiveIdleDecisions,
+            long idleDurationSelectedNs,
+            long successfulAcquisitionCount,
+            long failedAcquisitionCount,
+            long totalAcquisitionAttempts,
+            int executionPath,
+            long localCacheCount,
+            long productiveHandleCount,
+            int registeredWorkers,
+            int workerRank) {}
 }

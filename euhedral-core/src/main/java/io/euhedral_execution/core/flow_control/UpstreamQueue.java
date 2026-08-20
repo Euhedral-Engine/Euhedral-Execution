@@ -41,6 +41,13 @@ public class UpstreamQueue {
     private final AverageFlow acquireContention = new AverageFlow();
     long cachedUpCount = 0L;
     long nonproductiveCount = 0L;
+    private boolean acquireDiagnosticsEnabled;
+    private long contentionObservationCount;
+    private long lastRawContention = -1L;
+    private long lastContentionObservationNs = -1L;
+    private long successfulAcquisitionCount;
+    private long failedAcquisitionCount;
+    private long totalAcquisitionAttempts;
 
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
@@ -111,6 +118,42 @@ public class UpstreamQueue {
     /// Resets acquisition history under the existing worker-owner lifecycle handoff.
     public void resetAcquireContention() {
         this.acquireContention.reset();
+        this.contentionObservationCount = 0L;
+        this.lastRawContention = -1L;
+        this.lastContentionObservationNs = -1L;
+        this.successfulAcquisitionCount = 0L;
+        this.failedAcquisitionCount = 0L;
+        this.totalAcquisitionAttempts = 0L;
+    }
+
+    /// Enables owner-local acquisition diagnostics for calibration runs.
+    public void setAcquireDiagnosticsEnabled(boolean enabled) {
+        this.acquireDiagnosticsEnabled = enabled;
+        resetAcquireContention();
+    }
+
+    public long getContentionObservationCount() {
+        return this.contentionObservationCount;
+    }
+
+    public long getLastRawContention() {
+        return this.lastRawContention;
+    }
+
+    public long getLastContentionObservationNs() {
+        return this.lastContentionObservationNs;
+    }
+
+    public long getSuccessfulAcquisitionCount() {
+        return this.successfulAcquisitionCount;
+    }
+
+    public long getFailedAcquisitionCount() {
+        return this.failedAcquisitionCount;
+    }
+
+    public long getTotalAcquisitionAttempts() {
+        return this.totalAcquisitionAttempts;
     }
 
     /// Returns live handles minus handles this worker last observed as nonproductive.
@@ -203,7 +246,16 @@ public class UpstreamQueue {
             this.upstreams.offer(handle);
         }
         if (attempts > 0L) {
-            this.acquireContention.record(scaleAcquireContentionUnchecked(failedAcquires, attempts));
+            long rawContention = scaleAcquireContentionUnchecked(failedAcquires, attempts);
+            this.acquireContention.record(rawContention);
+            if (this.acquireDiagnosticsEnabled) {
+                this.contentionObservationCount++;
+                this.lastRawContention = rawContention;
+                this.lastContentionObservationNs = System.nanoTime();
+                this.successfulAcquisitionCount += attempts - failedAcquires;
+                this.failedAcquisitionCount += failedAcquires;
+                this.totalAcquisitionAttempts += attempts;
+            }
         }
         return totalPull;
     }

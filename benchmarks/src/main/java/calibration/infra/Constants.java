@@ -39,6 +39,9 @@ public final class Constants {
     public static final String CORRELATIONS_TSV = "correlations.tsv";
     public static final String CORRELATIONS_CHECKSUM = "correlations.tsv.sha256";
 
+    public static final String CONTENTION_STALENESS_TSV = "contention_staleness.tsv";
+    public static final String CONTENTION_STALENESS_CHECKSUM = "contention_staleness.tsv.sha256";
+
     public static final String COMPARISON_MANIFEST_JSON = "comparison_manifest.json";
     public static final String COMPARISON_MANIFEST_CHECKSUM = "comparison_manifest.json.sha256";
 

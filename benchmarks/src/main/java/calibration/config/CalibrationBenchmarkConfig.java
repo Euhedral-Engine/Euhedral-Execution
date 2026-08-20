@@ -24,7 +24,8 @@ public record CalibrationBenchmarkConfig(
         boolean observeBatchComplete,
         boolean observeRawBodyCost,
         boolean observeIdleDecision,
-        boolean observeExecDecision) {
+        boolean observeExecDecision,
+        boolean observeContentionStaleness) {
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
 
@@ -61,7 +62,8 @@ public record CalibrationBenchmarkConfig(
                 observeBatchComplete,
                 observeRawBodyCost,
                 observeIdleDecision,
-                observeExecDecision);
+                observeExecDecision,
+                false);
     }
 
     /// Convenience constructor with decisionWeightProfile reference and without inline decisionWeights.
@@ -97,7 +99,46 @@ public record CalibrationBenchmarkConfig(
                 observeBatchComplete,
                 observeRawBodyCost,
                 observeIdleDecision,
-                observeExecDecision);
+                observeExecDecision,
+                false);
+    }
+
+    /// Backwards-compatible constructor for callers that specify both profile and inline decision weights.
+    public CalibrationBenchmarkConfig(
+            List<Integer> cpuSet,
+            int parallelSources,
+            int orderedSources,
+            int workUnits,
+            boolean randomizeWork,
+            long totalRequiredExecutions,
+            long invocationTimeoutMillis,
+            @Nullable String decisionWeightProfile,
+            @Nullable FragmentDecisionWeights decisionWeights,
+            int rawSampleLimit,
+            boolean observeCycleStart,
+            boolean observeBatchProgress,
+            boolean observeBatchComplete,
+            boolean observeRawBodyCost,
+            boolean observeIdleDecision,
+            boolean observeExecDecision) {
+        this(
+                cpuSet,
+                parallelSources,
+                orderedSources,
+                workUnits,
+                randomizeWork,
+                totalRequiredExecutions,
+                invocationTimeoutMillis,
+                decisionWeightProfile,
+                decisionWeights,
+                rawSampleLimit,
+                observeCycleStart,
+                observeBatchProgress,
+                observeBatchComplete,
+                observeRawBodyCost,
+                observeIdleDecision,
+                observeExecDecision,
+                false);
     }
 
     @JsonCreator
@@ -117,7 +158,8 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("observeBatchComplete") boolean observeBatchComplete,
             @JsonProperty("observeRawBodyCost") boolean observeRawBodyCost,
             @JsonProperty("observeIdleDecision") boolean observeIdleDecision,
-            @JsonProperty("observeExecDecision") boolean observeExecDecision) {
+            @JsonProperty("observeExecDecision") boolean observeExecDecision,
+            @JsonProperty("observeContentionStaleness") boolean observeContentionStaleness) {
         Objects.requireNonNull(cpuSet, "CalibrationBenchmarkConfig cpuSet cannot be null");
         this.cpuSet = List.copyOf(cpuSet);
         this.parallelSources = parallelSources;
@@ -135,6 +177,7 @@ public record CalibrationBenchmarkConfig(
         this.observeRawBodyCost = observeRawBodyCost;
         this.observeIdleDecision = observeIdleDecision;
         this.observeExecDecision = observeExecDecision;
+        this.observeContentionStaleness = observeContentionStaleness;
         validate();
     }
 
@@ -177,7 +220,8 @@ public record CalibrationBenchmarkConfig(
                 this.observeBatchComplete,
                 this.observeRawBodyCost,
                 this.observeIdleDecision,
-                this.observeExecDecision);
+                this.observeExecDecision,
+                this.observeContentionStaleness);
     }
 
     /// Returns a copy of this CalibrationBenchmarkConfig with the given decisionWeightProfile reference set.
@@ -198,6 +242,7 @@ public record CalibrationBenchmarkConfig(
                 this.observeBatchComplete,
                 this.observeRawBodyCost,
                 this.observeIdleDecision,
-                this.observeExecDecision);
+                this.observeExecDecision,
+                this.observeContentionStaleness);
     }
 }

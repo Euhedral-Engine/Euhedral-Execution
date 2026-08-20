@@ -122,6 +122,9 @@ class TrialExportTest {
         assertEquals("correlations.tsv", Constants.CORRELATIONS_TSV);
         assertEquals("correlations.tsv.sha256", Constants.CORRELATIONS_CHECKSUM);
 
+        assertEquals("contention_staleness.tsv", Constants.CONTENTION_STALENESS_TSV);
+        assertEquals("contention_staleness.tsv.sha256", Constants.CONTENTION_STALENESS_CHECKSUM);
+
         assertEquals("euhedral.calibration.retainObserverData", Constants.RETAIN_OBSERVER_DATA_PROP);
         assertEquals("euhedral.calibration.retainObserverData", Constants.RETAIN_OBSERVER_PROP);
         assertEquals("euhedral.calibration.retainPerForkResults", Constants.RETAIN_PER_FORK_RESULTS_PROP);
@@ -184,6 +187,34 @@ class TrialExportTest {
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
         assertEquals(expectedHash, storedHash);
+    }
+
+    @Test
+    void testExportContentionStalenessTsvWritesBoundedSequenceAndChecksum(@TempDir Path tempDir) throws Exception {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(9, 2);
+        metrics.recordContentionStaleness(
+                10L, 1L, 800_000L, 1_000_000L, 4L, 90_000L, 2L, 10_000L, 3L, 5_000L, 6L, 2L, 8L, 1, 0L, 4L, 8, 2);
+        metrics.recordContentionStaleness(
+                11L, 1L, 810_000L, 1_000_000L, 4L, 90_000L, 3L, 15_000L, 4L, 5_000L, 6L, 2L, 8L, 1, 0L, 4L, 8, 2);
+        metrics.recordContentionStaleness(
+                12L, 1L, 820_000L, 500_000L, 5L, 110_000L, 0L, 100L, 5L, 5_000L, 7L, 3L, 10L, 1, 0L, 4L, 8, 2);
+
+        TrialExport.exportContentionStalenessTsv(tempDir, List.of(List.of(metrics)));
+
+        Path tsv = tempDir.resolve(Constants.CONTENTION_STALENESS_TSV);
+        Path checksum = tempDir.resolve(Constants.CONTENTION_STALENESS_CHECKSUM);
+        List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
+
+        assertEquals(5, lines.size());
+        assertTrue(lines.get(0).startsWith("iteration\tcore\tsegment\tsampleIndex\tcycleEpoch"));
+        assertTrue(lines.get(1).startsWith("0\t9\thead\t0\t10\t1\t800000"));
+        assertTrue(lines.get(2).startsWith("0\t9\thead\t1\t11\t1\t810000"));
+        assertTrue(lines.get(3).startsWith("0\t9\tsteadyState\t0\t11\t1\t810000"));
+        assertTrue(lines.get(3).contains("\tSTAGED\t"));
+        assertTrue(lines.get(4).startsWith("0\t9\tsteadyState\t1\t12\t1\t820000"));
+        assertEquals(
+                computeSha256(tsv),
+                Files.readString(checksum, StandardCharsets.UTF_8).trim());
     }
 
     @Test

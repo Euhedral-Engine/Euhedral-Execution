@@ -94,7 +94,8 @@
       "observeBatchComplete": false,
       "observeRawBodyCost": false,
       "observeIdleDecision": false,
-      "observeExecDecision": false
+      "observeExecDecision": false,
+      "observeContentionStaleness": false
     },
     "high-contention-calibration": {
       "cpuSet": [1, 2, 3, 4],
@@ -112,7 +113,8 @@
       "observeBatchComplete": false,
       "observeRawBodyCost": false,
       "observeIdleDecision": false,
-      "observeExecDecision": true
+      "observeExecDecision": true,
+      "observeContentionStaleness": false
     }
   },
   // Optional: Reusable fragment decision weights profiles
@@ -308,7 +310,8 @@
         "observeBatchComplete": false,
         "observeRawBodyCost": false,
         "observeIdleDecision": false,
-        "observeExecDecision": false
+        "observeExecDecision": false,
+        "observeContentionStaleness": false
       }
     },
     {

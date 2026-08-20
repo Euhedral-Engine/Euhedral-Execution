@@ -231,6 +231,38 @@ class UpstreamQueueTest {
     }
 
     @Test
+    void shouldTrackAcquireDiagnosticsOnlyWhenEnabled() {
+        TestUpstreamHandle unavailable = addHandle();
+        unavailable.available = false;
+        addHandle();
+
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertEquals(0L, queue.getContentionObservationCount());
+        assertEquals(-1L, queue.getLastRawContention());
+        assertEquals(-1L, queue.getLastContentionObservationNs());
+
+        queue.setAcquireDiagnosticsEnabled(true);
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertEquals(1L, queue.getContentionObservationCount());
+        assertEquals(500_000L, queue.getLastRawContention());
+        assertTrue(queue.getLastContentionObservationNs() > 0L);
+        assertEquals(1L, queue.getSuccessfulAcquisitionCount());
+        assertEquals(1L, queue.getFailedAcquisitionCount());
+        assertEquals(2L, queue.getTotalAcquisitionAttempts());
+
+        queue.resetAcquireContention();
+
+        assertEquals(0L, queue.getContentionObservationCount());
+        assertEquals(-1L, queue.getLastRawContention());
+        assertEquals(-1L, queue.getLastContentionObservationNs());
+        assertEquals(0L, queue.getSuccessfulAcquisitionCount());
+        assertEquals(0L, queue.getFailedAcquisitionCount());
+        assertEquals(0L, queue.getTotalAcquisitionAttempts());
+    }
+
+    @Test
     void shouldNotUpdateContentionWithoutAnAcquisitionAttempt() {
         assertFalse(queue.hasAcquireContention());
         assertEquals(-1L, queue.getAcquireContentionOrUninitialized());

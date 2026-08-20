@@ -75,7 +75,7 @@ final class FragmentDecisionTree {
     }
 
     /// Makes an idling decision using the idle branch and parks the fragment
-    public void idle(
+    public long idle(
             long cycleEpoch,
             long batchEpoch,
             long upstreamHandles,
@@ -84,16 +84,16 @@ final class FragmentDecisionTree {
             long contention) {
         if (upstreamHandles <= 0) {
             LockSupport.parkNanos(DEFAULT_PARK_NS);
-            return;
+            return DEFAULT_PARK_NS;
         }
         if (registeredWorkers <= 1 || bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
-            return;
+            return -1L;
         }
         if (workerRank <= 0) {
-            return;
+            return -1L;
         }
 
-        idle(
+        return idle(
                 cycleEpoch,
                 batchEpoch,
                 this.idleContentionThresholds,
@@ -102,7 +102,7 @@ final class FragmentDecisionTree {
                 contention);
     }
 
-    private void idle(
+    private long idle(
             long cycleEpoch,
             long batchEpoch,
             ContentionThresholds thresholds,
@@ -110,25 +110,21 @@ final class FragmentDecisionTree {
             List<IdlePolicy> idleTimeNs,
             long contention) {
         if (contention <= thresholds.xsContention()) {
-            idle(cycleEpoch, batchEpoch, contention, 0, idleBodyCost.getFirst(), idleTimeNs.getFirst());
-            return;
+            return idle(cycleEpoch, batchEpoch, contention, 0, idleBodyCost.getFirst(), idleTimeNs.getFirst());
         }
         if (contention <= thresholds.sContention()) {
-            idle(cycleEpoch, batchEpoch, contention, 1, idleBodyCost.get(1), idleTimeNs.get(1));
-            return;
+            return idle(cycleEpoch, batchEpoch, contention, 1, idleBodyCost.get(1), idleTimeNs.get(1));
         }
         if (contention <= thresholds.mContention()) {
-            idle(cycleEpoch, batchEpoch, contention, 2, idleBodyCost.get(2), idleTimeNs.get(2));
-            return;
+            return idle(cycleEpoch, batchEpoch, contention, 2, idleBodyCost.get(2), idleTimeNs.get(2));
         }
         if (contention <= thresholds.hContention()) {
-            idle(cycleEpoch, batchEpoch, contention, 3, idleBodyCost.get(3), idleTimeNs.get(3));
-            return;
+            return idle(cycleEpoch, batchEpoch, contention, 3, idleBodyCost.get(3), idleTimeNs.get(3));
         }
-        idle(cycleEpoch, batchEpoch, contention, 4, idleBodyCost.getLast(), idleTimeNs.getLast());
+        return idle(cycleEpoch, batchEpoch, contention, 4, idleBodyCost.getLast(), idleTimeNs.getLast());
     }
 
-    private void idle(
+    private long idle(
             long cycleEpoch,
             long batchEpoch,
             long contention,
@@ -136,29 +132,36 @@ final class FragmentDecisionTree {
             BodyCostThresholds thresholds,
             IdlePolicy policy) {
         int decision = -1;
+        long idleDurationNs = -1L;
         try {
             if (this.smoothedBodyCostNs <= thresholds.xs) {
                 decision = 0;
-                LockSupport.parkNanos(policy.xsPark());
-                return;
+                idleDurationNs = policy.xsPark();
+                LockSupport.parkNanos(idleDurationNs);
+                return idleDurationNs;
             }
             if (this.smoothedBodyCostNs <= thresholds.s) {
                 decision = 1;
-                LockSupport.parkNanos(policy.sPark());
-                return;
+                idleDurationNs = policy.sPark();
+                LockSupport.parkNanos(idleDurationNs);
+                return idleDurationNs;
             }
             if (this.smoothedBodyCostNs <= thresholds.m) {
                 decision = 2;
-                LockSupport.parkNanos(policy.mPark());
-                return;
+                idleDurationNs = policy.mPark();
+                LockSupport.parkNanos(idleDurationNs);
+                return idleDurationNs;
             }
             if (this.smoothedBodyCostNs <= thresholds.h) {
                 decision = 3;
-                LockSupport.parkNanos(policy.hPark());
-                return;
+                idleDurationNs = policy.hPark();
+                LockSupport.parkNanos(idleDurationNs);
+                return idleDurationNs;
             }
             decision = 4;
-            LockSupport.parkNanos(policy.xhPark());
+            idleDurationNs = policy.xhPark();
+            LockSupport.parkNanos(idleDurationNs);
+            return idleDurationNs;
         } finally {
             if (this.observer != null) {
                 this.observer.idleBranchDecision(

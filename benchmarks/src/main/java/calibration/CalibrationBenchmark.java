@@ -245,6 +245,9 @@ public class CalibrationBenchmark {
             throw new RuntimeException("Failed to create output directory: " + targetPath);
         }
         TrialExport.exportAll(targetPath, this.forkCalculationResult, retainPerIteration);
+        if (this.calibrationConfig.observeContentionStaleness()) {
+            TrialExport.exportContentionStalenessTsv(targetPath, forkMeasurementMetrics);
+        }
     }
 
     @State(Scope.Thread)

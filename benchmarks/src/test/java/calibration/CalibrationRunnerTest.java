@@ -791,6 +791,30 @@ class CalibrationRunnerTest {
     }
 
     @Test
+    void testPhase12DiagnosticPresetResolvesToOneFixedFixture() throws Exception {
+        Path preset = Path.of("src/main/presets/experiments/26-contention-staleness-diagnostic.json");
+        if (!Files.exists(preset)) {
+            preset = Path.of("benchmarks/src/main/presets/experiments/26-contention-staleness-diagnostic.json");
+        }
+
+        HarnessConfig config = CalibrationRunner.loadConfig(preset.toString(), mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(config, mapper);
+
+        assertEquals(1, trials.size());
+        TrialConfig trial = trials.getFirst();
+        assertEquals("staged-ecore-phase12-base__staged-ecore-contention-staleness__0", trial.id());
+        assertEquals(8, trial.forks());
+        assertEquals(
+                List.of(16, 17, 18, 19, 20, 21, 22, 23),
+                trial.calibrationConfig().cpuSet());
+        assertEquals(4, trial.calibrationConfig().parallelSources());
+        assertEquals(0, trial.calibrationConfig().orderedSources());
+        assertEquals(144, trial.calibrationConfig().workUnits());
+        assertFalse(trial.calibrationConfig().randomizeWork());
+        assertTrue(trial.calibrationConfig().observeContentionStaleness());
+    }
+
+    @Test
     void testComparisonConfigValidationRules() {
         RunReference baseline = RunReference.of("/path/to/baseline");
         RunReference cand1 = RunReference.of("/path/to/cand1");

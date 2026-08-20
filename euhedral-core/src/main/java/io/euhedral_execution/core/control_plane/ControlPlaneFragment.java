@@ -70,6 +70,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final FragmentConfig config;
 
     private final FragmentObserver observer;
+    private final boolean observeContentionStaleness;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong resetRequested = new AtomicLong();
@@ -98,6 +99,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.core = -1;
             this.cpu = -1;
             this.observer = null;
+            this.observeContentionStaleness = false;
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
             this.controlPolicy = null;
             this.state = null;
@@ -124,6 +126,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             } else {
                 this.observer = null;
             }
+            this.observeContentionStaleness = this.observer != null && this.observer.observesContentionStaleness();
             this.state = new CycleState();
 
             this.mainExecutor = PinnedThreadExecutor.getOrSetIfAbsent(
@@ -225,6 +228,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
             this.upstreamQueue = context.upstream;
+            if (this.observeContentionStaleness) {
+                this.upstreamQueue.setAcquireDiagnosticsEnabled(true);
+            }
             while (keepRunning()) {
                 this.state.cycleEpoch++;
                 serviceResetRequest();
@@ -252,8 +258,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                             this.state.throughputRecorder.averageUnitsOverTime());
                 }
 
+                long idleDurationSelectedNs = -1L;
                 if (localCache == 0L) {
-                    this.controlPolicy.idle(
+                    idleDurationSelectedNs = this.controlPolicy.idle(
                             this.state.cycleEpoch,
                             this.state.batchEpoch,
                             this.state.upstreamCount,
@@ -261,6 +268,15 @@ public final class ControlPlaneFragment extends WorkRequester {
                             this.state.workerRank,
                             this.upstreamQueue.getContention());
                     localCache = super.getLocalCacheCount();
+                }
+                if (this.observeContentionStaleness) {
+                    if (idleDurationSelectedNs >= 0L) {
+                        if (this.state.consecutiveIdleDecisions < Long.MAX_VALUE) {
+                            this.state.consecutiveIdleDecisions++;
+                        }
+                    } else {
+                        this.state.consecutiveIdleDecisions = 0L;
+                    }
                 }
 
                 if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
@@ -292,6 +308,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                         this.upstreamQueue.getCachedUpCount(),
                         this.state.registeredWorkers,
                         this.upstreamQueue.getContention());
+                if (this.observeContentionStaleness) {
+                    recordContentionStaleness(idleDurationSelectedNs, path, localCache);
+                }
                 if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
                         long start = System.nanoTime();
@@ -386,6 +405,42 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private long remoteExecute(FlowThread.FlowContext context, long limit) {
         return super.upstreamPull(context.upstream, this.outputStream, limit);
+    }
+
+    private void recordContentionStaleness(
+            long idleDurationSelectedNs, ExecutionPath executionPath, long localCacheCount) {
+        long observationCount = this.upstreamQueue.getContentionObservationCount();
+        if (observationCount != this.state.lastContentionObservationCount) {
+            this.state.lastContentionObservationCount = observationCount;
+            this.state.lastContentionObservationCycle = this.state.cycleEpoch;
+        }
+
+        long lastObservationNs = this.upstreamQueue.getLastContentionObservationNs();
+        long cyclesSinceObservation =
+                lastObservationNs < 0L ? -1L : this.state.cycleEpoch - this.state.lastContentionObservationCycle;
+        long nanosSinceObservation = lastObservationNs < 0L ? -1L : Math.max(0L, System.nanoTime() - lastObservationNs);
+
+        this.observer.contentionStalenessState(
+                this.core,
+                this.socket,
+                this.state.cycleEpoch,
+                this.state.batchEpoch,
+                this.upstreamQueue.getContention(),
+                this.upstreamQueue.getLastRawContention(),
+                observationCount,
+                lastObservationNs,
+                cyclesSinceObservation,
+                nanosSinceObservation,
+                this.state.consecutiveIdleDecisions,
+                idleDurationSelectedNs,
+                this.upstreamQueue.getSuccessfulAcquisitionCount(),
+                this.upstreamQueue.getFailedAcquisitionCount(),
+                this.upstreamQueue.getTotalAcquisitionAttempts(),
+                executionPath.ordinal(),
+                localCacheCount,
+                this.state.productiveHandleCount,
+                this.state.registeredWorkers,
+                this.state.workerRank);
     }
 
     /// Records loop execution telemetry and advances policy only at a batch boundary.
@@ -619,6 +674,9 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         long cycleEpoch = -1;
         long batchEpoch = 0;
+        long lastContentionObservationCount = 0L;
+        long lastContentionObservationCycle = -1L;
+        long consecutiveIdleDecisions = 0L;
 
         void reset() {
             this.batchRecorder.reset();
@@ -631,6 +689,9 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.registeredWorkers = 0;
             this.productiveHandleCount = 0;
             this.workerRank = -1;
+            this.lastContentionObservationCount = 0L;
+            this.lastContentionObservationCycle = -1L;
+            this.consecutiveIdleDecisions = 0L;
             if (ControlPlaneFragment.this.upstreamQueue != null) {
                 ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();
             }

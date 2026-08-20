@@ -1,5 +1,6 @@
 package calibration.io;
 
+import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
 import calibration.statistics.Band;
 import calibration.statistics.VectorCell;
@@ -39,6 +40,7 @@ public final class TrialExport {
     private static final String[] SEGMENTS_3 = {"head", "steadyState", "combined"};
     private static final String[] SEGMENTS_2 = {"head", "steadyState"};
     private static final String[] DECISION_TYPES = {"idle", "exec"};
+    private static final String[] EXECUTION_PATHS = {"DIRECT", "STAGED", "SKIP_THEN_DIRECT", "SKIP_THEN_STAGED"};
 
     private TrialExport() {}
 
@@ -98,6 +100,83 @@ public final class TrialExport {
                 Path iterDir = outputDir.resolve("iteration-" + r.iterationIndex());
                 exportAll(iterDir, List.of(r), false);
             }
+        }
+    }
+
+    /// Exports the bounded, chronologically aligned staleness samples retained for each core and iteration.
+    public static void exportContentionStalenessTsv(
+            Path outputDir, List<? extends List<HighSpeedMetrics>> measurementIterations) throws Exception {
+        if (outputDir == null || measurementIterations == null || measurementIterations.isEmpty()) {
+            return;
+        }
+        Files.createDirectories(outputDir);
+        Path file = outputDir.resolve(Constants.CONTENTION_STALENESS_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "iteration\tcore\tsegment\tsampleIndex\tcycleEpoch\tbatchEpoch\tmeasuredContention\tlastRawContention\tcontentionObservationCount\tlastContentionObservationNs\tcyclesSinceContentionObservation\tnanosSinceContentionObservation\tconsecutiveIdleDecisions\tidleDurationSelectedNs\tsuccessfulAcquisitionCount\tfailedAcquisitionCount\ttotalAcquisitionAttempts\texecutionPath\tlocalCacheCount\tproductiveHandleCount\tregisteredWorkers\tworkerRank\n");
+            for (int iteration = 0; iteration < measurementIterations.size(); iteration++) {
+                List<HighSpeedMetrics> metrics = measurementIterations.get(iteration);
+                if (metrics == null) {
+                    continue;
+                }
+                for (HighSpeedMetrics coreMetrics : metrics) {
+                    if (coreMetrics == null) {
+                        continue;
+                    }
+                    coreMetrics.align();
+                    int sampleCount =
+                            (int) Math.min(coreMetrics.contentionStalenessObservations, coreMetrics.rawSampleLimit);
+                    writeContentionStalenessSamples(
+                            writer,
+                            iteration,
+                            coreMetrics.core,
+                            "head",
+                            coreMetrics.contentionStalenessHead,
+                            sampleCount);
+                    writeContentionStalenessSamples(
+                            writer,
+                            iteration,
+                            coreMetrics.core,
+                            "steadyState",
+                            coreMetrics.contentionStalenessSteadyState,
+                            sampleCount);
+                }
+            }
+        }
+        writeChecksum(file);
+    }
+
+    private static void writeContentionStalenessSamples(
+            BufferedWriter writer, int iteration, int core, String segment, long[][] samples, int sampleCount)
+            throws Exception {
+        for (int sampleIndex = 0; sampleIndex < sampleCount; sampleIndex++) {
+            long[] sample = samples[sampleIndex];
+            int executionPath = (int) sample[13];
+            String executionPathName = executionPath >= 0 && executionPath < EXECUTION_PATHS.length
+                    ? EXECUTION_PATHS[executionPath]
+                    : "UNKNOWN";
+            writer.write(iteration + "\t"
+                    + core + "\t"
+                    + segment + "\t"
+                    + sampleIndex + "\t"
+                    + sample[0] + "\t"
+                    + sample[1] + "\t"
+                    + sample[2] + "\t"
+                    + sample[3] + "\t"
+                    + sample[4] + "\t"
+                    + sample[5] + "\t"
+                    + sample[6] + "\t"
+                    + sample[7] + "\t"
+                    + sample[8] + "\t"
+                    + sample[9] + "\t"
+                    + sample[10] + "\t"
+                    + sample[11] + "\t"
+                    + sample[12] + "\t"
+                    + executionPathName + "\t"
+                    + sample[14] + "\t"
+                    + sample[15] + "\t"
+                    + sample[16] + "\t"
+                    + sample[17] + "\n");
         }
     }
 

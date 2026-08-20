@@ -19,7 +19,8 @@
       "observeBatchComplete": false,
       "observeRawBodyCost": false,
       "observeIdleDecision": false,
-      "observeExecDecision": false
+      "observeExecDecision": false,
+      "observeContentionStaleness": false
     }
   },
   // Reusable fragment decision weights profiles

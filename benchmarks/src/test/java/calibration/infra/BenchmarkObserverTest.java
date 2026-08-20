@@ -80,4 +80,41 @@ class BenchmarkObserverTest {
         assertEquals(240.0, metrics.execSteadyStateSmoothedBodyCost[0]);
         assertEquals(480.0, metrics.execSteadyStateSmoothedBodyCost[3]);
     }
+
+    @Test
+    void testAlignContentionStalenessSamples() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(7, 4);
+        for (int i = 1; i <= 6; i++) {
+            metrics.recordContentionStaleness(
+                    i,
+                    i * 10L,
+                    i * 100L,
+                    i * 50L,
+                    i,
+                    i * 10_000L,
+                    i - 1L,
+                    i * 1_000L,
+                    i,
+                    5_000L,
+                    i * 2L,
+                    i,
+                    i * 3L,
+                    1,
+                    0L,
+                    4L,
+                    8,
+                    2);
+        }
+
+        metrics.align();
+
+        assertEquals(7, metrics.core);
+        assertEquals(6L, metrics.contentionStalenessObservations);
+        assertEquals(1L, metrics.contentionStalenessHead[0][0]);
+        assertEquals(4L, metrics.contentionStalenessHead[3][0]);
+        assertEquals(3L, metrics.contentionStalenessSteadyState[0][0]);
+        assertEquals(6L, metrics.contentionStalenessSteadyState[3][0]);
+        assertEquals(6_000L, metrics.contentionStalenessSteadyState[3][7]);
+        assertEquals(18L, metrics.contentionStalenessSteadyState[3][12]);
+    }
 }

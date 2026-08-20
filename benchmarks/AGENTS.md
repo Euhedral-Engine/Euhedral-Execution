@@ -107,6 +107,7 @@ HarnessConfig
        - `observeRawBodyCost`: Unfiltered execution cost samples.
        - `observeIdleDecision`: Idle action decision evaluations.
        - `observeExecDecision`: Execution action decision evaluations.
+       - `observeContentionStaleness`: Bounded per-cycle acquisition freshness and idle-streak diagnostics.
 
 #### Host Topology and CPU-to-Core Mapping (Intel Core i9-14900K)
 
@@ -433,6 +434,7 @@ according to the configured artifact retention flags, alongside their SHA-256 in
 | `transitions.tsv` | 25x25 Markov transition counts, probabilities, self-rates, and dominant targets | [`TransitionAnalysis`](src/main/java/calibration/statistics/iteration/TransitionAnalysis.java) |
 | `vector_fields.tsv` | 5x5 displacement vectors (Delta_C, Delta_B) and magnitudes | [`VectorField`](src/main/java/calibration/statistics/VectorField.java) |
 | `correlations.tsv` | Aligned Pearson and Spearman correlation matrices across observation dimensions | [`CorrelationResult`](src/main/java/calibration/statistics/iteration/CorrelationResult.java) |
+| `contention_staleness.tsv` | Calibration-only bounded per-core contention-observation age, acquisition counters, and idle streak sequence | [`BenchmarkObserver`](src/main/java/calibration/infra/BenchmarkObserver.java) |
 
 ### Benchmark File Columns (In Order)
 
@@ -448,6 +450,8 @@ according to the configured artifact retention flags, alongside their SHA-256 in
    `iteration`, `scope`, `core`, `decisionType`, `segment`, `contentionBand`, `bodyBand`, `transitionCount`, `meanDeltaContention`, `meanDeltaBody`, `magnitude`
 6. **`correlations.tsv`**:
    `iteration`, `scope`, `core`, `metric`, `segment`, `variable1`, `variable2`, `pearson`, `spearman`
+7. **`contention_staleness.tsv`**:
+   `iteration`, `core`, `segment`, `sampleIndex`, `cycleEpoch`, `batchEpoch`, `measuredContention`, `lastRawContention`, `contentionObservationCount`, `lastContentionObservationNs`, `cyclesSinceContentionObservation`, `nanosSinceContentionObservation`, `consecutiveIdleDecisions`, `idleDurationSelectedNs`, `successfulAcquisitionCount`, `failedAcquisitionCount`, `totalAcquisitionAttempts`, `executionPath`, `localCacheCount`, `productiveHandleCount`, `registeredWorkers`, `workerRank`
 
 ---
 
