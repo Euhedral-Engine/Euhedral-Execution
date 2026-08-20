@@ -1,0 +1,295 @@
+{
+  "schemaVersion": 1,
+  "id": "18-skip-policy-multifork-verification",
+  "name": "Phase 7 Skip Policy Multi-Fork Statistical Verification",
+  "description": "Executes 3 independent JVM forks (15 iterations per condition) comparing STAGED vs SKIP_THEN_STAGED across 2-core and 4-core topologies under severe acquisition contention (XH: 1 parallel source) across all 5 body bands (XS: 0, S: 48, M: 144, H: 216, XH: 288) with calibrated idle parking active.",
+  "labels": {
+    "preset": "skip-policy-multifork-verification",
+    "phase": "7"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/18-skip-policy-multifork-verification",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "staged-with-idle": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 1000, "sPark": 15000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "skip-staged-with-idle": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 1000, "sPark": 15000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-staged-2core-multifork": {
+      "cpuSet": [2, 4],
+      "parallelSources": 1,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "staged-with-idle",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-skip-staged-2core-multifork": {
+      "cpuSet": [2, 4],
+      "parallelSources": 1,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "skip-staged-with-idle",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-staged-4core-multifork": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 1,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "staged-with-idle",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-skip-staged-4core-multifork": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 1,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "skip-staged-with-idle",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "staged-2core-multifork-sweep",
+      "baseTrialId": "staged-2core-multifork-base",
+      "description": "Multi-fork sweep across body bands for STAGED under XH contention on 2 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        }
+      ]
+    },
+    {
+      "id": "skip-staged-2core-multifork-sweep",
+      "baseTrialId": "skip-staged-2core-multifork-base",
+      "description": "Multi-fork sweep across body bands for SKIP_THEN_STAGED under XH contention on 2 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        }
+      ]
+    },
+    {
+      "id": "staged-4core-multifork-sweep",
+      "baseTrialId": "staged-4core-multifork-base",
+      "description": "Multi-fork sweep across body bands for STAGED under XH contention on 4 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        }
+      ]
+    },
+    {
+      "id": "skip-staged-4core-multifork-sweep",
+      "baseTrialId": "skip-staged-4core-multifork-base",
+      "description": "Multi-fork sweep across body bands for SKIP_THEN_STAGED under XH contention on 4 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "staged-2core-multifork-base",
+      "name": "Staged 2-Core Multi-Fork Base",
+      "group": "skip-policy-multifork-verification",
+      "description": "Base trial for multi-fork STAGED verification on 2 cores.",
+      "tags": ["phase7", "skip-policy", "staged", "multifork", "2core"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-staged-2core-multifork"
+    },
+    {
+      "id": "skip-staged-2core-multifork-base",
+      "name": "Skip Staged 2-Core Multi-Fork Base",
+      "group": "skip-policy-multifork-verification",
+      "description": "Base trial for multi-fork SKIP_THEN_STAGED verification on 2 cores.",
+      "tags": ["phase7", "skip-policy", "skip-staged", "multifork", "2core"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-skip-staged-2core-multifork"
+    },
+    {
+      "id": "staged-4core-multifork-base",
+      "name": "Staged 4-Core Multi-Fork Base",
+      "group": "skip-policy-multifork-verification",
+      "description": "Base trial for multi-fork STAGED verification on 4 cores.",
+      "tags": ["phase7", "skip-policy", "staged", "multifork", "4core"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-staged-4core-multifork"
+    },
+    {
+      "id": "skip-staged-4core-multifork-base",
+      "name": "Skip Staged 4-Core Multi-Fork Base",
+      "group": "skip-policy-multifork-verification",
+      "description": "Base trial for multi-fork SKIP_THEN_STAGED verification on 4 cores.",
+      "tags": ["phase7", "skip-policy", "skip-staged", "multifork", "4core"],
+      "enabled": false,
+      "forks": 3,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-skip-staged-4core-multifork"
+    }
+  ]
+}

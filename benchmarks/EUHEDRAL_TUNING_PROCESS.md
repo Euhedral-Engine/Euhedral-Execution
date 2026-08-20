@@ -401,22 +401,385 @@ Do not create a policy that can remain in SKIP indefinitely.
 
 ---
 
-## 11. Phase 8 - Joint Local Refinement
+## 11. Phase 8 - High-Contention Zoom
 
-Once the major branches are established, perturb neighboring cells around high-performing regions.
+Phase 7 established that the unresolved policy competition is concentrated in the upper contention range.
 
-Do not search the entire matrix.
+Current broad behavior:
 
-Focus on boundaries where:
+below approximately 65% contention:
+DIRECT remains dominant
 
-```text
+high contention:
+the meaningful comparison is primarily:
+STAGED
+SKIP_THEN_STAGED
+
+Do not rerun the full policy surface.
+
+Focus experimental resolution on approximately:
+
+65% - 100% measured contention
+
+The current bands are:
+
+M:   35% - 65%
+H:   65% - 85%
+XH:  85% - 100%
+
+### Build a dense local contention surface
+
+Generate several fixtures that occupy meaningfully different locations within the 65%-100% range.
+
+Useful controls include:
+
+parallelSources
+orderedSources
+worker/core count
+productive source availability
+
+Use actual measured contention as the physical variable.
+
+Do not treat source count itself as the final independent variable.
+
+For each useful contention fixture:
+
+1. Run or reuse STAGED.
+2. Run SKIP_THEN_STAGED.
+3. Cover all body bands initially.
+4. Record actual steady-state contention/body occupancy.
+5. Compare matched conditions.
+6. Identify where winner, margin, or slope changes.
+
+Reuse existing Phase 7 results whenever the fixture is equivalent.
+
+Do not rerun DIRECT or SKIP_THEN_DIRECT unless new evidence specifically requires them.
+
+### Zoom strategy
+
+Prefer:
+
+moderately dense 65%-100% sweep
+->
+identify transition regions
+->
+fine-grained local sweep
+->
+multi-fork verification
+
+Do not probe one contention point at a time.
+
+The purpose is to discover the shape of the STAGED vs SKIP_THEN_STAGED surface.
+
+Possible outcomes include:
+
+STAGED always wins
+SKIP_THEN_STAGED owns a stable subregion
+multiple crossovers exist
+body band changes the crossover
+topology changes the crossover despite similar measured state
+
+Do not assume monotonic behavior.
+
+### Completion gate
+
+Phase 8 is complete when:
+
+- the H/XH contention region has substantially better resolution
+- likely STAGED / SKIP_THEN_STAGED crossover regions are identified
+- candidate gains are replicated
+- any body-dependent behavior is characterized
+- low/mid contention has not been unnecessarily rerun
+
+
+---
+
+## 12. Phase 9 - Refine the High-Contention Thresholds
+
+Use the Phase 8 surface to determine whether the current 65% and 85% contention boundaries are positioned usefully.
+
+Do not preserve the existing H/XH split merely because it already exists.
+
+Ask:
+
+Does crossing a particular contention level materially change:
+STAGED vs SKIP_THEN_STAGED?
+idle behavior?
+another control action?
+
+If policy behavior clusters around a different threshold, move resolution accordingly.
+
+### Redistribute rather than blindly add bands
+
+If behavior below 65% remains uniform while meaningful behavior is concentrated above 65%, consider reallocating contention resolution upward.
+
+Conceptually:
+
+coarse lower region
+fine upper region
+
+Do not require evenly spaced thresholds.
+
+The final contention quantization should reflect policy-relevant physical behavior.
+
+### Keep body interaction visible
+
+Repeat threshold analysis across body bands.
+
+A useful high-contention threshold may vary by body band.
+
+Do not collapse body dependence unless the Phase 8 data shows that the same threshold works across body regimes.
+
+
+---
+
+## 13. Phase 10 - Build the Combined Effective Policy
+
+Once the high-contention region is resolved, combine the established execution, idle, and skip behavior.
+
+Do not treat these as three unrelated 5x5 tables.
+
+For each relevant physical region determine:
+
+execution path
+idle duration
+whether a one-shot skip is useful
+
+Example form:
+
+low contention:
+DIRECT
+0 ns idle
+no skip
+
+extreme contention / XS body:
+STAGED or SKIP_THEN_STAGED
+short idle
+
+extreme contention / S body:
+STAGED or SKIP_THEN_STAGED
+longer idle
+
+The objective is to determine the actual effective action taken by the controller.
+
+### Reuse evidence aggressively
+
+Before scheduling any benchmark:
+
+1. Search existing experiment artifacts.
+2. Reuse exact compatible trials.
+3. Run only missing policy combinations.
+4. Repeat existing trials only when:
+   - interaction changes the runtime condition
+   - statistical confidence is insufficient
+   - environment materially changed
+   - replication is the experiment
+
+Do not reconstruct old surfaces merely to compare them with new data.
+
+
+---
+
+## 14. Phase 11 - Joint Local Refinement
+
+After the major effective branches are established, refine only boundaries where the controller actually changes behavior.
+
+Focus on regions where:
+
+the preferred action changes nearby
 throughput differences are small
-occupancy frequently crosses the boundary
+occupancy frequently crosses a boundary
 transition analysis shows oscillation
-the vector field suggests repeated movement between neighboring cells
-```
+vector fields show repeated movement between neighboring regions
+different fixtures reach similar state but prefer different actions
 
-Test small local alternatives and retain changes only when throughput improves or becomes more stable without a meaningful throughput loss.
+Possible local variables:
+
+contention threshold
+body threshold
+idle duration
+STAGED vs SKIP_THEN_STAGED assignment
+
+Change one relationship at a time.
+
+Do not perform a global multidimensional search.
+
+### Zoom rule
+
+Use:
+
+coarse evidence
+->
+locate boundary
+->
+dense local surface
+->
+replicate
+->
+encode
+
+Stop narrowing when neighboring points no longer show a reliable slope beyond benchmark variance.
+
+
+---
+
+## 15. Phase 12 - Evaluate Tier Simplification
+
+Only now decide whether the existing 5x5 representation contains unnecessary tiers.
+
+For every body and contention boundary ask:
+
+Does crossing this boundary ever change:
+execution path?
+idle duration?
+skip behavior?
+another meaningful control decision?
+
+If not, the boundary may be redundant.
+
+### Evaluate the union of all controls
+
+Do not remove a body tier because DIRECT/STAGED selection ignores it.
+
+Current evidence may look like:
+
+execution:
+largely contention-driven
+
+idle:
+contention-gated and body-sensitive
+
+skip:
+potentially concentrated in high contention
+
+The required state resolution is determined by all three together.
+
+### Consider redistribution
+
+Tier simplification does not necessarily mean fewer total thresholds.
+
+If lower contention is behaviorally uniform while high contention contains several crossovers, prefer:
+
+less resolution below the active region
+more resolution inside the active region
+
+This may produce a simpler and more physically useful controller than the original symmetric 5-band representation.
+
+Any structural simplification must be benchmarked against the previously calibrated policy before adoption.
+
+
+---
+
+## 16. Phase 13 - Validate Uniform Workloads
+
+After the effective policy and tier structure are stable, validate representative uniform workloads not used directly to select every threshold.
+
+Cover:
+
+XS body
+S body
+M body
+H body
+XH body
+
+and representative source/worker relationships spanning:
+
+low contention
+balanced contention
+high contention
+extreme contention
+
+Verify:
+
+throughput remains competitive
+occupancy is sensible
+idle and execution policies do not fight each other
+skip does not repeatedly retrigger pathologically
+batch behavior remains stable
+
+Do not tune aggressively against validation workloads.
+
+Use failures to identify missing relationships.
+
+
+---
+
+## 17. Phase 14 - Validate Mixed and Dynamic Workloads
+
+Test conditions that move through the state space over time.
+
+Include:
+
+mixed body costs
+randomized work
+changing source availability
+ordered and parallel source mixtures
+bursty ingestion
+contention transitions
+body-cost transitions
+
+Observe:
+
+boundary oscillation
+idle overreaction
+repeated skip activation
+stale contention state
+batch-size feedback
+recovery after regime changes
+
+The important question is no longer only whether each static cell is correct.
+
+Determine whether transitions between calibrated regions are stable.
+
+Throughput remains authoritative.
+
+Telemetry explains failures.
+
+
+---
+
+## 18. Phase 15 - Validate Additional Hardware
+
+After the control policy is stable on the calibration host, test representative additional machines.
+
+Do not immediately recalibrate the entire controller.
+
+First measure which relationships transfer.
+
+Compare:
+
+decision weight -> runtime body threshold
+contention distribution
+DIRECT/STAGED boundary
+idle timing
+STAGED vs SKIP_THEN_STAGED high-contention surface
+transition behavior
+
+Classify parameters as:
+
+portable
+hardware-scaled
+hardware-specific
+
+Only add hardware-dependent calibration when the experiments demonstrate it is necessary.
+
+
+---
+
+## 19. Phase 16 - Freeze and Simplify the Production Policy
+
+Once workload and hardware validation are complete:
+
+1. Remove policy branches that never demonstrated useful behavior.
+2. Collapse tiers that do not affect any control action.
+3. Retain or increase resolution where real high-contention crossovers exist.
+4. Encode only repeatable relationships.
+5. Record the experimental provenance of every retained threshold and action.
+6. Preserve all experiment artifacts unchanged.
+
+The production controller should be only as complex as the observed physical behavior requires.
+
+The calibration harness should remain more expressive than the production controller so future behavior can be investigated without redesigning the experimental system.
 
 ---
 
