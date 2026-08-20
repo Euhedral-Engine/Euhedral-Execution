@@ -1,0 +1,34 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "staged-8core-2src-sweep",
+    "runs": [
+      "experiments/20-high-contention-zoom-pcore/staged-8core-2src-base__staged-8core-2src-sweep__0_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/staged-8core-2src-base__staged-8core-2src-sweep__1_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/staged-8core-2src-base__staged-8core-2src-sweep__2_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/staged-8core-2src-base__staged-8core-2src-sweep__3_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/staged-8core-2src-base__staged-8core-2src-sweep__4_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "skip-staged-8core-2src-sweep",
+    "runs": [
+      "experiments/20-high-contention-zoom-pcore/skip-staged-8core-2src-base__skip-staged-8core-2src-sweep__0_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/skip-staged-8core-2src-base__skip-staged-8core-2src-sweep__1_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/skip-staged-8core-2src-base__skip-staged-8core-2src-sweep__2_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/skip-staged-8core-2src-base__skip-staged-8core-2src-sweep__3_repeat_0",
+      "experiments/20-high-contention-zoom-pcore/skip-staged-8core-2src-base__skip-staged-8core-2src-sweep__4_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/20-high-contention-zoom-pcore/comparisons-8core-2src"
+}

@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "id": "19-high-contention-zoom-4core",
+  "name": "Phase 8 High-Contention Zoom (4-Core)",
+  "description": "Evaluates STAGED vs SKIP_THEN_STAGED across 4-core high-contention levels (4 sources: H ~75%, 3 sources: H/XH ~85%, 2 sources: XH ~97%, 1 source: XH ~99%) and all 5 calibrated body bands (XS: 0, S: 48, M: 144, H: 216, XH: 288) with calibrated idle parking active.",
+  "labels": {
+    "preset": "high-contention-zoom-4core",
+    "phase": "8"
+  },
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "failFast": false,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/19-high-contention-zoom-4core",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "decisionWeightProfiles": {
+    "staged-with-idle": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 1000, "sPark": 15000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
+        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" }
+      ]
+    },
+    "skip-staged-with-idle": {
+      "idleContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "idleBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "idleTimeNs": [
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
+        { "xsPark": 1000, "sPark": 15000, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+      ],
+      "execContentionThresholds": {
+        "xsContention": 50000,
+        "sContention": 350000,
+        "mContention": 650000,
+        "hContention": 850000
+      },
+      "execBodyCostWeights": [
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 },
+        { "xs": 96, "s": 128, "m": 216, "h": 288 }
+      ],
+      "executionPolicies": [
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" },
+        { "xsBody": "SKIP_THEN_STAGED", "sBody": "SKIP_THEN_STAGED", "mBody": "SKIP_THEN_STAGED", "hBody": "SKIP_THEN_STAGED", "xhBody": "SKIP_THEN_STAGED" }
+      ]
+    }
+  },
+  "calibrationProfiles": {
+    "profile-staged-with-idle-4core": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "staged-with-idle",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    },
+    "profile-skip-staged-with-idle-4core": {
+      "cpuSet": [2, 4, 6, 8],
+      "parallelSources": 4,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "skip-staged-with-idle",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true
+    }
+  },
+  "sweeps": [
+    {
+      "id": "staged-with-idle-4core-sweep",
+      "baseTrialId": "staged-with-idle-4core-base",
+      "description": "Sweep body cost and high-contention parallel source count for forced STAGED with idle enabled on 4 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        },
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [4, 3, 2, 1]
+        }
+      ]
+    },
+    {
+      "id": "skip-staged-with-idle-4core-sweep",
+      "baseTrialId": "skip-staged-with-idle-4core-base",
+      "description": "Sweep body cost and high-contention parallel source count for forced SKIP_THEN_STAGED with idle enabled on 4 cores.",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [0, 48, 144, 216, 288]
+        },
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [4, 3, 2, 1]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "staged-with-idle-4core-base",
+      "name": "Staged with Idle 4-Core High-Contention Base",
+      "group": "high-contention-zoom-4core",
+      "description": "Base trial for forced STAGED high-contention mapping with idle active on 4 cores.",
+      "tags": ["phase8", "high-contention", "staged", "idle-enabled", "4core"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-staged-with-idle-4core"
+    },
+    {
+      "id": "skip-staged-with-idle-4core-base",
+      "name": "Skip Then Staged with Idle 4-Core High-Contention Base",
+      "group": "high-contention-zoom-4core",
+      "description": "Base trial for forced SKIP_THEN_STAGED high-contention mapping with idle active on 4 cores.",
+      "tags": ["phase8", "high-contention", "skip-staged", "idle-enabled", "4core"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED"
+      ],
+      "calibrationProfile": "profile-skip-staged-with-idle-4core"
+    }
+  ]
+}

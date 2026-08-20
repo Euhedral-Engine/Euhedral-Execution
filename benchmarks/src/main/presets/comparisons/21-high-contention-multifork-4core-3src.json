@@ -1,0 +1,30 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "staged-4core-3src-multifork-sweep",
+    "runs": [
+      "experiments/21-high-contention-multifork-verification/staged-4core-3src-multifork-base__staged-4core-3src-multifork-sweep__0_repeat_0",
+      "experiments/21-high-contention-multifork-verification/staged-4core-3src-multifork-base__staged-4core-3src-multifork-sweep__1_repeat_0",
+      "experiments/21-high-contention-multifork-verification/staged-4core-3src-multifork-base__staged-4core-3src-multifork-sweep__2_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "skip-staged-4core-3src-multifork-sweep",
+    "runs": [
+      "experiments/21-high-contention-multifork-verification/skip-staged-4core-3src-multifork-base__skip-staged-4core-3src-multifork-sweep__0_repeat_0",
+      "experiments/21-high-contention-multifork-verification/skip-staged-4core-3src-multifork-base__skip-staged-4core-3src-multifork-sweep__1_repeat_0",
+      "experiments/21-high-contention-multifork-verification/skip-staged-4core-3src-multifork-base__skip-staged-4core-3src-multifork-sweep__2_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/21-high-contention-multifork-verification/comparisons-4core-3src"
+}

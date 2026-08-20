@@ -1,0 +1,55 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "staged-4core-ecore-sweep",
+    "runs": [
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__0_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__1_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__2_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__3_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__4_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__5_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__6_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__7_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__8_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__9_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__10_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__11_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__12_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__13_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/staged-4core-ecore-base__staged-4core-ecore-sweep__14_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "skip-staged-4core-ecore-sweep",
+    "runs": [
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__0_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__1_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__2_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__3_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__4_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__5_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__6_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__7_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__8_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__9_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__10_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__11_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__12_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__13_repeat_0",
+      "experiments/19-high-contention-zoom-ecore/skip-staged-4core-ecore-base__skip-staged-4core-ecore-sweep__14_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits",
+      "/calibrationConfig/parallelSources"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/19-high-contention-zoom-ecore/comparisons-4core"
+}
