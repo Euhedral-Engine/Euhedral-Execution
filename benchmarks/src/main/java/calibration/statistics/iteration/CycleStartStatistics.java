@@ -14,7 +14,15 @@ public record CycleStartStatistics(
         @NonNull CorrelationResult combinedCorrelations) {
 
     public static final String[] COLUMN_NAMES = {
-        "completed", "batchSize", "upstreamCount", "registeredWorkers", "workerRank", "contention", "throughput"
+        "completed",
+        "batchSize",
+        "upstreamCount",
+        "registeredWorkers",
+        "productiveHandleCount",
+        "productiveHandleRatio",
+        "workerRank",
+        "contention",
+        "throughput"
     };
 
     public static final CycleStartStatistics EMPTY = new CycleStartStatistics(

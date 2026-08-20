@@ -33,6 +33,10 @@ public final class HighSpeedMetricsStatistics {
 
     private HighSpeedMetricsStatistics() {}
 
+    private static double productiveHandleRatio(double productiveHandles, double registeredWorkers) {
+        return registeredWorkers > 0.0 ? productiveHandles / registeredWorkers : 0.0;
+    }
+
     /// Calculates statistics for a single detached metric instance.
     public static @NonNull CoreIterationResult calculate(int core, @Nullable HighSpeedMetrics metrics) {
         return calculate(0, core, metrics);
@@ -221,28 +225,34 @@ public final class HighSpeedMetricsStatistics {
         double[] hBatchSize = new double[hTotalLen];
         double[] hUpstream = new double[hTotalLen];
         double[] hWorkers = new double[hTotalLen];
+        double[] hProductive = new double[hTotalLen];
+        double[] hProductiveRatio = new double[hTotalLen];
         double[] hRank = new double[hTotalLen];
         double[] hContention = new double[hTotalLen];
         double[] hThroughput = new double[hTotalLen];
-        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][7] : new double[0][0];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][9] : new double[0][0];
 
         double[] tCompleted = new double[tTotalLen];
         double[] tBatchSize = new double[tTotalLen];
         double[] tUpstream = new double[tTotalLen];
         double[] tWorkers = new double[tTotalLen];
+        double[] tProductive = new double[tTotalLen];
+        double[] tProductiveRatio = new double[tTotalLen];
         double[] tRank = new double[tTotalLen];
         double[] tContention = new double[tTotalLen];
         double[] tThroughput = new double[tTotalLen];
-        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][7] : new double[0][0];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][9] : new double[0][0];
 
         double[] cCompleted = new double[cTotalLen];
         double[] cBatchSize = new double[cTotalLen];
         double[] cUpstream = new double[cTotalLen];
         double[] cWorkers = new double[cTotalLen];
+        double[] cProductive = new double[cTotalLen];
+        double[] cProductiveRatio = new double[cTotalLen];
         double[] cRank = new double[cTotalLen];
         double[] cContention = new double[cTotalLen];
         double[] cThroughput = new double[cTotalLen];
-        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][7] : new double[0][0];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][9] : new double[0][0];
 
         int hOffset = 0;
         int tOffset = 0;
@@ -266,12 +276,16 @@ public final class HighSpeedMetricsStatistics {
                 double wrk = (double) m.cycleStartWarmupState[i][5];
                 double rk = (double) m.cycleStartWarmupState[i][6];
                 double cnt = (double) m.cycleStartWarmupState[i][7];
+                double productive = (double) m.cycleStartWarmupState[i][8];
+                double productiveRatio = productiveHandleRatio(productive, wrk);
                 double tp = m.cycleStartWarmupThroughput[i];
 
                 hCompleted[idx] = comp;
                 hBatchSize[idx] = bs;
                 hUpstream[idx] = up;
                 hWorkers[idx] = wrk;
+                hProductive[idx] = productive;
+                hProductiveRatio[idx] = productiveRatio;
                 hRank[idx] = rk;
                 hContention[idx] = cnt;
                 hThroughput[idx] = tp;
@@ -281,9 +295,11 @@ public final class HighSpeedMetricsStatistics {
                     hData[idx][1] = bs;
                     hData[idx][2] = up;
                     hData[idx][3] = wrk;
-                    hData[idx][4] = rk;
-                    hData[idx][5] = cnt;
-                    hData[idx][6] = tp;
+                    hData[idx][4] = productive;
+                    hData[idx][5] = productiveRatio;
+                    hData[idx][6] = rk;
+                    hData[idx][7] = cnt;
+                    hData[idx][8] = tp;
                 }
             }
             hOffset += hLen;
@@ -297,12 +313,16 @@ public final class HighSpeedMetricsStatistics {
                 double wrk = (double) m.cycleStartSteadyStateState[i][5];
                 double rk = (double) m.cycleStartSteadyStateState[i][6];
                 double cnt = (double) m.cycleStartSteadyStateState[i][7];
+                double productive = (double) m.cycleStartSteadyStateState[i][8];
+                double productiveRatio = productiveHandleRatio(productive, wrk);
                 double tp = m.cycleStartSteadyStateThroughput[i];
 
                 tCompleted[idx] = comp;
                 tBatchSize[idx] = bs;
                 tUpstream[idx] = up;
                 tWorkers[idx] = wrk;
+                tProductive[idx] = productive;
+                tProductiveRatio[idx] = productiveRatio;
                 tRank[idx] = rk;
                 tContention[idx] = cnt;
                 tThroughput[idx] = tp;
@@ -312,9 +332,11 @@ public final class HighSpeedMetricsStatistics {
                     tData[idx][1] = bs;
                     tData[idx][2] = up;
                     tData[idx][3] = wrk;
-                    tData[idx][4] = rk;
-                    tData[idx][5] = cnt;
-                    tData[idx][6] = tp;
+                    tData[idx][4] = productive;
+                    tData[idx][5] = productiveRatio;
+                    tData[idx][6] = rk;
+                    tData[idx][7] = cnt;
+                    tData[idx][8] = tp;
                 }
             }
             tOffset += tLen;
@@ -329,12 +351,16 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.cycleStartWarmupState[i][5];
                     double rk = (double) m.cycleStartWarmupState[i][6];
                     double cnt = (double) m.cycleStartWarmupState[i][7];
+                    double productive = (double) m.cycleStartWarmupState[i][8];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double tp = m.cycleStartWarmupThroughput[i];
 
                     cCompleted[idx] = comp;
                     cBatchSize[idx] = bs;
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cThroughput[idx] = tp;
@@ -344,9 +370,11 @@ public final class HighSpeedMetricsStatistics {
                         cData[idx][1] = bs;
                         cData[idx][2] = up;
                         cData[idx][3] = wrk;
-                        cData[idx][4] = rk;
-                        cData[idx][5] = cnt;
-                        cData[idx][6] = tp;
+                        cData[idx][4] = productive;
+                        cData[idx][5] = productiveRatio;
+                        cData[idx][6] = rk;
+                        cData[idx][7] = cnt;
+                        cData[idx][8] = tp;
                     }
                 }
                 cOffset += hLen;
@@ -359,12 +387,16 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.cycleStartWarmupState[i][5];
                     double rk = (double) m.cycleStartWarmupState[i][6];
                     double cnt = (double) m.cycleStartWarmupState[i][7];
+                    double productive = (double) m.cycleStartWarmupState[i][8];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double tp = m.cycleStartWarmupThroughput[i];
 
                     cCompleted[idx] = comp;
                     cBatchSize[idx] = bs;
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cThroughput[idx] = tp;
@@ -374,9 +406,11 @@ public final class HighSpeedMetricsStatistics {
                         cData[idx][1] = bs;
                         cData[idx][2] = up;
                         cData[idx][3] = wrk;
-                        cData[idx][4] = rk;
-                        cData[idx][5] = cnt;
-                        cData[idx][6] = tp;
+                        cData[idx][4] = productive;
+                        cData[idx][5] = productiveRatio;
+                        cData[idx][6] = rk;
+                        cData[idx][7] = cnt;
+                        cData[idx][8] = tp;
                     }
                 }
                 cOffset += hLen;
@@ -388,12 +422,16 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.cycleStartSteadyStateState[i][5];
                     double rk = (double) m.cycleStartSteadyStateState[i][6];
                     double cnt = (double) m.cycleStartSteadyStateState[i][7];
+                    double productive = (double) m.cycleStartSteadyStateState[i][8];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double tp = m.cycleStartSteadyStateThroughput[i];
 
                     cCompleted[idx] = comp;
                     cBatchSize[idx] = bs;
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cThroughput[idx] = tp;
@@ -403,9 +441,11 @@ public final class HighSpeedMetricsStatistics {
                         cData[idx][1] = bs;
                         cData[idx][2] = up;
                         cData[idx][3] = wrk;
-                        cData[idx][4] = rk;
-                        cData[idx][5] = cnt;
-                        cData[idx][6] = tp;
+                        cData[idx][4] = productive;
+                        cData[idx][5] = productiveRatio;
+                        cData[idx][6] = rk;
+                        cData[idx][7] = cnt;
+                        cData[idx][8] = tp;
                     }
                 }
                 cOffset += tLen;
@@ -417,6 +457,8 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(hBatchSize),
                 ScalarSummary.of(hUpstream),
                 ScalarSummary.of(hWorkers),
+                ScalarSummary.of(hProductive),
+                ScalarSummary.of(hProductiveRatio),
                 ScalarSummary.of(hRank),
                 ScalarSummary.of(hContention),
                 ScalarSummary.of(hThroughput));
@@ -426,6 +468,8 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(tBatchSize),
                 ScalarSummary.of(tUpstream),
                 ScalarSummary.of(tWorkers),
+                ScalarSummary.of(tProductive),
+                ScalarSummary.of(tProductiveRatio),
                 ScalarSummary.of(tRank),
                 ScalarSummary.of(tContention),
                 ScalarSummary.of(tThroughput));
@@ -435,6 +479,8 @@ public final class HighSpeedMetricsStatistics {
                 ScalarSummary.of(cBatchSize),
                 ScalarSummary.of(cUpstream),
                 ScalarSummary.of(cWorkers),
+                ScalarSummary.of(cProductive),
+                ScalarSummary.of(cProductiveRatio),
                 ScalarSummary.of(cRank),
                 ScalarSummary.of(cContention),
                 ScalarSummary.of(cThroughput));
@@ -472,24 +518,30 @@ public final class HighSpeedMetricsStatistics {
 
         double[] hUpstream = new double[hTotalLen];
         double[] hWorkers = new double[hTotalLen];
+        double[] hProductive = new double[hTotalLen];
+        double[] hProductiveRatio = new double[hTotalLen];
         double[] hRank = new double[hTotalLen];
         double[] hContention = new double[hTotalLen];
         double[] hAvgService = new double[hTotalLen];
-        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][2] : new double[0][0];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][3] : new double[0][0];
 
         double[] tUpstream = new double[tTotalLen];
         double[] tWorkers = new double[tTotalLen];
+        double[] tProductive = new double[tTotalLen];
+        double[] tProductiveRatio = new double[tTotalLen];
         double[] tRank = new double[tTotalLen];
         double[] tContention = new double[tTotalLen];
         double[] tAvgService = new double[tTotalLen];
-        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][2] : new double[0][0];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][3] : new double[0][0];
 
         double[] cUpstream = new double[cTotalLen];
         double[] cWorkers = new double[cTotalLen];
+        double[] cProductive = new double[cTotalLen];
+        double[] cProductiveRatio = new double[cTotalLen];
         double[] cRank = new double[cTotalLen];
         double[] cContention = new double[cTotalLen];
         double[] cAvgService = new double[cTotalLen];
-        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][2] : new double[0][0];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
 
         int hOffset = 0;
         int tOffset = 0;
@@ -511,17 +563,22 @@ public final class HighSpeedMetricsStatistics {
                 double wrk = (double) m.batchProgressWarmupState[i][3];
                 double rk = (double) m.batchProgressWarmupState[i][4];
                 double cnt = (double) m.batchProgressWarmupState[i][5];
+                double productive = (double) m.batchProgressWarmupState[i][6];
+                double productiveRatio = productiveHandleRatio(productive, wrk);
                 double svc = m.batchProgressWarmupAvgServiceTime[i];
 
                 hUpstream[idx] = up;
                 hWorkers[idx] = wrk;
+                hProductive[idx] = productive;
+                hProductiveRatio[idx] = productiveRatio;
                 hRank[idx] = rk;
                 hContention[idx] = cnt;
                 hAvgService[idx] = svc;
 
                 if (hData.length > 0) {
                     hData[idx][0] = cnt;
-                    hData[idx][1] = svc;
+                    hData[idx][1] = productiveRatio;
+                    hData[idx][2] = svc;
                 }
             }
             hOffset += hLen;
@@ -533,17 +590,22 @@ public final class HighSpeedMetricsStatistics {
                 double wrk = (double) m.batchProgressSteadyStateState[i][3];
                 double rk = (double) m.batchProgressSteadyStateState[i][4];
                 double cnt = (double) m.batchProgressSteadyStateState[i][5];
+                double productive = (double) m.batchProgressSteadyStateState[i][6];
+                double productiveRatio = productiveHandleRatio(productive, wrk);
                 double svc = m.batchProgressSteadyStateAvgServiceTime[i];
 
                 tUpstream[idx] = up;
                 tWorkers[idx] = wrk;
+                tProductive[idx] = productive;
+                tProductiveRatio[idx] = productiveRatio;
                 tRank[idx] = rk;
                 tContention[idx] = cnt;
                 tAvgService[idx] = svc;
 
                 if (tData.length > 0) {
                     tData[idx][0] = cnt;
-                    tData[idx][1] = svc;
+                    tData[idx][1] = productiveRatio;
+                    tData[idx][2] = svc;
                 }
             }
             tOffset += tLen;
@@ -556,17 +618,22 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.batchProgressWarmupState[i][3];
                     double rk = (double) m.batchProgressWarmupState[i][4];
                     double cnt = (double) m.batchProgressWarmupState[i][5];
+                    double productive = (double) m.batchProgressWarmupState[i][6];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double svc = m.batchProgressWarmupAvgServiceTime[i];
 
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cAvgService[idx] = svc;
 
                     if (cData.length > 0) {
                         cData[idx][0] = cnt;
-                        cData[idx][1] = svc;
+                        cData[idx][1] = productiveRatio;
+                        cData[idx][2] = svc;
                     }
                 }
                 cOffset += hLen;
@@ -577,17 +644,22 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.batchProgressWarmupState[i][3];
                     double rk = (double) m.batchProgressWarmupState[i][4];
                     double cnt = (double) m.batchProgressWarmupState[i][5];
+                    double productive = (double) m.batchProgressWarmupState[i][6];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double svc = m.batchProgressWarmupAvgServiceTime[i];
 
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cAvgService[idx] = svc;
 
                     if (cData.length > 0) {
                         cData[idx][0] = cnt;
-                        cData[idx][1] = svc;
+                        cData[idx][1] = productiveRatio;
+                        cData[idx][2] = svc;
                     }
                 }
                 cOffset += hLen;
@@ -597,17 +669,22 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.batchProgressSteadyStateState[i][3];
                     double rk = (double) m.batchProgressSteadyStateState[i][4];
                     double cnt = (double) m.batchProgressSteadyStateState[i][5];
+                    double productive = (double) m.batchProgressSteadyStateState[i][6];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double svc = m.batchProgressSteadyStateAvgServiceTime[i];
 
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cAvgService[idx] = svc;
 
                     if (cData.length > 0) {
                         cData[idx][0] = cnt;
-                        cData[idx][1] = svc;
+                        cData[idx][1] = productiveRatio;
+                        cData[idx][2] = svc;
                     }
                 }
                 cOffset += tLen;
@@ -617,6 +694,8 @@ public final class HighSpeedMetricsStatistics {
         BatchProgressScalars headScalars = new BatchProgressScalars(
                 ScalarSummary.of(hUpstream),
                 ScalarSummary.of(hWorkers),
+                ScalarSummary.of(hProductive),
+                ScalarSummary.of(hProductiveRatio),
                 ScalarSummary.of(hRank),
                 ScalarSummary.of(hContention),
                 ScalarSummary.of(hAvgService));
@@ -624,6 +703,8 @@ public final class HighSpeedMetricsStatistics {
         BatchProgressScalars steadyStateScalars = new BatchProgressScalars(
                 ScalarSummary.of(tUpstream),
                 ScalarSummary.of(tWorkers),
+                ScalarSummary.of(tProductive),
+                ScalarSummary.of(tProductiveRatio),
                 ScalarSummary.of(tRank),
                 ScalarSummary.of(tContention),
                 ScalarSummary.of(tAvgService));
@@ -631,6 +712,8 @@ public final class HighSpeedMetricsStatistics {
         BatchProgressScalars combinedScalars = new BatchProgressScalars(
                 ScalarSummary.of(cUpstream),
                 ScalarSummary.of(cWorkers),
+                ScalarSummary.of(cProductive),
+                ScalarSummary.of(cProductiveRatio),
                 ScalarSummary.of(cRank),
                 ScalarSummary.of(cContention),
                 ScalarSummary.of(cAvgService));
@@ -669,27 +752,33 @@ public final class HighSpeedMetricsStatistics {
 
         double[] hUpstream = new double[hTotalLen];
         double[] hWorkers = new double[hTotalLen];
+        double[] hProductive = new double[hTotalLen];
+        double[] hProductiveRatio = new double[hTotalLen];
         double[] hRank = new double[hTotalLen];
         double[] hContention = new double[hTotalLen];
         double[] hAvgService = new double[hTotalLen];
         double[] hThroughput = new double[hTotalLen];
-        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][3] : new double[0][0];
+        double[][] hData = hTotalLen >= 2 ? new double[hTotalLen][4] : new double[0][0];
 
         double[] tUpstream = new double[tTotalLen];
         double[] tWorkers = new double[tTotalLen];
+        double[] tProductive = new double[tTotalLen];
+        double[] tProductiveRatio = new double[tTotalLen];
         double[] tRank = new double[tTotalLen];
         double[] tContention = new double[tTotalLen];
         double[] tAvgService = new double[tTotalLen];
         double[] tThroughput = new double[tTotalLen];
-        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][3] : new double[0][0];
+        double[][] tData = tTotalLen >= 2 ? new double[tTotalLen][4] : new double[0][0];
 
         double[] cUpstream = new double[cTotalLen];
         double[] cWorkers = new double[cTotalLen];
+        double[] cProductive = new double[cTotalLen];
+        double[] cProductiveRatio = new double[cTotalLen];
         double[] cRank = new double[cTotalLen];
         double[] cContention = new double[cTotalLen];
         double[] cAvgService = new double[cTotalLen];
         double[] cThroughput = new double[cTotalLen];
-        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
+        double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][4] : new double[0][0];
 
         int hOffset = 0;
         int tOffset = 0;
@@ -711,11 +800,15 @@ public final class HighSpeedMetricsStatistics {
                 double wrk = (double) m.batchCompleteWarmupState[i][3];
                 double rk = (double) m.batchCompleteWarmupState[i][4];
                 double cnt = (double) m.batchCompleteWarmupState[i][5];
+                double productive = (double) m.batchCompleteWarmupState[i][6];
+                double productiveRatio = productiveHandleRatio(productive, wrk);
                 double svc = m.batchCompleteWarmupAvgServiceTime[i];
                 double tp = m.batchCompleteWarmupThroughput[i];
 
                 hUpstream[idx] = up;
                 hWorkers[idx] = wrk;
+                hProductive[idx] = productive;
+                hProductiveRatio[idx] = productiveRatio;
                 hRank[idx] = rk;
                 hContention[idx] = cnt;
                 hAvgService[idx] = svc;
@@ -723,8 +816,9 @@ public final class HighSpeedMetricsStatistics {
 
                 if (hData.length > 0) {
                     hData[idx][0] = cnt;
-                    hData[idx][1] = svc;
-                    hData[idx][2] = tp;
+                    hData[idx][1] = productiveRatio;
+                    hData[idx][2] = svc;
+                    hData[idx][3] = tp;
                 }
             }
             hOffset += hLen;
@@ -736,11 +830,15 @@ public final class HighSpeedMetricsStatistics {
                 double wrk = (double) m.batchCompleteSteadyStateState[i][3];
                 double rk = (double) m.batchCompleteSteadyStateState[i][4];
                 double cnt = (double) m.batchCompleteSteadyStateState[i][5];
+                double productive = (double) m.batchCompleteSteadyStateState[i][6];
+                double productiveRatio = productiveHandleRatio(productive, wrk);
                 double svc = m.batchCompleteSteadyStateAvgServiceTime[i];
                 double tp = m.batchCompleteSteadyStateThroughput[i];
 
                 tUpstream[idx] = up;
                 tWorkers[idx] = wrk;
+                tProductive[idx] = productive;
+                tProductiveRatio[idx] = productiveRatio;
                 tRank[idx] = rk;
                 tContention[idx] = cnt;
                 tAvgService[idx] = svc;
@@ -748,8 +846,9 @@ public final class HighSpeedMetricsStatistics {
 
                 if (tData.length > 0) {
                     tData[idx][0] = cnt;
-                    tData[idx][1] = svc;
-                    tData[idx][2] = tp;
+                    tData[idx][1] = productiveRatio;
+                    tData[idx][2] = svc;
+                    tData[idx][3] = tp;
                 }
             }
             tOffset += tLen;
@@ -762,11 +861,15 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.batchCompleteWarmupState[i][3];
                     double rk = (double) m.batchCompleteWarmupState[i][4];
                     double cnt = (double) m.batchCompleteWarmupState[i][5];
+                    double productive = (double) m.batchCompleteWarmupState[i][6];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double svc = m.batchCompleteWarmupAvgServiceTime[i];
                     double tp = m.batchCompleteWarmupThroughput[i];
 
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cAvgService[idx] = svc;
@@ -774,8 +877,9 @@ public final class HighSpeedMetricsStatistics {
 
                     if (cData.length > 0) {
                         cData[idx][0] = cnt;
-                        cData[idx][1] = svc;
-                        cData[idx][2] = tp;
+                        cData[idx][1] = productiveRatio;
+                        cData[idx][2] = svc;
+                        cData[idx][3] = tp;
                     }
                 }
                 cOffset += hLen;
@@ -786,11 +890,15 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.batchCompleteWarmupState[i][3];
                     double rk = (double) m.batchCompleteWarmupState[i][4];
                     double cnt = (double) m.batchCompleteWarmupState[i][5];
+                    double productive = (double) m.batchCompleteWarmupState[i][6];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double svc = m.batchCompleteWarmupAvgServiceTime[i];
                     double tp = m.batchCompleteWarmupThroughput[i];
 
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cAvgService[idx] = svc;
@@ -798,8 +906,9 @@ public final class HighSpeedMetricsStatistics {
 
                     if (cData.length > 0) {
                         cData[idx][0] = cnt;
-                        cData[idx][1] = svc;
-                        cData[idx][2] = tp;
+                        cData[idx][1] = productiveRatio;
+                        cData[idx][2] = svc;
+                        cData[idx][3] = tp;
                     }
                 }
                 cOffset += hLen;
@@ -809,11 +918,15 @@ public final class HighSpeedMetricsStatistics {
                     double wrk = (double) m.batchCompleteSteadyStateState[i][3];
                     double rk = (double) m.batchCompleteSteadyStateState[i][4];
                     double cnt = (double) m.batchCompleteSteadyStateState[i][5];
+                    double productive = (double) m.batchCompleteSteadyStateState[i][6];
+                    double productiveRatio = productiveHandleRatio(productive, wrk);
                     double svc = m.batchCompleteSteadyStateAvgServiceTime[i];
                     double tp = m.batchCompleteSteadyStateThroughput[i];
 
                     cUpstream[idx] = up;
                     cWorkers[idx] = wrk;
+                    cProductive[idx] = productive;
+                    cProductiveRatio[idx] = productiveRatio;
                     cRank[idx] = rk;
                     cContention[idx] = cnt;
                     cAvgService[idx] = svc;
@@ -821,8 +934,9 @@ public final class HighSpeedMetricsStatistics {
 
                     if (cData.length > 0) {
                         cData[idx][0] = cnt;
-                        cData[idx][1] = svc;
-                        cData[idx][2] = tp;
+                        cData[idx][1] = productiveRatio;
+                        cData[idx][2] = svc;
+                        cData[idx][3] = tp;
                     }
                 }
                 cOffset += tLen;
@@ -832,6 +946,8 @@ public final class HighSpeedMetricsStatistics {
         BatchCompleteScalars headScalars = new BatchCompleteScalars(
                 ScalarSummary.of(hUpstream),
                 ScalarSummary.of(hWorkers),
+                ScalarSummary.of(hProductive),
+                ScalarSummary.of(hProductiveRatio),
                 ScalarSummary.of(hRank),
                 ScalarSummary.of(hContention),
                 ScalarSummary.of(hAvgService),
@@ -840,6 +956,8 @@ public final class HighSpeedMetricsStatistics {
         BatchCompleteScalars steadyStateScalars = new BatchCompleteScalars(
                 ScalarSummary.of(tUpstream),
                 ScalarSummary.of(tWorkers),
+                ScalarSummary.of(tProductive),
+                ScalarSummary.of(tProductiveRatio),
                 ScalarSummary.of(tRank),
                 ScalarSummary.of(tContention),
                 ScalarSummary.of(tAvgService),
@@ -848,6 +966,8 @@ public final class HighSpeedMetricsStatistics {
         BatchCompleteScalars combinedScalars = new BatchCompleteScalars(
                 ScalarSummary.of(cUpstream),
                 ScalarSummary.of(cWorkers),
+                ScalarSummary.of(cProductive),
+                ScalarSummary.of(cProductiveRatio),
                 ScalarSummary.of(cRank),
                 ScalarSummary.of(cContention),
                 ScalarSummary.of(cAvgService),

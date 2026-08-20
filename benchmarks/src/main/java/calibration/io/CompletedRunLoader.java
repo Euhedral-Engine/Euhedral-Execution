@@ -686,6 +686,8 @@ public final class CompletedRunLoader {
                 statsMap.getOrDefault(p + "batchSize", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "upstreamCount", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "registeredWorkers", ScalarSummary.EMPTY),
+                statsMap.getOrDefault(p + "productiveHandleCount", ScalarSummary.EMPTY),
+                statsMap.getOrDefault(p + "productiveHandleRatio", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "workerRank", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "contention", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "throughput", ScalarSummary.EMPTY));
@@ -696,6 +698,8 @@ public final class CompletedRunLoader {
         return new BatchProgressScalars(
                 statsMap.getOrDefault(p + "upstreamCount", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "registeredWorkers", ScalarSummary.EMPTY),
+                statsMap.getOrDefault(p + "productiveHandleCount", ScalarSummary.EMPTY),
+                statsMap.getOrDefault(p + "productiveHandleRatio", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "workerRank", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "contention", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "avgServiceTime", ScalarSummary.EMPTY));
@@ -706,6 +710,8 @@ public final class CompletedRunLoader {
         return new BatchCompleteScalars(
                 statsMap.getOrDefault(p + "upstreamCount", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "registeredWorkers", ScalarSummary.EMPTY),
+                statsMap.getOrDefault(p + "productiveHandleCount", ScalarSummary.EMPTY),
+                statsMap.getOrDefault(p + "productiveHandleRatio", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "workerRank", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "contention", ScalarSummary.EMPTY),
                 statsMap.getOrDefault(p + "avgServiceTime", ScalarSummary.EMPTY),

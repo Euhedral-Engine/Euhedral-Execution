@@ -220,8 +220,18 @@ class TrialExportTest {
         boolean foundFork = false;
         boolean foundIteration = false;
         boolean foundCore = false;
+        boolean foundProductiveRatio = false;
         for (String line : lines) {
             String[] tokens = line.split("\t");
+            if (tokens.length >= 8
+                    && tokens[0].equals("-1")
+                    && tokens[1].equals("FORK")
+                    && tokens[3].equals("batchComplete")
+                    && tokens[4].equals("steadyState")
+                    && tokens[5].equals("productiveHandleRatio")) {
+                foundProductiveRatio = true;
+                assertEquals("0.5", tokens[7]);
+            }
             if (tokens.length >= 6
                     && tokens[0].equals("-1")
                     && tokens[1].equals("FORK")
@@ -282,6 +292,7 @@ class TrialExportTest {
         assertTrue(foundFork);
         assertTrue(foundIteration);
         assertTrue(foundCore);
+        assertTrue(foundProductiveRatio);
 
         String expectedHash = computeSha256(tsv);
         String storedHash = Files.readString(checksum, StandardCharsets.UTF_8).trim();
@@ -423,9 +434,10 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 3 (FORK + ITERATION + CORE) * 3 segments * (7*7 + 2*2 + 3*3 + 3*3 + 3*3) = 1 + 3 * 3 * 80 = 721
+        // 1 header + 3 (FORK + ITERATION + CORE) * 3 segments * (9*9 + 3*3 + 4*4 + 3*3 + 3*3)
+        // = 1 + 3 * 3 * 124 = 1117
         // lines
-        assertEquals(721, lines.size());
+        assertEquals(1117, lines.size());
         assertEquals("iteration\tscope\tcore\tmetric\tsegment\tvariable1\tvariable2\tpearson\tspearman", lines.get(0));
 
         String expectedHash = computeSha256(tsv);

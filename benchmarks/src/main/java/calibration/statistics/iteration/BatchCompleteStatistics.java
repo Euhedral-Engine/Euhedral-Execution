@@ -13,7 +13,7 @@ public record BatchCompleteStatistics(
         @NonNull CorrelationResult steadyStateCorrelations,
         @NonNull CorrelationResult combinedCorrelations) {
 
-    public static final String[] COLUMN_NAMES = {"contention", "avgServiceTime", "throughput"};
+    public static final String[] COLUMN_NAMES = {"contention", "productiveHandleRatio", "avgServiceTime", "throughput"};
 
     public static final BatchCompleteStatistics EMPTY = new BatchCompleteStatistics(
             0L,

@@ -486,6 +486,16 @@ public final class SystemTelemetryComparisonCalculator {
                     bScalars.registeredWorkers(),
                     cScalars.registeredWorkers());
             putScalarIfAvailable(
+                    map,
+                    "cycleStart." + seg + ".productiveHandleCount",
+                    bScalars.productiveHandleCount(),
+                    cScalars.productiveHandleCount());
+            putScalarIfAvailable(
+                    map,
+                    "cycleStart." + seg + ".productiveHandleRatio",
+                    bScalars.productiveHandleRatio(),
+                    cScalars.productiveHandleRatio());
+            putScalarIfAvailable(
                     map, "cycleStart." + seg + ".workerRank", bScalars.workerRank(), cScalars.workerRank());
             putScalarIfAvailable(
                     map, "cycleStart." + seg + ".contention", bScalars.contention(), cScalars.contention());
@@ -516,6 +526,16 @@ public final class SystemTelemetryComparisonCalculator {
                     "batchProgress." + seg + ".registeredWorkers",
                     bScalars.registeredWorkers(),
                     cScalars.registeredWorkers());
+            putScalarIfAvailable(
+                    map,
+                    "batchProgress." + seg + ".productiveHandleCount",
+                    bScalars.productiveHandleCount(),
+                    cScalars.productiveHandleCount());
+            putScalarIfAvailable(
+                    map,
+                    "batchProgress." + seg + ".productiveHandleRatio",
+                    bScalars.productiveHandleRatio(),
+                    cScalars.productiveHandleRatio());
             putScalarIfAvailable(
                     map, "batchProgress." + seg + ".workerRank", bScalars.workerRank(), cScalars.workerRank());
             putScalarIfAvailable(
@@ -550,6 +570,16 @@ public final class SystemTelemetryComparisonCalculator {
                     "batchComplete." + seg + ".registeredWorkers",
                     bScalars.registeredWorkers(),
                     cScalars.registeredWorkers());
+            putScalarIfAvailable(
+                    map,
+                    "batchComplete." + seg + ".productiveHandleCount",
+                    bScalars.productiveHandleCount(),
+                    cScalars.productiveHandleCount());
+            putScalarIfAvailable(
+                    map,
+                    "batchComplete." + seg + ".productiveHandleRatio",
+                    bScalars.productiveHandleRatio(),
+                    cScalars.productiveHandleRatio());
             putScalarIfAvailable(
                     map, "batchComplete." + seg + ".workerRank", bScalars.workerRank(), cScalars.workerRank());
             putScalarIfAvailable(

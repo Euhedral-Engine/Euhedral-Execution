@@ -281,9 +281,9 @@ ForkCalculationResult
       +-- cores: List<CoreIterationResult> (per-core diagnostics)
 
 SystemForkResult / SystemIterationResult / CoreIterationResult
-+-- cycleStart: CycleStartStatistics (completed, batchSize, upstreamCount, workers, rank, contention, throughput)
-+-- batchProgress: BatchProgressStatistics (upstreamCount, workers, rank, contention, avgServiceTime)
-+-- batchComplete: BatchCompleteStatistics (upstreamCount, workers, rank, contention, avgServiceTime, throughput)
++-- cycleStart: CycleStartStatistics (completed, batchSize, upstreamCount, workers, productive handles/ratio, rank, contention, throughput)
++-- batchProgress: BatchProgressStatistics (upstreamCount, workers, productive handles/ratio, rank, contention, avgServiceTime)
++-- batchComplete: BatchCompleteStatistics (upstreamCount, workers, productive handles/ratio, rank, contention, avgServiceTime, throughput)
 +-- rawBodyCost: RawBodyCostStatistics (unfiltered frame body cost distributions)
 +-- idleDecisions: DecisionStatistics (idle policy occupancy, transitions, vector field, correlations)
 +-- execDecisions: DecisionStatistics (exec policy occupancy, transitions, vector field, correlations)
@@ -332,20 +332,23 @@ Sampled at the start of a fragment loop cycle.
   - `batchSize`: Batch size pulled in current cycle.
   - `upstreamCount`: Number of active upstream sources.
   - `registeredWorkers`: Active sibling workers on the shard.
+  - `productiveHandleCount`: Handles this worker last observed producing useful work.
+  - `productiveHandleRatio`: Productive handles divided by registered workers; this is explanatory
+    telemetry and is not a decision-tree input.
   - `workerRank`: Relative rank/index of this worker core.
   - `contention`: Measured queue/core contention.
   - `throughput`: Instantaneous operations/sec.
-- Includes cross-correlation matrices across all 7 variables for head, steady-state, and combined segments.
+- Includes cross-correlation matrices across all 9 variables for head, steady-state, and combined segments.
 
 #### 4. [`BatchProgressStatistics`](src/main/java/calibration/statistics/iteration/BatchProgressStatistics.java) & [`BatchProgressScalars`](src/main/java/calibration/statistics/iteration/BatchProgressScalars.java)
 Sampled during batch execution progress.
-- **Variables**: `upstreamCount`, `registeredWorkers`, `workerRank`, `contention`, and `avgServiceTime` (nanoseconds per frame).
-- Evaluates correlation between `contention` and `avgServiceTime`.
+- **Variables**: `upstreamCount`, `registeredWorkers`, `productiveHandleCount`, `productiveHandleRatio`, `workerRank`, `contention`, and `avgServiceTime` (nanoseconds per frame).
+- Evaluates correlations across `[contention, productiveHandleRatio, avgServiceTime]`.
 
 #### 5. [`BatchCompleteStatistics`](src/main/java/calibration/statistics/iteration/BatchCompleteStatistics.java) & [`BatchCompleteScalars`](src/main/java/calibration/statistics/iteration/BatchCompleteScalars.java)
 Sampled upon batch completion.
-- **Variables**: `upstreamCount`, `registeredWorkers`, `workerRank`, `contention`, `avgServiceTime`, `throughput`.
-- Evaluates correlations across `[contention, avgServiceTime, throughput]`.
+- **Variables**: `upstreamCount`, `registeredWorkers`, `productiveHandleCount`, `productiveHandleRatio`, `workerRank`, `contention`, `avgServiceTime`, `throughput`.
+- Evaluates correlations across `[contention, productiveHandleRatio, avgServiceTime, throughput]`.
 
 #### 6. [`RawBodyCostStatistics`](src/main/java/calibration/statistics/iteration/RawBodyCostStatistics.java)
 Captures raw, unfiltered execution body cost samples (execution time in nanoseconds/cycles) across

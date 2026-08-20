@@ -14,6 +14,7 @@ public abstract class FragmentObserver {
             long batchSize,
             long upstreamCount,
             int registeredWorkers,
+            long productiveHandleCount,
             int workerRank,
             long contention,
             double throughput);
@@ -28,6 +29,7 @@ public abstract class FragmentObserver {
             long batchEpoch,
             long upstreamCount,
             int registeredWorkers,
+            long productiveHandleCount,
             int workerRank,
             long contention,
             double avgServiceTime);
@@ -42,6 +44,7 @@ public abstract class FragmentObserver {
             long batchEpoch,
             long upstreamCount,
             int registeredWorkers,
+            long productiveHandleCount,
             int workerRank,
             long contention,
             double avgServiceTime,

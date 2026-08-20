@@ -246,6 +246,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                             this.state.batchSize,
                             newUpCount,
                             this.state.registeredWorkers,
+                            this.state.productiveHandleCount,
                             this.state.workerRank,
                             upstreamQueue.getContention(),
                             this.state.throughputRecorder.averageUnitsOverTime());
@@ -405,6 +406,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                         this.state.batchEpoch,
                         this.state.upstreamCount,
                         this.state.registeredWorkers,
+                        this.state.productiveHandleCount,
                         this.state.workerRank,
                         this.upstreamQueue.getContention(),
                         this.state.serviceTimeRecorder.averageUnits());
@@ -414,8 +416,10 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         int registeredWorkers = super.getThreadCount();
         int workerRank = super.getThreadRank(this.core);
+        long productiveHandleCount = this.state.productiveHandleCount;
 
         if (this.config.benchmarkMode()) {
+            productiveHandleCount = this.upstreamQueue.getProductiveHandleCount();
             this.observer.batchCompleteState(
                     this.core,
                     this.socket,
@@ -423,6 +427,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     this.state.batchEpoch,
                     this.state.upstreamCount,
                     registeredWorkers,
+                    productiveHandleCount,
                     workerRank,
                     upstreamQueue.getContention(),
                     this.state.serviceTimeRecorder.averageUnits(),
@@ -433,6 +438,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         this.state.completed = 0L;
         this.state.batchSize = this.controlPolicy.completeBatch(getBatchLimit());
         this.state.registeredWorkers = registeredWorkers;
+        if (this.config.benchmarkMode()) {
+            this.state.productiveHandleCount = productiveHandleCount;
+        }
         this.state.workerRank = workerRank;
         reportMetrics();
     }
@@ -606,6 +614,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         long upstreamCount = 0;
         int registeredWorkers = 0;
+        long productiveHandleCount = 0;
         int workerRank = -1;
 
         long cycleEpoch = -1;
@@ -620,6 +629,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.completed = 0;
             this.upstreamCount = 0;
             this.registeredWorkers = 0;
+            this.productiveHandleCount = 0;
             this.workerRank = -1;
             if (ControlPlaneFragment.this.upstreamQueue != null) {
                 ControlPlaneFragment.this.upstreamQueue.resetAcquireContention();

@@ -226,12 +226,27 @@ class HighSpeedMetricsStatisticsTest {
         CorrelationResult corr = result.cycleStart().headCorrelations();
 
         assertFalse(corr.isEmpty());
-        // completed (col 0) vs throughput (col 6) -> perfect linear positive correlation (1.0)
-        assertEquals(1.0, corr.pearsonMatrix()[0][6], EPSILON);
-        assertEquals(1.0, corr.spearmanMatrix()[0][6], EPSILON);
+        // completed (col 0) vs throughput (col 8) -> perfect linear positive correlation (1.0)
+        assertEquals(1.0, corr.pearsonMatrix()[0][8], EPSILON);
+        assertEquals(1.0, corr.spearmanMatrix()[0][8], EPSILON);
 
-        // batchSize (col 1) vs contention (col 5) -> 1.0
-        assertEquals(1.0, corr.pearsonMatrix()[1][5], EPSILON);
+        // batchSize (col 1) vs contention (col 7) -> 1.0
+        assertEquals(1.0, corr.pearsonMatrix()[1][7], EPSILON);
+    }
+
+    @Test
+    void testProductiveHandleRatioIsCalculatedPerObservationWithoutCapping() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(16);
+        metrics.recordCycleStart(1, 1, 10, 20, 6, 4, 3, 0, 100, 1_000.0);
+        metrics.recordCycleStart(2, 2, 20, 20, 6, 4, 5, 0, 200, 2_000.0);
+        metrics.recordBatchComplete(2, 2, 6, 4, 5, 0, 200, 20.0, 2_000.0);
+
+        CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
+
+        assertEquals(4.0, result.cycleStart().combined().productiveHandleCount().mean(), EPSILON);
+        assertEquals(1.0, result.cycleStart().combined().productiveHandleRatio().mean(), EPSILON);
+        assertEquals(
+                1.25, result.batchComplete().combined().productiveHandleRatio().mean(), EPSILON);
     }
 
     @Test
@@ -673,8 +688,8 @@ class HighSpeedMetricsStatisticsTest {
 
         assertFalse(corr.isEmpty());
         // completed vs throughput across 6 points with perfect linear relationship
-        assertEquals(1.0, corr.pearsonMatrix()[0][6], EPSILON);
-        assertEquals(1.0, corr.spearmanMatrix()[0][6], EPSILON);
+        assertEquals(1.0, corr.pearsonMatrix()[0][8], EPSILON);
+        assertEquals(1.0, corr.spearmanMatrix()[0][8], EPSILON);
     }
 
     @Test
@@ -945,8 +960,8 @@ class HighSpeedMetricsStatisticsTest {
         CorrelationResult corr = fork.cycleStart().headCorrelations();
 
         assertFalse(corr.isEmpty());
-        assertEquals(1.0, corr.pearsonMatrix()[0][6], EPSILON);
-        assertEquals(1.0, corr.spearmanMatrix()[0][6], EPSILON);
+        assertEquals(1.0, corr.pearsonMatrix()[0][8], EPSILON);
+        assertEquals(1.0, corr.spearmanMatrix()[0][8], EPSILON);
     }
 
     @Test

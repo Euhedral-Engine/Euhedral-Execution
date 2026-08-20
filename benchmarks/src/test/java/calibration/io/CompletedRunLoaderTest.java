@@ -248,6 +248,10 @@ class CompletedRunLoaderTest {
         assertEquals(Band.TOTAL_STATES, sys.idleHeadTransitions().transitionCounts().length);
         assertEquals(Band.GRID_SIZE, sys.idleHeadVectorField().grid().length);
         assertNotNull(sys.cycleStart().headCorrelations().pearsonMatrix());
+        assertEquals(
+                2.0, sys.batchComplete().steadyState().productiveHandleCount().mean());
+        assertEquals(
+                0.5, sys.batchComplete().steadyState().productiveHandleRatio().mean());
     }
 
     @Test

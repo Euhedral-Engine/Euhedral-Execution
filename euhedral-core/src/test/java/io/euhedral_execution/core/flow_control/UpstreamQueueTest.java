@@ -114,6 +114,62 @@ class UpstreamQueueTest {
 
         assertEquals(1L, queue.getCachedUpCount());
         assertEquals(1L, queue.getTrueUpstreamCount());
+        assertEquals(0L, queue.getProductiveHandleCount());
+    }
+
+    @Test
+    void shouldInitiallyClassifyLiveHandlesAsProductive() {
+        addHandle();
+        addHandle();
+
+        assertEquals(2L, queue.getProductiveHandleCount());
+    }
+
+    @Test
+    void shouldRestoreProductivityAfterUsefulWorkReturns() {
+        TestUpstreamHandle upstream = addHandle();
+        upstream.pullResult = 0L;
+
+        assertEquals(0L, queue.pull(frame -> {}, frame -> false, 64L));
+        assertEquals(0L, queue.getProductiveHandleCount());
+
+        upstream.pullResult = -1L;
+
+        assertEquals(64L, queue.pull(frame -> {}, frame -> false, 64L));
+        assertEquals(1L, queue.getProductiveHandleCount());
+        assertEquals(0L, queue.nonproductiveCount);
+    }
+
+    @Test
+    void shouldNotTreatRequestOnlyServiceAsEmptyPullEvidence() {
+        TestUpstreamHandle upstream = addHandle();
+
+        queue.request(64L);
+        assertEquals(1L, queue.getProductiveHandleCount());
+
+        upstream.pullResult = 0L;
+        queue.pull(frame -> {}, frame -> false, 64L);
+        queue.request(64L);
+
+        assertEquals(0L, queue.getProductiveHandleCount());
+    }
+
+    @Test
+    void shouldUseFlowThreadEvidenceForSynchronousRequestProduction() {
+        CachedQueueFixture fixture = cachedQueueFixture();
+        TestFrame frame = new TestFrame("requested");
+        frame.randomizeHash(1L);
+        fixture.sink.offer(frame);
+
+        try {
+            fixture.queue.request(64L);
+
+            assertEquals(1L, this.flowContext.satisfiedRequest);
+            assertEquals(0L, fixture.sink.size());
+            assertEquals(1L, fixture.queue.getProductiveHandleCount());
+        } finally {
+            fixture.vertex.close();
+        }
     }
 
     @Test
@@ -278,6 +334,33 @@ class UpstreamQueueTest {
     }
 
     @Test
+    void shouldReconcileCompletedNonproductiveHandle() {
+        TestUpstreamHandle productive = addHandle();
+        TestUpstreamHandle nonproductive = addHandle();
+        nonproductive.pullResult = 0L;
+        queue.pull(frame -> {}, frame -> false, 4_096L);
+        assertEquals(1L, queue.getProductiveHandleCount());
+
+        nonproductive.complete(count);
+
+        assertEquals(1L, queue.getProductiveHandleCount());
+        assertEquals(1L, queue.getTrueUpstreamCount());
+        assertTrue(productive.isProductive());
+    }
+
+    @Test
+    void shouldPreserveProductivityWhenStopConditionPreventsObservation() {
+        QueueFixture fixture = queueFixture();
+        fixture.sink.offer(new TestFrame("blocked"));
+
+        assertEquals(0L, fixture.queue.pull(frame -> {}, frame -> true, 64L));
+
+        assertEquals(0L, this.flowContext.satisfiedPull);
+        assertEquals(1L, fixture.sink.size());
+        assertEquals(1L, fixture.queue.getProductiveHandleCount());
+    }
+
+    @Test
     void shouldReportQueueSignal() {
         QueueFixture productive = queueFixture();
         QueueFixture empty = queueFixture();
@@ -291,6 +374,7 @@ class UpstreamQueueTest {
         assertEquals(1L, combined.pull(frame -> {}, LatticeVertex.NO_STOP, 4_096L));
 
         assertEquals(2L, combined.getTrueUpstreamCount());
+        assertEquals(1L, combined.getProductiveHandleCount());
         assertFalse(empty.sink.isComplete());
         assertEquals(0L, empty.sink.size());
     }
@@ -420,6 +504,16 @@ class UpstreamQueueTest {
         @Override
         public boolean isComplete() {
             return complete;
+        }
+
+        @Override
+        public boolean isProductive() {
+            return this.productive;
+        }
+
+        @Override
+        public void setProductivity(boolean productive) {
+            this.productive = productive;
         }
 
         void complete(PaddedAtomicLong count) {

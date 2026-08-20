@@ -41,6 +41,7 @@ public class BenchmarkObserver extends FragmentObserver {
             long batchSize,
             long upstreamCount,
             int registeredWorkers,
+            long productiveHandleCount,
             int workerRank,
             long contention,
             double throughput) {
@@ -59,6 +60,7 @@ public class BenchmarkObserver extends FragmentObserver {
                 batchSize,
                 upstreamCount,
                 registeredWorkers,
+                productiveHandleCount,
                 workerRank,
                 contention,
                 throughput);
@@ -72,6 +74,7 @@ public class BenchmarkObserver extends FragmentObserver {
             long batchEpoch,
             long upstreamCount,
             int registeredWorkers,
+            long productiveHandleCount,
             int workerRank,
             long contention,
             double avgServiceTime) {
@@ -84,7 +87,14 @@ public class BenchmarkObserver extends FragmentObserver {
             return;
         }
         coreMetrics.recordBatchProgress(
-                cycleEpoch, batchEpoch, upstreamCount, registeredWorkers, workerRank, contention, avgServiceTime);
+                cycleEpoch,
+                batchEpoch,
+                upstreamCount,
+                registeredWorkers,
+                productiveHandleCount,
+                workerRank,
+                contention,
+                avgServiceTime);
     }
 
     @Override
@@ -95,6 +105,7 @@ public class BenchmarkObserver extends FragmentObserver {
             long batchEpoch,
             long upstreamCount,
             int registeredWorkers,
+            long productiveHandleCount,
             int workerRank,
             long contention,
             double avgServiceTime,
@@ -112,6 +123,7 @@ public class BenchmarkObserver extends FragmentObserver {
                 batchEpoch,
                 upstreamCount,
                 registeredWorkers,
+                productiveHandleCount,
                 workerRank,
                 contention,
                 avgServiceTime,
@@ -235,20 +247,20 @@ public class BenchmarkObserver extends FragmentObserver {
             this.rawSampleLimit = rawSampleLimit;
             this.mask = rawSampleLimit - 1;
 
-            this.cycleStartWarmupState = new long[rawSampleLimit][8];
+            this.cycleStartWarmupState = new long[rawSampleLimit][9];
             this.cycleStartWarmupThroughput = new double[rawSampleLimit];
-            this.cycleStartSteadyStateState = new long[rawSampleLimit][8];
+            this.cycleStartSteadyStateState = new long[rawSampleLimit][9];
             this.cycleStartSteadyStateThroughput = new double[rawSampleLimit];
 
-            this.batchProgressWarmupState = new long[rawSampleLimit][6];
+            this.batchProgressWarmupState = new long[rawSampleLimit][7];
             this.batchProgressWarmupAvgServiceTime = new double[rawSampleLimit];
-            this.batchProgressSteadyStateState = new long[rawSampleLimit][6];
+            this.batchProgressSteadyStateState = new long[rawSampleLimit][7];
             this.batchProgressSteadyStateAvgServiceTime = new double[rawSampleLimit];
 
-            this.batchCompleteWarmupState = new long[rawSampleLimit][6];
+            this.batchCompleteWarmupState = new long[rawSampleLimit][7];
             this.batchCompleteWarmupAvgServiceTime = new double[rawSampleLimit];
             this.batchCompleteWarmupThroughput = new double[rawSampleLimit];
-            this.batchCompleteSteadyStateState = new long[rawSampleLimit][6];
+            this.batchCompleteSteadyStateState = new long[rawSampleLimit][7];
             this.batchCompleteSteadyStateAvgServiceTime = new double[rawSampleLimit];
             this.batchCompleteSteadyStateThroughput = new double[rawSampleLimit];
 
@@ -276,6 +288,30 @@ public class BenchmarkObserver extends FragmentObserver {
                 int workerRank,
                 long contention,
                 double throughput) {
+            recordCycleStart(
+                    cycleEpoch,
+                    batchEpoch,
+                    completed,
+                    batchSize,
+                    upstreamCount,
+                    registeredWorkers,
+                    upstreamCount,
+                    workerRank,
+                    contention,
+                    throughput);
+        }
+
+        public void recordCycleStart(
+                long cycleEpoch,
+                long batchEpoch,
+                long completed,
+                long batchSize,
+                long upstreamCount,
+                int registeredWorkers,
+                long productiveHandleCount,
+                int workerRank,
+                long contention,
+                double throughput) {
             int idx = (int) (cycleStartObservations & this.mask);
             if (cycleStartObservations++ < rawSampleLimit) {
                 cycleStartWarmupState[idx][0] = cycleEpoch;
@@ -286,6 +322,7 @@ public class BenchmarkObserver extends FragmentObserver {
                 cycleStartWarmupState[idx][5] = registeredWorkers;
                 cycleStartWarmupState[idx][6] = workerRank;
                 cycleStartWarmupState[idx][7] = contention;
+                cycleStartWarmupState[idx][8] = productiveHandleCount;
                 cycleStartWarmupThroughput[idx] = throughput;
             }
             cycleStartSteadyStateState[idx][0] = cycleEpoch;
@@ -296,6 +333,7 @@ public class BenchmarkObserver extends FragmentObserver {
             cycleStartSteadyStateState[idx][5] = registeredWorkers;
             cycleStartSteadyStateState[idx][6] = workerRank;
             cycleStartSteadyStateState[idx][7] = contention;
+            cycleStartSteadyStateState[idx][8] = productiveHandleCount;
             cycleStartSteadyStateThroughput[idx] = throughput;
         }
 
@@ -307,6 +345,26 @@ public class BenchmarkObserver extends FragmentObserver {
                 int workerRank,
                 long contention,
                 double avgServiceTime) {
+            recordBatchProgress(
+                    cycleEpoch,
+                    batchEpoch,
+                    upstreamCount,
+                    registeredWorkers,
+                    upstreamCount,
+                    workerRank,
+                    contention,
+                    avgServiceTime);
+        }
+
+        public void recordBatchProgress(
+                long cycleEpoch,
+                long batchEpoch,
+                long upstreamCount,
+                int registeredWorkers,
+                long productiveHandleCount,
+                int workerRank,
+                long contention,
+                double avgServiceTime) {
             int idx = (int) (batchProgressObservations & this.mask);
             if (batchProgressObservations++ < rawSampleLimit) {
                 batchProgressWarmupState[idx][0] = cycleEpoch;
@@ -315,6 +373,7 @@ public class BenchmarkObserver extends FragmentObserver {
                 batchProgressWarmupState[idx][3] = registeredWorkers;
                 batchProgressWarmupState[idx][4] = workerRank;
                 batchProgressWarmupState[idx][5] = contention;
+                batchProgressWarmupState[idx][6] = productiveHandleCount;
                 batchProgressWarmupAvgServiceTime[idx] = avgServiceTime;
             }
             batchProgressSteadyStateState[idx][0] = cycleEpoch;
@@ -323,6 +382,7 @@ public class BenchmarkObserver extends FragmentObserver {
             batchProgressSteadyStateState[idx][3] = registeredWorkers;
             batchProgressSteadyStateState[idx][4] = workerRank;
             batchProgressSteadyStateState[idx][5] = contention;
+            batchProgressSteadyStateState[idx][6] = productiveHandleCount;
             batchProgressSteadyStateAvgServiceTime[idx] = avgServiceTime;
         }
 
@@ -335,6 +395,28 @@ public class BenchmarkObserver extends FragmentObserver {
                 long contention,
                 double avgServiceTime,
                 double throughput) {
+            recordBatchComplete(
+                    cycleEpoch,
+                    batchEpoch,
+                    upstreamCount,
+                    registeredWorkers,
+                    upstreamCount,
+                    workerRank,
+                    contention,
+                    avgServiceTime,
+                    throughput);
+        }
+
+        public void recordBatchComplete(
+                long cycleEpoch,
+                long batchEpoch,
+                long upstreamCount,
+                int registeredWorkers,
+                long productiveHandleCount,
+                int workerRank,
+                long contention,
+                double avgServiceTime,
+                double throughput) {
             int idx = (int) (batchCompleteObservations & this.mask);
             if (batchCompleteObservations++ < rawSampleLimit) {
                 batchCompleteWarmupState[idx][0] = cycleEpoch;
@@ -343,6 +425,7 @@ public class BenchmarkObserver extends FragmentObserver {
                 batchCompleteWarmupState[idx][3] = registeredWorkers;
                 batchCompleteWarmupState[idx][4] = workerRank;
                 batchCompleteWarmupState[idx][5] = contention;
+                batchCompleteWarmupState[idx][6] = productiveHandleCount;
                 batchCompleteWarmupAvgServiceTime[idx] = avgServiceTime;
                 batchCompleteWarmupThroughput[idx] = throughput;
             }
@@ -352,6 +435,7 @@ public class BenchmarkObserver extends FragmentObserver {
             batchCompleteSteadyStateState[idx][3] = registeredWorkers;
             batchCompleteSteadyStateState[idx][4] = workerRank;
             batchCompleteSteadyStateState[idx][5] = contention;
+            batchCompleteSteadyStateState[idx][6] = productiveHandleCount;
             batchCompleteSteadyStateAvgServiceTime[idx] = avgServiceTime;
             batchCompleteSteadyStateThroughput[idx] = throughput;
         }

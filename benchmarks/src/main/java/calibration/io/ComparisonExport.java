@@ -800,6 +800,8 @@ public final class ComparisonExport {
             case "batchSize" -> "batch_size";
             case "upstreamCount" -> "upstream_count";
             case "registeredWorkers" -> "registered_workers";
+            case "productiveHandleCount" -> "productive_handle_count";
+            case "productiveHandleRatio" -> "productive_handle_ratio";
             case "workerRank" -> "worker_rank";
             case "avgServiceTime" -> "avg_service_time";
             case "smoothedBodyCost" -> "smoothed_body_cost";

@@ -40,6 +40,7 @@ public class UpstreamQueue {
     private final PaddedAtomicLong upstreamCount;
     private final AverageFlow acquireContention = new AverageFlow();
     long cachedUpCount = 0L;
+    long nonproductiveCount = 0L;
 
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
@@ -112,6 +113,16 @@ public class UpstreamQueue {
         this.acquireContention.reset();
     }
 
+    /// Returns live handles minus handles this worker last observed as nonproductive.
+    ///
+    /// New handles are optimistic until this worker services them. Completed handles are reconciled
+    /// from this owner-local queue; no productivity state is published between workers.
+    public long getProductiveHandleCount() {
+        getTrueUpstreamCount();
+        removeCompletedHandles();
+        return this.cachedUpCount - Math.min(this.cachedUpCount, this.nonproductiveCount);
+    }
+
     public void request(long demand) {
         pull(null, null, demand);
     }
@@ -142,9 +153,11 @@ public class UpstreamQueue {
                 continue;
             }
             if (handle.isComplete()) {
+                observeRemoval(handle);
                 continue;
             }
 
+            boolean wasProductive = handle.isProductive();
             attempts++;
             if (!handle.acquireLock()) {
                 failedAcquires++;
@@ -154,6 +167,7 @@ public class UpstreamQueue {
             }
 
             try {
+                long requestBefore = context == null || consumer != null ? 0L : context.satisfiedRequest;
                 long request = Math.min(limit, bucketSize);
                 limit -= request;
 
@@ -161,6 +175,25 @@ public class UpstreamQueue {
                 totalPull += drainCount;
                 if (context != null) {
                     context.satisfiedPull += drainCount;
+                }
+
+                if (consumer == null) {
+                    if (context != null && context.satisfiedRequest != requestBefore) {
+                        handle.setProductivity(true);
+                    } else if (!handle.isProductive()) {
+                        // Request has no empty-source result. Without a synchronous push, it
+                        // supplies no new evidence and retains the worker's prior observation.
+                        handle.setProductivity(wasProductive);
+                    }
+                }
+
+                boolean produced = handle.isProductive();
+                if (!wasProductive && produced) {
+                    if (this.nonproductiveCount > 0L) {
+                        this.nonproductiveCount--;
+                    }
+                } else if (wasProductive && !produced) {
+                    this.nonproductiveCount++;
                 }
             } finally {
                 handle.releaseLock();
@@ -226,10 +259,17 @@ public class UpstreamQueue {
             }
             queued--;
             if (handle.isComplete()) {
+                observeRemoval(handle);
                 surplus--;
             } else {
                 this.upstreams.offer(handle);
             }
+        }
+    }
+
+    private void observeRemoval(UpstreamHandle handle) {
+        if (!handle.isProductive() && this.nonproductiveCount > 0L) {
+            this.nonproductiveCount--;
         }
     }
 
@@ -267,5 +307,13 @@ public class UpstreamQueue {
         }
 
         public void releaseLock() {}
+
+        /// Returns this worker's last observation of whether the handle produced useful work.
+        public boolean isProductive() {
+            return true;
+        }
+
+        /// Sets this worker's plain observation after classifying one acquired service.
+        public void setProductivity(boolean productive) {}
     }
 }

@@ -283,6 +283,24 @@ public final class TrialExport {
             writeScalarSummaryRow(writer, iter, scope, core, "cycleStart", segment, "upstreamCount", s.upstreamCount());
             writeScalarSummaryRow(
                     writer, iter, scope, core, "cycleStart", segment, "registeredWorkers", s.registeredWorkers());
+            writeScalarSummaryRow(
+                    writer,
+                    iter,
+                    scope,
+                    core,
+                    "cycleStart",
+                    segment,
+                    "productiveHandleCount",
+                    s.productiveHandleCount());
+            writeScalarSummaryRow(
+                    writer,
+                    iter,
+                    scope,
+                    core,
+                    "cycleStart",
+                    segment,
+                    "productiveHandleRatio",
+                    s.productiveHandleRatio());
             writeScalarSummaryRow(writer, iter, scope, core, "cycleStart", segment, "workerRank", s.workerRank());
             writeScalarSummaryRow(writer, iter, scope, core, "cycleStart", segment, "contention", s.contention());
             writeScalarSummaryRow(writer, iter, scope, core, "cycleStart", segment, "throughput", s.throughput());
@@ -299,6 +317,24 @@ public final class TrialExport {
                     writer, iter, scope, core, "batchProgress", segment, "upstreamCount", s.upstreamCount());
             writeScalarSummaryRow(
                     writer, iter, scope, core, "batchProgress", segment, "registeredWorkers", s.registeredWorkers());
+            writeScalarSummaryRow(
+                    writer,
+                    iter,
+                    scope,
+                    core,
+                    "batchProgress",
+                    segment,
+                    "productiveHandleCount",
+                    s.productiveHandleCount());
+            writeScalarSummaryRow(
+                    writer,
+                    iter,
+                    scope,
+                    core,
+                    "batchProgress",
+                    segment,
+                    "productiveHandleRatio",
+                    s.productiveHandleRatio());
             writeScalarSummaryRow(writer, iter, scope, core, "batchProgress", segment, "workerRank", s.workerRank());
             writeScalarSummaryRow(writer, iter, scope, core, "batchProgress", segment, "contention", s.contention());
             writeScalarSummaryRow(
@@ -316,6 +352,24 @@ public final class TrialExport {
                     writer, iter, scope, core, "batchComplete", segment, "upstreamCount", s.upstreamCount());
             writeScalarSummaryRow(
                     writer, iter, scope, core, "batchComplete", segment, "registeredWorkers", s.registeredWorkers());
+            writeScalarSummaryRow(
+                    writer,
+                    iter,
+                    scope,
+                    core,
+                    "batchComplete",
+                    segment,
+                    "productiveHandleCount",
+                    s.productiveHandleCount());
+            writeScalarSummaryRow(
+                    writer,
+                    iter,
+                    scope,
+                    core,
+                    "batchComplete",
+                    segment,
+                    "productiveHandleRatio",
+                    s.productiveHandleRatio());
             writeScalarSummaryRow(writer, iter, scope, core, "batchComplete", segment, "workerRank", s.workerRank());
             writeScalarSummaryRow(writer, iter, scope, core, "batchComplete", segment, "contention", s.contention());
             writeScalarSummaryRow(
