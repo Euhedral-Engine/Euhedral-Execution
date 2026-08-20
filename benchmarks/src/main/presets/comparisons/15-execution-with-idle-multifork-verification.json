@@ -1,0 +1,45 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "direct-2core-multifork-sweep",
+    "runs": [
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__0_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__1_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__2_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__3_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__4_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__5_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__6_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__7_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__8_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/direct-2core-multifork-base__direct-2core-multifork-sweep__9_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "staged-2core-multifork-sweep",
+    "runs": [
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__0_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__1_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__2_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__3_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__4_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__5_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__6_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__7_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__8_repeat_0",
+      "experiments/15-execution-with-idle-multifork-verification/staged-2core-multifork-base__staged-2core-multifork-sweep__9_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits",
+      "/calibrationConfig/parallelSources"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/15-execution-with-idle-multifork-verification/comparisons"
+}
