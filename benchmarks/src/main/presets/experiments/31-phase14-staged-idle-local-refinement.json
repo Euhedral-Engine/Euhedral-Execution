@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "id": "31-phase14-staged-idle-local-refinement",
+  "name": "Phase 14 STAGED Follower Idle Local Refinement",
+  "description": "Refines the Case B STAGED idle response around the coarse 5000 ns winner using 2000, 3500, 5000, 7500, and 10000 ns treatments in a ten-block balanced Williams design.",
+  "labels": {
+    "preset": "phase14-staged-idle-local-refinement",
+    "phase": "14",
+    "coarseOutcome": "case-b"
+  },
+  "imports": [
+    {
+      "path": "../profiles/phase-14-execution-idle-coarse.json",
+      "namespace": "phase14"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "randomSeed": 311405,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/31-phase14-staged-idle-local-refinement",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "phase14-refine-block-1",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order A B E C D: 2000, 3500, 10000, 5000, 7500 ns.",
+      "labels": {"block": "1", "order": "A-B-E-C-D"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-2",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order B C A D E: 3500, 5000, 2000, 7500, 10000 ns.",
+      "labels": {"block": "2", "order": "B-C-A-D-E"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-3",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order C D B E A: 5000, 7500, 3500, 10000, 2000 ns.",
+      "labels": {"block": "3", "order": "C-D-B-E-A"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-4",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order D E C A B: 7500, 10000, 5000, 2000, 3500 ns.",
+      "labels": {"block": "4", "order": "D-E-C-A-B"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-5",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order E A D B C: 10000, 2000, 7500, 3500, 5000 ns.",
+      "labels": {"block": "5", "order": "E-A-D-B-C"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-6",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order D C E B A: 7500, 5000, 10000, 3500, 2000 ns.",
+      "labels": {"block": "6", "order": "D-C-E-B-A"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-7",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order E D A C B: 10000, 7500, 2000, 5000, 3500 ns.",
+      "labels": {"block": "7", "order": "E-D-A-C-B"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-8",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order A E B D C: 2000, 10000, 3500, 7500, 5000 ns.",
+      "labels": {"block": "8", "order": "A-E-B-D-C"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-9",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order B A C E D: 3500, 2000, 5000, 10000, 7500 ns.",
+      "labels": {"block": "9", "order": "B-A-C-E-D"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}]
+      ]}]
+    },
+    {
+      "id": "phase14-refine-block-10",
+      "baseTrialId": "phase14-refine-base",
+      "description": "Order C B D A E: 5000, 3500, 7500, 2000, 10000 ns.",
+      "labels": {"block": "10", "order": "C-B-D-A-E"},
+      "parameters": [{"path": "/calibrationConfig/decisionWeights/idleTimeNs", "values": [
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}, {"xsPark": 5000, "sPark": 5000, "mPark": 5000, "hPark": 5000, "xhPark": 5000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}, {"xsPark": 3500, "sPark": 3500, "mPark": 3500, "hPark": 3500, "xhPark": 3500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}, {"xsPark": 7500, "sPark": 7500, "mPark": 7500, "hPark": 7500, "xhPark": 7500}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}, {"xsPark": 2000, "sPark": 2000, "mPark": 2000, "hPark": 2000, "xhPark": 2000}],
+        [{"xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}, {"xsPark": 10000, "sPark": 10000, "mPark": 10000, "hPark": 10000, "xhPark": 10000}]
+      ]}]
+    }
+  ],
+  "trials": [
+    {
+      "id": "phase14-refine-base",
+      "name": "Phase 14 STAGED Idle Refinement Base",
+      "group": "phase14-staged-idle-refinement",
+      "description": "Known eight-E-core, four-source, deterministic M-body anchor with fixed STAGED execution and FLOOR/2048 pull bucketing.",
+      "hypothesis": "A stable throughput plateau exists around the coarse 5000 ns STAGED follower-idle winner.",
+      "tags": ["phase14", "idle-refinement", "staged", "ecore", "m-body"],
+      "labels": {"phase": "14", "fixture": "ecore-8w-4src-m-body", "executionAction": "STAGED"},
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 5,
+      "warmupTime": "2s",
+      "measurementTime": "3s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "phase14.staged-5000ns"
+    }
+  ]
+}

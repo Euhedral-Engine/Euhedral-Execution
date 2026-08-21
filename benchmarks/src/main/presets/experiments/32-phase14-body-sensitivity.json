@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "id": "32-phase14-body-sensitivity",
+  "name": "Phase 14 High-Contention Body Sensitivity",
+  "description": "Checks whether the STAGED-over-DIRECT action relationship at 5000 ns follower idle transfers from the retained M-body anchor to calibrated S- and H-body neighbors.",
+  "labels": {
+    "preset": "phase14-body-sensitivity",
+    "phase": "14",
+    "coarseOutcome": "case-b",
+    "selectedIdleDurationNs": "5000"
+  },
+  "imports": [
+    {
+      "path": "../profiles/phase-14-body-sensitivity.json",
+      "namespace": "phase14body"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "randomSeed": 321405,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/32-phase14-body-sensitivity",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "trials": [
+    {"id": "phase14-body-block-1-direct-s", "labels": {"block": "1", "position": "1", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+    {"id": "phase14-body-block-1-staged-s", "labels": {"block": "1", "position": "2", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+    {"id": "phase14-body-block-1-staged-h", "labels": {"block": "1", "position": "3", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+    {"id": "phase14-body-block-1-direct-h", "labels": {"block": "1", "position": "4", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+
+    {"id": "phase14-body-block-2-staged-s", "labels": {"block": "2", "position": "1", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+    {"id": "phase14-body-block-2-direct-h", "labels": {"block": "2", "position": "2", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+    {"id": "phase14-body-block-2-direct-s", "labels": {"block": "2", "position": "3", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+    {"id": "phase14-body-block-2-staged-h", "labels": {"block": "2", "position": "4", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+
+    {"id": "phase14-body-block-3-direct-h", "labels": {"block": "3", "position": "1", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+    {"id": "phase14-body-block-3-staged-h", "labels": {"block": "3", "position": "2", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+    {"id": "phase14-body-block-3-staged-s", "labels": {"block": "3", "position": "3", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+    {"id": "phase14-body-block-3-direct-s", "labels": {"block": "3", "position": "4", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+
+    {"id": "phase14-body-block-4-staged-h", "labels": {"block": "4", "position": "1", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+    {"id": "phase14-body-block-4-direct-s", "labels": {"block": "4", "position": "2", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+    {"id": "phase14-body-block-4-direct-h", "labels": {"block": "4", "position": "3", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+    {"id": "phase14-body-block-4-staged-s", "labels": {"block": "4", "position": "4", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+
+    {"id": "phase14-body-block-5-direct-s", "labels": {"block": "5", "position": "1", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+    {"id": "phase14-body-block-5-staged-s", "labels": {"block": "5", "position": "2", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+    {"id": "phase14-body-block-5-staged-h", "labels": {"block": "5", "position": "3", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+    {"id": "phase14-body-block-5-direct-h", "labels": {"block": "5", "position": "4", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+
+    {"id": "phase14-body-block-6-staged-s", "labels": {"block": "6", "position": "1", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+    {"id": "phase14-body-block-6-direct-h", "labels": {"block": "6", "position": "2", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+    {"id": "phase14-body-block-6-direct-s", "labels": {"block": "6", "position": "3", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+    {"id": "phase14-body-block-6-staged-h", "labels": {"block": "6", "position": "4", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+
+    {"id": "phase14-body-block-7-direct-h", "labels": {"block": "7", "position": "1", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+    {"id": "phase14-body-block-7-staged-h", "labels": {"block": "7", "position": "2", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+    {"id": "phase14-body-block-7-staged-s", "labels": {"block": "7", "position": "3", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"},
+    {"id": "phase14-body-block-7-direct-s", "labels": {"block": "7", "position": "4", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+
+    {"id": "phase14-body-block-8-staged-h", "labels": {"block": "8", "position": "1", "treatment": "STAGED_H", "executionAction": "STAGED", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-h-body"},
+    {"id": "phase14-body-block-8-direct-s", "labels": {"block": "8", "position": "2", "treatment": "DIRECT_S", "executionAction": "DIRECT", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-s-body"},
+    {"id": "phase14-body-block-8-direct-h", "labels": {"block": "8", "position": "3", "treatment": "DIRECT_H", "executionAction": "DIRECT", "bodyBand": "H", "workUnits": "216"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.direct-h-body"},
+    {"id": "phase14-body-block-8-staged-s", "labels": {"block": "8", "position": "4", "treatment": "STAGED_S", "executionAction": "STAGED", "bodyBand": "S", "workUnits": "48"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14body.staged-s-body"}
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "strategy": "KEYED",
+  "baseline": {"id": "direct-s-source4", "runs": [
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-1-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-2-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-3-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-4-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-5-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-6-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-7-direct-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-8-direct-s-source4_repeat_0"
+  ]},
+  "candidates": {"id": "staged-s-source4", "runs": [
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-1-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-2-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-3-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-4-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-5-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-6-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-7-staged-s-source4_repeat_0",
+    "experiments/35-phase14-pcore-portability/phase14-pcore-block-8-staged-s-source4_repeat_0"
+  ]},
+  "key": {"path": "/labels/block", "requireCompleteMatch": true},
+  "options": {"includeDiagnostics": true, "failFast": true, "scope": "RUN"},
+  "outputDirectory": "experiments/35-phase14-pcore-portability/comparisons-s-source4-direct-vs-staged"
+}

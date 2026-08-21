@@ -1,0 +1,26 @@
+{
+  "strategy": "KEYED",
+  "baseline": {"id": "direct-h-body", "runs": [
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-1-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-2-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-3-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-4-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-5-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-6-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-7-direct-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-8-direct-h_repeat_0"
+  ]},
+  "candidates": {"id": "staged-h-body", "runs": [
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-1-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-2-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-3-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-4-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-5-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-6-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-7-staged-h_repeat_0",
+    "experiments/32-phase14-body-sensitivity/phase14-body-block-8-staged-h_repeat_0"
+  ]},
+  "key": {"path": "/labels/block", "requireCompleteMatch": true},
+  "options": {"includeDiagnostics": true, "failFast": true, "scope": "RUN"},
+  "outputDirectory": "experiments/32-phase14-body-sensitivity/comparisons-h-body-direct-vs-staged"
+}

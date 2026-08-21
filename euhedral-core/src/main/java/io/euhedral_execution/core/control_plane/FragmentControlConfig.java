@@ -240,7 +240,7 @@ public final class FragmentControlConfig {
                         new IdlePolicy(0, 0, 0, 0, 0), // S Contention
                         new IdlePolicy(0, 0, 0, 0, 0), // M Contention
                         new IdlePolicy(0, 0, 0, 0, 0), // H Contention
-                        new IdlePolicy(1_000, 15_000, 5_000, 5_000, 5_000) // XH Contention
+                        new IdlePolicy(1_000, 0, 5_000, 5_000, 5_000) // XH Contention
                         );
             }
         }

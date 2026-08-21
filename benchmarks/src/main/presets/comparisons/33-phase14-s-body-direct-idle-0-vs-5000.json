@@ -1,0 +1,18 @@
+{
+  "strategy": "KEYED",
+  "baseline": {"id": "direct-0ns", "runs": [
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-1-direct-0ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-2-direct-0ns_repeat_0",
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-3-direct-0ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-4-direct-0ns_repeat_0",
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-5-direct-0ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-6-direct-0ns_repeat_0",
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-7-direct-0ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-8-direct-0ns_repeat_0"
+  ]},
+  "candidates": {"id": "direct-5000ns", "runs": [
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-1-direct-5000ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-2-direct-5000ns_repeat_0",
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-3-direct-5000ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-4-direct-5000ns_repeat_0",
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-5-direct-5000ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-6-direct-5000ns_repeat_0",
+    "experiments/33-phase14-s-body-action-idle/phase14-s-block-7-direct-5000ns_repeat_0", "experiments/33-phase14-s-body-action-idle/phase14-s-block-8-direct-5000ns_repeat_0"
+  ]},
+  "key": {"path": "/labels/block", "requireCompleteMatch": true},
+  "options": {"includeDiagnostics": true, "failFast": true, "scope": "RUN"},
+  "outputDirectory": "experiments/33-phase14-s-body-action-idle/comparisons-direct-idle-0-vs-5000"
+}

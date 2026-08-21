@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "33g-phase14-s-body-action-idle-block-7",
+  "name": "Phase 14 S-Body Action/Idle Refinement - Williams Block 7",
+  "description": "Williams order G H F A E B D C for the Phase 14 S-body E-core refinement. Each trial is one independent JVM with one fixed treatment.",
+  "labels": {"preset": "phase14-s-body-action-idle", "phase": "14", "block": "7"},
+  "imports": [{"path": "../profiles/phase-14-s-body-action-idle.json", "namespace": "phase14"}],
+  "runOptions": {"randomizeTrialOrder": false, "randomSeed": 331407, "failFast": true, "repeatCount": 1},
+  "artifacts": {"outputDirectory": "experiments/33-phase14-s-body-action-idle", "retainExpandedConfig": true, "retainRawBenchmarkOutput": true, "retainObserverData": true, "retainPerForkResults": true, "retainPerIterationResults": true},
+  "trials": [
+    {"id": "phase14-s-block-7-staged-5000ns", "labels": {"block": "7", "position": "1", "treatment": "STAGED_5000NS", "executionAction": "STAGED", "idleDurationNs": "5000"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.staged-5000ns"},
+    {"id": "phase14-s-block-7-staged-15000ns", "labels": {"block": "7", "position": "2", "treatment": "STAGED_15000NS_BASELINE", "executionAction": "STAGED", "idleDurationNs": "15000", "baseline": "true"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.staged-15000ns"},
+    {"id": "phase14-s-block-7-staged-1000ns", "labels": {"block": "7", "position": "3", "treatment": "STAGED_1000NS", "executionAction": "STAGED", "idleDurationNs": "1000"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.staged-1000ns"},
+    {"id": "phase14-s-block-7-direct-0ns", "labels": {"block": "7", "position": "4", "treatment": "DIRECT_0NS", "executionAction": "DIRECT", "idleDurationNs": "0"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.direct-0ns"},
+    {"id": "phase14-s-block-7-staged-0ns", "labels": {"block": "7", "position": "5", "treatment": "STAGED_0NS", "executionAction": "STAGED", "idleDurationNs": "0"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.staged-0ns"},
+    {"id": "phase14-s-block-7-direct-1000ns", "labels": {"block": "7", "position": "6", "treatment": "DIRECT_1000NS", "executionAction": "DIRECT", "idleDurationNs": "1000"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.direct-1000ns"},
+    {"id": "phase14-s-block-7-direct-15000ns", "labels": {"block": "7", "position": "7", "treatment": "DIRECT_15000NS", "executionAction": "DIRECT", "idleDurationNs": "15000"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.direct-15000ns"},
+    {"id": "phase14-s-block-7-direct-5000ns", "labels": {"block": "7", "position": "8", "treatment": "DIRECT_5000NS", "executionAction": "DIRECT", "idleDurationNs": "5000"}, "forks": 1, "warmups": 2, "iterations": 5, "warmupTime": "2s", "measurementTime": "3s", "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"], "calibrationProfile": "phase14.direct-5000ns"}
+  ]
+}
