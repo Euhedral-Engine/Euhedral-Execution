@@ -20,6 +20,8 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -62,6 +64,10 @@ class LatticeEdgeTest {
 
         CpuInfo cpu = new CpuInfo(0, 0, 0);
         mockSysInfo.when(() -> SystemInfo.getCpuInfo(anyInt())).thenReturn(cpu);
+
+        BitSet pCores = new BitSet();
+        pCores.set(0, 64);
+        mockSysInfo.when(SystemInfo::getPCoreSet).thenReturn(UnmodifiableBitSet.wrap(pCores));
 
         mockThreadTools = Mockito.mockStatic(ThreadTools.class);
         mockThreadTools.when(ThreadTools::getCpu).thenReturn(0);
@@ -355,5 +361,28 @@ class LatticeEdgeTest {
     @Test
     void shouldAlwaysReportIncomplete() {
         assertFalse(edge.isComplete());
+    }
+
+    @Test
+    void shouldReturnNegativeRankForUnregisteredCore() {
+        assertEquals(-1, edge.getThreadRank(99));
+    }
+
+    @Test
+    void shouldRankRegisteredCore() {
+        edge.register();
+
+        assertEquals(1, edge.getThreadRank(0));
+        assertEquals(-1, edge.getThreadRank(1));
+    }
+
+    @Test
+    void shouldDelegateThreadRankToParent() {
+        edge.register();
+
+        LatticeEdge child = new LatticeEdge(new AtomicBoolean());
+        child.setParent(edge);
+
+        assertEquals(1, child.getThreadRank(0));
     }
 }

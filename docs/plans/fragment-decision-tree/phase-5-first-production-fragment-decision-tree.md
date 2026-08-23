@@ -83,7 +83,7 @@ mode; it must not change the existing override's default behavior.
 - A live handle count may describe lock independence but not current source readiness. This phase
   accepts it only for the already-observed repeating-source surface; readiness is a possible future
   split, not a branch to add now.
-- Moving `THREAD_COUNT` to registration boundaries must preserve one-worker-per-active-core and
+- Moving `CORE_COUNT` to registration boundaries must preserve one-worker-per-active-core and
   cleanup behavior. If the existing `ACTIVE_PARTITIONS` invariant cannot make that exact, stop
   rather than adding coordination in this phase.
 - A single-dispatch sample includes the common hot-source, executor-terminal, and frame-finalization

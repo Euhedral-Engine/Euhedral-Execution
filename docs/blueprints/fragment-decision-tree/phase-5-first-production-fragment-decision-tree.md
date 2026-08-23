@@ -42,7 +42,7 @@ Use these existing root-graph values:
 
 - opportunities: `UpstreamQueue.getTrueUpstreamCount()`, which acquire-reads
   `LatticeEdge.UPSTREAM_COUNT`;
-- active execution workers: `LatticeEdge.getThreadCount()`, backed by `THREAD_COUNT`.
+- active execution workers: `LatticeEdge.getThreadCount()`, backed by `CORE_COUNT`.
 
 Compare the integer counts directly:
 
@@ -56,12 +56,12 @@ stale cache. Each `UpstreamInterceptor` contributes one live handle with one ind
 lock and is published into every registered active partition, so handle count is the existing state
 that corresponds to the fixture's independent pull opportunities.
 
-The existing `THREAD_COUNT` update point does not yet match that meaning: `UpstreamQueue.get`
+The existing `CORE_COUNT` update point does not yet match that meaning: `UpstreamQueue.get`
 increments it when any thread creates a thread-local queue, before `LatticeEdge.register` marks an
 active partition. Correct that existing state narrowly:
 
 - remove the counter update and counter argument from `UpstreamQueue.get`;
-- in root `LatticeEdge.register`, increment `THREAD_COUNT` only when an
+- in root `LatticeEdge.register`, increment `CORE_COUNT` only when an
   `ACTIVE_PARTITIONS.compareAndSet(core, 0, 1)` succeeds; and
 - in root `removeThread`, decrement only when the matching
   `ACTIVE_PARTITIONS.compareAndSet(core, 1, 0)` succeeds.
@@ -386,7 +386,7 @@ Input A passed; the selected Input B did not.
 
 ### Input A result
 
-`THREAD_COUNT` now changes only when the root active-partition CAS registers or removes a fragment
+`CORE_COUNT` now changes only when the root active-partition CAS registers or removes a fragment
 worker. Creating or reusing an unregistered `UpstreamQueue` no longer changes the count, and
 repeated registration/removal is idempotent. Focused tests cover those semantics and upstream count
 removal.

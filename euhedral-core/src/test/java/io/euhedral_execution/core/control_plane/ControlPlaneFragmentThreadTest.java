@@ -22,6 +22,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.concurrent.CountDownLatch;
@@ -279,13 +280,16 @@ class ControlPlaneFragmentThreadTest {
         private static void resetSharedRoutingState() {
             UpstreamQueue.UP_QUEUE.remove();
             UPSTREAM_COUNT.set(0L);
-            THREAD_COUNT.set(0L);
+            CORE_COUNT.set(0L);
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 if (UPSTREAMS[i] != null) {
                     UPSTREAMS[i].clear();
                 }
                 ACTIVE_PARTITIONS.set(i, 0L);
             }
+            Int2IntOpenHashMap initialRanks = new Int2IntOpenHashMap(UPSTREAMS.length);
+            initialRanks.defaultReturnValue(-1);
+            CORE_RANK.set(initialRanks);
         }
     }
 
