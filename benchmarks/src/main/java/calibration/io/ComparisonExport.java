@@ -19,7 +19,7 @@ import calibration.comparisons.schema.TransitionComparison;
 import calibration.comparisons.schema.VectorCellComparison;
 import calibration.comparisons.schema.VectorFieldComparison;
 import calibration.infra.Constants;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorCell;
 import calibration.statistics.iteration.BranchOccupancyResult;
 import calibration.statistics.iteration.CorrelationResult;
@@ -478,7 +478,7 @@ public final class ComparisonExport {
                 + formatDouble(sc.p95ToP50RatioDelta()) + "\n");
     }
 
-    /// Exports 5x5 branch occupancy comparisons to TSV.
+    /// Exports 2x5 branch occupancy comparisons to TSV.
     public static void exportOccupancyComparisonsTsv(@NonNull Path outputDir, @NonNull ComparisonResult result)
             throws Exception {
         Objects.requireNonNull(outputDir, "outputDir must not be null");
@@ -518,8 +518,8 @@ public final class ComparisonExport {
                     double[][] candProbs = cand.normalizedOccupancy();
                     double[][] probDeltas = occ.probabilityDeltas();
 
-                    for (int c = 0; c < Band.GRID_SIZE; c++) {
-                        for (int b = 0; b < Band.GRID_SIZE; b++) {
+                    for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+                        for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                             writer.write(strategyStr + "\t"
                                     + pairIndexStr + "\t"
                                     + keyStr + "\t"
@@ -562,7 +562,7 @@ public final class ComparisonExport {
         TrialExport.writeChecksum(file);
     }
 
-    /// Exports 25-state Markov transition comparisons to TSV.
+    /// Exports 10-state Markov transition comparisons to TSV.
     public static void exportTransitionComparisonsTsv(@NonNull Path outputDir, @NonNull ComparisonResult result)
             throws Exception {
         Objects.requireNonNull(outputDir, "outputDir must not be null");
@@ -610,7 +610,7 @@ public final class ComparisonExport {
                         int[] candDominantStates = tc.candidateDominantOutgoingStates();
                         double[] domProbDeltas = tc.dominantOutgoingProbabilityDeltas();
 
-                        for (int from = 0; from < Band.TOTAL_STATES; from++) {
+                        for (int from = 0; from < DecisionGrid.TOTAL_STATES; from++) {
                             int fromC = TransitionAnalysis.contentionBandOf(from);
                             int fromB = TransitionAnalysis.bodyBandOf(from);
                             double baseSelf = base.selfTransitionRate(from);
@@ -623,7 +623,7 @@ public final class ComparisonExport {
                             double candDomProb = cand.dominantOutgoingProbability(from);
                             double domProbDelta = domProbDeltas[from];
 
-                            for (int to = 0; to < Band.TOTAL_STATES; to++) {
+                            for (int to = 0; to < DecisionGrid.TOTAL_STATES; to++) {
                                 int toC = TransitionAnalysis.contentionBandOf(to);
                                 int toB = TransitionAnalysis.bodyBandOf(to);
                                 long bCount = baseCounts[from][to];
@@ -670,7 +670,7 @@ public final class ComparisonExport {
         TrialExport.writeChecksum(file);
     }
 
-    /// Exports 5x5 displacement vector field comparisons to TSV.
+    /// Exports 2x5 displacement vector field comparisons to TSV.
     public static void exportVectorFieldComparisonsTsv(@NonNull Path outputDir, @NonNull ComparisonResult result)
             throws Exception {
         Objects.requireNonNull(outputDir, "outputDir must not be null");
@@ -706,8 +706,8 @@ public final class ComparisonExport {
                         if (vfc == null) {
                             continue;
                         }
-                        for (int c = 0; c < Band.GRID_SIZE; c++) {
-                            for (int b = 0; b < Band.GRID_SIZE; b++) {
+                        for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+                            for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                                 VectorCellComparison cell = vfc.cell(c, b);
                                 VectorCell baseCell = cell.baseline();
                                 VectorCell candCell = cell.candidate();

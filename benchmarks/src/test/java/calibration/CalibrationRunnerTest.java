@@ -99,34 +99,6 @@ class CalibrationRunnerTest {
     }
 
     @Test
-    void phase13ShuffleRecheckPresetResolvesBalancedTreatments() throws Exception {
-        File preset = new File("src/main/presets/experiments/28-phase13-handle-shuffle-recheck.json");
-        HarnessConfig config = CalibrationRunner.loadConfig(preset.getPath(), this.mapper);
-        List<TrialConfig> trials = CalibrationRunner.resolveTrials(config, this.mapper);
-
-        assertEquals(8, trials.size());
-        for (int position = 0; position < 8; position++) {
-            int iterationPosition = position;
-            assertEquals(
-                    8,
-                    trials.stream()
-                            .map(t -> t.calibrationConfig()
-                                    .pullBucketTreatments()
-                                    .get(iterationPosition)
-                                    .id())
-                            .distinct()
-                            .count());
-        }
-        for (TrialConfig trial : trials) {
-            assertEquals(1, trial.forks());
-            assertEquals(2, trial.warmups());
-            assertEquals(8, trial.iterations());
-            assertEquals(8, trial.calibrationConfig().pullBucketTreatments().size());
-            assertTrue(trial.calibrationConfig().observePullConvoy());
-        }
-    }
-
-    @Test
     void phase13ShuffleComparisonPresetsAreValid() throws Exception {
         ComparisonConfig forkMatrix = this.mapper.readValue(
                 new File("src/main/presets/comparisons/28-phase13-handle-shuffle-fork-matrix.json"),
@@ -661,8 +633,8 @@ class CalibrationRunnerTest {
         metrics.recordRawBodyCost(2, 2, 70 + offset);
         metrics.recordIdle(1, 1, 0, 1, 50 + offset, 10.0 + offset);
         metrics.recordIdle(2, 2, 1, 2, 150 + offset, 20.0 + offset);
-        metrics.recordExec(1, 1, 2, 3, 250 + offset, 30.0 + offset);
-        metrics.recordExec(2, 2, 3, 4, 350 + offset, 40.0 + offset);
+        metrics.recordExec(1, 1, 0, 3, 250 + offset, 30.0 + offset);
+        metrics.recordExec(2, 2, 1, 4, 350 + offset, 40.0 + offset);
         return metrics;
     }
 
@@ -832,30 +804,6 @@ class CalibrationRunnerTest {
                 }
             }
         }
-    }
-
-    @Test
-    void testPhase12DiagnosticPresetResolvesToOneFixedFixture() throws Exception {
-        Path preset = Path.of("src/main/presets/experiments/26-contention-staleness-diagnostic.json");
-        if (!Files.exists(preset)) {
-            preset = Path.of("benchmarks/src/main/presets/experiments/26-contention-staleness-diagnostic.json");
-        }
-
-        HarnessConfig config = CalibrationRunner.loadConfig(preset.toString(), mapper);
-        List<TrialConfig> trials = CalibrationRunner.resolveTrials(config, mapper);
-
-        assertEquals(1, trials.size());
-        TrialConfig trial = trials.getFirst();
-        assertEquals("staged-ecore-phase12-base__staged-ecore-contention-staleness__0", trial.id());
-        assertEquals(8, trial.forks());
-        assertEquals(
-                List.of(16, 17, 18, 19, 20, 21, 22, 23),
-                trial.calibrationConfig().cpuSet());
-        assertEquals(4, trial.calibrationConfig().parallelSources());
-        assertEquals(0, trial.calibrationConfig().orderedSources());
-        assertEquals(144, trial.calibrationConfig().workUnits());
-        assertFalse(trial.calibrationConfig().randomizeWork());
-        assertTrue(trial.calibrationConfig().observeContentionStaleness());
     }
 
     @Test

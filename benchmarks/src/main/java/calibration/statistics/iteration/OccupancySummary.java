@@ -1,11 +1,11 @@
 package calibration.statistics.iteration;
 
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import java.util.Arrays;
 import java.util.Objects;
 import org.jspecify.annotations.Nullable;
 
-/// Fixed 5x5 occupancy summary for branch counts.
+/// Fixed 2x5 occupancy summary for branch counts.
 public record OccupancySummary(
         long totalCount,
         double[][] probabilities,
@@ -19,7 +19,7 @@ public record OccupancySummary(
 
     public static final OccupancySummary EMPTY = new OccupancySummary(
             0L,
-            new double[Band.GRID_SIZE][Band.GRID_SIZE],
+            new double[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES],
             Double.NaN,
             Double.NaN,
             Double.NaN,
@@ -43,7 +43,7 @@ public record OccupancySummary(
     @Override
     public double[][] probabilities() {
         if (probabilities == null) {
-            return new double[Band.GRID_SIZE][Band.GRID_SIZE];
+            return new double[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         }
         double[][] copy = new double[probabilities.length][];
         for (int i = 0; i < probabilities.length; i++) {

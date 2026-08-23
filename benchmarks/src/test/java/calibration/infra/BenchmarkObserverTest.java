@@ -56,12 +56,23 @@ class BenchmarkObserverTest {
     }
 
     @Test
+    void testSkippedBodyDecisionUsesFirstBodyColumn() {
+        HighSpeedMetrics metrics = new HighSpeedMetrics(4);
+
+        metrics.recordIdle(1L, 10L, 0, -1, 100L, 25.0);
+
+        assertEquals(1L, metrics.idleBranchDecisionTotal[0][0]);
+        assertEquals(0L, metrics.idleWarmupDecisionState[0][3]);
+        assertEquals(0L, metrics.idleSteadyStateDecisionState[0][3]);
+    }
+
+    @Test
     void testAlignCycleStartAndDecisions() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(4);
         for (int i = 1; i <= 6; i++) {
             metrics.recordCycleStart(i, i * 10, i * 100, 10, 1, 4, 0, i * 2, (double) i * 1000.0);
             metrics.recordIdle(i, i * 10, 1, 2, i * 5, (double) i * 50.0);
-            metrics.recordExec(i, i * 10, 3, 4, i * 8, (double) i * 80.0);
+            metrics.recordExec(i, i * 10, 1, 4, i * 8, (double) i * 80.0);
         }
 
         metrics.align();

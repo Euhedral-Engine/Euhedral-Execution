@@ -3,7 +3,7 @@ package calibration.io;
 import calibration.config.PullBucketTreatment;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorCell;
 import calibration.statistics.VectorField;
 import calibration.statistics.fork.ForkCalculationResult;
@@ -41,7 +41,7 @@ public final class TrialExport {
     private static final String[] SEGMENTS_3 = {"head", "steadyState", "combined"};
     private static final String[] SEGMENTS_2 = {"head", "steadyState"};
     private static final String[] DECISION_TYPES = {"idle", "exec"};
-    private static final String[] EXECUTION_PATHS = {"DIRECT", "STAGED", "SKIP_THEN_DIRECT", "SKIP_THEN_STAGED"};
+    private static final String[] EXECUTION_PATHS = {"DIRECT", "STAGED", "SKIP_THEN_DIRECT"};
 
     private TrialExport() {}
 
@@ -618,7 +618,7 @@ public final class TrialExport {
                 + s.toTsvRow() + "\n");
     }
 
-    /// Exports 5x5 branch occupancy results to TSV.
+    /// Exports 2x5 branch occupancy results to TSV.
     public static void exportOccupancyTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
         if (outputDir == null || forkResult == null) {
             return;
@@ -706,8 +706,8 @@ public final class TrialExport {
             OccupancySummary summary = occ.summary();
             long[][] counts = occ.exactCounts();
             double[][] probs = occ.normalizedOccupancy();
-            for (int c = 0; c < Band.GRID_SIZE; c++) {
-                for (int b = 0; b < Band.GRID_SIZE; b++) {
+            for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+                for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                     writer.write(iter + "\t"
                             + scope + "\t"
                             + core + "\t"
@@ -722,7 +722,7 @@ public final class TrialExport {
         }
     }
 
-    /// Exports 25x25 state transition matrices to TSV.
+    /// Exports 10x10 state transition matrices to TSV.
     public static void exportTransitionsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
         if (outputDir == null || forkResult == null) {
             return;
@@ -844,13 +844,13 @@ public final class TrialExport {
                 }
                 long[][] counts = ta.transitionCounts();
                 double[][] probs = ta.transitionProbabilities();
-                for (int from = 0; from < Band.TOTAL_STATES; from++) {
+                for (int from = 0; from < DecisionGrid.TOTAL_STATES; from++) {
                     int fromC = TransitionAnalysis.contentionBandOf(from);
                     int fromB = TransitionAnalysis.bodyBandOf(from);
                     double selfRate = ta.selfTransitionRate(from);
                     int domState = ta.dominantOutgoingState(from);
                     double domProb = ta.dominantOutgoingProbability(from);
-                    for (int to = 0; to < Band.TOTAL_STATES; to++) {
+                    for (int to = 0; to < DecisionGrid.TOTAL_STATES; to++) {
                         int toC = TransitionAnalysis.contentionBandOf(to);
                         int toB = TransitionAnalysis.bodyBandOf(to);
                         long count = counts[from][to];
@@ -877,7 +877,7 @@ public final class TrialExport {
         }
     }
 
-    /// Exports 5x5 vector field displacement results to TSV.
+    /// Exports 2x5 vector field displacement results to TSV.
     public static void exportVectorFieldsTsv(Path outputDir, ForkCalculationResult forkResult) throws Exception {
         if (outputDir == null || forkResult == null) {
             return;
@@ -998,8 +998,8 @@ public final class TrialExport {
                     continue;
                 }
                 VectorCell[][] grid = vf.grid();
-                for (int c = 0; c < Band.GRID_SIZE; c++) {
-                    for (int b = 0; b < Band.GRID_SIZE; b++) {
+                for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+                    for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                         VectorCell cell = grid[c][b];
                         writer.write(iter + "\t"
                                 + scope + "\t"

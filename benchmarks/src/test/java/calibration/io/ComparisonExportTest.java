@@ -81,8 +81,8 @@ class ComparisonExportTest {
         metrics.recordIdle(1, 1, 0, 1, 50 + offset, 10.0 + offset);
         metrics.recordIdle(2, 2, 1, 2, 150 + offset, 20.0 + offset);
 
-        metrics.recordExec(1, 1, 2, 3, 250 + offset, 30.0 + offset);
-        metrics.recordExec(2, 2, 3, 4, 350 + offset, 40.0 + offset);
+        metrics.recordExec(1, 1, 0, 3, 250 + offset, 30.0 + offset);
+        metrics.recordExec(2, 2, 1, 4, 350 + offset, 40.0 + offset);
 
         return metrics;
     }
@@ -164,43 +164,13 @@ class ComparisonExportTest {
     private static ComparisonResult createPopulatedComparisonResult() {
         var baseWeights = io.euhedral_execution.core.config.FragmentDecisionWeights.DEFAULT;
 
-        List<io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy> policies1 =
-                new ArrayList<>(baseWeights.executionPolicies());
-        var p4_1 = policies1.get(4);
-        policies1.set(
-                4,
-                new io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy(
-                        io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath.STAGED,
-                        p4_1.sBody(),
-                        p4_1.mBody(),
-                        p4_1.hBody(),
-                        p4_1.xhBody()));
         var cand1Weights = new io.euhedral_execution.core.config.FragmentDecisionWeights(
-                baseWeights.idleContentionThresholds(),
-                baseWeights.idleBodyCostWeights(),
-                baseWeights.idleTimeNs(),
-                baseWeights.execContentionThresholds(),
-                baseWeights.execBodyCostWeights(),
-                policies1);
-
-        List<io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy> policies2 =
-                new ArrayList<>(baseWeights.executionPolicies());
-        var p0_2 = policies2.get(0);
-        policies2.set(
-                0,
-                new io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy(
-                        io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath.STAGED,
-                        p0_2.sBody(),
-                        p0_2.mBody(),
-                        p0_2.hBody(),
-                        p0_2.xhBody()));
+                new io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights(100, 140, 220, 300),
+                baseWeights.idleTimeNs());
         var cand2Weights = new io.euhedral_execution.core.config.FragmentDecisionWeights(
-                baseWeights.idleContentionThresholds(),
                 baseWeights.idleBodyCostWeights(),
-                baseWeights.idleTimeNs(),
-                baseWeights.execContentionThresholds(),
-                baseWeights.execBodyCostWeights(),
-                policies2);
+                new io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy(
+                        2_000L, 0L, 5_000L, 5_000L, 5_000L));
 
         CompletedRun baseline =
                 createCompletedRun("base-trial", "Baseline Trial", "grp-1", "/runs/base", baseWeights, 1000.0, 0);
@@ -368,15 +338,15 @@ class ComparisonExportTest {
     }
 
     @Test
-    void testOccupancyComparisons25CellsAndTvd(@TempDir Path tempDir) throws Exception {
+    void testOccupancyComparisons10CellsAndTvd(@TempDir Path tempDir) throws Exception {
         ComparisonResult result = createPopulatedComparisonResult();
         ComparisonExport.exportOccupancyComparisonsTsv(tempDir, result);
 
         Path tsv = tempDir.resolve(Constants.OCCUPANCY_COMPARISONS_TSV);
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
 
-        // Header + 2 candidates * 2 decisionTypes (idle, exec) * 25 cells = 1 + 100 = 101 lines
-        assertEquals(101, lines.size());
+        // Header + 2 candidates * 2 decision types * 10 cells.
+        assertEquals(41, lines.size());
         assertEquals(
                 "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tcontentionBand\tbodyBand\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineContentionCentroid\tcandidateContentionCentroid\tcontentionCentroidDelta\tbaselineBodyCentroid\tcandidateBodyCentroid\tbodyCentroidDelta\tcentroidDistance\tbaselineContentionVariance\tcandidateContentionVariance\tcontentionVarianceDelta\tbaselineBodyVariance\tcandidateBodyVariance\tbodyVarianceDelta\tbaselineCovariance\tcandidateCovariance\tcovarianceDelta\tbaselineRadius\tcandidateRadius\tradiusDelta\ttotalVariationDistance",
                 lines.get(0));
@@ -406,9 +376,8 @@ class ComparisonExportTest {
         Path tsv = tempDir.resolve(Constants.TRANSITION_COMPARISONS_TSV);
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
 
-        // Header + 2 candidates * 2 decisionTypes (idle, exec) * 2 segments (head, steady_state) * 625 = 1 + 5000 =
-        // 5001 lines
-        assertEquals(5001, lines.size());
+        // Header + 2 candidates * 2 decision types * 2 segments * 100 transitions.
+        assertEquals(801, lines.size());
         assertEquals(
                 "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tbaselineCount\tcandidateCount\tcountDelta\tbaselineProbability\tcandidateProbability\tprobabilityDelta\tbaselineSelfTransitionRate\tcandidateSelfTransitionRate\tselfTransitionRateDelta\tbaselineDominantOutgoingState\tcandidateDominantOutgoingState\tdominantStateChanged\tbaselineDominantProbability\tcandidateDominantProbability\tdominantProbabilityDelta",
                 lines.get(0));
@@ -423,15 +392,15 @@ class ComparisonExportTest {
     }
 
     @Test
-    void testVectorFieldsAll25Cells(@TempDir Path tempDir) throws Exception {
+    void testVectorFieldsAll10Cells(@TempDir Path tempDir) throws Exception {
         ComparisonResult result = createPopulatedComparisonResult();
         ComparisonExport.exportVectorFieldComparisonsTsv(tempDir, result);
 
         Path tsv = tempDir.resolve(Constants.VECTOR_FIELD_COMPARISONS_TSV);
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
 
-        // Header + 2 candidates * 2 decisionTypes * 2 segments * 25 cells = 1 + 200 = 201 lines
-        assertEquals(201, lines.size());
+        // Header + 2 candidates * 2 decision types * 2 segments * 10 cells.
+        assertEquals(81, lines.size());
         assertEquals(
                 "strategy\tpairIndex\tkey\tbaseline\tcandidate\tdecisionType\tsegment\tcontentionBand\tbodyBand\tbaselineTransitionCount\tcandidateTransitionCount\ttransitionCountDelta\tbaselineMeanDeltaContention\tcandidateMeanDeltaContention\tmeanDeltaContentionDelta\tbaselineMeanDeltaBody\tcandidateMeanDeltaBody\tmeanDeltaBodyDelta\tbaselineMagnitude\tcandidateMagnitude\tmagnitudeDelta",
                 lines.get(0));

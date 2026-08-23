@@ -77,12 +77,8 @@ class ProfileLibraryLoaderTest {
                   "totalRequiredExecutions": 1000,
                   "invocationTimeoutMillis": 5000,
                   "decisionWeights": {
-                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "idleBodyCostWeights": [],
-                    "idleTimeNs": [],
-                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "execBodyCostWeights": [],
-                    "executionPolicies": []
+                    "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                    "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                   },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
@@ -95,12 +91,8 @@ class ProfileLibraryLoaderTest {
               },
               "decisionWeightProfiles": {
                 "baseline-weights": {
-                  "idleContentionThresholds": { "xsContention": 200, "sContention": 200, "mContention": 200, "hContention": 200 },
-                  "idleBodyCostWeights": [],
-                  "idleTimeNs": [],
-                  "execContentionThresholds": { "xsContention": 200, "sContention": 200, "mContention": 200, "hContention": 200 },
-                  "execBodyCostWeights": [],
-                  "executionPolicies": []
+                  "idleBodyCostWeights": { "xs": 200, "s": 200, "m": 200, "h": 200 },
+                  "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                 }
               }
             }

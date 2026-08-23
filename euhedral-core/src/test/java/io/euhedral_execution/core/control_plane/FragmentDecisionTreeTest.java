@@ -11,17 +11,13 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ContentionThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
 import java.lang.reflect.Field;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class FragmentDecisionTreeTest {
@@ -33,15 +29,8 @@ class FragmentDecisionTreeTest {
         return new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, observer, TEST_CORE, TEST_SOCKET);
     }
 
-    private static FragmentDecisionWeights createCustomWeights(
-            ContentionThresholds idleContention,
-            List<BodyCostWeights> idleBodyWeights,
-            List<IdlePolicy> idlePolicies,
-            ContentionThresholds execContention,
-            List<BodyCostWeights> execBodyWeights,
-            List<ExecutionPolicy> execPolicies) {
-        return new FragmentDecisionWeights(
-                idleContention, idleBodyWeights, idlePolicies, execContention, execBodyWeights, execPolicies);
+    private static FragmentDecisionWeights createCustomWeights(BodyCostWeights bodyWeights, IdlePolicy idlePolicy) {
+        return new FragmentDecisionWeights(bodyWeights, idlePolicy);
     }
 
     private static void populateBodyCosts(FragmentDecisionTree tree, int count, long valueNs) {
@@ -238,7 +227,11 @@ class FragmentDecisionTreeTest {
     @Test
     void recordBodyCost_circularBufferUpdatesEvery32Samples() {
         FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
+        FragmentDecisionTree tree = new FragmentDecisionTree(
+                createCustomWeights(new BodyCostWeights(10_000, 10_000, 10_000, 10_000), IdlePolicy.DEFAULT),
+                observer,
+                TEST_CORE,
+                TEST_SOCKET);
 
         // Window 1: 32 samples of 100ns -> second minimum 100.0
         populateBodyCosts(tree, 32, 100L);
@@ -326,27 +319,10 @@ class FragmentDecisionTreeTest {
 
     @Test
     void completeBatch_scalesWithStagedWorkTarget() {
-        // Set execution path to STAGED using custom policy
-        ContentionThresholds contention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        ExecutionPolicy stagedPolicy = new ExecutionPolicy(
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED);
-        FragmentDecisionWeights weights = createCustomWeights(
-                contention,
-                BodyCostWeights.DEFAULTS,
-                IdlePolicy.DEFAULT,
-                contention,
-                BodyCostWeights.EXEC_DEFAULTS,
-                List.of(stagedPolicy, stagedPolicy, stagedPolicy, stagedPolicy, stagedPolicy));
-
-        FragmentDecisionTree tree = new FragmentDecisionTree(weights, null, TEST_CORE, TEST_SOCKET);
+        FragmentDecisionTree tree = createDefaultTree(null);
         populateBodyCosts(tree, 32, 100L);
 
-        // Trigger STAGED execution path
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(1L, 1L, 2L, 4, 50_000L));
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(1L, 1L, 2L, 4, 900_000L));
 
         // STAGED target is 8_000_000 ns. Set service time to 10_000 ns.
         // raw = 8_000_000 / 10_000 = 800. highestOneBit(800) = 512. Desired = 512.
@@ -518,153 +494,37 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
-    void idle_evaluatesAllContentionBranchesAndNotifiesObserver() {
+    void idle_evaluatesBothContentionBranchesAndNotifiesObserver() {
         FragmentObserver observer = mock(FragmentObserver.class);
+        FragmentDecisionTree tree = createDefaultTree(observer);
+        populateBodyCosts(tree, 32, 1L);
 
-        ContentionThresholds idleContention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        ContentionThresholds execContention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        List<IdlePolicy> idlePolicies = List.of(
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0));
-        List<BodyCostWeights> bodyWeights = List.of(
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40));
-        FragmentDecisionWeights weights = createCustomWeights(
-                idleContention, bodyWeights, idlePolicies, execContention, bodyWeights, ExecutionPolicy.DEFAULT);
+        assertEquals(-1L, tree.idle(1L, 1L, 2L, 4, 1, 850_000L));
+        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, -1, 850_000L, 1.0);
 
-        FragmentDecisionTree tree = new FragmentDecisionTree(weights, observer, TEST_CORE, TEST_SOCKET);
-        populateBodyCosts(tree, 32, 1L); // smoothedBodyCost = 1.0 (decision 0)
-
-        // Contention <= 100_000 (decision 0)
-        tree.idle(1L, 1L, 2L, 4, 1, 50_000L);
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 50_000L, 1.0);
-
-        // Contention <= 200_000 (decision 1)
-        tree.idle(2L, 1L, 2L, 4, 1, 150_000L);
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 150_000L, 1.0);
-
-        // Contention <= 300_000 (decision 2)
-        tree.idle(3L, 1L, 2L, 4, 1, 250_000L);
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 3L, 1L, 2, 0, 250_000L, 1.0);
-
-        // Contention <= 400_000 (decision 3)
-        tree.idle(4L, 1L, 2L, 4, 1, 350_000L);
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 4L, 1L, 3, 0, 350_000L, 1.0);
-
-        // Contention > 400_000 (decision 4)
-        tree.idle(5L, 1L, 2L, 4, 1, 450_000L);
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 5L, 1L, 4, 0, 450_000L, 1.0);
+        assertEquals(1_000L, tree.idle(2L, 1L, 2L, 4, 1, 850_001L));
+        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
     }
 
     @Test
     void idle_evaluatesAllBodyCostBranches() {
-        ContentionThresholds contention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        List<IdlePolicy> idlePolicies = List.of(
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0),
-                new IdlePolicy(0, 0, 0, 0, 0));
+        assertIdleBodyCostDecision(new BodyCostWeights(10, 20, 30, 40), 32, 0);
+        assertIdleBodyCostDecision(new BodyCostWeights(0, 10, 20, 30), 32, 1);
+        assertIdleBodyCostDecision(new BodyCostWeights(0, 0, 10, 20), 32, 2);
+        assertIdleBodyCostDecision(new BodyCostWeights(0, 0, 0, 10), 32, 3);
+        assertIdleBodyCostDecision(new BodyCostWeights(0, 0, 0, 0), 64, 4);
+    }
 
-        // Decision 0: xs > 0, smoothedBodyCost = 1.0 <= xs
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights0 = List.of(
-                    new BodyCostWeights(10, 20, 30, 40),
-                    new BodyCostWeights(10, 20, 30, 40),
-                    new BodyCostWeights(10, 20, 30, 40),
-                    new BodyCostWeights(10, 20, 30, 40));
-            FragmentDecisionTree tree0 = new FragmentDecisionTree(
-                    createCustomWeights(
-                            contention, weights0, idlePolicies, contention, weights0, ExecutionPolicy.DEFAULT),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree0, 32, 1L);
-            tree0.idle(1L, 1L, 2L, 4, 1, 50_000L);
-            verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 50_000L, 1.0);
-        }
+    private static void assertIdleBodyCostDecision(BodyCostWeights weights, int samples, int decision) {
+        FragmentObserver observer = mock(FragmentObserver.class);
+        IdlePolicy policy = new IdlePolicy(0, 0, 0, 0, 0);
+        FragmentDecisionTree tree =
+                new FragmentDecisionTree(createCustomWeights(weights, policy), observer, TEST_CORE, TEST_SOCKET);
+        populateBodyCosts(tree, samples, 1L);
 
-        // Decision 1: xs = 0, s > 0, smoothedBodyCost = 1.0 <= s
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights1 = List.of(
-                    new BodyCostWeights(0, 10, 20, 30),
-                    new BodyCostWeights(0, 10, 20, 30),
-                    new BodyCostWeights(0, 10, 20, 30),
-                    new BodyCostWeights(0, 10, 20, 30));
-            FragmentDecisionTree tree1 = new FragmentDecisionTree(
-                    createCustomWeights(
-                            contention, weights1, idlePolicies, contention, weights1, ExecutionPolicy.DEFAULT),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree1, 32, 1L);
-            tree1.idle(1L, 1L, 2L, 4, 1, 50_000L);
-            verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 1, 50_000L, 1.0);
-        }
+        tree.idle(1L, 1L, 2L, 4, 1, 900_000L);
 
-        // Decision 2: xs = 0, s = 0, m > 0, smoothedBodyCost = 1.0 <= m
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights2 = List.of(
-                    new BodyCostWeights(0, 0, 10, 20),
-                    new BodyCostWeights(0, 0, 10, 20),
-                    new BodyCostWeights(0, 0, 10, 20),
-                    new BodyCostWeights(0, 0, 10, 20));
-            FragmentDecisionTree tree2 = new FragmentDecisionTree(
-                    createCustomWeights(
-                            contention, weights2, idlePolicies, contention, weights2, ExecutionPolicy.DEFAULT),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree2, 32, 1L);
-            tree2.idle(1L, 1L, 2L, 4, 1, 50_000L);
-            verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 2, 50_000L, 1.0);
-        }
-
-        // Decision 3: xs = 0, s = 0, m = 0, h > 0, smoothedBodyCost = 1.0 <= h
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights3 = List.of(
-                    new BodyCostWeights(0, 0, 0, 10),
-                    new BodyCostWeights(0, 0, 0, 10),
-                    new BodyCostWeights(0, 0, 0, 10),
-                    new BodyCostWeights(0, 0, 0, 10));
-            FragmentDecisionTree tree3 = new FragmentDecisionTree(
-                    createCustomWeights(
-                            contention, weights3, idlePolicies, contention, weights3, ExecutionPolicy.DEFAULT),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree3, 32, 1L);
-            tree3.idle(1L, 1L, 2L, 4, 1, 50_000L);
-            verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 3, 50_000L, 1.0);
-        }
-
-        // Decision 4: xs = 0, s = 0, m = 0, h = 0, maxBodyCost = 0. Requires 2 windows (64 samples) to confirm
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights4 = List.of(
-                    new BodyCostWeights(0, 0, 0, 0),
-                    new BodyCostWeights(0, 0, 0, 0),
-                    new BodyCostWeights(0, 0, 0, 0),
-                    new BodyCostWeights(0, 0, 0, 0));
-            FragmentDecisionTree tree4 = new FragmentDecisionTree(
-                    createCustomWeights(
-                            contention, weights4, idlePolicies, contention, weights4, ExecutionPolicy.DEFAULT),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree4, 64, 1L);
-            tree4.idle(1L, 1L, 2L, 4, 1, 50_000L);
-            verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 4, 50_000L, 1.0);
-        }
+        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 1, decision, 900_000L, 1.0);
     }
 
     @Test
@@ -714,229 +574,29 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
-    void executionPath_transitionsFromSkipStates() {
+    void executionPath_transitionsFromSkipThenDirect() {
         FragmentObserver observer = mock(FragmentObserver.class);
-
-        // Create tree where policy returns SKIP_THEN_STAGED
-        ContentionThresholds contention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        ExecutionPolicy skipPolicy = new ExecutionPolicy(
-                ExecutionPath.SKIP_THEN_STAGED,
-                ExecutionPath.SKIP_THEN_STAGED,
-                ExecutionPath.SKIP_THEN_STAGED,
-                ExecutionPath.SKIP_THEN_STAGED,
-                ExecutionPath.SKIP_THEN_STAGED);
-        List<BodyCostWeights> bodyWeights = List.of(
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40));
-        FragmentDecisionWeights weights = createCustomWeights(
-                contention,
-                bodyWeights,
-                IdlePolicy.DEFAULT,
-                contention,
-                bodyWeights,
-                List.of(skipPolicy, skipPolicy, skipPolicy, skipPolicy, skipPolicy));
-
-        FragmentDecisionTree tree = new FragmentDecisionTree(weights, observer, TEST_CORE, TEST_SOCKET);
+        FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        // 1. upstreamHandles <= 0 sets SKIP_THEN_DIRECT
         assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 4, 100L));
-
-        // 2. Next call with valid upstream transitions SKIP_THEN_DIRECT -> DIRECT without calling observer
         assertEquals(ExecutionPath.DIRECT, tree.executionPath(2L, 1L, 2L, 4, 100L));
         verify(observer, never())
                 .execBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-
-        // 3. Next call executes policy and returns SKIP_THEN_STAGED
-        assertEquals(ExecutionPath.SKIP_THEN_STAGED, tree.executionPath(3L, 1L, 2L, 4, 100L));
-        verify(observer, times(1))
-                .execBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-
-        // 4. Next call transitions SKIP_THEN_STAGED -> STAGED without calling observer again
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(4L, 1L, 2L, 4, 100L));
-        verify(observer, times(1))
-                .execBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
     }
 
     @Test
-    void executionPath_evaluatesAllContentionBranchesAndNotifiesObserver() {
+    void executionPath_evaluatesBothContentionBranchesAndNotifiesObserver() {
         FragmentObserver observer = mock(FragmentObserver.class);
+        FragmentDecisionTree tree = createDefaultTree(observer);
+        populateBodyCosts(tree, 32, 1L);
 
-        ContentionThresholds contention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        ExecutionPolicy policy0 = new ExecutionPolicy(
-                ExecutionPath.DIRECT,
-                ExecutionPath.DIRECT,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED);
-        ExecutionPolicy policy1 = new ExecutionPolicy(
-                ExecutionPath.DIRECT,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.DIRECT,
-                ExecutionPath.STAGED);
-        ExecutionPolicy policy2 = new ExecutionPolicy(
-                ExecutionPath.STAGED,
-                ExecutionPath.DIRECT,
-                ExecutionPath.DIRECT,
-                ExecutionPath.DIRECT,
-                ExecutionPath.STAGED);
-        ExecutionPolicy policy3 = new ExecutionPolicy(
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.DIRECT,
-                ExecutionPath.DIRECT,
-                ExecutionPath.DIRECT);
-        ExecutionPolicy policy4 = new ExecutionPolicy(
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.STAGED,
-                ExecutionPath.DIRECT,
-                ExecutionPath.DIRECT);
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 4, 850_000L));
+        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 850_000L, 1.0);
 
-        List<BodyCostWeights> bodyWeights = List.of(
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40),
-                new BodyCostWeights(10, 20, 30, 40));
-        FragmentDecisionWeights weights = createCustomWeights(
-                contention,
-                bodyWeights,
-                IdlePolicy.DEFAULT,
-                contention,
-                bodyWeights,
-                List.of(policy0, policy1, policy2, policy3, policy4));
-
-        FragmentDecisionTree tree = new FragmentDecisionTree(weights, observer, TEST_CORE, TEST_SOCKET);
-        populateBodyCosts(tree, 32, 1L); // smoothedBodyCost = 1.0 (decision index 0)
-
-        // Contention 0 (<= 100_000) -> policy0.xsBody = DIRECT
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 4, 50_000L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 50_000L, 1.0);
-
-        // Contention 1 (<= 200_000) -> policy1.xsBody = DIRECT
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(2L, 1L, 2L, 4, 150_000L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 150_000L, 1.0);
-
-        // Contention 2 (<= 300_000) -> policy2.xsBody = STAGED
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(3L, 1L, 2L, 4, 250_000L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 3L, 1L, 2, 0, 250_000L, 1.0);
-
-        // Contention 3 (<= 400_000) -> policy3.xsBody = STAGED
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(4L, 1L, 2L, 4, 350_000L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 4L, 1L, 3, 0, 350_000L, 1.0);
-
-        // Contention 4 (> 400_000) -> policy4.xsBody = STAGED
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(5L, 1L, 2L, 4, 450_000L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 5L, 1L, 4, 0, 450_000L, 1.0);
-    }
-
-    @Test
-    void executionPath_evaluatesAllBodyCostBranches() {
-        ContentionThresholds contention = new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L);
-        ExecutionPolicy policy = new ExecutionPolicy(
-                ExecutionPath.DIRECT,
-                ExecutionPath.STAGED,
-                ExecutionPath.SKIP_THEN_DIRECT,
-                ExecutionPath.SKIP_THEN_STAGED,
-                ExecutionPath.STAGED);
-        List<ExecutionPolicy> policies = List.of(policy, policy, policy, policy, policy);
-
-        // Decision 0: xs > 0, smoothed = 1.0 <= xs -> policy.xsBody = DIRECT
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights0 = List.of(
-                    new BodyCostWeights(10, 20, 30, 40),
-                    new BodyCostWeights(10, 20, 30, 40),
-                    new BodyCostWeights(10, 20, 30, 40),
-                    new BodyCostWeights(10, 20, 30, 40));
-            FragmentDecisionTree tree0 = new FragmentDecisionTree(
-                    createCustomWeights(contention, weights0, IdlePolicy.DEFAULT, contention, weights0, policies),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree0, 32, 1L);
-            assertEquals(ExecutionPath.DIRECT, tree0.executionPath(1L, 1L, 2L, 4, 50_000L));
-            verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 50_000L, 1.0);
-        }
-
-        // Decision 1: xs = 0, s > 0, smoothed = 1.0 <= s -> policy.sBody = STAGED
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights1 = List.of(
-                    new BodyCostWeights(0, 10, 20, 30),
-                    new BodyCostWeights(0, 10, 20, 30),
-                    new BodyCostWeights(0, 10, 20, 30),
-                    new BodyCostWeights(0, 10, 20, 30));
-            FragmentDecisionTree tree1 = new FragmentDecisionTree(
-                    createCustomWeights(contention, weights1, IdlePolicy.DEFAULT, contention, weights1, policies),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree1, 32, 1L);
-            assertEquals(ExecutionPath.STAGED, tree1.executionPath(1L, 1L, 2L, 4, 50_000L));
-            verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 1, 50_000L, 1.0);
-        }
-
-        // Decision 2: xs = 0, s = 0, m > 0, smoothed = 1.0 <= m -> policy.mBody = SKIP_THEN_DIRECT
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights2 = List.of(
-                    new BodyCostWeights(0, 0, 10, 20),
-                    new BodyCostWeights(0, 0, 10, 20),
-                    new BodyCostWeights(0, 0, 10, 20),
-                    new BodyCostWeights(0, 0, 10, 20));
-            FragmentDecisionTree tree2 = new FragmentDecisionTree(
-                    createCustomWeights(contention, weights2, IdlePolicy.DEFAULT, contention, weights2, policies),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree2, 32, 1L);
-            assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree2.executionPath(1L, 1L, 2L, 4, 50_000L));
-            verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 2, 50_000L, 1.0);
-        }
-
-        // Decision 3: xs = 0, s = 0, m = 0, h > 0, smoothed = 1.0 <= h -> policy.hBody = SKIP_THEN_STAGED
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights3 = List.of(
-                    new BodyCostWeights(0, 0, 0, 10),
-                    new BodyCostWeights(0, 0, 0, 10),
-                    new BodyCostWeights(0, 0, 0, 10),
-                    new BodyCostWeights(0, 0, 0, 10));
-            FragmentDecisionTree tree3 = new FragmentDecisionTree(
-                    createCustomWeights(contention, weights3, IdlePolicy.DEFAULT, contention, weights3, policies),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree3, 32, 1L);
-            assertEquals(ExecutionPath.SKIP_THEN_STAGED, tree3.executionPath(1L, 1L, 2L, 4, 50_000L));
-            verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 3, 50_000L, 1.0);
-        }
-
-        // Decision 4: xs = 0, s = 0, m = 0, h = 0, maxBodyCost = 0. Requires 2 windows (64 samples) to confirm ->
-        // policy.xhBody = STAGED
-        {
-            FragmentObserver observer = mock(FragmentObserver.class);
-            List<BodyCostWeights> weights4 = List.of(
-                    new BodyCostWeights(0, 0, 0, 0),
-                    new BodyCostWeights(0, 0, 0, 0),
-                    new BodyCostWeights(0, 0, 0, 0),
-                    new BodyCostWeights(0, 0, 0, 0));
-            FragmentDecisionTree tree4 = new FragmentDecisionTree(
-                    createCustomWeights(contention, weights4, IdlePolicy.DEFAULT, contention, weights4, policies),
-                    observer,
-                    TEST_CORE,
-                    TEST_SOCKET);
-            populateBodyCosts(tree4, 64, 1L);
-            assertEquals(ExecutionPath.STAGED, tree4.executionPath(1L, 1L, 2L, 4, 50_000L));
-            verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 4, 50_000L, 1.0);
-        }
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(2L, 1L, 2L, 4, 850_001L));
+        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
     }
 
     @Test

@@ -103,30 +103,30 @@ class HighSpeedMetricsStatisticsTest {
     }
 
     @Test
-    void testKnown5x5MeshProducesExpectedCentroidAndSpread() {
+    void testKnown2x5MeshProducesExpectedCentroidAndSpread() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(4);
-        // 10 decisions at (1, 1) and 10 decisions at (3, 3)
-        metrics.idleBranchDecisionTotal[1][1] = 10L;
-        metrics.idleBranchDecisionTotal[3][3] = 10L;
+        // 10 decisions at (0, 1) and 10 decisions at (1, 3)
+        metrics.idleBranchDecisionTotal[0][1] = 10L;
+        metrics.idleBranchDecisionTotal[1][3] = 10L;
 
         CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
         BranchOccupancyResult occ = result.idleOccupancy();
 
         assertEquals(20L, occ.totalCount());
-        assertEquals(2.0, occ.contentionCentroid(), EPSILON);
+        assertEquals(0.5, occ.contentionCentroid(), EPSILON);
         assertEquals(2.0, occ.bodyCentroid(), EPSILON);
-        assertEquals(1.0, occ.contentionVariance(), EPSILON);
+        assertEquals(0.25, occ.contentionVariance(), EPSILON);
         assertEquals(1.0, occ.bodyVariance(), EPSILON);
-        assertEquals(1.0, occ.contentionBodyCovariance(), EPSILON);
-        assertEquals(2.0, occ.radiusSquared(), EPSILON);
-        assertEquals(Math.sqrt(2.0), occ.radius(), EPSILON);
+        assertEquals(0.5, occ.contentionBodyCovariance(), EPSILON);
+        assertEquals(1.25, occ.radiusSquared(), EPSILON);
+        assertEquals(Math.sqrt(1.25), occ.radius(), EPSILON);
     }
 
     @Test
     void testIdleAndExecutionCentroidDistance() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(4);
-        // Exec at (4, 4)
-        metrics.execBranchDecisionTotal[4][4] = 100L;
+        // Exec at (0, 4)
+        metrics.execBranchDecisionTotal[0][4] = 100L;
         // Idle at (1, 0)
         metrics.idleBranchDecisionTotal[1][0] = 100L;
 
@@ -135,11 +135,10 @@ class HighSpeedMetricsStatisticsTest {
         assertEquals(1.0, result.idleOccupancy().contentionCentroid(), EPSILON);
         assertEquals(0.0, result.idleOccupancy().bodyCentroid(), EPSILON);
 
-        assertEquals(4.0, result.execOccupancy().contentionCentroid(), EPSILON);
+        assertEquals(0.0, result.execOccupancy().contentionCentroid(), EPSILON);
         assertEquals(4.0, result.execOccupancy().bodyCentroid(), EPSILON);
 
-        // sqrt((4-1)^2 + (4-0)^2) = sqrt(9 + 16) = 5.0
-        assertEquals(5.0, result.centroidDistance(), EPSILON);
+        assertEquals(Math.sqrt(17.0), result.centroidDistance(), EPSILON);
     }
 
     @Test
@@ -172,7 +171,7 @@ class HighSpeedMetricsStatisticsTest {
 
         // 10 unobserved middle decisions
         for (int i = 5; i <= 14; i++) {
-            metrics.recordIdle(i, i, 2, 2, 10, 2.0);
+            metrics.recordIdle(i, i, 1, 2, 10, 2.0);
         }
 
         // 4 steadyState decisions in state 1 = (0, 1)
@@ -198,10 +197,10 @@ class HighSpeedMetricsStatisticsTest {
     @Test
     void testKnownDirectionalSequenceProducesExpectedVectorField() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(16);
-        // Transition: (0, 0) -> (2, 4)
-        // deltaContention = 2, deltaBody = 4
+        // Transition: (0, 0) -> (1, 4)
+        // deltaContention = 1, deltaBody = 4
         metrics.recordIdle(1, 1, 0, 0, 10, 1.0);
-        metrics.recordIdle(2, 2, 2, 4, 10, 2.0);
+        metrics.recordIdle(2, 2, 1, 4, 10, 2.0);
 
         CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
         VectorField vf = result.idleHeadVectorField();
@@ -209,9 +208,9 @@ class HighSpeedMetricsStatisticsTest {
 
         assertTrue(cell.hasVector());
         assertEquals(1L, cell.transitionCount());
-        assertEquals(2.0, cell.meanDeltaContention(), EPSILON);
+        assertEquals(1.0, cell.meanDeltaContention(), EPSILON);
         assertEquals(4.0, cell.meanDeltaBody(), EPSILON);
-        assertEquals(Math.hypot(2.0, 4.0), cell.magnitude(), EPSILON);
+        assertEquals(Math.hypot(1.0, 4.0), cell.magnitude(), EPSILON);
     }
 
     @Test
@@ -295,7 +294,7 @@ class HighSpeedMetricsStatisticsTest {
     @Test
     void testOneObservedStateDoesNotManufactureVarianceOrTransitions() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(16);
-        metrics.recordIdle(1, 1, 2, 2, 50, 100.0);
+        metrics.recordIdle(1, 1, 1, 2, 50, 100.0);
 
         CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
 
@@ -307,11 +306,11 @@ class HighSpeedMetricsStatisticsTest {
         assertTrue(Double.isNaN(contention.coefficientOfVariation()));
 
         TransitionAnalysis trans = result.idleHeadTransitions();
-        assertEquals(-1, trans.dominantOutgoingState(12)); // state 12 = 2*5+2
-        assertEquals(0.0, trans.dominantOutgoingProbability(12), EPSILON);
-        assertEquals(0.0, trans.selfTransitionRate(12), EPSILON);
+        assertEquals(-1, trans.dominantOutgoingState(7));
+        assertEquals(0.0, trans.dominantOutgoingProbability(7), EPSILON);
+        assertEquals(0.0, trans.selfTransitionRate(7), EPSILON);
 
-        VectorCell cell = result.idleHeadVectorField().cell(2, 2);
+        VectorCell cell = result.idleHeadVectorField().cell(1, 2);
         assertFalse(cell.hasVector());
         assertEquals(0L, cell.transitionCount());
     }
@@ -372,17 +371,17 @@ class HighSpeedMetricsStatisticsTest {
     void testExecutionDecisionTransitionsAndVectorField() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(16);
         metrics.recordExec(1, 1, 1, 1, 10, 5.0); // state 6
-        metrics.recordExec(2, 2, 3, 3, 20, 15.0); // state 18
+        metrics.recordExec(2, 2, 1, 3, 20, 15.0); // state 8
 
         CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
         TransitionAnalysis trans = result.execHeadTransitions();
 
-        assertEquals(1L, trans.transitionCounts()[6][18]);
+        assertEquals(1L, trans.transitionCounts()[6][8]);
         VectorField vf = result.execHeadVectorField();
         VectorCell cell = vf.cell(1, 1);
 
         assertTrue(cell.hasVector());
-        assertEquals(2.0, cell.meanDeltaContention(), EPSILON);
+        assertEquals(0.0, cell.meanDeltaContention(), EPSILON);
         assertEquals(2.0, cell.meanDeltaBody(), EPSILON);
     }
 
@@ -400,7 +399,7 @@ class HighSpeedMetricsStatisticsTest {
         HighSpeedMetrics metrics = new HighSpeedMetrics(16);
         // Only record execution decisions (like in contention band calibration where other observers are disabled)
         metrics.recordExec(1, 1, 1, 1, 10, 5.0);
-        metrics.recordExec(2, 2, 2, 2, 20, 10.0);
+        metrics.recordExec(2, 2, 1, 2, 20, 10.0);
 
         CoreIterationResult result = HighSpeedMetricsStatistics.calculate(0, 0, metrics);
 
@@ -432,7 +431,7 @@ class HighSpeedMetricsStatisticsTest {
         m1.recordBatchComplete(1, 1, 2, 4, 1, 100, 1.5, 10.0);
         m1.recordRawBodyCost(1, 1, 50);
         m1.recordIdle(1, 1, 0, 1, 50, 10.0);
-        m1.recordExec(1, 1, 2, 3, 250, 30.0);
+        m1.recordExec(1, 1, 0, 3, 250, 30.0);
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(8);
         m2.recordCycleStart(2, 2, 20, 5, 2, 4, 2, 200, 20.0);
@@ -443,7 +442,7 @@ class HighSpeedMetricsStatisticsTest {
         m2.recordRawBodyCost(3, 3, 80);
         m2.recordIdle(2, 2, 1, 2, 150, 20.0);
         m2.recordIdle(3, 3, 1, 3, 160, 25.0);
-        m2.recordExec(2, 2, 3, 4, 350, 40.0);
+        m2.recordExec(2, 2, 1, 4, 350, 40.0);
 
         calibration.statistics.iteration.SystemIterationResult system =
                 HighSpeedMetricsStatistics.calculateSystem(0, java.util.List.of(m1, m2));
@@ -464,7 +463,7 @@ class HighSpeedMetricsStatisticsTest {
         m1.idleBranchDecisionTotal[0][0] = 10L;
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(4);
-        m2.idleBranchDecisionTotal[4][4] = 90L;
+        m2.idleBranchDecisionTotal[1][4] = 90L;
 
         calibration.statistics.iteration.SystemIterationResult system =
                 HighSpeedMetricsStatistics.calculateSystem(0, java.util.List.of(m1, m2));
@@ -472,11 +471,11 @@ class HighSpeedMetricsStatisticsTest {
 
         assertEquals(100L, occ.totalCount());
         assertEquals(10L, occ.exactCounts()[0][0]);
-        assertEquals(90L, occ.exactCounts()[4][4]);
+        assertEquals(90L, occ.exactCounts()[1][4]);
         // Normalized probability must be 0.1 and 0.9, NOT 0.5 each (which unweighted core probability average would
         // yield)
         assertEquals(0.1, occ.normalizedOccupancy()[0][0], EPSILON);
-        assertEquals(0.9, occ.normalizedOccupancy()[4][4], EPSILON);
+        assertEquals(0.9, occ.normalizedOccupancy()[1][4], EPSILON);
     }
 
     @Test
@@ -486,15 +485,14 @@ class HighSpeedMetricsStatisticsTest {
         m1.idleBranchDecisionTotal[0][0] = 10L;
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(4);
-        // Core 2 has 90 decisions at (4, 4) -> centroid (4.0, 4.0)
-        m2.idleBranchDecisionTotal[4][4] = 90L;
+        // Core 2 has 90 decisions at (1, 4) -> centroid (1.0, 4.0)
+        m2.idleBranchDecisionTotal[1][4] = 90L;
 
         calibration.statistics.iteration.SystemIterationResult system =
                 HighSpeedMetricsStatistics.calculateSystem(0, java.util.List.of(m1, m2));
         BranchOccupancyResult occ = system.idleOccupancy();
 
-        // System centroid = (0*10 + 4*90)/100 = 3.6 (not (0+4)/2 = 2.0)
-        assertEquals(3.6, occ.contentionCentroid(), EPSILON);
+        assertEquals(0.9, occ.contentionCentroid(), EPSILON);
         assertEquals(3.6, occ.bodyCentroid(), EPSILON);
     }
 
@@ -543,21 +541,19 @@ class HighSpeedMetricsStatisticsTest {
     void testNoTransitionsCreatedBetweenDifferentCores() {
         HighSpeedMetrics m1 = new HighSpeedMetrics(16);
         m1.recordIdle(1, 1, 0, 0, 10, 1.0); // state 0
-        m1.recordIdle(2, 2, 2, 0, 10, 2.0); // state 10
+        m1.recordIdle(2, 2, 1, 0, 10, 2.0); // state 5
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(16);
-        m2.recordIdle(3, 3, 4, 0, 10, 3.0); // state 20
-        m2.recordIdle(4, 4, 4, 4, 10, 4.0); // state 24
+        m2.recordIdle(3, 3, 1, 0, 10, 3.0); // state 5
+        m2.recordIdle(4, 4, 1, 4, 10, 4.0); // state 9
 
         calibration.statistics.iteration.SystemIterationResult system =
                 HighSpeedMetricsStatistics.calculateSystem(0, java.util.List.of(m1, m2));
         TransitionAnalysis head = system.idleHeadTransitions();
 
-        // Core 1 has 0->10 (1). Core 2 has 20->24 (1).
-        assertEquals(1L, head.transitionCounts()[0][10]);
-        assertEquals(1L, head.transitionCounts()[20][24]);
-        // Must NOT have transition between core 1 last state (10) and core 2 first state (20)
-        assertEquals(0L, head.transitionCounts()[10][20]);
+        assertEquals(1L, head.transitionCounts()[0][5]);
+        assertEquals(1L, head.transitionCounts()[5][9]);
+        assertEquals(0L, head.transitionCounts()[5][5]);
     }
 
     @Test
@@ -571,7 +567,7 @@ class HighSpeedMetricsStatisticsTest {
 
         // Middle: unobserved states
         for (int i = 5; i <= 20; i++) {
-            m1.recordIdle(i, i, 2, 2, 10, 1.0);
+            m1.recordIdle(i, i, 1, 2, 10, 1.0);
         }
 
         // SteadyState: state 1
@@ -597,22 +593,21 @@ class HighSpeedMetricsStatisticsTest {
         m1.recordIdle(2, 2, 1, 1, 10, 2.0);
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(64);
-        // Core 2: 9 transitions from (0, 0) to (3, 3) -> deltaContention = +3, deltaBody = +3
+        // Core 2: 9 transitions from (0, 0) to (1, 3)
         for (int i = 0; i < 9; i++) {
             m2.recordIdle(i * 2 + 1, 1, 0, 0, 10, 1.0);
-            m2.recordIdle(i * 2 + 2, 1, 3, 3, 10, 2.0);
+            m2.recordIdle(i * 2 + 2, 1, 1, 3, 10, 2.0);
         }
 
         calibration.statistics.iteration.SystemIterationResult system =
                 HighSpeedMetricsStatistics.calculateSystem(0, java.util.List.of(m1, m2));
         VectorCell cell = system.idleHeadVectorField().cell(0, 0);
 
-        // Weighted mean: (1*1 + 9*3) / 10 = 28 / 10 = 2.8 (not (1+3)/2 = 2.0)
         assertTrue(cell.hasVector());
         assertEquals(10L, cell.transitionCount());
-        assertEquals(2.8, cell.meanDeltaContention(), EPSILON);
+        assertEquals(1.0, cell.meanDeltaContention(), EPSILON);
         assertEquals(2.8, cell.meanDeltaBody(), EPSILON);
-        assertEquals(Math.hypot(2.8, 2.8), cell.magnitude(), EPSILON);
+        assertEquals(Math.hypot(1.0, 2.8), cell.magnitude(), EPSILON);
     }
 
     @Test
@@ -717,22 +712,21 @@ class HighSpeedMetricsStatisticsTest {
     void testIdleExecCentroidDistanceCalculatedFromSystemOccupancyCentroids() {
         HighSpeedMetrics m1 = new HighSpeedMetrics(16);
         m1.idleBranchDecisionTotal[0][0] = 50L;
-        m1.execBranchDecisionTotal[3][4] = 50L;
+        m1.execBranchDecisionTotal[1][4] = 50L;
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(16);
         m2.idleBranchDecisionTotal[0][0] = 50L;
-        m2.execBranchDecisionTotal[3][4] = 50L;
+        m2.execBranchDecisionTotal[1][4] = 50L;
 
         calibration.statistics.iteration.SystemIterationResult system =
                 HighSpeedMetricsStatistics.calculateSystem(0, java.util.List.of(m1, m2));
 
         assertEquals(0.0, system.idleOccupancy().contentionCentroid(), EPSILON);
         assertEquals(0.0, system.idleOccupancy().bodyCentroid(), EPSILON);
-        assertEquals(3.0, system.execOccupancy().contentionCentroid(), EPSILON);
+        assertEquals(1.0, system.execOccupancy().contentionCentroid(), EPSILON);
         assertEquals(4.0, system.execOccupancy().bodyCentroid(), EPSILON);
 
-        // hypot(3 - 0, 4 - 0) = 5.0
-        assertEquals(5.0, system.centroidDistance(), EPSILON);
+        assertEquals(Math.sqrt(17.0), system.centroidDistance(), EPSILON);
     }
 
     @Test
@@ -771,8 +765,8 @@ class HighSpeedMetricsStatisticsTest {
         m.recordRawBodyCost(1, 1, 50);
         m.recordIdle(1, 1, 0, 1, 50, 10.0);
         m.recordIdle(2, 2, 1, 2, 150, 20.0);
-        m.recordExec(1, 1, 2, 3, 250, 30.0);
-        m.recordExec(2, 2, 3, 4, 350, 40.0);
+        m.recordExec(1, 1, 0, 3, 250, 30.0);
+        m.recordExec(2, 2, 1, 4, 350, 40.0);
 
         CoreIterationResult coreResult = HighSpeedMetricsStatistics.calculate(0, 0, m);
         calibration.statistics.iteration.SystemIterationResult systemResult =
@@ -812,10 +806,10 @@ class HighSpeedMetricsStatisticsTest {
         iter0Core1.idleBranchDecisionTotal[0][0] = 20L;
 
         HighSpeedMetrics iter1Core0 = new HighSpeedMetrics(4);
-        iter1Core0.idleBranchDecisionTotal[4][4] = 30L;
+        iter1Core0.idleBranchDecisionTotal[1][4] = 30L;
 
         HighSpeedMetrics iter1Core1 = new HighSpeedMetrics(4);
-        iter1Core1.idleBranchDecisionTotal[4][4] = 40L;
+        iter1Core1.idleBranchDecisionTotal[1][4] = 40L;
 
         List<List<HighSpeedMetrics>> forkIterations =
                 List.of(List.of(iter0Core0, iter0Core1), List.of(iter1Core0, iter1Core1));
@@ -827,9 +821,9 @@ class HighSpeedMetricsStatisticsTest {
         assertEquals(2, fork.participatingCoreCount());
         assertEquals(100L, occ.totalCount());
         assertEquals(30L, occ.exactCounts()[0][0]);
-        assertEquals(70L, occ.exactCounts()[4][4]);
+        assertEquals(70L, occ.exactCounts()[1][4]);
         assertEquals(0.3, occ.normalizedOccupancy()[0][0], EPSILON);
-        assertEquals(0.7, occ.normalizedOccupancy()[4][4], EPSILON);
+        assertEquals(0.7, occ.normalizedOccupancy()[1][4], EPSILON);
     }
 
     @Test
@@ -838,15 +832,14 @@ class HighSpeedMetricsStatisticsTest {
         iter0.idleBranchDecisionTotal[0][0] = 10L; // centroid (0.0, 0.0)
 
         HighSpeedMetrics iter1 = new HighSpeedMetrics(4);
-        iter1.idleBranchDecisionTotal[4][4] = 90L; // centroid (4.0, 4.0)
+        iter1.idleBranchDecisionTotal[1][4] = 90L; // centroid (1.0, 4.0)
 
         List<List<HighSpeedMetrics>> forkIterations = List.of(List.of(iter0), List.of(iter1));
 
         SystemForkResult fork = HighSpeedMetricsStatistics.calculateSystemFork(0, forkIterations);
         BranchOccupancyResult occ = fork.idleOccupancy();
 
-        // Fork centroid = (0*10 + 4*90)/100 = 3.6 (not (0+4)/2 = 2.0)
-        assertEquals(3.6, occ.contentionCentroid(), EPSILON);
+        assertEquals(0.9, occ.contentionCentroid(), EPSILON);
         assertEquals(3.6, occ.bodyCentroid(), EPSILON);
     }
 
@@ -880,20 +873,19 @@ class HighSpeedMetricsStatisticsTest {
     void testNoTransitionsCreatedAcrossIterationBoundaries() {
         HighSpeedMetrics iter0 = new HighSpeedMetrics(16);
         iter0.recordIdle(1, 1, 0, 0, 10, 1.0); // state 0
-        iter0.recordIdle(2, 2, 2, 0, 10, 2.0); // state 10
+        iter0.recordIdle(2, 2, 1, 0, 10, 2.0); // state 5
 
         HighSpeedMetrics iter1 = new HighSpeedMetrics(16);
-        iter1.recordIdle(3, 3, 4, 0, 10, 3.0); // state 20
-        iter1.recordIdle(4, 4, 4, 4, 10, 4.0); // state 24
+        iter1.recordIdle(3, 3, 1, 0, 10, 3.0); // state 5
+        iter1.recordIdle(4, 4, 1, 4, 10, 4.0); // state 9
 
         List<List<HighSpeedMetrics>> forkIterations = List.of(List.of(iter0), List.of(iter1));
         SystemForkResult fork = HighSpeedMetricsStatistics.calculateSystemFork(0, forkIterations);
         TransitionAnalysis head = fork.idleHeadTransitions();
 
-        assertEquals(1L, head.transitionCounts()[0][10]);
-        assertEquals(1L, head.transitionCounts()[20][24]);
-        // Must NOT create synthetic transition between iter0 end (10) and iter1 start (20)
-        assertEquals(0L, head.transitionCounts()[10][20]);
+        assertEquals(1L, head.transitionCounts()[0][5]);
+        assertEquals(1L, head.transitionCounts()[5][9]);
+        assertEquals(0L, head.transitionCounts()[5][5]);
     }
 
     @Test
@@ -904,10 +896,10 @@ class HighSpeedMetricsStatisticsTest {
         iter0.recordIdle(2, 2, 1, 1, 10, 2.0);
 
         HighSpeedMetrics iter1 = new HighSpeedMetrics(64);
-        // Iteration 1: 9 transitions from (0, 0) to (3, 3) -> delta = +3
+        // Iteration 1: 9 transitions from (0, 0) to (1, 3)
         for (int i = 0; i < 9; i++) {
             iter1.recordIdle(i * 2 + 1, 1, 0, 0, 10, 1.0);
-            iter1.recordIdle(i * 2 + 2, 1, 3, 3, 10, 2.0);
+            iter1.recordIdle(i * 2 + 2, 1, 1, 3, 10, 2.0);
         }
 
         List<List<HighSpeedMetrics>> forkIterations = List.of(List.of(iter0), List.of(iter1));
@@ -916,9 +908,9 @@ class HighSpeedMetricsStatisticsTest {
 
         assertTrue(cell.hasVector());
         assertEquals(10L, cell.transitionCount());
-        assertEquals(2.8, cell.meanDeltaContention(), EPSILON);
+        assertEquals(1.0, cell.meanDeltaContention(), EPSILON);
         assertEquals(2.8, cell.meanDeltaBody(), EPSILON);
-        assertEquals(Math.hypot(2.8, 2.8), cell.magnitude(), EPSILON);
+        assertEquals(Math.hypot(1.0, 2.8), cell.magnitude(), EPSILON);
     }
 
     @Test
@@ -989,20 +981,20 @@ class HighSpeedMetricsStatisticsTest {
     void testForkIdleExecCentroidDistanceCalculatedFromForkOccupancyCentroids() {
         HighSpeedMetrics iter0 = new HighSpeedMetrics(16);
         iter0.idleBranchDecisionTotal[0][0] = 50L;
-        iter0.execBranchDecisionTotal[3][4] = 50L;
+        iter0.execBranchDecisionTotal[1][4] = 50L;
 
         HighSpeedMetrics iter1 = new HighSpeedMetrics(16);
         iter1.idleBranchDecisionTotal[0][0] = 50L;
-        iter1.execBranchDecisionTotal[3][4] = 50L;
+        iter1.execBranchDecisionTotal[1][4] = 50L;
 
         List<List<HighSpeedMetrics>> forkIterations = List.of(List.of(iter0), List.of(iter1));
         SystemForkResult fork = HighSpeedMetricsStatistics.calculateSystemFork(0, forkIterations);
 
         assertEquals(0.0, fork.idleOccupancy().contentionCentroid(), EPSILON);
         assertEquals(0.0, fork.idleOccupancy().bodyCentroid(), EPSILON);
-        assertEquals(3.0, fork.execOccupancy().contentionCentroid(), EPSILON);
+        assertEquals(1.0, fork.execOccupancy().contentionCentroid(), EPSILON);
         assertEquals(4.0, fork.execOccupancy().bodyCentroid(), EPSILON);
-        assertEquals(5.0, fork.centroidDistance(), EPSILON);
+        assertEquals(Math.sqrt(17.0), fork.centroidDistance(), EPSILON);
     }
 
     @Test
@@ -1030,12 +1022,12 @@ class HighSpeedMetricsStatisticsTest {
         HighSpeedMetrics m1 = new HighSpeedMetrics(16);
         m1.recordCycleStart(1, 1, 10, 5, 2, 4, 1, 100, 10.0);
         m1.recordIdle(1, 1, 0, 1, 50, 10.0);
-        m1.recordExec(1, 1, 2, 3, 250, 30.0);
+        m1.recordExec(1, 1, 0, 3, 250, 30.0);
 
         HighSpeedMetrics m2 = new HighSpeedMetrics(16);
         m2.recordCycleStart(2, 2, 20, 5, 2, 4, 2, 200, 20.0);
         m2.recordIdle(2, 2, 1, 2, 150, 20.0);
-        m2.recordExec(2, 2, 3, 4, 350, 40.0);
+        m2.recordExec(2, 2, 1, 4, 350, 40.0);
 
         List<HighSpeedMetrics> coreMetrics = List.of(m1, m2);
         SystemIterationResult iterResult = HighSpeedMetricsStatistics.calculateSystem(0, coreMetrics);

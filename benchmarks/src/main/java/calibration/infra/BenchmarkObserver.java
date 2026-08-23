@@ -2,6 +2,7 @@ package calibration.infra;
 
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.PullBucketTreatment;
+import calibration.statistics.DecisionGrid;
 import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.core.flow_control.PullBucketDivisionMode;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
@@ -332,14 +333,14 @@ public class BenchmarkObserver extends FragmentObserver {
         public final long[][] rawBodyCostSteadyStateState;
 
         public final long[][] idleBranchDecisionTotal =
-                new long[calibration.statistics.Band.GRID_SIZE][calibration.statistics.Band.GRID_SIZE];
+                new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         public final long[][] idleWarmupDecisionState;
         public final double[] idleWarmupSmoothedBodyCost;
         public final long[][] idleSteadyStateDecisionState;
         public final double[] idleSteadyStateSmoothedBodyCost;
 
         public final long[][] execBranchDecisionTotal =
-                new long[calibration.statistics.Band.GRID_SIZE][calibration.statistics.Band.GRID_SIZE];
+                new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         public final long[][] execWarmupDecisionState;
         public final double[] execWarmupSmoothedBodyCost;
         public final long[][] execSteadyStateDecisionState;
@@ -697,23 +698,24 @@ public class BenchmarkObserver extends FragmentObserver {
                 int bodyPolicy,
                 long contention,
                 double smoothedBodyCost) {
+            int normalizedBodyPolicy = Math.max(0, bodyPolicy);
             int idx = (int) (idleDecisionObservations & this.mask);
             if (idleDecisionObservations++ < rawSampleLimit) {
                 idleWarmupDecisionState[idx][0] = cycleEpoch;
                 idleWarmupDecisionState[idx][1] = batchEpoch;
                 idleWarmupDecisionState[idx][2] = contentionPolicy;
-                idleWarmupDecisionState[idx][3] = bodyPolicy;
+                idleWarmupDecisionState[idx][3] = normalizedBodyPolicy;
                 idleWarmupDecisionState[idx][4] = contention;
                 idleWarmupSmoothedBodyCost[idx] = smoothedBodyCost;
             }
             idleSteadyStateDecisionState[idx][0] = cycleEpoch;
             idleSteadyStateDecisionState[idx][1] = batchEpoch;
             idleSteadyStateDecisionState[idx][2] = contentionPolicy;
-            idleSteadyStateDecisionState[idx][3] = bodyPolicy;
+            idleSteadyStateDecisionState[idx][3] = normalizedBodyPolicy;
             idleSteadyStateDecisionState[idx][4] = contention;
             idleSteadyStateSmoothedBodyCost[idx] = smoothedBodyCost;
 
-            idleBranchDecisionTotal[contentionPolicy][bodyPolicy]++;
+            idleBranchDecisionTotal[contentionPolicy][normalizedBodyPolicy]++;
         }
 
         public void recordExec(

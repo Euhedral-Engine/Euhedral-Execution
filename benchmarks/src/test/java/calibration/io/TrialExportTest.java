@@ -63,8 +63,8 @@ class TrialExportTest {
         metrics.recordIdle(2, 2, 1, 2, 150, 20.0);
 
         // Exec decisions (contentionPolicy=2, bodyPolicy=3 -> state 13) -> (3, 4 -> state 19)
-        metrics.recordExec(1, 1, 2, 3, 250, 30.0);
-        metrics.recordExec(2, 2, 3, 4, 350, 40.0);
+        metrics.recordExec(1, 1, 0, 3, 250, 30.0);
+        metrics.recordExec(2, 2, 1, 4, 350, 40.0);
 
         return metrics;
     }
@@ -355,8 +355,8 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 50 (FORK idle+exec) + 50 (ITERATION idle+exec) + 50 (CORE 0 idle+exec) = 151 lines
-        assertEquals(151, lines.size());
+        // 1 header + 20 rows for each of FORK, ITERATION, and CORE scopes.
+        assertEquals(61, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tdecisionType\tcontentionBand\tbodyBand\tcount\tprobability\tcontentionCentroid\tbodyCentroid\tcontentionVariance\tbodyVariance\tcontentionBodyCovariance\tradiusSquared\tradius",
                 lines.get(0));
@@ -391,9 +391,8 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 3 (FORK + ITERATION + CORE) * 2 (decisionTypes) * 2 (segments) * 25 * 25 = 1 + 3 * 2500 = 7501
-        // lines
-        assertEquals(7501, lines.size());
+        // 1 header + 3 scopes * 2 decision types * 2 segments * 10 * 10 states.
+        assertEquals(1201, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tdecisionType\tsegment\tfromState\tfromContention\tfromBody\ttoState\ttoContention\ttoBody\tcount\tprobability\tselfTransitionRate\tdominantOutgoingState\tdominantOutgoingProbability",
                 lines.get(0));
@@ -428,9 +427,8 @@ class TrialExportTest {
         assertTrue(Files.exists(checksum));
 
         List<String> lines = Files.readAllLines(tsv, StandardCharsets.UTF_8);
-        // 1 header + 3 (FORK + ITERATION + CORE) * 2 (decisionTypes) * 2 (segments) * 25 (cells) = 1 + 3 * 100 = 301
-        // lines
-        assertEquals(301, lines.size());
+        // 1 header + 3 scopes * 2 decision types * 2 segments * 10 cells.
+        assertEquals(121, lines.size());
         assertEquals(
                 "iteration\tscope\tcore\tdecisionType\tsegment\tcontentionBand\tbodyBand\ttransitionCount\tmeanDeltaContention\tmeanDeltaBody\tmagnitude",
                 lines.get(0));
@@ -582,8 +580,8 @@ class TrialExportTest {
     void testExportOccupancyTsvSkipsUnobservedDecisionTypes(@TempDir Path tempDir) throws Exception {
         // Metrics with only exec decisions recorded (no idle decisions)
         HighSpeedMetrics metrics = new HighSpeedMetrics(8);
-        metrics.recordExec(1, 1, 2, 3, 250, 30.0);
-        metrics.recordExec(2, 2, 3, 4, 350, 40.0);
+        metrics.recordExec(1, 1, 0, 3, 250, 30.0);
+        metrics.recordExec(2, 2, 1, 4, 350, 40.0);
 
         CoreIterationResult coreResult = HighSpeedMetricsStatistics.calculate(0, 1, metrics);
         SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(metrics));

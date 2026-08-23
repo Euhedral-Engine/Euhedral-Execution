@@ -1,17 +1,17 @@
 package calibration.statistics.iteration;
 
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import java.util.Arrays;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// Retains exact 5x5 branch counts alongside the derived occupancy summary.
+/// Retains exact 2x5 branch counts alongside the derived occupancy summary.
 public record BranchOccupancyResult(
         long[][] exactCounts, @NonNull OccupancySummary summary) {
 
-    public static final BranchOccupancyResult EMPTY =
-            new BranchOccupancyResult(new long[Band.GRID_SIZE][Band.GRID_SIZE], OccupancySummary.EMPTY);
+    public static final BranchOccupancyResult EMPTY = new BranchOccupancyResult(
+            new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES], OccupancySummary.EMPTY);
 
     public BranchOccupancyResult {
         Objects.requireNonNull(summary, "summary must not be null");
@@ -24,7 +24,7 @@ public record BranchOccupancyResult(
             }
             exactCounts = copy;
         } else {
-            exactCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+            exactCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         }
     }
 
@@ -36,10 +36,10 @@ public record BranchOccupancyResult(
         if (counts == null) {
             return EMPTY;
         }
-        long[][] copy = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        for (int i = 0; i < Band.GRID_SIZE && i < counts.length; i++) {
+        long[][] copy = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES && i < counts.length; i++) {
             if (counts[i] != null) {
-                System.arraycopy(counts[i], 0, copy[i], 0, Math.min(counts[i].length, Band.GRID_SIZE));
+                System.arraycopy(counts[i], 0, copy[i], 0, Math.min(counts[i].length, DecisionGrid.BODY_OUTCOMES));
             }
         }
         OccupancySummary summary = OccupancyMesh.analyze(copy);

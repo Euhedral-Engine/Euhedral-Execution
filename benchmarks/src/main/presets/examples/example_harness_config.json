@@ -59,34 +59,8 @@
       // "decisionWeightProfile": "default-weights",
       // Optional: Inline decision weights configuration
       "decisionWeights": {
-        "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
-        "idleBodyCostWeights": [
-          { "xs": 0, "s": 0, "m": 24, "h": 256 },
-          { "xs": 0, "s": 0, "m": 24, "h": 256 },
-          { "xs": 0, "s": 0, "m": 24, "h": 256 },
-          { "xs": 0, "s": 24, "m": 96, "h": 256 }
-        ],
-        "idleTimeNs": [
-          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-          { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-          { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
-        ],
-        "execContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
-        "execBodyCostWeights": [
-          { "xs": 0, "s": 24, "m": 96, "h": 256 },
-          { "xs": 0, "s": 24, "m": 96, "h": 256 },
-          { "xs": 0, "s": 24, "m": 96, "h": 256 },
-          { "xs": 0, "s": 24, "m": 96, "h": 256 }
-        ],
-        "executionPolicies": [
-          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-          { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
-        ]
+        "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
+        "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
       },
       "rawSampleLimit": 1024,
       "observeCycleStart": false,
@@ -120,64 +94,12 @@
   // Optional: Reusable fragment decision weights profiles
   "decisionWeightProfiles": {
     "default-weights": {
-      "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
-      "idleBodyCostWeights": [
-        { "xs": 0, "s": 0, "m": 24, "h": 256 },
-        { "xs": 0, "s": 0, "m": 24, "h": 256 },
-        { "xs": 0, "s": 0, "m": 24, "h": 256 },
-        { "xs": 0, "s": 24, "m": 96, "h": 256 }
-      ],
-      "idleTimeNs": [
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
-      ],
-      "execContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
-      "execBodyCostWeights": [
-        { "xs": 0, "s": 24, "m": 96, "h": 256 },
-        { "xs": 0, "s": 24, "m": 96, "h": 256 },
-        { "xs": 0, "s": 24, "m": 96, "h": 256 },
-        { "xs": 0, "s": 24, "m": 96, "h": 256 }
-      ],
-      "executionPolicies": [
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
-      ]
+      "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
+      "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
     },
     "aggressive-weights": {
-      "idleContentionThresholds": { "xsContention": 1000000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
-      "idleBodyCostWeights": [
-        { "xs": 0, "s": 0, "m": 0, "h": 0 },
-        { "xs": 0, "s": 0, "m": 0, "h": 0 },
-        { "xs": 0, "s": 0, "m": 0, "h": 0 },
-        { "xs": 0, "s": 0, "m": 0, "h": 0 }
-      ],
-      "idleTimeNs": [
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-        { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-      ],
-      "execContentionThresholds": { "xsContention": 500000, "sContention": 1000000, "mContention": 1000000, "hContention": 1000000 },
-      "execBodyCostWeights": [
-        { "xs": 0, "s": 0, "m": 0, "h": 0 },
-        { "xs": 0, "s": 0, "m": 0, "h": 0 },
-        { "xs": 0, "s": 0, "m": 0, "h": 0 },
-        { "xs": 0, "s": 0, "m": 0, "h": 0 }
-      ],
-      "executionPolicies": [
-        { "xsBody": "STAGED", "sBody": "STAGED", "mBody": "STAGED", "hBody": "STAGED", "xhBody": "STAGED" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" },
-        { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "DIRECT" }
-      ]
+      "idleBodyCostWeights": { "xs": 0, "s": 0, "m": 0, "h": 0 },
+      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
     }
   },
   // Optional: Parameter sweep declarations
@@ -275,34 +197,8 @@
         // "decisionWeightProfile": "default-weights",
         // Optional: Inline decision weights configuration
         "decisionWeights": {
-          "idleContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
-          "idleBodyCostWeights": [
-            { "xs": 0, "s": 0, "m": 24, "h": 256 },
-            { "xs": 0, "s": 0, "m": 24, "h": 256 },
-            { "xs": 0, "s": 0, "m": 24, "h": 256 },
-            { "xs": 0, "s": 24, "m": 96, "h": 256 }
-          ],
-          "idleTimeNs": [
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 },
-            { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
-          ],
-          "execContentionThresholds": { "xsContention": 650000, "sContention": 650000, "mContention": 650000, "hContention": 980000 },
-          "execBodyCostWeights": [
-            { "xs": 0, "s": 24, "m": 96, "h": 256 },
-            { "xs": 0, "s": 24, "m": 96, "h": 256 },
-            { "xs": 0, "s": 24, "m": 96, "h": 256 },
-            { "xs": 0, "s": 24, "m": 96, "h": 256 }
-          ],
-          "executionPolicies": [
-            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" },
-            { "xsBody": "DIRECT", "sBody": "DIRECT", "mBody": "DIRECT", "hBody": "DIRECT", "xhBody": "STAGED" }
-          ]
+          "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
+          "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
         },
         "rawSampleLimit": 1024,
         "observeCycleStart": false,

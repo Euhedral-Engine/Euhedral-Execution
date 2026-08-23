@@ -3,6 +3,7 @@ package calibration.statistics.iteration;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import calibration.statistics.DecisionGrid;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -12,8 +13,8 @@ class TransitionAnalysisTest {
 
     @Test
     void testStateConversions() {
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+            for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                 int state = TransitionAnalysis.toState(i, j);
                 assertEquals(i * 5 + j, state);
                 assertEquals(i, TransitionAnalysis.contentionBandOf(state));
@@ -24,13 +25,13 @@ class TransitionAnalysisTest {
         assertThrows(IllegalArgumentException.class, () -> TransitionAnalysis.toState(-1, 0));
         assertThrows(IllegalArgumentException.class, () -> TransitionAnalysis.toState(0, 5));
         assertThrows(IllegalArgumentException.class, () -> TransitionAnalysis.contentionBandOf(-1));
-        assertThrows(IllegalArgumentException.class, () -> TransitionAnalysis.bodyBandOf(25));
+        assertThrows(IllegalArgumentException.class, () -> TransitionAnalysis.bodyBandOf(DecisionGrid.TOTAL_STATES));
     }
 
     @Test
     void testEmptyAndShortSequences() {
         TransitionAnalysis analysis = TransitionAnalysis.compute(new int[0]);
-        for (int i = 0; i < 25; i++) {
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
             assertEquals(0.0, analysis.selfTransitionRate(i), EPSILON);
             assertEquals(-1, analysis.dominantOutgoingState(i));
             assertEquals(0.0, analysis.dominantOutgoingProbability(i), EPSILON);
@@ -64,7 +65,7 @@ class TransitionAnalysisTest {
         assertEquals(1.0, probs[1][0], EPSILON);
 
         // State 2 has no outgoing transitions -> row remains all 0.0
-        for (int b = 0; b < 25; b++) {
+        for (int b = 0; b < DecisionGrid.TOTAL_STATES; b++) {
             assertEquals(0.0, probs[2][b], EPSILON);
         }
         assertEquals(-1, analysis.dominantOutgoingState(2));
@@ -101,7 +102,7 @@ class TransitionAnalysisTest {
         // (2, 0) - involves 0
         // (3, 4) - involves neither 0 nor 1
         // Sequence: 0 -> 1 -> 2 -> 0, then 3 -> 4
-        long[][] counts = new long[25][25];
+        long[][] counts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         counts[0][1] = 1L;
         counts[1][2] = 1L;
         counts[2][0] = 1L;
@@ -118,7 +119,7 @@ class TransitionAnalysisTest {
 
     @Test
     void testOscillationZeroDenominator() {
-        long[][] counts = new long[25][25];
+        long[][] counts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         counts[3][4] = 5L;
         TransitionAnalysis analysis = TransitionAnalysis.computeFromCounts(counts);
 

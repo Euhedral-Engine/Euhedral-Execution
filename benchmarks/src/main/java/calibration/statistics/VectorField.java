@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// 5x5 local vector field showing average next-state displacement for every source cell.
+/// 2x5 local vector field showing average next-state displacement for every source cell.
 public record VectorField(VectorCell[][] grid) {
 
     public VectorField {
@@ -23,7 +23,7 @@ public record VectorField(VectorCell[][] grid) {
     @Override
     public VectorCell[][] grid() {
         if (grid == null) {
-            return new VectorCell[Band.GRID_SIZE][Band.GRID_SIZE];
+            return new VectorCell[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         }
         VectorCell[][] copy = new VectorCell[grid.length][];
         for (int i = 0; i < grid.length; i++) {
@@ -33,17 +33,20 @@ public record VectorField(VectorCell[][] grid) {
     }
 
     public VectorCell cell(int contentionBand, int bodyBand) {
-        if (contentionBand < 0 || contentionBand >= Band.GRID_SIZE || bodyBand < 0 || bodyBand >= Band.GRID_SIZE) {
+        if (contentionBand < 0
+                || contentionBand >= DecisionGrid.CONTENTION_OUTCOMES
+                || bodyBand < 0
+                || bodyBand >= DecisionGrid.BODY_OUTCOMES) {
             throw new IllegalArgumentException("Coordinates out of bounds: (" + contentionBand + ", " + bodyBand + ")");
         }
         return grid[contentionBand][bodyBand];
     }
 
     public VectorCell cell(int stateIndex) {
-        if (stateIndex < 0 || stateIndex >= Band.TOTAL_STATES) {
+        if (stateIndex < 0 || stateIndex >= DecisionGrid.TOTAL_STATES) {
             throw new IllegalArgumentException("State index out of bounds: " + stateIndex);
         }
-        return grid[stateIndex / Band.GRID_SIZE][stateIndex % Band.GRID_SIZE];
+        return grid[stateIndex / DecisionGrid.BODY_OUTCOMES][stateIndex % DecisionGrid.BODY_OUTCOMES];
     }
 
     public static VectorField compute(int[] stateSequence) {
@@ -58,25 +61,25 @@ public record VectorField(VectorCell[][] grid) {
     }
 
     public static VectorField compute(long[][] transitionCounts) {
-        if (transitionCounts == null || transitionCounts.length != Band.TOTAL_STATES) {
+        if (transitionCounts == null || transitionCounts.length != DecisionGrid.TOTAL_STATES) {
             throw new IllegalArgumentException(
-                    "transitionCounts must be " + Band.TOTAL_STATES + "x" + Band.TOTAL_STATES);
+                    "transitionCounts must be " + DecisionGrid.TOTAL_STATES + "x" + DecisionGrid.TOTAL_STATES);
         }
 
-        VectorCell[][] grid = new VectorCell[Band.GRID_SIZE][Band.GRID_SIZE];
+        VectorCell[][] grid = new VectorCell[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
 
-        for (int i = 0; i < Band.GRID_SIZE; i++) {
-            for (int j = 0; j < Band.GRID_SIZE; j++) {
-                int sourceState = i * Band.GRID_SIZE + j;
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+            for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
+                int sourceState = i * DecisionGrid.BODY_OUTCOMES + j;
                 long count = 0L;
                 double sumDeltaContention = 0.0;
                 double sumDeltaBody = 0.0;
 
-                for (int nextState = 0; nextState < Band.TOTAL_STATES; nextState++) {
+                for (int nextState = 0; nextState < DecisionGrid.TOTAL_STATES; nextState++) {
                     long transitionCount = transitionCounts[sourceState][nextState];
                     if (transitionCount > 0L) {
-                        int nextI = nextState / Band.GRID_SIZE;
-                        int nextJ = nextState % Band.GRID_SIZE;
+                        int nextI = nextState / DecisionGrid.BODY_OUTCOMES;
+                        int nextJ = nextState % DecisionGrid.BODY_OUTCOMES;
                         int deltaI = nextI - i;
                         int deltaJ = nextJ - j;
 

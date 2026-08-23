@@ -1,15 +1,12 @@
 package calibration.statistics;
 
-/// Fixed 5-element contention and body coordinate bands.
+/// Fixed five-element body-cost coordinate bands.
 public enum Band {
     XS(0),
     S(1),
     M(2),
     H(3),
     XH(4);
-
-    public static final int GRID_SIZE = 5;
-    public static final int TOTAL_STATES = GRID_SIZE * GRID_SIZE;
 
     private final int index;
 

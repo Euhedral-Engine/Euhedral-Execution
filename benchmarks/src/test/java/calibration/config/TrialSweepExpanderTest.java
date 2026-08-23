@@ -134,36 +134,35 @@ class TrialSweepExpanderTest {
     @Test
     void nestedObjectProperty() {
         SweepParameter param = new SweepParameter(
-                "/calibrationConfig/decisionWeights/execContentionThresholds/xsContention",
-                List.of(new LongNode(10_000L), new LongNode(20_000L)));
+                "/calibrationConfig/decisionWeights/idleBodyCostWeights/xs", List.of(new IntNode(10), new IntNode(20)));
         SweepConfig sweep = new SweepConfig("sweep-nested", "trial-001", List.of(param));
 
         List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
         assertEquals(2, generated.size());
 
         assertEquals(
-                10_000L,
+                10,
                 generated
                         .get(0)
                         .calibrationConfig()
                         .decisionWeights()
-                        .execContentionThresholds()
-                        .xsContention());
+                        .idleBodyCostWeights()
+                        .xs());
         assertEquals(
-                20_000L,
+                20,
                 generated
                         .get(1)
                         .calibrationConfig()
                         .decisionWeights()
-                        .execContentionThresholds()
-                        .xsContention());
+                        .idleBodyCostWeights()
+                        .xs());
     }
 
     /// Verifies array element property mutation via JSON Pointer.
     @Test
-    void arrayElementProperty() {
+    void idlePolicyProperty() {
         SweepParameter param = new SweepParameter(
-                "/calibrationConfig/decisionWeights/idleTimeNs/4/sPark",
+                "/calibrationConfig/decisionWeights/idleTimeNs/sPark",
                 List.of(new LongNode(1000L), new LongNode(2000L)));
         SweepConfig sweep = new SweepConfig("sweep-array", "trial-001", List.of(param));
 
@@ -177,7 +176,6 @@ class TrialSweepExpanderTest {
                         .calibrationConfig()
                         .decisionWeights()
                         .idleTimeNs()
-                        .get(4)
                         .sPark());
         assertEquals(
                 2000L,
@@ -186,39 +184,36 @@ class TrialSweepExpanderTest {
                         .calibrationConfig()
                         .decisionWeights()
                         .idleTimeNs()
-                        .get(4)
                         .sPark());
     }
 
-    /// Verifies enum value property mutation (e.g. DIRECT / STAGED / SKIP).
+    /// Verifies another scalar policy property can be swept.
     @Test
-    void enumValueProperty() {
+    void bodyCostProperty() {
         SweepParameter param = new SweepParameter(
-                "/calibrationConfig/decisionWeights/executionPolicies/4/mBody",
-                List.of(new TextNode("DIRECT"), new TextNode("STAGED")));
-        SweepConfig sweep = new SweepConfig("sweep-enum", "trial-001", List.of(param));
+                "/calibrationConfig/decisionWeights/idleBodyCostWeights/h",
+                List.of(new IntNode(288), new IntNode(320)));
+        SweepConfig sweep = new SweepConfig("sweep-body-cost", "trial-001", List.of(param));
 
         List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
         assertEquals(2, generated.size());
 
         assertEquals(
-                io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath.DIRECT,
+                288,
                 generated
                         .get(0)
                         .calibrationConfig()
                         .decisionWeights()
-                        .executionPolicies()
-                        .get(4)
-                        .mBody());
+                        .idleBodyCostWeights()
+                        .h());
         assertEquals(
-                io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath.STAGED,
+                320,
                 generated
                         .get(1)
                         .calibrationConfig()
                         .decisionWeights()
-                        .executionPolicies()
-                        .get(4)
-                        .mBody());
+                        .idleBodyCostWeights()
+                        .h());
     }
 
     /// Verifies disabled base template generates enabled candidates.

@@ -87,8 +87,10 @@ final class FragmentDecisionTree {
         }
 
         if (contention <= CONTENTION_THRESHOLD) {
-            this.observer.idleBranchDecision(
-                    this.core, this.socket, cycleEpoch, batchEpoch, 0, -1, contention, this.smoothedBodyCostNs);
+            if (this.observer != null) {
+                this.observer.idleBranchDecision(
+                        this.core, this.socket, cycleEpoch, batchEpoch, 0, -1, contention, this.smoothedBodyCostNs);
+            }
             return -1;
         }
 
@@ -157,9 +159,6 @@ final class FragmentDecisionTree {
         if (this.executionPath == ExecutionPath.SKIP_THEN_DIRECT) {
             this.executionPath = ExecutionPath.DIRECT;
             return this.executionPath;
-        } else if (this.executionPath == ExecutionPath.SKIP_THEN_STAGED) {
-            this.executionPath = ExecutionPath.STAGED;
-            return this.executionPath;
         }
 
         this.executionPath = executionPath(cycleEpoch, batchEpoch, contention);
@@ -168,12 +167,16 @@ final class FragmentDecisionTree {
 
     private ExecutionPath executionPath(long cycleEpoch, long batchEpoch, long contention) {
         if (contention <= CONTENTION_THRESHOLD) {
-            this.observer.execBranchDecision(
-                    this.core, this.socket, cycleEpoch, batchEpoch, 0, 0, contention, this.smoothedBodyCostNs);
+            if (this.observer != null) {
+                this.observer.execBranchDecision(
+                        this.core, this.socket, cycleEpoch, batchEpoch, 0, 0, contention, this.smoothedBodyCostNs);
+            }
             return ExecutionPath.DIRECT;
         }
-        this.observer.execBranchDecision(
-                this.core, this.socket, cycleEpoch, batchEpoch, 1, 0, contention, this.smoothedBodyCostNs);
+        if (this.observer != null) {
+            this.observer.execBranchDecision(
+                    this.core, this.socket, cycleEpoch, batchEpoch, 1, 0, contention, this.smoothedBodyCostNs);
+        }
         return ExecutionPath.STAGED;
     }
 

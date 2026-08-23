@@ -12,8 +12,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import calibration.config.ComparisonOptions;
 import calibration.config.TrialConfig;
 import calibration.infra.Constants;
-import calibration.statistics.Band;
 import calibration.statistics.ComparisonOutcome;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorField;
 import calibration.statistics.iteration.BranchOccupancyResult;
 import calibration.statistics.iteration.CoreIterationResult;
@@ -258,12 +258,12 @@ class ComparisonSchemaTest {
     }
 
     @Test
-    void testOccupancyComparisonAcceptsFull5x5Structures() {
+    void testOccupancyComparisonAcceptsFull2x5Structures() {
         BranchOccupancyResult base = BranchOccupancyResult.EMPTY;
         BranchOccupancyResult cand = BranchOccupancyResult.EMPTY;
 
-        long[][] countDeltas = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        double[][] probDeltas = new double[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] countDeltas = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        double[][] probDeltas = new double[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         countDeltas[0][0] = 50L;
         probDeltas[0][0] = 0.5;
 
@@ -297,16 +297,16 @@ class ComparisonSchemaTest {
     }
 
     @Test
-    void testTransitionComparisonAcceptsFull25x25Structures() {
+    void testTransitionComparisonAcceptsFull10x10Structures() {
         TransitionAnalysis base = TransitionAnalysis.compute(new int[] {0, 1, 2, 0});
         TransitionAnalysis cand = TransitionAnalysis.compute(new int[] {0, 2, 1, 0});
 
-        long[][] countDeltas = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        double[][] probDeltas = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        double[] selfRateDeltas = new double[Band.TOTAL_STATES];
-        int[] candDominantStates = new int[Band.TOTAL_STATES];
-        double[] domProbDeltas = new double[Band.TOTAL_STATES];
-        double[][] oscDeltas = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] countDeltas = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        double[][] probDeltas = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        double[] selfRateDeltas = new double[DecisionGrid.TOTAL_STATES];
+        int[] candDominantStates = new int[DecisionGrid.TOTAL_STATES];
+        double[] domProbDeltas = new double[DecisionGrid.TOTAL_STATES];
+        double[][] oscDeltas = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
 
         countDeltas[0][1] = -1L;
         countDeltas[0][2] = 1L;
@@ -318,22 +318,23 @@ class ComparisonSchemaTest {
         assertSame(cand, tc.candidate());
         assertEquals(-1L, tc.countDeltas()[0][1]);
         assertEquals(1L, tc.countDeltas()[0][2]);
-        assertEquals(Band.TOTAL_STATES, tc.countDeltas().length);
-        assertEquals(Band.TOTAL_STATES, tc.probabilityDeltas().length);
-        assertEquals(Band.TOTAL_STATES, tc.selfTransitionRateDeltas().length);
-        assertEquals(Band.TOTAL_STATES, tc.candidateDominantOutgoingStates().length);
-        assertEquals(Band.TOTAL_STATES, tc.dominantOutgoingProbabilityDeltas().length);
-        assertEquals(Band.TOTAL_STATES, tc.oscillationScoreDeltas().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, tc.countDeltas().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, tc.probabilityDeltas().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, tc.selfTransitionRateDeltas().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, tc.candidateDominantOutgoingStates().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, tc.dominantOutgoingProbabilityDeltas().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, tc.oscillationScoreDeltas().length);
     }
 
     @Test
-    void testVectorComparisonPreservesAll25Cells() {
+    void testVectorComparisonPreservesAll10Cells() {
         VectorField base = VectorField.compute(new int[] {0, 1, 2, 0});
         VectorField cand = VectorField.compute(new int[] {0, 2, 1, 0});
 
-        VectorCellComparison[][] cells = new VectorCellComparison[Band.GRID_SIZE][Band.GRID_SIZE];
-        for (int c = 0; c < Band.GRID_SIZE; c++) {
-            for (int b = 0; b < Band.GRID_SIZE; b++) {
+        VectorCellComparison[][] cells =
+                new VectorCellComparison[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+            for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                 cells[c][b] = new VectorCellComparison(c, b, base.cell(c, b), cand.cell(c, b), 10L, 0.1, -0.2, 0.2236);
             }
         }
@@ -343,15 +344,15 @@ class ComparisonSchemaTest {
         assertSame(cand, vfc.candidate());
 
         // Check grid coordinates and state index access
-        for (int c = 0; c < Band.GRID_SIZE; c++) {
-            for (int b = 0; b < Band.GRID_SIZE; b++) {
+        for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+            for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                 VectorCellComparison cell = vfc.cell(c, b);
                 assertNotNull(cell);
                 assertEquals(c, cell.contentionBand());
                 assertEquals(b, cell.bodyBand());
                 assertEquals(10L, cell.transitionCountDelta());
 
-                int state = c * Band.GRID_SIZE + b;
+                int state = c * DecisionGrid.BODY_OUTCOMES + b;
                 assertSame(cell, vfc.cell(state));
             }
         }

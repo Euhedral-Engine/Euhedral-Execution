@@ -10,7 +10,7 @@ import calibration.io.exceptions.ChecksumMismatchException;
 import calibration.io.exceptions.MalformedArtifactException;
 import calibration.io.exceptions.MissingArtifactException;
 import calibration.io.exceptions.MissingAuthoritativeSummaryException;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.DescriptiveSummary;
 import calibration.statistics.QuantileSummary;
 import calibration.statistics.VectorCell;
@@ -414,8 +414,8 @@ public final class CompletedRunLoader {
         Map<String, double[]> summaryFieldsMap = new HashMap<>();
 
         for (String dec : DECISION_TYPES) {
-            countsMap.put(dec, new long[Band.GRID_SIZE][Band.GRID_SIZE]);
-            probsMap.put(dec, new double[Band.GRID_SIZE][Band.GRID_SIZE]);
+            countsMap.put(dec, new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES]);
+            probsMap.put(dec, new double[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES]);
             summaryFieldsMap.put(
                     dec,
                     new double
@@ -448,7 +448,11 @@ public final class CompletedRunLoader {
                 double[][] probs = probsMap.get(decisionType);
                 double[] fields = summaryFieldsMap.get(decisionType);
 
-                if (counts != null && c >= 0 && c < Band.GRID_SIZE && b >= 0 && b < Band.GRID_SIZE) {
+                if (counts != null
+                        && c >= 0
+                        && c < DecisionGrid.CONTENTION_OUTCOMES
+                        && b >= 0
+                        && b < DecisionGrid.BODY_OUTCOMES) {
                     counts[c][b] = count;
                     probs[c][b] = prob;
                     fields[0] = parseDouble(parts[8]); // contentionCentroid
@@ -472,8 +476,8 @@ public final class CompletedRunLoader {
             double[] fields = summaryFieldsMap.get(dec);
 
             long totalCount = 0L;
-            for (int i = 0; i < Band.GRID_SIZE; i++) {
-                for (int j = 0; j < Band.GRID_SIZE; j++) {
+            for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+                for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                     totalCount += counts[i][j];
                 }
             }
@@ -492,7 +496,7 @@ public final class CompletedRunLoader {
 
         for (String dec : DECISION_TYPES) {
             for (String seg : SEGMENTS_2) {
-                countsMap.put(dec + "." + seg, new long[Band.TOTAL_STATES][Band.TOTAL_STATES]);
+                countsMap.put(dec + "." + seg, new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES]);
             }
         }
 
@@ -519,7 +523,11 @@ public final class CompletedRunLoader {
                 long count = Long.parseLong(parts[11]);
 
                 long[][] matrix = countsMap.get(dec + "." + seg);
-                if (matrix != null && from >= 0 && from < Band.TOTAL_STATES && to >= 0 && to < Band.TOTAL_STATES) {
+                if (matrix != null
+                        && from >= 0
+                        && from < DecisionGrid.TOTAL_STATES
+                        && to >= 0
+                        && to < DecisionGrid.TOTAL_STATES) {
                     matrix[from][to] = count;
                 }
             }
@@ -542,9 +550,9 @@ public final class CompletedRunLoader {
 
         for (String dec : DECISION_TYPES) {
             for (String seg : SEGMENTS_2) {
-                VectorCell[][] grid = new VectorCell[Band.GRID_SIZE][Band.GRID_SIZE];
-                for (int i = 0; i < Band.GRID_SIZE; i++) {
-                    for (int j = 0; j < Band.GRID_SIZE; j++) {
+                VectorCell[][] grid = new VectorCell[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+                for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+                    for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                         grid[i][j] = VectorCell.empty(i, j);
                     }
                 }
@@ -578,7 +586,11 @@ public final class CompletedRunLoader {
                 double mag = parseDouble(parts[10]);
 
                 VectorCell[][] grid = gridMap.get(dec + "." + seg);
-                if (grid != null && c >= 0 && c < Band.GRID_SIZE && b >= 0 && b < Band.GRID_SIZE) {
+                if (grid != null
+                        && c >= 0
+                        && c < DecisionGrid.CONTENTION_OUTCOMES
+                        && b >= 0
+                        && b < DecisionGrid.BODY_OUTCOMES) {
                     grid[c][b] = new VectorCell(c, b, count, deltaC, deltaB, mag);
                 }
             }
@@ -752,9 +764,11 @@ public final class CompletedRunLoader {
                 transMap.getOrDefault(decisionType + ".steadyState", TransitionAnalysis.compute(new int[0]));
 
         VectorField headVec = vecMap.getOrDefault(
-                decisionType + ".head", new VectorField(new VectorCell[Band.GRID_SIZE][Band.GRID_SIZE]));
+                decisionType + ".head",
+                new VectorField(new VectorCell[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES]));
         VectorField steadyVec = vecMap.getOrDefault(
-                decisionType + ".steadyState", new VectorField(new VectorCell[Band.GRID_SIZE][Band.GRID_SIZE]));
+                decisionType + ".steadyState",
+                new VectorField(new VectorCell[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES]));
 
         CorrelationResult headCorr = getCorr(corrMap, metric + ".head", DecisionStatistics.COLUMN_NAMES);
         CorrelationResult steadyCorr = getCorr(corrMap, metric + ".steadyState", DecisionStatistics.COLUMN_NAMES);

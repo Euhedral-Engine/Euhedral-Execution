@@ -1,12 +1,12 @@
 package calibration.comparisons.schema;
 
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.iteration.BranchOccupancyResult;
 import java.util.Arrays;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// Comparison between matching baseline and candidate 5x5 branch occupancy surfaces.
+/// Comparison between matching baseline and candidate 2x5 branch occupancy surfaces.
 public record OccupancyComparison(
         @NonNull BranchOccupancyResult baseline,
         @NonNull BranchOccupancyResult candidate,
@@ -34,7 +34,7 @@ public record OccupancyComparison(
             }
             countDeltas = copy;
         } else {
-            countDeltas = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+            countDeltas = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         }
 
         if (probabilityDeltas != null) {
@@ -46,7 +46,7 @@ public record OccupancyComparison(
             }
             probabilityDeltas = copy;
         } else {
-            probabilityDeltas = new double[Band.GRID_SIZE][Band.GRID_SIZE];
+            probabilityDeltas = new double[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         }
     }
 

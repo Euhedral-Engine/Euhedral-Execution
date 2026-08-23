@@ -92,12 +92,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -158,12 +154,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -321,12 +313,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -417,12 +405,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -505,12 +489,8 @@ class HarnessConfigTest {
                   "totalRequiredExecutions": 1000000,
                   "invocationTimeoutMillis": 60000,
                   "decisionWeights": {
-                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "idleBodyCostWeights": [],
-                    "idleTimeNs": [],
-                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "execBodyCostWeights": [],
-                    "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                   },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
@@ -535,12 +515,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "rawSampleLimit": 1024,
@@ -582,12 +558,8 @@ class HarnessConfigTest {
                   "totalRequiredExecutions": 1000000,
                   "invocationTimeoutMillis": 60000,
                   "decisionWeights": {
-                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "idleBodyCostWeights": [],
-                    "idleTimeNs": [],
-                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "execBodyCostWeights": [],
-                    "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                   },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
@@ -646,20 +618,12 @@ class HarnessConfigTest {
             {
               "decisionWeightProfiles": {
                 "default-weights": {
-                  "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                  "idleBodyCostWeights": [],
-                  "idleTimeNs": [],
-                  "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                  "execBodyCostWeights": [],
-                  "executionPolicies": []
+                  "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                  "idleTimeNs": { "xsPark": 1, "sPark": 1, "mPark": 1, "hPark": 1, "xhPark": 1 }
                 },
                 "aggressive-weights": {
-                  "idleContentionThresholds": { "xsContention": 10, "sContention": 20, "mContention": 30, "hContention": 40 },
-                  "idleBodyCostWeights": [],
-                  "idleTimeNs": [],
-                  "execContentionThresholds": { "xsContention": 10, "sContention": 20, "mContention": 30, "hContention": 40 },
-                  "execBodyCostWeights": [],
-                  "executionPolicies": []
+                  "idleBodyCostWeights": { "xs": 10, "s": 20, "m": 30, "h": 40 },
+                  "idleTimeNs": { "xsPark": 10, "sPark": 20, "mPark": 30, "hPark": 40, "xhPark": 50 }
                 }
               },
               "trials": [
@@ -676,12 +640,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 1, "sPark": 1, "mPark": 1, "hPark": 1, "xhPark": 1 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -706,14 +666,14 @@ class HarnessConfigTest {
                 1,
                 config.decisionWeightProfiles()
                         .get("default-weights")
-                        .idleContentionThresholds()
-                        .hContention());
+                        .idleBodyCostWeights()
+                        .h());
         assertEquals(
                 40,
                 config.decisionWeightProfiles()
                         .get("aggressive-weights")
-                        .idleContentionThresholds()
-                        .hContention());
+                        .idleBodyCostWeights()
+                        .h());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
@@ -727,12 +687,8 @@ class HarnessConfigTest {
             {
               "decisionWeightProfiles": {
                 "   ": {
-                  "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                  "idleBodyCostWeights": [],
-                  "idleTimeNs": [],
-                  "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                  "execBodyCostWeights": [],
-                  "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                 }
               },
               "trials": []
@@ -834,12 +790,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -1096,12 +1048,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -1263,12 +1211,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -1296,12 +1240,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -1396,12 +1336,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -1459,12 +1395,8 @@ class HarnessConfigTest {
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
                     "decisionWeights": {
-                      "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "idleBodyCostWeights": [],
-                      "idleTimeNs": [],
-                      "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                      "execBodyCostWeights": [],
-                      "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                     },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
@@ -1726,12 +1658,8 @@ class HarnessConfigTest {
                   "totalRequiredExecutions": 1000000,
                   "invocationTimeoutMillis": 60000,
                   "decisionWeights": {
-                    "idleContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "idleBodyCostWeights": [],
-                    "idleTimeNs": [],
-                    "execContentionThresholds": { "xsContention": 1, "sContention": 1, "mContention": 1, "hContention": 1 },
-                    "execBodyCostWeights": [],
-                    "executionPolicies": []
+                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
+                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                   },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
@@ -1781,12 +1709,8 @@ class HarnessConfigTest {
             {
               "decisionWeightProfiles": {
                 "weights-a": {
-                  "idleContentionThresholds": { "xsContention": 50000, "sContention": 50000, "mContention": 50000, "hContention": 50000 },
-                  "idleBodyCostWeights": [],
-                  "idleTimeNs": [],
-                  "execContentionThresholds": { "xsContention": 50000, "sContention": 50000, "mContention": 50000, "hContention": 50000 },
-                  "execBodyCostWeights": [],
-                  "executionPolicies": []
+                  "idleBodyCostWeights": { "xs": 50, "s": 50, "m": 50, "h": 50 },
+                  "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                 }
               },
               "trials": [
@@ -1831,12 +1755,12 @@ class HarnessConfigTest {
         assertEquals("weights-a", resolvedTrial.calibrationConfig().decisionWeightProfile());
         assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
         assertEquals(
-                50000,
+                50,
                 resolvedTrial
                         .calibrationConfig()
                         .decisionWeights()
-                        .idleContentionThresholds()
-                        .xsContention());
+                        .idleBodyCostWeights()
+                        .xs());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
@@ -1850,12 +1774,8 @@ class HarnessConfigTest {
             {
               "decisionWeightProfiles": {
                 "weights-nested": {
-                  "idleContentionThresholds": { "xsContention": 77777, "sContention": 77777, "mContention": 77777, "hContention": 77777 },
-                  "idleBodyCostWeights": [],
-                  "idleTimeNs": [],
-                  "execContentionThresholds": { "xsContention": 77777, "sContention": 77777, "mContention": 77777, "hContention": 77777 },
-                  "execBodyCostWeights": [],
-                  "executionPolicies": []
+                  "idleBodyCostWeights": { "xs": 77, "s": 77, "m": 77, "h": 77 },
+                  "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                 }
               },
               "calibrationProfiles": {
@@ -1904,12 +1824,12 @@ class HarnessConfigTest {
         assertEquals("weights-nested", resolvedTrial.calibrationConfig().decisionWeightProfile());
         assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
         assertEquals(
-                77777,
+                77,
                 resolvedTrial
                         .calibrationConfig()
                         .decisionWeights()
-                        .idleContentionThresholds()
-                        .xsContention());
+                        .idleBodyCostWeights()
+                        .xs());
 
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
@@ -2198,13 +2118,13 @@ class HarnessConfigTest {
         assertEquals(50, resolved.trials().get(1).calibrationConfig().workUnits());
         assertNotNull(resolved.trials().get(1).calibrationConfig().decisionWeights());
         assertEquals(
-                650000,
+                0,
                 resolved.trials()
                         .get(1)
                         .calibrationConfig()
                         .decisionWeights()
-                        .idleContentionThresholds()
-                        .xsContention());
+                        .idleBodyCostWeights()
+                        .xs());
 
         HarnessConfig expanded = TrialSweepExpander.expandHarnessConfig(withImports);
         // Base trial-001 is swept into 3 candidates, plus trial-001 and trial-002 -> 5 trials

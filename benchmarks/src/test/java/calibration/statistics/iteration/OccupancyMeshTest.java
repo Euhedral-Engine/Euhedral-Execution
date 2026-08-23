@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import org.junit.jupiter.api.Test;
 
 class OccupancyMeshTest {
@@ -27,106 +28,100 @@ class OccupancyMeshTest {
         assertTrue(Double.isNaN(summary.radiusSquared()));
         assertTrue(Double.isNaN(summary.radius()));
 
-        OccupancySummary directEmpty = OccupancyMesh.analyze(new long[5][5]);
+        OccupancySummary directEmpty =
+                OccupancyMesh.analyze(new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES]);
         assertEquals(summary, directEmpty);
     }
 
     @Test
     void testSingleCellOccupancy() {
-        // Cell at contention M (2), body H (3)
+        // Cell at high contention (1), body H (3)
         OccupancyMesh mesh = new OccupancyMesh();
-        mesh.record(Band.M, Band.H, 50L);
+        mesh.record(1, Band.H.index(), 50L);
 
         OccupancySummary summary = mesh.summarize();
 
         assertEquals(50L, summary.totalCount());
         assertFalse(summary.isEmpty());
-        assertEquals(2.0, summary.contentionCentroid(), EPSILON);
+        assertEquals(1.0, summary.contentionCentroid(), EPSILON);
         assertEquals(3.0, summary.bodyCentroid(), EPSILON);
         assertEquals(0.0, summary.contentionVariance(), EPSILON);
         assertEquals(0.0, summary.bodyVariance(), EPSILON);
         assertEquals(0.0, summary.contentionBodyCovariance(), EPSILON);
         assertEquals(0.0, summary.radiusSquared(), EPSILON);
         assertEquals(0.0, summary.radius(), EPSILON);
-        assertEquals(1.0, summary.probabilities()[2][3], EPSILON);
+        assertEquals(1.0, summary.probabilities()[1][3], EPSILON);
     }
 
     @Test
     void testSymmetricOccupancy() {
-        // Uniform distribution across all 25 cells
-        long[][] counts = new long[5][5];
-        for (int i = 0; i < 5; i++) {
-            for (int j = 0; j < 5; j++) {
+        // Uniform distribution across all 10 cells
+        long[][] counts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+            for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                 counts[i][j] = 10L;
             }
         }
 
         OccupancySummary summary = OccupancyMesh.analyze(counts);
 
-        assertEquals(250L, summary.totalCount());
-        assertEquals(2.0, summary.contentionCentroid(), EPSILON);
+        assertEquals(100L, summary.totalCount());
+        assertEquals(0.5, summary.contentionCentroid(), EPSILON);
         assertEquals(2.0, summary.bodyCentroid(), EPSILON);
-        // Variance for uniform 0..4 = ((0-2)^2 + (1-2)^2 + (2-2)^2 + (3-2)^2 + (4-2)^2) / 5 = (4+1+0+1+4)/5 = 2.0
-        assertEquals(2.0, summary.contentionVariance(), EPSILON);
+        assertEquals(0.25, summary.contentionVariance(), EPSILON);
         assertEquals(2.0, summary.bodyVariance(), EPSILON);
         assertEquals(0.0, summary.contentionBodyCovariance(), EPSILON);
-        assertEquals(4.0, summary.radiusSquared(), EPSILON);
-        assertEquals(2.0, summary.radius(), EPSILON);
+        assertEquals(2.25, summary.radiusSquared(), EPSILON);
+        assertEquals(1.5, summary.radius(), EPSILON);
     }
 
     @Test
     void testDiagonalOccupancyPositiveCovariance() {
-        // (0,0), (1,1), (2,2), (3,3), (4,4)
-        long[][] counts = new long[5][5];
-        for (int i = 0; i < 5; i++) {
-            counts[i][i] = 1L;
-        }
+        long[][] counts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        counts[0][0] = 1L;
+        counts[1][4] = 1L;
 
         OccupancySummary summary = OccupancyMesh.analyze(counts);
 
-        assertEquals(5L, summary.totalCount());
-        assertEquals(2.0, summary.contentionCentroid(), EPSILON);
+        assertEquals(2L, summary.totalCount());
+        assertEquals(0.5, summary.contentionCentroid(), EPSILON);
         assertEquals(2.0, summary.bodyCentroid(), EPSILON);
-        assertEquals(2.0, summary.contentionVariance(), EPSILON);
-        assertEquals(2.0, summary.bodyVariance(), EPSILON);
-        // Covariance on diagonal: sum((i-2)*(i-2))/5 = 2.0 > 0
-        assertEquals(2.0, summary.contentionBodyCovariance(), EPSILON);
+        assertEquals(0.25, summary.contentionVariance(), EPSILON);
+        assertEquals(4.0, summary.bodyVariance(), EPSILON);
+        assertEquals(1.0, summary.contentionBodyCovariance(), EPSILON);
         assertTrue(summary.contentionBodyCovariance() > 0.0);
     }
 
     @Test
     void testAntiDiagonalOccupancyNegativeCovariance() {
-        // (0,4), (1,3), (2,2), (3,1), (4,0)
-        long[][] counts = new long[5][5];
-        for (int i = 0; i < 5; i++) {
-            counts[i][4 - i] = 1L;
-        }
+        long[][] counts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        counts[0][4] = 1L;
+        counts[1][0] = 1L;
 
         OccupancySummary summary = OccupancyMesh.analyze(counts);
 
-        assertEquals(5L, summary.totalCount());
-        assertEquals(2.0, summary.contentionCentroid(), EPSILON);
+        assertEquals(2L, summary.totalCount());
+        assertEquals(0.5, summary.contentionCentroid(), EPSILON);
         assertEquals(2.0, summary.bodyCentroid(), EPSILON);
-        assertEquals(2.0, summary.contentionVariance(), EPSILON);
-        assertEquals(2.0, summary.bodyVariance(), EPSILON);
-        // Covariance on anti-diagonal: sum((i-2)*(2-i))/5 = -2.0 < 0
-        assertEquals(-2.0, summary.contentionBodyCovariance(), EPSILON);
+        assertEquals(0.25, summary.contentionVariance(), EPSILON);
+        assertEquals(4.0, summary.bodyVariance(), EPSILON);
+        assertEquals(-1.0, summary.contentionBodyCovariance(), EPSILON);
         assertTrue(summary.contentionBodyCovariance() < 0.0);
     }
 
     @Test
     void testCentroidDistance() {
-        long[][] countsA = new long[5][5];
+        long[][] countsA = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         countsA[0][0] = 1L; // Centroid at (0, 0)
         OccupancySummary summaryA = OccupancyMesh.analyze(countsA);
 
-        long[][] countsB = new long[5][5];
-        countsB[3][4] = 1L; // Centroid at (3, 4)
+        long[][] countsB = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        countsB[1][4] = 1L; // Centroid at (1, 4)
         OccupancySummary summaryB = OccupancyMesh.analyze(countsB);
 
-        assertEquals(5.0, summaryA.distanceTo(summaryB), EPSILON);
-        assertEquals(5.0, OccupancySummary.distance(summaryA, summaryB), EPSILON);
-        assertEquals(5.0, OccupancySummary.distance(0.0, 0.0, 3.0, 4.0), EPSILON);
+        assertEquals(Math.sqrt(17.0), summaryA.distanceTo(summaryB), EPSILON);
+        assertEquals(Math.sqrt(17.0), OccupancySummary.distance(summaryA, summaryB), EPSILON);
+        assertEquals(Math.sqrt(17.0), OccupancySummary.distance(0.0, 0.0, 1.0, 4.0), EPSILON);
 
         assertTrue(Double.isNaN(summaryA.distanceTo(OccupancySummary.EMPTY)));
         assertTrue(Double.isNaN(OccupancySummary.distance(summaryA, null)));
@@ -153,10 +148,10 @@ class OccupancyMeshTest {
     @Test
     void testValidation() {
         assertThrows(NullPointerException.class, () -> OccupancyMesh.analyze(null));
-        assertThrows(IllegalArgumentException.class, () -> OccupancyMesh.analyze(new long[4][5]));
-        assertThrows(IllegalArgumentException.class, () -> OccupancyMesh.analyze(new long[5][4]));
+        assertThrows(IllegalArgumentException.class, () -> OccupancyMesh.analyze(new long[1][5]));
+        assertThrows(IllegalArgumentException.class, () -> OccupancyMesh.analyze(new long[2][4]));
 
-        long[][] negativeCounts = new long[5][5];
+        long[][] negativeCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         negativeCounts[1][1] = -5L;
         assertThrows(IllegalArgumentException.class, () -> OccupancyMesh.analyze(negativeCounts));
     }

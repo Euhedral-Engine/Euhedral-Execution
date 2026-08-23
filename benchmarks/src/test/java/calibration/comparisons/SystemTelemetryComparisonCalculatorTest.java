@@ -25,7 +25,7 @@ import calibration.comparisons.schema.TransitionComparison;
 import calibration.comparisons.schema.VectorCellComparison;
 import calibration.comparisons.schema.VectorFieldComparison;
 import calibration.config.TrialConfig;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorField;
 import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.BatchCompleteScalars;
@@ -139,9 +139,9 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testOccupancyIdenticalProducesZeroDeltasAndZeroTV() {
-        long[][] counts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] counts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         counts[0][0] = 50L;
-        counts[2][3] = 50L;
+        counts[1][3] = 50L;
 
         BranchOccupancyResult occ = BranchOccupancyResult.of(counts);
         OccupancyComparison comp = SystemTelemetryComparisonCalculator.compareOccupancy(occ, occ);
@@ -159,8 +159,8 @@ class SystemTelemetryComparisonCalculatorTest {
 
         long[][] countDeltas = comp.countDeltas();
         double[][] probDeltas = comp.probabilityDeltas();
-        for (int i = 0; i < Band.GRID_SIZE; i++) {
-            for (int j = 0; j < Band.GRID_SIZE; j++) {
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+            for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                 assertEquals(0L, countDeltas[i][j]);
                 assertEquals(0.0, probDeltas[i][j], EPSILON);
             }
@@ -169,11 +169,11 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testOccupancyCompletelyDisjointProducesTVOne() {
-        long[][] baseCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] baseCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         baseCounts[0][0] = 100L;
 
-        long[][] candCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        candCounts[4][4] = 100L;
+        long[][] candCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        candCounts[1][4] = 100L;
 
         BranchOccupancyResult base = BranchOccupancyResult.of(baseCounts);
         BranchOccupancyResult cand = BranchOccupancyResult.of(candCounts);
@@ -181,18 +181,18 @@ class SystemTelemetryComparisonCalculatorTest {
         OccupancyComparison comp = SystemTelemetryComparisonCalculator.compareOccupancy(base, cand);
 
         assertEquals(1.0, comp.totalVariationDistance(), EPSILON);
-        assertEquals(4.0, comp.contentionCentroidDelta(), EPSILON);
+        assertEquals(1.0, comp.contentionCentroidDelta(), EPSILON);
         assertEquals(4.0, comp.bodyCentroidDelta(), EPSILON);
-        assertEquals(Math.hypot(4.0, 4.0), comp.centroidDistance(), EPSILON);
+        assertEquals(Math.hypot(1.0, 4.0), comp.centroidDistance(), EPSILON);
     }
 
     @Test
     void testOccupancyPartialDistributionMovementProducesExpectedTV() {
-        long[][] baseCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] baseCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         baseCounts[0][0] = 50L;
         baseCounts[0][1] = 50L;
 
-        long[][] candCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] candCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         candCounts[0][0] = 50L;
         candCounts[0][2] = 50L;
 
@@ -207,13 +207,13 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testOccupancyExactCountAndProbabilityDeltas() {
-        long[][] baseCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] baseCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         baseCounts[1][1] = 20L;
-        baseCounts[2][2] = 80L;
+        baseCounts[0][2] = 80L;
 
-        long[][] candCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] candCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         candCounts[1][1] = 40L;
-        candCounts[2][2] = 60L;
+        candCounts[0][2] = 60L;
 
         BranchOccupancyResult base = BranchOccupancyResult.of(baseCounts);
         BranchOccupancyResult cand = BranchOccupancyResult.of(candCounts);
@@ -221,37 +221,37 @@ class SystemTelemetryComparisonCalculatorTest {
         OccupancyComparison comp = SystemTelemetryComparisonCalculator.compareOccupancy(base, cand);
 
         assertEquals(20L, comp.countDeltas()[1][1]);
-        assertEquals(-20L, comp.countDeltas()[2][2]);
+        assertEquals(-20L, comp.countDeltas()[0][2]);
         assertEquals(0.20, comp.probabilityDeltas()[1][1], EPSILON);
-        assertEquals(-0.20, comp.probabilityDeltas()[2][2], EPSILON);
+        assertEquals(-0.20, comp.probabilityDeltas()[0][2], EPSILON);
     }
 
     @Test
     void testOccupancyCentroidEuclideanDisplacement() {
-        long[][] baseCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] baseCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         baseCounts[1][1] = 100L; // centroid (1.0, 1.0)
 
-        long[][] candCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        candCounts[4][5 - 1] = 100L; // centroid (4.0, 4.0)
+        long[][] candCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        candCounts[0][4] = 100L; // centroid (0.0, 4.0)
 
         BranchOccupancyResult base = BranchOccupancyResult.of(baseCounts);
         BranchOccupancyResult cand = BranchOccupancyResult.of(candCounts);
 
         OccupancyComparison comp = SystemTelemetryComparisonCalculator.compareOccupancy(base, cand);
 
-        assertEquals(3.0, comp.contentionCentroidDelta(), EPSILON);
+        assertEquals(-1.0, comp.contentionCentroidDelta(), EPSILON);
         assertEquals(3.0, comp.bodyCentroidDelta(), EPSILON);
-        assertEquals(Math.hypot(3.0, 3.0), comp.centroidDistance(), EPSILON);
+        assertEquals(Math.hypot(-1.0, 3.0), comp.centroidDistance(), EPSILON);
     }
 
     @Test
     void testOccupancyVarianceCovarianceRadiusDeltas() {
-        long[][] baseCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] baseCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         baseCounts[0][0] = 50L;
-        baseCounts[4][4] = 50L;
+        baseCounts[1][4] = 50L;
 
-        long[][] candCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        candCounts[2][2] = 100L;
+        long[][] candCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        candCounts[1][2] = 100L;
 
         BranchOccupancyResult base = BranchOccupancyResult.of(baseCounts);
         BranchOccupancyResult cand = BranchOccupancyResult.of(candCounts);
@@ -269,11 +269,11 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testTransitionComparisonCountsAndProbabilities() {
-        long[][] baseCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] baseCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         baseCounts[0][1] = 10L;
         baseCounts[0][2] = 10L;
 
-        long[][] candCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] candCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         candCounts[0][1] = 5L;
         candCounts[0][2] = 15L;
 
@@ -292,11 +292,11 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testTransitionSelfTransitionDeltas() {
-        long[][] baseCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] baseCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         baseCounts[3][3] = 2L;
         baseCounts[3][4] = 8L;
 
-        long[][] candCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] candCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         candCounts[3][3] = 8L;
         candCounts[3][4] = 2L;
 
@@ -310,11 +310,11 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testTransitionDominantOutgoingStateAndProbability() {
-        long[][] baseCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] baseCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         baseCounts[0][1] = 7L;
         baseCounts[0][2] = 3L;
 
-        long[][] candCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] candCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         candCounts[0][1] = 2L;
         candCounts[0][2] = 8L;
 
@@ -350,11 +350,11 @@ class SystemTelemetryComparisonCalculatorTest {
         TransitionAnalysis ta = TransitionAnalysis.compute(new int[] {0, 1, 2, 0, 1, 2});
         TransitionComparison tc = SystemTelemetryComparisonCalculator.compareTransitions(ta, ta);
 
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
             assertEquals(0.0, tc.selfTransitionRateDeltas()[i], EPSILON);
             assertEquals(ta.dominantOutgoingState(i), tc.candidateDominantOutgoingStates()[i]);
             assertEquals(0.0, tc.dominantOutgoingProbabilityDeltas()[i], EPSILON);
-            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+            for (int j = 0; j < DecisionGrid.TOTAL_STATES; j++) {
                 assertEquals(0L, tc.countDeltas()[i][j]);
                 assertEquals(0.0, tc.probabilityDeltas()[i][j], EPSILON);
                 assertEquals(0.0, tc.oscillationScoreDeltas()[i][j], EPSILON);
@@ -366,10 +366,10 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testVectorFieldComparisonDeltas() {
-        long[][] baseCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] baseCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         baseCounts[0][1] = 10L; // (0,0) -> (0,1): deltaC=0, deltaB=1
 
-        long[][] candCounts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] candCounts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         candCounts[0][5] = 15L; // (0,0) -> (1,0): deltaC=1, deltaB=0
 
         VectorField base = VectorField.compute(baseCounts);
@@ -392,8 +392,8 @@ class SystemTelemetryComparisonCalculatorTest {
         VectorField vf = VectorField.compute(new int[] {0, 1, 2, 3, 0});
         VectorFieldComparison vfc = SystemTelemetryComparisonCalculator.compareVectorField(vf, vf);
 
-        for (int c = 0; c < Band.GRID_SIZE; c++) {
-            for (int b = 0; b < Band.GRID_SIZE; b++) {
+        for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+            for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                 VectorCellComparison cell = vfc.cell(c, b);
                 assertEquals(0L, cell.transitionCountDelta());
                 if (cell.baseline().hasVector()) {
@@ -486,10 +486,10 @@ class SystemTelemetryComparisonCalculatorTest {
 
     @Test
     void testIdleAndExecutionComparedIndependently() {
-        long[][] idleCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] idleCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         idleCounts[0][0] = 100L;
-        long[][] execCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        execCounts[4][4] = 100L;
+        long[][] execCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        execCounts[1][4] = 100L;
 
         DecisionStatistics idle = new DecisionStatistics(
                 100L,

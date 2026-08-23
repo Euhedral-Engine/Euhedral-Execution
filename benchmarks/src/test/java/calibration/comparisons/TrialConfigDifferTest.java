@@ -8,12 +8,10 @@ import calibration.comparisons.schema.DifferenceCategory;
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.TrialConfig;
 import com.fasterxml.jackson.databind.node.IntNode;
-import com.fasterxml.jackson.databind.node.TextNode;
+import com.fasterxml.jackson.databind.node.LongNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ContentionThresholds;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy;
-import java.util.ArrayList;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -66,23 +64,12 @@ class TrialConfigDifferTest {
     }
 
     @Test
-    void testExecutionPolicyCellChangeProducesPolicyDifference() {
+    void testIdlePolicyChangeProducesPolicyDifference() {
         TrialConfig base = baseConfig();
 
-        List<ExecutionPolicy> policies = new ArrayList<>(FragmentDecisionWeights.DEFAULT.executionPolicies());
-        // Modify cell 0 (band 0): xsBody from DIRECT to STAGED
-        ExecutionPolicy p0 = policies.getFirst();
-        ExecutionPolicy modifiedP0 =
-                new ExecutionPolicy(ExecutionPath.STAGED, p0.sBody(), p0.mBody(), p0.hBody(), p0.xhBody());
-        policies.set(0, modifiedP0);
-
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                FragmentDecisionWeights.DEFAULT.idleContentionThresholds(),
                 FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                FragmentDecisionWeights.DEFAULT.execContentionThresholds(),
-                FragmentDecisionWeights.DEFAULT.execBodyCostWeights(),
-                policies);
+                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L));
 
         TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
 
@@ -90,24 +77,18 @@ class TrialConfigDifferTest {
         assertEquals(1, diffs.size());
 
         ConfigurationDifference diff = diffs.getFirst();
-        assertEquals("/calibrationConfig/decisionWeights/executionPolicies/0/xsBody", diff.path());
+        assertEquals("/calibrationConfig/decisionWeights/idleTimeNs/xsPark", diff.path());
         assertEquals(DifferenceCategory.POLICY, diff.category());
-        assertEquals(TextNode.valueOf("DIRECT"), diff.baselineValue());
-        assertEquals(TextNode.valueOf("STAGED"), diff.candidateValue());
+        assertEquals(LongNode.valueOf(1_000), diff.baselineValue());
+        assertEquals(LongNode.valueOf(2_000), diff.candidateValue());
     }
 
     @Test
-    void testContentionThresholdChangeIsPolicy() {
+    void testBodyCostThresholdChangeIsPolicy() {
         TrialConfig base = baseConfig();
 
-        ContentionThresholds thresholds = new ContentionThresholds(10, 20, 30, 40);
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                thresholds,
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                FragmentDecisionWeights.DEFAULT.execContentionThresholds(),
-                FragmentDecisionWeights.DEFAULT.execBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.executionPolicies());
+                new BodyCostWeights(100, 140, 220, 300), FragmentDecisionWeights.DEFAULT.idleTimeNs());
 
         TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
 
@@ -115,7 +96,7 @@ class TrialConfigDifferTest {
         assertTrue(!diffs.isEmpty());
         for (ConfigurationDifference diff : diffs) {
             assertEquals(DifferenceCategory.POLICY, diff.category());
-            assertTrue(diff.path().startsWith("/calibrationConfig/decisionWeights/idleContentionThresholds"));
+            assertTrue(diff.path().startsWith("/calibrationConfig/decisionWeights/idleBodyCostWeights"));
         }
     }
 

@@ -18,7 +18,7 @@ import calibration.io.exceptions.ChecksumMismatchException;
 import calibration.io.exceptions.MalformedArtifactException;
 import calibration.io.exceptions.MissingArtifactException;
 import calibration.io.exceptions.MissingAuthoritativeSummaryException;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.HighSpeedMetricsStatistics;
 import calibration.statistics.fork.ForkCalculationResult;
 import calibration.statistics.fork.SystemForkResult;
@@ -95,8 +95,8 @@ class CompletedRunLoaderTest {
         metrics.recordIdle(1, 1, 0, 1, 50, 10.0);
         metrics.recordIdle(2, 2, 1, 2, 150, 20.0);
 
-        metrics.recordExec(1, 1, 2, 3, 250, 30.0);
-        metrics.recordExec(2, 2, 3, 4, 350, 40.0);
+        metrics.recordExec(1, 1, 0, 3, 250, 30.0);
+        metrics.recordExec(2, 2, 1, 4, 350, 40.0);
 
         return metrics;
     }
@@ -281,10 +281,10 @@ class CompletedRunLoaderTest {
 
         CompletedRun run = CompletedRunLoader.load(runDir);
         SystemForkResult sys = run.system();
-        assertEquals(Band.GRID_SIZE, sys.idleOccupancy().exactCounts().length);
-        assertEquals(Band.GRID_SIZE, sys.execOccupancy().exactCounts().length);
-        assertEquals(Band.TOTAL_STATES, sys.idleHeadTransitions().transitionCounts().length);
-        assertEquals(Band.GRID_SIZE, sys.idleHeadVectorField().grid().length);
+        assertEquals(DecisionGrid.CONTENTION_OUTCOMES, sys.idleOccupancy().exactCounts().length);
+        assertEquals(DecisionGrid.CONTENTION_OUTCOMES, sys.execOccupancy().exactCounts().length);
+        assertEquals(DecisionGrid.TOTAL_STATES, sys.idleHeadTransitions().transitionCounts().length);
+        assertEquals(DecisionGrid.CONTENTION_OUTCOMES, sys.idleHeadVectorField().grid().length);
         assertNotNull(sys.cycleStart().headCorrelations().pearsonMatrix());
         assertEquals(
                 2.0, sys.batchComplete().steadyState().productiveHandleCount().mean());

@@ -10,7 +10,7 @@ import calibration.comparisons.schema.ScalarComparison;
 import calibration.comparisons.schema.TransitionComparison;
 import calibration.comparisons.schema.VectorCellComparison;
 import calibration.comparisons.schema.VectorFieldComparison;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorCell;
 import calibration.statistics.VectorField;
 import calibration.statistics.fork.SystemForkResult;
@@ -164,7 +164,7 @@ public final class SystemTelemetryComparisonCalculator {
                 p95ToP50RatioDelta);
     }
 
-    /// Compares two 5x5 branch occupancy results and calculates count/probability deltas and total variation distance.
+    /// Compares two 2x5 branch occupancy results and calculates count/probability deltas and total variation distance.
     public static @NonNull OccupancyComparison compareOccupancy(
             @NonNull BranchOccupancyResult baseline, @NonNull BranchOccupancyResult candidate) {
         Objects.requireNonNull(baseline, "baseline must not be null");
@@ -172,41 +172,45 @@ public final class SystemTelemetryComparisonCalculator {
 
         long[][] baseCounts = baseline.exactCounts();
         long[][] candCounts = candidate.exactCounts();
-        if (baseCounts.length != Band.GRID_SIZE || candCounts.length != Band.GRID_SIZE) {
-            throw new IllegalArgumentException("Occupancy exactCounts must have " + Band.GRID_SIZE + " rows");
+        if (baseCounts.length != DecisionGrid.CONTENTION_OUTCOMES
+                || candCounts.length != DecisionGrid.CONTENTION_OUTCOMES) {
+            throw new IllegalArgumentException(
+                    "Occupancy exactCounts must have " + DecisionGrid.CONTENTION_OUTCOMES + " rows");
         }
 
-        long[][] countDeltas = new long[Band.GRID_SIZE][Band.GRID_SIZE];
-        for (int i = 0; i < Band.GRID_SIZE; i++) {
+        long[][] countDeltas = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
             if (baseCounts[i] == null
                     || candCounts[i] == null
-                    || baseCounts[i].length != Band.GRID_SIZE
-                    || candCounts[i].length != Band.GRID_SIZE) {
+                    || baseCounts[i].length != DecisionGrid.BODY_OUTCOMES
+                    || candCounts[i].length != DecisionGrid.BODY_OUTCOMES) {
                 throw new IllegalArgumentException(
-                        "Occupancy exactCounts row " + i + " must have " + Band.GRID_SIZE + " columns");
+                        "Occupancy exactCounts row " + i + " must have " + DecisionGrid.BODY_OUTCOMES + " columns");
             }
-            for (int j = 0; j < Band.GRID_SIZE; j++) {
+            for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                 countDeltas[i][j] = candCounts[i][j] - baseCounts[i][j];
             }
         }
 
         double[][] baseProbs = baseline.normalizedOccupancy();
         double[][] candProbs = candidate.normalizedOccupancy();
-        if (baseProbs.length != Band.GRID_SIZE || candProbs.length != Band.GRID_SIZE) {
-            throw new IllegalArgumentException("Occupancy probabilities must have " + Band.GRID_SIZE + " rows");
+        if (baseProbs.length != DecisionGrid.CONTENTION_OUTCOMES
+                || candProbs.length != DecisionGrid.CONTENTION_OUTCOMES) {
+            throw new IllegalArgumentException(
+                    "Occupancy probabilities must have " + DecisionGrid.CONTENTION_OUTCOMES + " rows");
         }
 
-        double[][] probabilityDeltas = new double[Band.GRID_SIZE][Band.GRID_SIZE];
+        double[][] probabilityDeltas = new double[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         double sumAbsDiff = 0.0;
-        for (int i = 0; i < Band.GRID_SIZE; i++) {
+        for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
             if (baseProbs[i] == null
                     || candProbs[i] == null
-                    || baseProbs[i].length != Band.GRID_SIZE
-                    || candProbs[i].length != Band.GRID_SIZE) {
+                    || baseProbs[i].length != DecisionGrid.BODY_OUTCOMES
+                    || candProbs[i].length != DecisionGrid.BODY_OUTCOMES) {
                 throw new IllegalArgumentException(
-                        "Occupancy probabilities row " + i + " must have " + Band.GRID_SIZE + " columns");
+                        "Occupancy probabilities row " + i + " must have " + DecisionGrid.BODY_OUTCOMES + " columns");
             }
-            for (int j = 0; j < Band.GRID_SIZE; j++) {
+            for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                 double diff = candProbs[i][j] - baseProbs[i][j];
                 probabilityDeltas[i][j] = diff;
                 sumAbsDiff += Math.abs(diff);
@@ -238,7 +242,7 @@ public final class SystemTelemetryComparisonCalculator {
                 totalVariationDistance);
     }
 
-    /// Compares two 25-state transition analyses and calculates count, probability, self-rate, and oscillation deltas.
+    /// Compares two 10-state transition analyses and calculates count, probability, self-rate, and oscillation deltas.
     public static @NonNull TransitionComparison compareTransitions(
             @NonNull TransitionAnalysis baseline, @NonNull TransitionAnalysis candidate) {
         Objects.requireNonNull(baseline, "baseline must not be null");
@@ -246,56 +250,57 @@ public final class SystemTelemetryComparisonCalculator {
 
         long[][] baseCounts = baseline.transitionCounts();
         long[][] candCounts = candidate.transitionCounts();
-        if (baseCounts.length != Band.TOTAL_STATES || candCounts.length != Band.TOTAL_STATES) {
-            throw new IllegalArgumentException("Transition counts must have " + Band.TOTAL_STATES + " rows");
+        if (baseCounts.length != DecisionGrid.TOTAL_STATES || candCounts.length != DecisionGrid.TOTAL_STATES) {
+            throw new IllegalArgumentException("Transition counts must have " + DecisionGrid.TOTAL_STATES + " rows");
         }
 
-        long[][] countDeltas = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
+        long[][] countDeltas = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
             if (baseCounts[i] == null
                     || candCounts[i] == null
-                    || baseCounts[i].length != Band.TOTAL_STATES
-                    || candCounts[i].length != Band.TOTAL_STATES) {
+                    || baseCounts[i].length != DecisionGrid.TOTAL_STATES
+                    || candCounts[i].length != DecisionGrid.TOTAL_STATES) {
                 throw new IllegalArgumentException(
-                        "Transition counts row " + i + " must have " + Band.TOTAL_STATES + " columns");
+                        "Transition counts row " + i + " must have " + DecisionGrid.TOTAL_STATES + " columns");
             }
-            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+            for (int j = 0; j < DecisionGrid.TOTAL_STATES; j++) {
                 countDeltas[i][j] = candCounts[i][j] - baseCounts[i][j];
             }
         }
 
         double[][] baseProbs = baseline.transitionProbabilities();
         double[][] candProbs = candidate.transitionProbabilities();
-        if (baseProbs.length != Band.TOTAL_STATES || candProbs.length != Band.TOTAL_STATES) {
-            throw new IllegalArgumentException("Transition probabilities must have " + Band.TOTAL_STATES + " rows");
+        if (baseProbs.length != DecisionGrid.TOTAL_STATES || candProbs.length != DecisionGrid.TOTAL_STATES) {
+            throw new IllegalArgumentException(
+                    "Transition probabilities must have " + DecisionGrid.TOTAL_STATES + " rows");
         }
 
-        double[][] probDeltas = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
+        double[][] probDeltas = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
             if (baseProbs[i] == null
                     || candProbs[i] == null
-                    || baseProbs[i].length != Band.TOTAL_STATES
-                    || candProbs[i].length != Band.TOTAL_STATES) {
+                    || baseProbs[i].length != DecisionGrid.TOTAL_STATES
+                    || candProbs[i].length != DecisionGrid.TOTAL_STATES) {
                 throw new IllegalArgumentException(
-                        "Transition probabilities row " + i + " must have " + Band.TOTAL_STATES + " columns");
+                        "Transition probabilities row " + i + " must have " + DecisionGrid.TOTAL_STATES + " columns");
             }
-            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+            for (int j = 0; j < DecisionGrid.TOTAL_STATES; j++) {
                 probDeltas[i][j] = candProbs[i][j] - baseProbs[i][j];
             }
         }
 
-        double[] selfRateDeltas = new double[Band.TOTAL_STATES];
-        int[] candDominantStates = new int[Band.TOTAL_STATES];
-        double[] dominantProbDeltas = new double[Band.TOTAL_STATES];
-        for (int s = 0; s < Band.TOTAL_STATES; s++) {
+        double[] selfRateDeltas = new double[DecisionGrid.TOTAL_STATES];
+        int[] candDominantStates = new int[DecisionGrid.TOTAL_STATES];
+        double[] dominantProbDeltas = new double[DecisionGrid.TOTAL_STATES];
+        for (int s = 0; s < DecisionGrid.TOTAL_STATES; s++) {
             selfRateDeltas[s] = candidate.selfTransitionRate(s) - baseline.selfTransitionRate(s);
             candDominantStates[s] = candidate.dominantOutgoingState(s);
             dominantProbDeltas[s] = candidate.dominantOutgoingProbability(s) - baseline.dominantOutgoingProbability(s);
         }
 
-        double[][] oscDeltas = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        for (int a = 0; a < Band.TOTAL_STATES; a++) {
-            for (int b = 0; b < Band.TOTAL_STATES; b++) {
+        double[][] oscDeltas = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        for (int a = 0; a < DecisionGrid.TOTAL_STATES; a++) {
+            for (int b = 0; b < DecisionGrid.TOTAL_STATES; b++) {
                 if (a != b) {
                     oscDeltas[a][b] = candidate.oscillation(a, b) - baseline.oscillation(a, b);
                 } else {
@@ -315,15 +320,16 @@ public final class SystemTelemetryComparisonCalculator {
                 oscDeltas);
     }
 
-    /// Compares two 5x5 vector fields across all 25 source cells.
+    /// Compares two 2x5 vector fields across all 10 source cells.
     public static @NonNull VectorFieldComparison compareVectorField(
             @NonNull VectorField baseline, @NonNull VectorField candidate) {
         Objects.requireNonNull(baseline, "baseline must not be null");
         Objects.requireNonNull(candidate, "candidate must not be null");
 
-        VectorCellComparison[][] cells = new VectorCellComparison[Band.GRID_SIZE][Band.GRID_SIZE];
-        for (int c = 0; c < Band.GRID_SIZE; c++) {
-            for (int b = 0; b < Band.GRID_SIZE; b++) {
+        VectorCellComparison[][] cells =
+                new VectorCellComparison[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
+        for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+            for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                 VectorCell baseCell = baseline.cell(c, b);
                 VectorCell candCell = candidate.cell(c, b);
 
@@ -431,8 +437,8 @@ public final class SystemTelemetryComparisonCalculator {
             return false;
         }
         long[][] counts = ta.transitionCounts();
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
-            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
+            for (int j = 0; j < DecisionGrid.TOTAL_STATES; j++) {
                 if (counts[i][j] > 0L) {
                     return true;
                 }
@@ -445,8 +451,8 @@ public final class SystemTelemetryComparisonCalculator {
         if (vf == null) {
             return false;
         }
-        for (int c = 0; c < Band.GRID_SIZE; c++) {
-            for (int b = 0; b < Band.GRID_SIZE; b++) {
+        for (int c = 0; c < DecisionGrid.CONTENTION_OUTCOMES; c++) {
+            for (int b = 0; b < DecisionGrid.BODY_OUTCOMES; b++) {
                 VectorCell cell = vf.cell(c, b);
                 if (cell != null && cell.hasVector()) {
                     return true;

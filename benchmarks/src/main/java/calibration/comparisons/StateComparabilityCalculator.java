@@ -2,7 +2,7 @@ package calibration.comparisons;
 
 import calibration.comparisons.schema.StateComparability;
 import calibration.comparisons.schema.StateComparabilityComparison;
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorCell;
 import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.BranchOccupancyResult;
@@ -122,8 +122,8 @@ public final class StateComparabilityCalculator {
         double[][] baselineProbabilities = baseline.normalizedOccupancy();
         double[][] candidateProbabilities = candidate.normalizedOccupancy();
         double sumAbsoluteDifference = 0.0;
-        for (int contention = 0; contention < Band.GRID_SIZE; contention++) {
-            for (int body = 0; body < Band.GRID_SIZE; body++) {
+        for (int contention = 0; contention < DecisionGrid.CONTENTION_OUTCOMES; contention++) {
+            for (int body = 0; body < DecisionGrid.BODY_OUTCOMES; body++) {
                 sumAbsoluteDifference +=
                         Math.abs(candidateProbabilities[contention][body] - baselineProbabilities[contention][body]);
             }
@@ -135,11 +135,11 @@ public final class StateComparabilityCalculator {
         double[][] probabilities = occupancy.normalizedOccupancy();
         int dominantState = 0;
         double dominantProbability = probabilities[0][0];
-        for (int contention = 0; contention < Band.GRID_SIZE; contention++) {
-            for (int body = 0; body < Band.GRID_SIZE; body++) {
+        for (int contention = 0; contention < DecisionGrid.CONTENTION_OUTCOMES; contention++) {
+            for (int body = 0; body < DecisionGrid.BODY_OUTCOMES; body++) {
                 if (probabilities[contention][body] > dominantProbability) {
                     dominantProbability = probabilities[contention][body];
-                    dominantState = contention * Band.GRID_SIZE + body;
+                    dominantState = contention * DecisionGrid.BODY_OUTCOMES + body;
                 }
             }
         }
@@ -147,7 +147,7 @@ public final class StateComparabilityCalculator {
     }
 
     private static double probability(BranchOccupancyResult occupancy, int state) {
-        return occupancy.normalizedOccupancy()[state / Band.GRID_SIZE][state % Band.GRID_SIZE];
+        return occupancy.normalizedOccupancy()[state / DecisionGrid.BODY_OUTCOMES][state % DecisionGrid.BODY_OUTCOMES];
     }
 
     private static double transitionTotalVariationDistance(TransitionAnalysis baseline, TransitionAnalysis candidate) {
@@ -160,8 +160,8 @@ public final class StateComparabilityCalculator {
         }
 
         double sumAbsoluteDifference = 0.0;
-        for (int from = 0; from < Band.TOTAL_STATES; from++) {
-            for (int to = 0; to < Band.TOTAL_STATES; to++) {
+        for (int from = 0; from < DecisionGrid.TOTAL_STATES; from++) {
+            for (int to = 0; to < DecisionGrid.TOTAL_STATES; to++) {
                 double baselineProbability = (double) baselineCounts[from][to] / baselineTotal;
                 double candidateProbability = (double) candidateCounts[from][to] / candidateTotal;
                 sumAbsoluteDifference += Math.abs(candidateProbability - baselineProbability);
@@ -182,8 +182,8 @@ public final class StateComparabilityCalculator {
 
     private static double maximumOscillation(TransitionAnalysis transitions) {
         double maximum = 0.0;
-        for (int first = 0; first < Band.TOTAL_STATES; first++) {
-            for (int second = first + 1; second < Band.TOTAL_STATES; second++) {
+        for (int first = 0; first < DecisionGrid.TOTAL_STATES; first++) {
+            for (int second = first + 1; second < DecisionGrid.TOTAL_STATES; second++) {
                 maximum = Math.max(maximum, transitions.oscillation(first, second));
             }
         }

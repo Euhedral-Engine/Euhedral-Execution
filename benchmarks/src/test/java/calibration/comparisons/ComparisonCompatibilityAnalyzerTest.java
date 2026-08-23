@@ -14,10 +14,8 @@ import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.TrialConfig;
 import calibration.statistics.fork.SystemForkResult;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ContentionThresholds;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPolicy;
-import java.util.ArrayList;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -90,16 +88,9 @@ class ComparisonCompatibilityAnalyzerTest {
     void testPolicyOnlyChangeIsCompatible() {
         TrialConfig baseConfig = baseTrialConfig();
 
-        List<ExecutionPolicy> policies = new ArrayList<>(FragmentDecisionWeights.DEFAULT.executionPolicies());
-        ExecutionPolicy p0 = policies.getFirst();
-        policies.set(0, new ExecutionPolicy(ExecutionPath.STAGED, p0.sBody(), p0.mBody(), p0.hBody(), p0.xhBody()));
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                FragmentDecisionWeights.DEFAULT.idleContentionThresholds(),
                 FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                FragmentDecisionWeights.DEFAULT.execContentionThresholds(),
-                FragmentDecisionWeights.DEFAULT.execBodyCostWeights(),
-                policies);
+                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L));
 
         TrialConfig candConfig =
                 baseConfig.withCalibrationConfig(baseConfig.calibrationConfig().withDecisionWeights(modifiedWeights));
@@ -118,14 +109,8 @@ class ComparisonCompatibilityAnalyzerTest {
     void testPolicyPlusIdentityChangesRemainCompatible() {
         TrialConfig baseConfig = baseTrialConfig();
 
-        ContentionThresholds thresholds = new ContentionThresholds(10, 20, 30, 40);
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                thresholds,
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                FragmentDecisionWeights.DEFAULT.execContentionThresholds(),
-                FragmentDecisionWeights.DEFAULT.execBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.executionPolicies());
+                new BodyCostWeights(100, 140, 220, 300), FragmentDecisionWeights.DEFAULT.idleTimeNs());
 
         TrialConfig candConfig = new TrialConfig(
                 "trial_2",
@@ -194,14 +179,8 @@ class ComparisonCompatibilityAnalyzerTest {
     void testPolicyPlusObservationDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
 
-        ContentionThresholds thresholds = new ContentionThresholds(10, 20, 30, 40);
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                thresholds,
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                FragmentDecisionWeights.DEFAULT.execContentionThresholds(),
-                FragmentDecisionWeights.DEFAULT.execBodyCostWeights(),
-                FragmentDecisionWeights.DEFAULT.executionPolicies());
+                new BodyCostWeights(100, 140, 220, 300), FragmentDecisionWeights.DEFAULT.idleTimeNs());
 
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(

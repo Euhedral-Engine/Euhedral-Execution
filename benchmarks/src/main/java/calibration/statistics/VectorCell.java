@@ -1,6 +1,6 @@
 package calibration.statistics;
 
-/// Displacement vector for a single source cell in the 5x5 occupancy mesh.
+/// Displacement vector for a single source cell in the 2x5 decision surface.
 public record VectorCell(
         int contentionBand,
         int bodyBand,

@@ -1060,13 +1060,13 @@ public final class HighSpeedMetricsStatistics {
         int hTotalLen = 0;
         int tTotalLen = 0;
         int cTotalLen = 0;
-        long[][] aggregatedBranchCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] aggregatedBranchCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
 
         for (HighSpeedMetrics m : metricsList) {
             long obs = m.idleDecisionObservations;
             total += obs;
-            for (int i = 0; i < Band.GRID_SIZE; i++) {
-                for (int j = 0; j < Band.GRID_SIZE; j++) {
+            for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+                for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                     aggregatedBranchCounts[i][j] += m.idleBranchDecisionTotal[i][j];
                 }
             }
@@ -1113,8 +1113,8 @@ public final class HighSpeedMetricsStatistics {
         double[] cSmoothed = new double[cTotalLen];
         double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
 
-        long[][] headTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        long[][] steadyStateTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] headTransitionsCount = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        long[][] steadyStateTransitionsCount = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
 
         int hOffset = 0;
         int tOffset = 0;
@@ -1262,13 +1262,13 @@ public final class HighSpeedMetricsStatistics {
         int hTotalLen = 0;
         int tTotalLen = 0;
         int cTotalLen = 0;
-        long[][] aggregatedBranchCounts = new long[Band.GRID_SIZE][Band.GRID_SIZE];
+        long[][] aggregatedBranchCounts = new long[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
 
         for (HighSpeedMetrics m : metricsList) {
             long obs = m.execDecisionObservations;
             total += obs;
-            for (int i = 0; i < Band.GRID_SIZE; i++) {
-                for (int j = 0; j < Band.GRID_SIZE; j++) {
+            for (int i = 0; i < DecisionGrid.CONTENTION_OUTCOMES; i++) {
+                for (int j = 0; j < DecisionGrid.BODY_OUTCOMES; j++) {
                     aggregatedBranchCounts[i][j] += m.execBranchDecisionTotal[i][j];
                 }
             }
@@ -1315,8 +1315,8 @@ public final class HighSpeedMetricsStatistics {
         double[] cSmoothed = new double[cTotalLen];
         double[][] cData = cTotalLen >= 2 ? new double[cTotalLen][3] : new double[0][0];
 
-        long[][] headTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        long[][] steadyStateTransitionsCount = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] headTransitionsCount = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        long[][] steadyStateTransitionsCount = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
 
         int hOffset = 0;
         int tOffset = 0;

@@ -1,11 +1,11 @@
 package calibration.statistics.iteration;
 
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// 25-state transition matrix and oscillation analysis.
+/// Ten-state transition matrix and oscillation analysis for the 2x5 decision surface.
 public final class TransitionAnalysis {
 
     private final long[][] transitionCounts;
@@ -27,32 +27,32 @@ public final class TransitionAnalysis {
         this.dominantOutgoingProbabilities = dominantOutgoingProbabilities;
     }
 
-    /// Converts (contentionBand, bodyBand) coordinates into a 0..24 state index.
+    /// Converts (contention outcome, body-cost outcome) coordinates into a 0..9 state index.
     public static int toState(int contentionBand, int bodyBand) {
-        if (contentionBand < 0 || contentionBand >= Band.GRID_SIZE) {
+        if (contentionBand < 0 || contentionBand >= DecisionGrid.CONTENTION_OUTCOMES) {
             throw new IllegalArgumentException("contentionBand out of bounds: " + contentionBand);
         }
-        if (bodyBand < 0 || bodyBand >= Band.GRID_SIZE) {
+        if (bodyBand < 0 || bodyBand >= DecisionGrid.BODY_OUTCOMES) {
             throw new IllegalArgumentException("bodyBand out of bounds: " + bodyBand);
         }
-        return contentionBand * Band.GRID_SIZE + bodyBand;
+        return contentionBand * DecisionGrid.BODY_OUTCOMES + bodyBand;
     }
 
-    /// Extracts contention band (0..4) from a 0..24 state index.
+    /// Extracts contention outcome (0..1) from a 0..9 state index.
     public static int contentionBandOf(int state) {
         validateState(state);
-        return state / Band.GRID_SIZE;
+        return state / DecisionGrid.BODY_OUTCOMES;
     }
 
-    /// Extracts body band (0..4) from a 0..24 state index.
+    /// Extracts body-cost outcome (0..4) from a 0..9 state index.
     public static int bodyBandOf(int state) {
         validateState(state);
-        return state % Band.GRID_SIZE;
+        return state % DecisionGrid.BODY_OUTCOMES;
     }
 
-    /// Computes transition analysis from an ordered sequence of state indices (0..24).
+    /// Computes transition analysis from an ordered sequence of state indices (0..9).
     public static TransitionAnalysis compute(int[] stateSequence) {
-        long[][] counts = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+        long[][] counts = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         if (stateSequence != null && stateSequence.length >= 2) {
             for (int k = 0; k < stateSequence.length - 1; k++) {
                 int from = stateSequence[k];
@@ -65,7 +65,7 @@ public final class TransitionAnalysis {
         return computeFromCounts(counts);
     }
 
-    /// Computes transition analysis from an ordered list of state indices (0..24).
+    /// Computes transition analysis from an ordered list of state indices (0..9).
     public static TransitionAnalysis compute(@NonNull List<Integer> stateSequence) {
         Objects.requireNonNull(stateSequence, "stateSequence must not be null");
         int[] array = new int[stateSequence.size()];
@@ -77,27 +77,28 @@ public final class TransitionAnalysis {
         return compute(array);
     }
 
-    /// Computes transition analysis from a raw 25x25 transition count matrix.
+    /// Computes transition analysis from a raw 10x10 transition count matrix.
     public static TransitionAnalysis computeFromCounts(long[][] counts) {
         if (counts == null) {
             throw new NullPointerException("Counts matrix must not be null");
         }
-        if (counts.length != Band.TOTAL_STATES) {
-            throw new IllegalArgumentException("Counts matrix must be " + Band.TOTAL_STATES + "x" + Band.TOTAL_STATES);
+        if (counts.length != DecisionGrid.TOTAL_STATES) {
+            throw new IllegalArgumentException(
+                    "Counts matrix must be " + DecisionGrid.TOTAL_STATES + "x" + DecisionGrid.TOTAL_STATES);
         }
 
-        long[][] countsCopy = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        double[][] probabilities = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        double[] selfRates = new double[Band.TOTAL_STATES];
-        int[] dominantStates = new int[Band.TOTAL_STATES];
-        double[] dominantProbs = new double[Band.TOTAL_STATES];
+        long[][] countsCopy = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        double[][] probabilities = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        double[] selfRates = new double[DecisionGrid.TOTAL_STATES];
+        int[] dominantStates = new int[DecisionGrid.TOTAL_STATES];
+        double[] dominantProbs = new double[DecisionGrid.TOTAL_STATES];
 
-        for (int a = 0; a < Band.TOTAL_STATES; a++) {
-            if (counts[a] == null || counts[a].length != Band.TOTAL_STATES) {
-                throw new IllegalArgumentException("Counts row " + a + " must be length " + Band.TOTAL_STATES);
+        for (int a = 0; a < DecisionGrid.TOTAL_STATES; a++) {
+            if (counts[a] == null || counts[a].length != DecisionGrid.TOTAL_STATES) {
+                throw new IllegalArgumentException("Counts row " + a + " must be length " + DecisionGrid.TOTAL_STATES);
             }
             long rowSum = 0L;
-            for (int b = 0; b < Band.TOTAL_STATES; b++) {
+            for (int b = 0; b < DecisionGrid.TOTAL_STATES; b++) {
                 long c = counts[a][b];
                 if (c < 0L) {
                     throw new IllegalArgumentException("Transition count cannot be negative: " + c);
@@ -109,7 +110,7 @@ public final class TransitionAnalysis {
             if (rowSum > 0L) {
                 int dominantState = 0;
                 long dominantCount = countsCopy[a][0];
-                for (int b = 0; b < Band.TOTAL_STATES; b++) {
+                for (int b = 0; b < DecisionGrid.TOTAL_STATES; b++) {
                     double p = (double) countsCopy[a][b] / (double) rowSum;
                     probabilities[a][b] = p;
                     if (countsCopy[a][b] > dominantCount) {
@@ -131,17 +132,17 @@ public final class TransitionAnalysis {
     }
 
     public long[][] transitionCounts() {
-        long[][] copy = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
-            System.arraycopy(transitionCounts[i], 0, copy[i], 0, Band.TOTAL_STATES);
+        long[][] copy = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
+            System.arraycopy(transitionCounts[i], 0, copy[i], 0, DecisionGrid.TOTAL_STATES);
         }
         return copy;
     }
 
     public double[][] transitionProbabilities() {
-        double[][] copy = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
-            System.arraycopy(transitionProbabilities[i], 0, copy[i], 0, Band.TOTAL_STATES);
+        double[][] copy = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
+            System.arraycopy(transitionProbabilities[i], 0, copy[i], 0, DecisionGrid.TOTAL_STATES);
         }
         return copy;
     }
@@ -174,8 +175,8 @@ public final class TransitionAnalysis {
         long numerator = transitionCounts[stateA][stateB] + transitionCounts[stateB][stateA];
         long denominator = 0L;
 
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
-            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
+            for (int j = 0; j < DecisionGrid.TOTAL_STATES; j++) {
                 if (i == stateA || i == stateB || j == stateA || j == stateB) {
                     denominator += transitionCounts[i][j];
                 }
@@ -190,8 +191,8 @@ public final class TransitionAnalysis {
     }
 
     public boolean isEmpty() {
-        for (int i = 0; i < Band.TOTAL_STATES; i++) {
-            for (int j = 0; j < Band.TOTAL_STATES; j++) {
+        for (int i = 0; i < DecisionGrid.TOTAL_STATES; i++) {
+            for (int j = 0; j < DecisionGrid.TOTAL_STATES; j++) {
                 if (transitionCounts[i][j] > 0L) {
                     return false;
                 }
@@ -201,9 +202,9 @@ public final class TransitionAnalysis {
     }
 
     private static void validateState(int state) {
-        if (state < 0 || state >= Band.TOTAL_STATES) {
+        if (state < 0 || state >= DecisionGrid.TOTAL_STATES) {
             throw new IllegalArgumentException(
-                    "State index out of bounds: " + state + " (expected 0.." + (Band.TOTAL_STATES - 1) + ")");
+                    "State index out of bounds: " + state + " (expected 0.." + (DecisionGrid.TOTAL_STATES - 1) + ")");
         }
     }
 }

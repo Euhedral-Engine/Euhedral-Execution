@@ -1,12 +1,12 @@
 package calibration.comparisons.schema;
 
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.VectorField;
 import java.util.Arrays;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// Comparison between matching baseline and candidate 5x5 vector displacement fields.
+/// Comparison between matching baseline and candidate 2x5 vector displacement fields.
 public record VectorFieldComparison(
         @NonNull VectorField baseline, @NonNull VectorField candidate, VectorCellComparison[][] cells) {
 
@@ -23,7 +23,7 @@ public record VectorFieldComparison(
             }
             cells = copy;
         } else {
-            cells = new VectorCellComparison[Band.GRID_SIZE][Band.GRID_SIZE];
+            cells = new VectorCellComparison[DecisionGrid.CONTENTION_OUTCOMES][DecisionGrid.BODY_OUTCOMES];
         }
     }
 
@@ -37,17 +37,20 @@ public record VectorFieldComparison(
     }
 
     public VectorCellComparison cell(int contentionBand, int bodyBand) {
-        if (contentionBand < 0 || contentionBand >= Band.GRID_SIZE || bodyBand < 0 || bodyBand >= Band.GRID_SIZE) {
+        if (contentionBand < 0
+                || contentionBand >= DecisionGrid.CONTENTION_OUTCOMES
+                || bodyBand < 0
+                || bodyBand >= DecisionGrid.BODY_OUTCOMES) {
             throw new IllegalArgumentException("Coordinates out of bounds: (" + contentionBand + ", " + bodyBand + ")");
         }
         return cells[contentionBand][bodyBand];
     }
 
     public VectorCellComparison cell(int stateIndex) {
-        if (stateIndex < 0 || stateIndex >= Band.TOTAL_STATES) {
+        if (stateIndex < 0 || stateIndex >= DecisionGrid.TOTAL_STATES) {
             throw new IllegalArgumentException("State index out of bounds: " + stateIndex);
         }
-        return cells[stateIndex / Band.GRID_SIZE][stateIndex % Band.GRID_SIZE];
+        return cells[stateIndex / DecisionGrid.BODY_OUTCOMES][stateIndex % DecisionGrid.BODY_OUTCOMES];
     }
 
     @Override

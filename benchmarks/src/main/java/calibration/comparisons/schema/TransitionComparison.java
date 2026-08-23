@@ -1,12 +1,12 @@
 package calibration.comparisons.schema;
 
-import calibration.statistics.Band;
+import calibration.statistics.DecisionGrid;
 import calibration.statistics.iteration.TransitionAnalysis;
 import java.util.Arrays;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// Comparison between matching baseline and candidate 25-state transition analyses.
+/// Comparison between matching baseline and candidate 10-state transition analyses.
 public record TransitionComparison(
         @NonNull TransitionAnalysis baseline,
         @NonNull TransitionAnalysis candidate,
@@ -30,7 +30,7 @@ public record TransitionComparison(
             }
             countDeltas = copy;
         } else {
-            countDeltas = new long[Band.TOTAL_STATES][Band.TOTAL_STATES];
+            countDeltas = new long[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         }
 
         if (probabilityDeltas != null) {
@@ -42,25 +42,25 @@ public record TransitionComparison(
             }
             probabilityDeltas = copy;
         } else {
-            probabilityDeltas = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
+            probabilityDeltas = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         }
 
         if (selfTransitionRateDeltas != null) {
             selfTransitionRateDeltas = selfTransitionRateDeltas.clone();
         } else {
-            selfTransitionRateDeltas = new double[Band.TOTAL_STATES];
+            selfTransitionRateDeltas = new double[DecisionGrid.TOTAL_STATES];
         }
 
         if (candidateDominantOutgoingStates != null) {
             candidateDominantOutgoingStates = candidateDominantOutgoingStates.clone();
         } else {
-            candidateDominantOutgoingStates = new int[Band.TOTAL_STATES];
+            candidateDominantOutgoingStates = new int[DecisionGrid.TOTAL_STATES];
         }
 
         if (dominantOutgoingProbabilityDeltas != null) {
             dominantOutgoingProbabilityDeltas = dominantOutgoingProbabilityDeltas.clone();
         } else {
-            dominantOutgoingProbabilityDeltas = new double[Band.TOTAL_STATES];
+            dominantOutgoingProbabilityDeltas = new double[DecisionGrid.TOTAL_STATES];
         }
 
         if (oscillationScoreDeltas != null) {
@@ -72,7 +72,7 @@ public record TransitionComparison(
             }
             oscillationScoreDeltas = copy;
         } else {
-            oscillationScoreDeltas = new double[Band.TOTAL_STATES][Band.TOTAL_STATES];
+            oscillationScoreDeltas = new double[DecisionGrid.TOTAL_STATES][DecisionGrid.TOTAL_STATES];
         }
     }
 
