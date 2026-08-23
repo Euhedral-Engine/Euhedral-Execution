@@ -6,6 +6,7 @@ import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
+import io.euhedral_execution.core.utils.MicroCalibrator;
 import java.util.Objects;
 import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
@@ -15,6 +16,8 @@ import org.jspecify.annotations.Nullable;
 ///
 /// All fields use plain access because one pinned fragment thread owns the policy for its lifetime.
 final class FragmentDecisionTree {
+    private static final String PRODUCTIVITY_THRESHOLD = "euhedral.productivity.thresholdWeight";
+
     static final long CONTENTION_THRESHOLD = 850_000; // 85%
 
     static final long DIRECT_BATCH_WORK_TARGET_NS = 250_000L;
@@ -35,6 +38,7 @@ final class FragmentDecisionTree {
     private final IdlePolicy idleTimeNs;
 
     private final long maxBodyCostThreshold;
+    private final long productivityThreshold;
     private final double[] bodyCostWindow = new double[BODY_COST_WINDOW_SAMPLES];
     private ExecutionPath executionPath;
     private long batchSize;
@@ -59,6 +63,15 @@ final class FragmentDecisionTree {
         this.idleBodyCostThresholds = config.idleBodyCostThresholds;
         this.idleTimeNs = config.idleTimeNs;
         this.maxBodyCostThreshold = this.idleBodyCostThresholds.h;
+
+        String prop = System.getProperty(PRODUCTIVITY_THRESHOLD);
+        if (prop != null && !prop.isBlank()) {
+            MicroCalibrator calibrator = new MicroCalibrator();
+            calibrator.warmup();
+            this.productivityThreshold = calibrator.benchmark(Integer.parseInt(prop));
+        } else {
+            this.productivityThreshold = this.idleBodyCostThresholds.m;
+        }
         reset();
     }
 
@@ -71,6 +84,7 @@ final class FragmentDecisionTree {
     public long idle(
             long cycleEpoch,
             long batchEpoch,
+            long productiveHandles,
             long upstreamHandles,
             int registeredWorkers,
             int workerRank,
@@ -92,6 +106,14 @@ final class FragmentDecisionTree {
                         this.core, this.socket, cycleEpoch, batchEpoch, 0, -1, contention, this.smoothedBodyCostNs);
             }
             return -1;
+        }
+        if (workerRank > productiveHandles && this.smoothedBodyCostNs <= this.productivityThreshold) {
+            if (this.observer != null) {
+                this.observer.idleBranchDecision(
+                        this.core, this.socket, cycleEpoch, batchEpoch, 2, 5, contention, this.smoothedBodyCostNs);
+            }
+            LockSupport.parkNanos(DEFAULT_PARK_NS);
+            return DEFAULT_PARK_NS;
         }
 
         return idle(cycleEpoch, batchEpoch, this.idleBodyCostThresholds, this.idleTimeNs, contention);

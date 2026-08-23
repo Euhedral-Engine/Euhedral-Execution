@@ -264,6 +264,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     idleDurationSelectedNs = this.controlPolicy.idle(
                             this.state.cycleEpoch,
                             this.state.batchEpoch,
+                            this.upstreamQueue.getProductiveHandleCount(),
                             this.state.upstreamCount,
                             this.state.registeredWorkers,
                             this.state.workerRank,

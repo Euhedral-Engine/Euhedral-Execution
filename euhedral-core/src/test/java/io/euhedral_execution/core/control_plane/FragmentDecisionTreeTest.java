@@ -442,8 +442,8 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        tree.idle(1L, 1L, 0L, 4, 1, 100L);
-        tree.idle(1L, 1L, -1L, 4, 1, 100L);
+        tree.idle(1L, 1L, 0L, 0L, 4, 1, 100L);
+        tree.idle(1L, 1L, -1L, -1L, 4, 1, 100L);
 
         // Observer not called for upstream <= 0
         verify(observer, never())
@@ -457,8 +457,8 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        tree.idle(1L, 1L, 2L, 1, 1, 100L);
-        tree.idle(1L, 1L, 2L, 0, 1, 100L);
+        tree.idle(1L, 1L, 2L, 2L, 1, 1, 100L);
+        tree.idle(1L, 1L, 2L, 2L, 0, 1, 100L);
 
         verify(observer, never())
                 .idleBranchDecision(
@@ -473,7 +473,7 @@ class FragmentDecisionTreeTest {
         // Only 31 samples (< 32)
         populateBodyCosts(tree, 31, 100L);
 
-        tree.idle(1L, 1L, 2L, 4, 1, 100L);
+        tree.idle(1L, 1L, 2L, 2L, 4, 1, 100L);
         verify(observer, never())
                 .idleBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
@@ -485,8 +485,8 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        tree.idle(1L, 1L, 2L, 4, 0, 100L);
-        tree.idle(1L, 1L, 2L, 4, -1, 100L);
+        tree.idle(1L, 1L, 2L, 2L, 4, 0, 100L);
+        tree.idle(1L, 1L, 2L, 2L, 4, -1, 100L);
 
         verify(observer, never())
                 .idleBranchDecision(
@@ -499,10 +499,10 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 1L);
 
-        assertEquals(-1L, tree.idle(1L, 1L, 2L, 4, 1, 850_000L));
+        assertEquals(-1L, tree.idle(1L, 1L, 2L, 2L, 4, 1, 850_000L));
         verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, -1, 850_000L, 1.0);
 
-        assertEquals(1_000L, tree.idle(2L, 1L, 2L, 4, 1, 850_001L));
+        assertEquals(1_000L, tree.idle(2L, 1L, 2L, 2L, 4, 1, 850_001L));
         verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
     }
 
@@ -522,7 +522,7 @@ class FragmentDecisionTreeTest {
                 new FragmentDecisionTree(createCustomWeights(weights, policy), observer, TEST_CORE, TEST_SOCKET);
         populateBodyCosts(tree, samples, 1L);
 
-        tree.idle(1L, 1L, 2L, 4, 1, 900_000L);
+        tree.idle(1L, 1L, 2L, 2L, 4, 1, 900_000L);
 
         verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 1, decision, 900_000L, 1.0);
     }
@@ -533,7 +533,7 @@ class FragmentDecisionTreeTest {
         populateBodyCosts(tree, 32, 100L);
 
         // Does not throw NPE when observer is null
-        tree.idle(1L, 1L, 2L, 4, 1, 100L);
+        tree.idle(1L, 1L, 2L, 2L, 4, 1, 100L);
     }
 
     @Test

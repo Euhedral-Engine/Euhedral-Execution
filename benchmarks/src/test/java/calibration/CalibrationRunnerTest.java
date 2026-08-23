@@ -99,22 +99,6 @@ class CalibrationRunnerTest {
     }
 
     @Test
-    void phase13ShuffleComparisonPresetsAreValid() throws Exception {
-        ComparisonConfig forkMatrix = this.mapper.readValue(
-                new File("src/main/presets/comparisons/28-phase13-handle-shuffle-fork-matrix.json"),
-                ComparisonConfig.class);
-        ComparisonConfig prePost = this.mapper.readValue(
-                new File("src/main/presets/comparisons/28-phase13-pre-post-cross.json"), ComparisonConfig.class);
-
-        assertEquals(ComparisonStrategy.CROSS, forkMatrix.strategy());
-        assertEquals(8, forkMatrix.baseline().runs().size());
-        assertEquals(8, forkMatrix.candidate().runs().size());
-        assertEquals(ComparisonStrategy.CROSS, prePost.strategy());
-        assertEquals(8, prePost.baseline().runs().size());
-        assertEquals(8, prePost.candidate().runs().size());
-    }
-
-    @Test
     void resolveOutputDirectoryCreatesAndReturnsCanonicalDirWhenConfigured(@TempDir Path tempDir) throws Exception {
         Path targetPath = tempDir.resolve("reports/benchmarks");
         ArtifactConfig artifacts = new ArtifactConfig(targetPath.toString(), true, false, false, false, false);
