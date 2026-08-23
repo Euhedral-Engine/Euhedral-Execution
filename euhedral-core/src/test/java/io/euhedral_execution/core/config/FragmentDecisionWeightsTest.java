@@ -46,7 +46,7 @@ class FragmentDecisionWeightsTest {
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
                         null,
-                        BodyCostWeights.IDLE_DEFAULTS,
+                        BodyCostWeights.DEFAULTS,
                         IdlePolicy.DEFAULT,
                         ContentionThresholds.EXEC_DEFAULTS,
                         BodyCostWeights.EXEC_DEFAULTS,
@@ -58,7 +58,7 @@ class FragmentDecisionWeightsTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
-                        ContentionThresholds.IDLE_DEFAULTS,
+                        ContentionThresholds.DEFAULTS,
                         null,
                         IdlePolicy.DEFAULT,
                         ContentionThresholds.EXEC_DEFAULTS,
@@ -71,8 +71,8 @@ class FragmentDecisionWeightsTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
-                        ContentionThresholds.IDLE_DEFAULTS,
-                        BodyCostWeights.IDLE_DEFAULTS,
+                        ContentionThresholds.DEFAULTS,
+                        BodyCostWeights.DEFAULTS,
                         null,
                         ContentionThresholds.EXEC_DEFAULTS,
                         BodyCostWeights.EXEC_DEFAULTS,
@@ -84,8 +84,8 @@ class FragmentDecisionWeightsTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
-                        ContentionThresholds.IDLE_DEFAULTS,
-                        BodyCostWeights.IDLE_DEFAULTS,
+                        ContentionThresholds.DEFAULTS,
+                        BodyCostWeights.DEFAULTS,
                         IdlePolicy.DEFAULT,
                         null,
                         BodyCostWeights.EXEC_DEFAULTS,
@@ -97,8 +97,8 @@ class FragmentDecisionWeightsTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
-                        ContentionThresholds.IDLE_DEFAULTS,
-                        BodyCostWeights.IDLE_DEFAULTS,
+                        ContentionThresholds.DEFAULTS,
+                        BodyCostWeights.DEFAULTS,
                         IdlePolicy.DEFAULT,
                         ContentionThresholds.EXEC_DEFAULTS,
                         null,
@@ -110,8 +110,8 @@ class FragmentDecisionWeightsTest {
         assertThrows(
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
-                        ContentionThresholds.IDLE_DEFAULTS,
-                        BodyCostWeights.IDLE_DEFAULTS,
+                        ContentionThresholds.DEFAULTS,
+                        BodyCostWeights.DEFAULTS,
                         IdlePolicy.DEFAULT,
                         ContentionThresholds.EXEC_DEFAULTS,
                         BodyCostWeights.EXEC_DEFAULTS,
@@ -136,8 +136,8 @@ class FragmentDecisionWeightsTest {
     void equalsAndHashCode_verifyRecordContract() {
         FragmentDecisionWeights weights1 = FragmentDecisionWeights.DEFAULT;
         FragmentDecisionWeights weights2 = new FragmentDecisionWeights(
-                ContentionThresholds.IDLE_DEFAULTS,
-                BodyCostWeights.IDLE_DEFAULTS,
+                ContentionThresholds.DEFAULTS,
+                BodyCostWeights.DEFAULTS,
                 IdlePolicy.DEFAULT,
                 ContentionThresholds.EXEC_DEFAULTS,
                 BodyCostWeights.EXEC_DEFAULTS,
@@ -145,7 +145,7 @@ class FragmentDecisionWeightsTest {
 
         FragmentDecisionWeights weights3 = new FragmentDecisionWeights(
                 new ContentionThresholds(100_000L, 200_000L, 300_000L, 400_000L),
-                BodyCostWeights.IDLE_DEFAULTS,
+                BodyCostWeights.DEFAULTS,
                 IdlePolicy.DEFAULT,
                 ContentionThresholds.EXEC_DEFAULTS,
                 BodyCostWeights.EXEC_DEFAULTS,

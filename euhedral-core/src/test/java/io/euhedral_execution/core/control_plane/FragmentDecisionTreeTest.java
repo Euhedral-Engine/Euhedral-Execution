@@ -336,7 +336,7 @@ class FragmentDecisionTreeTest {
                 ExecutionPath.STAGED);
         FragmentDecisionWeights weights = createCustomWeights(
                 contention,
-                BodyCostWeights.IDLE_DEFAULTS,
+                BodyCostWeights.DEFAULTS,
                 IdlePolicy.DEFAULT,
                 contention,
                 BodyCostWeights.EXEC_DEFAULTS,
