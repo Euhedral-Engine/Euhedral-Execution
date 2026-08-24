@@ -28,7 +28,9 @@ public record CalibrationBenchmarkConfig(
         boolean observeContentionStaleness,
         int pullBucketFork,
         List<PullBucketTreatment> pullBucketTreatments,
-        boolean observePullConvoy) {
+        boolean observePullConvoy,
+        @Nullable Integer productivityThresholdWeight,
+        CalibrationLifecycleMode lifecycleMode) {
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
 
@@ -69,7 +71,9 @@ public record CalibrationBenchmarkConfig(
                 false,
                 0,
                 List.of(),
-                false);
+                false,
+                null,
+                CalibrationLifecycleMode.RESET);
     }
 
     /// Convenience constructor with decisionWeightProfile reference and without inline decisionWeights.
@@ -109,7 +113,9 @@ public record CalibrationBenchmarkConfig(
                 false,
                 0,
                 List.of(),
-                false);
+                false,
+                null,
+                CalibrationLifecycleMode.RESET);
     }
 
     /// Backwards-compatible constructor for callers that specify both profile and inline decision weights.
@@ -150,7 +156,104 @@ public record CalibrationBenchmarkConfig(
                 false,
                 0,
                 List.of(),
-                false);
+                false,
+                null,
+                CalibrationLifecycleMode.RESET);
+    }
+
+    /// Backwards-compatible constructor without a productivity threshold override.
+    public CalibrationBenchmarkConfig(
+            List<Integer> cpuSet,
+            int parallelSources,
+            int orderedSources,
+            int workUnits,
+            boolean randomizeWork,
+            long totalRequiredExecutions,
+            long invocationTimeoutMillis,
+            @Nullable String decisionWeightProfile,
+            @Nullable FragmentDecisionWeights decisionWeights,
+            int rawSampleLimit,
+            boolean observeCycleStart,
+            boolean observeBatchProgress,
+            boolean observeBatchComplete,
+            boolean observeRawBodyCost,
+            boolean observeIdleDecision,
+            boolean observeExecDecision,
+            boolean observeContentionStaleness,
+            int pullBucketFork,
+            @Nullable List<PullBucketTreatment> pullBucketTreatments,
+            boolean observePullConvoy) {
+        this(
+                cpuSet,
+                parallelSources,
+                orderedSources,
+                workUnits,
+                randomizeWork,
+                totalRequiredExecutions,
+                invocationTimeoutMillis,
+                decisionWeightProfile,
+                decisionWeights,
+                rawSampleLimit,
+                observeCycleStart,
+                observeBatchProgress,
+                observeBatchComplete,
+                observeRawBodyCost,
+                observeIdleDecision,
+                observeExecDecision,
+                observeContentionStaleness,
+                pullBucketFork,
+                pullBucketTreatments,
+                observePullConvoy,
+                null,
+                CalibrationLifecycleMode.RESET);
+    }
+
+    /// Backwards-compatible constructor without an explicit lifecycle mode.
+    public CalibrationBenchmarkConfig(
+            List<Integer> cpuSet,
+            int parallelSources,
+            int orderedSources,
+            int workUnits,
+            boolean randomizeWork,
+            long totalRequiredExecutions,
+            long invocationTimeoutMillis,
+            @Nullable String decisionWeightProfile,
+            @Nullable FragmentDecisionWeights decisionWeights,
+            int rawSampleLimit,
+            boolean observeCycleStart,
+            boolean observeBatchProgress,
+            boolean observeBatchComplete,
+            boolean observeRawBodyCost,
+            boolean observeIdleDecision,
+            boolean observeExecDecision,
+            boolean observeContentionStaleness,
+            int pullBucketFork,
+            @Nullable List<PullBucketTreatment> pullBucketTreatments,
+            boolean observePullConvoy,
+            @Nullable Integer productivityThresholdWeight) {
+        this(
+                cpuSet,
+                parallelSources,
+                orderedSources,
+                workUnits,
+                randomizeWork,
+                totalRequiredExecutions,
+                invocationTimeoutMillis,
+                decisionWeightProfile,
+                decisionWeights,
+                rawSampleLimit,
+                observeCycleStart,
+                observeBatchProgress,
+                observeBatchComplete,
+                observeRawBodyCost,
+                observeIdleDecision,
+                observeExecDecision,
+                observeContentionStaleness,
+                pullBucketFork,
+                pullBucketTreatments,
+                observePullConvoy,
+                productivityThresholdWeight,
+                CalibrationLifecycleMode.RESET);
     }
 
     @JsonCreator
@@ -174,7 +277,9 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("observeContentionStaleness") boolean observeContentionStaleness,
             @JsonProperty("pullBucketFork") int pullBucketFork,
             @JsonProperty("pullBucketTreatments") @Nullable List<PullBucketTreatment> pullBucketTreatments,
-            @JsonProperty("observePullConvoy") boolean observePullConvoy) {
+            @JsonProperty("observePullConvoy") boolean observePullConvoy,
+            @JsonProperty("productivityThresholdWeight") @Nullable Integer productivityThresholdWeight,
+            @JsonProperty("lifecycleMode") @Nullable CalibrationLifecycleMode lifecycleMode) {
         Objects.requireNonNull(cpuSet, "CalibrationBenchmarkConfig cpuSet cannot be null");
         this.cpuSet = List.copyOf(cpuSet);
         this.parallelSources = parallelSources;
@@ -196,6 +301,8 @@ public record CalibrationBenchmarkConfig(
         this.pullBucketFork = pullBucketFork;
         this.pullBucketTreatments = pullBucketTreatments == null ? List.of() : List.copyOf(pullBucketTreatments);
         this.observePullConvoy = observePullConvoy;
+        this.productivityThresholdWeight = productivityThresholdWeight;
+        this.lifecycleMode = lifecycleMode == null ? CalibrationLifecycleMode.RESET : lifecycleMode;
         validate();
     }
 
@@ -223,6 +330,23 @@ public record CalibrationBenchmarkConfig(
         if (this.observePullConvoy && this.pullBucketTreatments.isEmpty()) {
             throw new IllegalArgumentException("Pull-convoy observation requires a non-empty treatment order");
         }
+        if (this.productivityThresholdWeight != null && this.productivityThresholdWeight < 0) {
+            throw new IllegalArgumentException("productivityThresholdWeight must not be negative");
+        }
+        if (this.lifecycleMode == CalibrationLifecycleMode.CONTINUOUS
+                && this.pullBucketTreatments.stream()
+                        .anyMatch(treatment -> !PullBucketTreatment.BASELINE.equals(treatment))) {
+            throw new IllegalArgumentException(
+                    "CONTINUOUS lifecycle cannot change pull-bucket treatment between measurement windows");
+        }
+        if (this.lifecycleMode == CalibrationLifecycleMode.CONTINUOUS
+                && (!this.observeCycleStart
+                        || !this.observeIdleDecision
+                        || !this.observeExecDecision
+                        || !this.observeContentionStaleness)) {
+            throw new IllegalArgumentException(
+                    "CONTINUOUS lifecycle requires cycle, idle/exec decision, and contention-staleness telemetry");
+        }
     }
 
     /// Returns a copy of this CalibrationBenchmarkConfig with the given decisionWeights set.
@@ -248,7 +372,9 @@ public record CalibrationBenchmarkConfig(
                 this.observeContentionStaleness,
                 this.pullBucketFork,
                 this.pullBucketTreatments,
-                this.observePullConvoy);
+                this.observePullConvoy,
+                this.productivityThresholdWeight,
+                this.lifecycleMode);
     }
 
     /// Returns a copy of this CalibrationBenchmarkConfig with the given decisionWeightProfile reference set.
@@ -273,6 +399,36 @@ public record CalibrationBenchmarkConfig(
                 this.observeContentionStaleness,
                 this.pullBucketFork,
                 this.pullBucketTreatments,
-                this.observePullConvoy);
+                this.observePullConvoy,
+                this.productivityThresholdWeight,
+                this.lifecycleMode);
+    }
+
+    /// Returns a copy with an explicit measurement lifecycle while preserving the scheduler fixture configuration.
+    public CalibrationBenchmarkConfig withLifecycleMode(@NonNull CalibrationLifecycleMode lifecycleMode) {
+        Objects.requireNonNull(lifecycleMode, "lifecycleMode must not be null");
+        return new CalibrationBenchmarkConfig(
+                this.cpuSet,
+                this.parallelSources,
+                this.orderedSources,
+                this.workUnits,
+                this.randomizeWork,
+                this.totalRequiredExecutions,
+                this.invocationTimeoutMillis,
+                this.decisionWeightProfile,
+                this.decisionWeights,
+                this.rawSampleLimit,
+                this.observeCycleStart,
+                this.observeBatchProgress,
+                this.observeBatchComplete,
+                this.observeRawBodyCost,
+                this.observeIdleDecision,
+                this.observeExecDecision,
+                this.observeContentionStaleness,
+                this.pullBucketFork,
+                this.pullBucketTreatments,
+                this.observePullConvoy,
+                this.productivityThresholdWeight,
+                lifecycleMode);
     }
 }

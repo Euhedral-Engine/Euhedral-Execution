@@ -1,6 +1,7 @@
 package calibration.infra;
 
 public final class Constants {
+    public static final String HARNESS_CPU_PROP = "euhedral.calibration.harnessCpu";
     public static final String REPEAT_INDEX_PROP = "euhedral.calibration.repeatIndex";
     public static final String TRIAL_CONFIG_PROP = "euhedral.calibration.trialConfigPath";
     public static final String TRIAL_ID_PROP = "euhedral.calibration.trialId";
@@ -45,6 +46,10 @@ public final class Constants {
     public static final String PULL_CONVOY_CHECKSUM = "pull_convoy.tsv.sha256";
     public static final String PULL_BUCKET_TREATMENTS_TSV = "pull_bucket_treatments.tsv";
     public static final String PULL_BUCKET_TREATMENTS_CHECKSUM = "pull_bucket_treatments.tsv.sha256";
+    public static final String TRAJECTORY_WINDOWS_TSV = "trajectory_windows.tsv";
+    public static final String TRAJECTORY_WINDOWS_CHECKSUM = "trajectory_windows.tsv.sha256";
+    public static final String TRAJECTORY_OCCUPANCY_TSV = "trajectory_occupancy.tsv";
+    public static final String TRAJECTORY_OCCUPANCY_CHECKSUM = "trajectory_occupancy.tsv.sha256";
 
     public static final String COMPARISON_MANIFEST_JSON = "comparison_manifest.json";
     public static final String COMPARISON_MANIFEST_CHECKSUM = "comparison_manifest.json.sha256";

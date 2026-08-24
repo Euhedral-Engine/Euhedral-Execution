@@ -55,6 +55,8 @@
       "randomizeWork": true,
       "totalRequiredExecutions": 1000000,
       "invocationTimeoutMillis": 60000,
+      // Optional: RESET (default) or CONTINUOUS persistent scheduler trajectory
+      "lifecycleMode": "RESET",
       // Optional: Reusable decision weights profile reference
       // "decisionWeightProfile": "default-weights",
       // Optional: Inline decision weights configuration
@@ -79,16 +81,17 @@
       "randomizeWork": false,
       "totalRequiredExecutions": 32000000,
       "invocationTimeoutMillis": 6000,
+      "lifecycleMode": "CONTINUOUS",
       // Optional: Reusable decision weights profile reference
       "decisionWeightProfile": "common.imported-weights",
       "rawSampleLimit": 1024,
-      "observeCycleStart": false,
+      "observeCycleStart": true,
       "observeBatchProgress": false,
       "observeBatchComplete": false,
       "observeRawBodyCost": false,
-      "observeIdleDecision": false,
+      "observeIdleDecision": true,
       "observeExecDecision": true,
-      "observeContentionStaleness": false
+      "observeContentionStaleness": true
     }
   },
   // Optional: Reusable fragment decision weights profiles
@@ -193,6 +196,8 @@
         "randomizeWork": true,
         "totalRequiredExecutions": 1000000,
         "invocationTimeoutMillis": 60000,
+        // Optional: RESET (default) or CONTINUOUS persistent scheduler trajectory
+        "lifecycleMode": "RESET",
         // Optional: Reusable decision weights profile reference
         // "decisionWeightProfile": "default-weights",
         // Optional: Inline decision weights configuration

@@ -12,6 +12,7 @@ import io.euhedral_execution.core.metrics.ExecutionMetrics;
 import io.euhedral_execution.core.utils.FlowRecorder;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
+import io.euhedral_execution.core.utils.MicroCalibrator;
 import io.euhedral_execution.core.utils.StopWatch;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -80,6 +81,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final CycleState state;
 
     private FragmentDecisionTree controlPolicy;
+    private long productivityThresholdNs;
 
     private UpstreamQueue upstreamQueue;
     boolean drainMode = false;
@@ -102,6 +104,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.observeContentionStaleness = false;
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
             this.controlPolicy = null;
+            this.productivityThresholdNs = 0L;
             this.state = null;
             this.mainExecutor = null;
             this.isPCore = false;
@@ -208,6 +211,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.mainThread = Thread.currentThread();
                 this.controlPolicy =
                         new FragmentDecisionTree(this.config.decisionWeights(), this.observer, this.core, this.socket);
+                this.productivityThresholdNs = resolveProductivityThresholdNs();
 
                 try {
                     cycle();
@@ -260,15 +264,24 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
 
                 long idleDurationSelectedNs = -1L;
+                boolean productivityParked = false;
                 if (localCache == 0L) {
-                    idleDurationSelectedNs = this.controlPolicy.idle(
-                            this.state.cycleEpoch,
-                            this.state.batchEpoch,
-                            this.upstreamQueue.getProductiveHandleCount(),
-                            this.state.upstreamCount,
-                            this.state.registeredWorkers,
-                            this.state.workerRank,
-                            this.upstreamQueue.getContention());
+                    long contention = this.upstreamQueue.getContention();
+                    if (productivityParkRequired(contention)) {
+                        // Return to the owner loop after one bounded park so reset and interrupt state
+                        // are observed before this worker parks again.
+                        LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
+                        idleDurationSelectedNs = FragmentControlConfig.DEFAULT_PARK_NS;
+                        productivityParked = true;
+                    } else {
+                        idleDurationSelectedNs = this.controlPolicy.idle(
+                                this.state.cycleEpoch,
+                                this.state.batchEpoch,
+                                this.state.upstreamCount,
+                                this.state.registeredWorkers,
+                                this.state.workerRank,
+                                contention);
+                    }
                     localCache = super.getLocalCacheCount();
                 }
                 if (this.observeContentionStaleness) {
@@ -279,6 +292,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                     } else {
                         this.state.consecutiveIdleDecisions = 0L;
                     }
+                }
+                if (productivityParked) {
+                    continue;
                 }
 
                 if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
@@ -526,6 +542,60 @@ public final class ControlPlaneFragment extends WorkRequester {
             cap = Math.max(2L, Math.min(maxBatch, quota));
         }
         return cap;
+    }
+
+    private long resolveProductivityThresholdNs() {
+        String configuredWeight = System.getProperty(FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT);
+        if (configuredWeight == null || configuredWeight.isBlank()) {
+            return this.controlPolicy.defaultProductivityThresholdNs();
+        }
+        int weight = Integer.parseInt(configuredWeight);
+        if (weight <= 0) {
+            return 0L;
+        }
+        MicroCalibrator calibrator = new MicroCalibrator();
+        calibrator.warmup();
+        return calibrator.benchmark(weight);
+    }
+
+    private boolean productivityParkRequired(long contention) {
+        if (this.productivityThresholdNs <= 0L
+                || !this.controlPolicy.hasBodyCostHistory()
+                || this.state.upstreamCount <= 0L
+                || this.state.registeredWorkers <= 1
+                || this.state.workerRank <= 0
+                || contention <= FragmentDecisionTree.CONTENTION_THRESHOLD
+                || this.controlPolicy.smoothedBodyCostNs() > this.productivityThresholdNs) {
+            return false;
+        }
+        return productivityParkRequired(
+                this.productivityThresholdNs,
+                this.controlPolicy.smoothedBodyCostNs(),
+                true,
+                this.state.upstreamCount,
+                this.state.registeredWorkers,
+                this.state.workerRank,
+                this.upstreamQueue.getProductiveHandleCount(),
+                contention);
+    }
+
+    static boolean productivityParkRequired(
+            long thresholdNs,
+            double bodyCostNs,
+            boolean hasBodyCostHistory,
+            long upstreamHandles,
+            int registeredWorkers,
+            int workerRank,
+            long productiveHandles,
+            long contention) {
+        return thresholdNs > 0L
+                && hasBodyCostHistory
+                && upstreamHandles > 0L
+                && registeredWorkers > 1
+                && workerRank > 0
+                && contention > FragmentDecisionTree.CONTENTION_THRESHOLD
+                && workerRank > productiveHandles
+                && bodyCostNs <= thresholdNs;
     }
 
     long getAdaptiveBatchCap() {

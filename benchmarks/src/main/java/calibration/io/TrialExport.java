@@ -1,5 +1,6 @@
 package calibration.io;
 
+import calibration.config.CalibrationLifecycleMode;
 import calibration.config.PullBucketTreatment;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
 import calibration.infra.Constants;
@@ -24,6 +25,7 @@ import calibration.statistics.iteration.OccupancySummary;
 import calibration.statistics.iteration.RawBodyCostStatistics;
 import calibration.statistics.iteration.ScalarSummary;
 import calibration.statistics.iteration.SystemIterationResult;
+import calibration.statistics.iteration.TrajectoryWindow;
 import calibration.statistics.iteration.TransitionAnalysis;
 import java.io.BufferedWriter;
 import java.io.InputStream;
@@ -102,6 +104,204 @@ public final class TrialExport {
                 exportAll(iterDir, List.of(r), false);
             }
         }
+    }
+
+    /// Exports ordered measurement-window summaries and exact state occupancy for one persistent JVM trajectory.
+    public static void exportTrajectoryTsv(
+            Path outputDir,
+            CalibrationLifecycleMode lifecycleMode,
+            List<TrajectoryWindow> windows,
+            ForkCalculationResult forkResult,
+            List<? extends List<HighSpeedMetrics>> measurementMetrics)
+            throws Exception {
+        if (outputDir == null || lifecycleMode == null || windows == null || forkResult == null) {
+            return;
+        }
+        if (windows.size() != forkResult.iterations().size()
+                || measurementMetrics == null
+                || windows.size() != measurementMetrics.size()) {
+            throw new IllegalArgumentException(
+                    "Trajectory export requires one timing, statistics, and telemetry entry per measurement window");
+        }
+
+        Files.createDirectories(outputDir);
+        Path windowsFile = outputDir.resolve(Constants.TRAJECTORY_WINDOWS_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(windowsFile, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "jvmId\tlifecycleMode\twindowIndex\ttrajectoryElapsedNs\twindowElapsedNs\tcompletedExecutions\tthroughputExecutionsPerSecond\tcontinuouslyFed\tdominantDecisionType\tdominantState\tdominantContentionBand\tdominantBodyBand\tdominantStateProbability\tcontentionCentroid\tbodyCentroid\tsuccessfulAcquisitions\tfailedAcquisitions\tacquisitionSuccessRatio\tidleSelectedFraction\tproductiveHandleRatio\n");
+            for (int i = 0; i < windows.size(); i++) {
+                TrajectoryWindow window = windows.get(i);
+                IterationResult iteration = forkResult.iterations().get(i);
+                SystemIterationResult system = iteration.system();
+                DominantState dominant = dominantState(system);
+                CombinedCentroid centroid = combinedCentroid(system);
+                AcquisitionWindow acquisition = acquisitionWindow(measurementMetrics.get(i));
+                double productiveHandleRatio =
+                        system.cycleStart().combined().productiveHandleRatio().mean();
+                if (!Double.isFinite(productiveHandleRatio)) {
+                    productiveHandleRatio = system.batchComplete()
+                            .combined()
+                            .productiveHandleRatio()
+                            .mean();
+                }
+                writer.write(window.jvmId() + "\t"
+                        + lifecycleMode + "\t"
+                        + window.windowIndex() + "\t"
+                        + window.trajectoryElapsedNanos() + "\t"
+                        + window.windowElapsedNanos() + "\t"
+                        + window.completedExecutions() + "\t"
+                        + window.throughputExecutionsPerSecond() + "\t"
+                        + window.continuouslyFed() + "\t"
+                        + dominant.decisionType() + "\t"
+                        + dominant.stateLabel() + "\t"
+                        + dominant.contentionBand() + "\t"
+                        + dominant.bodyBand() + "\t"
+                        + dominant.probability() + "\t"
+                        + centroid.contention() + "\t"
+                        + centroid.body() + "\t"
+                        + acquisition.successes() + "\t"
+                        + acquisition.failures() + "\t"
+                        + acquisition.successRatio() + "\t"
+                        + acquisition.idleSelectedFraction() + "\t"
+                        + productiveHandleRatio + "\n");
+            }
+        }
+        writeChecksum(windowsFile);
+
+        Path occupancyFile = outputDir.resolve(Constants.TRAJECTORY_OCCUPANCY_TSV);
+        try (BufferedWriter writer = Files.newBufferedWriter(occupancyFile, StandardCharsets.UTF_8)) {
+            writer.write(
+                    "jvmId\tlifecycleMode\twindowIndex\tdecisionType\tstate\tcontentionBand\tbodyBand\tcount\tprobability\n");
+            for (int i = 0; i < windows.size(); i++) {
+                TrajectoryWindow window = windows.get(i);
+                SystemIterationResult system = forkResult.iterations().get(i).system();
+                writeTrajectoryOccupancy(
+                        writer,
+                        window,
+                        lifecycleMode,
+                        "idle",
+                        system.idleDecisions().occupancy());
+                writeTrajectoryOccupancy(
+                        writer,
+                        window,
+                        lifecycleMode,
+                        "exec",
+                        system.execDecisions().occupancy());
+            }
+        }
+        writeChecksum(occupancyFile);
+    }
+
+    private static void writeTrajectoryOccupancy(
+            BufferedWriter writer,
+            TrajectoryWindow window,
+            CalibrationLifecycleMode lifecycleMode,
+            String decisionType,
+            BranchOccupancyResult occupancy)
+            throws Exception {
+        long[][] counts = occupancy.exactCounts();
+        long total = occupancy.totalCount();
+        for (int contention = 0; contention < DecisionGrid.CONTENTION_OUTCOMES; contention++) {
+            for (int body = 0; body < DecisionGrid.BODY_OUTCOMES; body++) {
+                long count = counts[contention][body];
+                double probability = total == 0L ? 0.0 : (double) count / total;
+                int state = TransitionAnalysis.toState(contention, body);
+                writer.write(window.jvmId() + "\t" + lifecycleMode + "\t" + window.windowIndex() + "\t"
+                        + decisionType + "\t" + state + "\t" + contention + "\t" + body + "\t" + count + "\t"
+                        + probability + "\n");
+            }
+        }
+    }
+
+    private static DominantState dominantState(SystemIterationResult system) {
+        long[][] idle = system.idleDecisions().occupancy().exactCounts();
+        long[][] exec = system.execDecisions().occupancy().exactCounts();
+        long allDecisions = system.idleDecisionTotal() + system.execDecisionTotal();
+        String type = "NONE";
+        int dominantContention = -1;
+        int dominantBody = -1;
+        long dominantCount = 0L;
+        for (int contention = 0; contention < DecisionGrid.CONTENTION_OUTCOMES; contention++) {
+            for (int body = 0; body < DecisionGrid.BODY_OUTCOMES; body++) {
+                if (idle[contention][body] > dominantCount) {
+                    type = "idle";
+                    dominantContention = contention;
+                    dominantBody = body;
+                    dominantCount = idle[contention][body];
+                }
+                if (exec[contention][body] > dominantCount) {
+                    type = "exec";
+                    dominantContention = contention;
+                    dominantBody = body;
+                    dominantCount = exec[contention][body];
+                }
+            }
+        }
+        int state = dominantContention < 0 ? -1 : TransitionAnalysis.toState(dominantContention, dominantBody);
+        double probability = allDecisions == 0L ? 0.0 : (double) dominantCount / allDecisions;
+        return new DominantState(type, state, dominantContention, dominantBody, probability);
+    }
+
+    private static CombinedCentroid combinedCentroid(SystemIterationResult system) {
+        long[][] idle = system.idleDecisions().occupancy().exactCounts();
+        long[][] exec = system.execDecisions().occupancy().exactCounts();
+        long total = 0L;
+        double contentionTotal = 0.0;
+        double bodyTotal = 0.0;
+        for (int contention = 0; contention < DecisionGrid.CONTENTION_OUTCOMES; contention++) {
+            for (int body = 0; body < DecisionGrid.BODY_OUTCOMES; body++) {
+                long count = idle[contention][body] + exec[contention][body];
+                total += count;
+                contentionTotal += contention * (double) count;
+                bodyTotal += body * (double) count;
+            }
+        }
+        return total == 0L
+                ? new CombinedCentroid(Double.NaN, Double.NaN)
+                : new CombinedCentroid(contentionTotal / total, bodyTotal / total);
+    }
+
+    private static AcquisitionWindow acquisitionWindow(List<HighSpeedMetrics> metrics) {
+        if (metrics == null || metrics.isEmpty()) {
+            return AcquisitionWindow.EMPTY;
+        }
+        long successes = 0L;
+        long failures = 0L;
+        long retainedSamples = 0L;
+        long idleSelectedSamples = 0L;
+        for (HighSpeedMetrics core : metrics) {
+            if (core == null || core.contentionStalenessSteadyState.length == 0) {
+                continue;
+            }
+            core.align();
+            int count = (int) Math.min(core.contentionStalenessObservations, core.rawSampleLimit);
+            if (count == 0) {
+                continue;
+            }
+            long[] first = core.contentionStalenessHead[0];
+            long[] last = core.contentionStalenessSteadyState[count - 1];
+            successes += Math.max(0L, last[10] - first[10]);
+            failures += Math.max(0L, last[11] - first[11]);
+            retainedSamples += count;
+            for (int sample = 0; sample < count; sample++) {
+                if (core.contentionStalenessSteadyState[sample][9] >= 0L) {
+                    idleSelectedSamples++;
+                }
+            }
+        }
+        long attempts = successes + failures;
+        double successRatio = attempts == 0L ? Double.NaN : (double) successes / attempts;
+        double idleFraction = retainedSamples == 0L ? Double.NaN : (double) idleSelectedSamples / retainedSamples;
+        return new AcquisitionWindow(successes, failures, successRatio, idleFraction);
+    }
+
+    private record DominantState(
+            String decisionType, int stateLabel, int contentionBand, int bodyBand, double probability) {}
+
+    private record CombinedCentroid(double contention, double body) {}
+
+    private record AcquisitionWindow(long successes, long failures, double successRatio, double idleSelectedFraction) {
+        private static final AcquisitionWindow EMPTY = new AcquisitionWindow(0L, 0L, Double.NaN, Double.NaN);
     }
 
     /// Exports the bounded, chronologically aligned staleness samples retained for each core and iteration.

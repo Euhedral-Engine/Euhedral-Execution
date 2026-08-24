@@ -106,8 +106,13 @@ public final class TrialConfigDiffer {
             normalized = normalized.substring("calibrationConfig/".length());
         }
 
-        if (normalized.startsWith("decisionWeights") || normalized.startsWith("decisionWeightProfile")) {
+        if (normalized.startsWith("decisionWeights")
+                || normalized.startsWith("decisionWeightProfile")
+                || normalized.startsWith("productivityThresholdWeight")) {
             return DifferenceCategory.POLICY;
+        }
+        if (normalized.startsWith("lifecycleMode")) {
+            return DifferenceCategory.LIFECYCLE;
         }
         if (normalized.startsWith("rawSampleLimit") || normalized.startsWith("observe")) {
             return DifferenceCategory.OBSERVATION;

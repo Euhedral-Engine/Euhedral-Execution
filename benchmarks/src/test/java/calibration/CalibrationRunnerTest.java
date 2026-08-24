@@ -36,13 +36,16 @@ import calibration.statistics.iteration.SystemIterationResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.openjdk.jmh.runner.options.Options;
@@ -388,6 +391,137 @@ class CalibrationRunnerTest {
 
         assertTrue(configIdx < outputDirIdx);
         assertTrue(outputDirIdx < customArgIdx);
+    }
+
+    @Test
+    void productivityThresholdPresetResolvesPairedFixedWorkloadsAndForwardsWeight() throws Exception {
+        String presetPath = "src/main/presets/experiments/00-productivity-threshold-coarse-sweep-4core.json";
+        Map<Integer, Integer> treatmentThresholds = Map.of(0, 128, 48, 144, 96, 192, 144, 240, 216, 320, 288, 384);
+
+        HarnessConfig harness = CalibrationRunner.loadConfig(presetPath, this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+
+        assertEquals(12, trials.size());
+        assertEquals(
+                treatmentThresholds.keySet(),
+                new HashSet<>(trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::workUnits)
+                        .toList()));
+        assertTrue(trials.stream()
+                .allMatch(trial -> trial.calibrationConfig().cpuSet().size() >= 4));
+        assertTrue(trials.stream().allMatch(trial -> trial.forks() == 5));
+        assertTrue(trials.stream().noneMatch(trial -> trial.calibrationConfig().randomizeWork()));
+        assertTrue(trials.stream().noneMatch(trial -> trial.calibrationConfig().observeIdleDecision()));
+
+        for (Map.Entry<Integer, Integer> treatment : treatmentThresholds.entrySet()) {
+            List<TrialConfig> pair = trials.stream()
+                    .filter(trial -> trial.calibrationConfig().workUnits() == treatment.getKey())
+                    .toList();
+            assertEquals(2, pair.size());
+            assertEquals(
+                    Set.of(0, treatment.getValue()),
+                    new HashSet<>(pair.stream()
+                            .map(TrialConfig::calibrationConfig)
+                            .map(CalibrationBenchmarkConfig::productivityThresholdWeight)
+                            .toList()));
+        }
+
+        TrialConfig treatment = trials.stream()
+                .filter(trial -> "wu-288-policy-on".equals(trial.id()))
+                .findFirst()
+                .orElseThrow();
+        List<String> jvmArgs = CalibrationRunner.buildJvmArgs(treatment, 0, 0, "/tmp/config.json", null);
+        assertTrue(jvmArgs.contains("-D" + FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT + "=384"));
+
+        ComparisonConfig comparison = this.mapper.readValue(
+                new File("src/main/presets/comparisons/00-productivity-threshold-coarse-sweep-4core.json"),
+                ComparisonConfig.class);
+        assertEquals(ComparisonStrategy.KEYED, comparison.strategy());
+        assertEquals(6, comparison.baseline().runs().size());
+        assertEquals(6, comparison.candidate().runs().size());
+        assertEquals(List.of("/calibrationConfig/workUnits"), comparison.key().paths());
+    }
+
+    @Test
+    void productivityWorkerScalePresetPairsPoliciesAcrossWorkerAndECoreClusterLayouts() throws Exception {
+        String presetPath = "src/main/presets/experiments/01-productivity-worker-scale-sweep.json";
+        Set<String> expectedTopologies =
+                Set.of("4:2", "7:3", "11:5", "15:7", "19:9", "22:11", "11:11", "15:11", "19:11");
+
+        HarnessConfig harness = CalibrationRunner.loadConfig(presetPath, this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+
+        assertEquals(24, trials.size());
+        assertEquals(
+                expectedTopologies,
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(config -> config.cpuSet().size() + ":" + config.parallelSources())
+                        .collect(java.util.stream.Collectors.toSet()));
+        assertTrue(trials.stream().allMatch(trial -> trial.forks() == 5));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 0));
+        assertTrue(trials.stream().noneMatch(trial -> trial.calibrationConfig().randomizeWork()));
+        assertTrue(
+                trials.stream().allMatch(trial -> trial.jvmArgs().contains("-D" + Constants.HARNESS_CPU_PROP + "=31")));
+        assertTrue(trials.stream()
+                .noneMatch(trial -> trial.calibrationConfig().cpuSet().contains(0)));
+        assertTrue(trials.stream()
+                .noneMatch(trial -> trial.calibrationConfig().cpuSet().contains(31)));
+
+        Map<String, List<TrialConfig>> policyPairs = trials.stream()
+                .collect(java.util.stream.Collectors.groupingBy(trial -> {
+                    CalibrationBenchmarkConfig config = trial.calibrationConfig();
+                    return config.cpuSet() + ":" + config.parallelSources();
+                }));
+        assertEquals(12, policyPairs.size());
+        for (List<TrialConfig> pair : policyPairs.values()) {
+            assertEquals(2, pair.size());
+            assertEquals(
+                    Set.of(0, 128),
+                    pair.stream()
+                            .map(TrialConfig::calibrationConfig)
+                            .map(CalibrationBenchmarkConfig::productivityThresholdWeight)
+                            .collect(java.util.stream.Collectors.toSet()));
+        }
+
+        Set<String> eCoreClusterOccupancies = trials.stream()
+                .map(TrialConfig::calibrationConfig)
+                .map(CalibrationBenchmarkConfig::cpuSet)
+                .distinct()
+                .map(cpuSet -> {
+                    int[] occupancy = new int[4];
+                    for (int cpu : cpuSet) {
+                        if (cpu >= 16) {
+                            assertTrue(cpu <= 31);
+                            occupancy[(cpu - 16) / 4]++;
+                        }
+                    }
+                    return occupancy[0] + ":" + occupancy[1] + ":" + occupancy[2] + ":" + occupancy[3];
+                })
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(
+                Set.of("0:0:0:0", "4:0:0:0", "4:4:0:0", "4:4:4:0", "4:4:4:3", "1:1:1:1", "2:2:2:2", "3:3:3:3"),
+                eCoreClusterOccupancies);
+
+        ComparisonConfig comparison = this.mapper.readValue(
+                new File("src/main/presets/comparisons/01-productivity-worker-scale-sweep.json"),
+                ComparisonConfig.class);
+        assertEquals(ComparisonStrategy.KEYED, comparison.strategy());
+        assertEquals(12, comparison.baseline().runs().size());
+        assertEquals(12, comparison.candidate().runs().size());
+        assertEquals(
+                List.of("/calibrationConfig/parallelSources", "/tags/2"),
+                comparison.key().paths());
+
+        Set<String> resolvedRunDirectories =
+                trials.stream().map(trial -> trial.id() + "_repeat_0").collect(java.util.stream.Collectors.toSet());
+        assertTrue(comparison.baseline().runs().stream()
+                .map(run -> Path.of(run.path()).getFileName().toString())
+                .allMatch(resolvedRunDirectories::contains));
+        assertTrue(comparison.candidate().runs().stream()
+                .map(run -> Path.of(run.path()).getFileName().toString())
+                .allMatch(resolvedRunDirectories::contains));
     }
 
     @Test

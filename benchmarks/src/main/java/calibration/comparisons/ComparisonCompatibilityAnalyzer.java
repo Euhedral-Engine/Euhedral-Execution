@@ -36,6 +36,10 @@ public final class ComparisonCompatibilityAnalyzer {
         for (ConfigurationDifference diff : differences) {
             DifferenceCategory category = diff.category();
             switch (category) {
+                case LIFECYCLE ->
+                    incompatibleReasons.add("Calibration lifecycle differs at " + diff.path()
+                            + " (baseline=" + diff.baselineValue()
+                            + ", candidate=" + diff.candidateValue() + ")");
                 case WORKLOAD ->
                     partialReasons.add("Workload configuration differs at " + diff.path()
                             + " (baseline=" + diff.baselineValue()

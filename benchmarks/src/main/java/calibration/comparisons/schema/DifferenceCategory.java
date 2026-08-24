@@ -5,6 +5,7 @@ public enum DifferenceCategory {
     IDENTITY,
     HARNESS,
     WORKLOAD,
+    LIFECYCLE,
     POLICY,
     OBSERVATION,
     JMH,

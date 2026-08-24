@@ -1,0 +1,34 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "policy-off",
+    "runs": [
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-000-policy-off_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-048-policy-off_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-096-policy-off_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-144-policy-off_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-216-policy-off_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-288-policy-off_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "policy-on",
+    "runs": [
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-000-policy-on_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-048-policy-on_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-096-policy-on_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-144-policy-on_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-216-policy-on_repeat_0",
+      "experiments/00-productivity-threshold-coarse-sweep-4core/wu-288-policy-on_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": ["/calibrationConfig/workUnits"],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/00-productivity-threshold-coarse-sweep-4core/comparisons"
+}

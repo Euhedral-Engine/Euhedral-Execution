@@ -1,6 +1,7 @@
 package calibration;
 
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.CalibrationLifecycleMode;
 import calibration.config.PullBucketTreatment;
 import calibration.config.TrialConfig;
 import calibration.infra.BenchmarkObserver;
@@ -14,6 +15,7 @@ import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.CoreIterationResult;
 import calibration.statistics.iteration.IterationResult;
 import calibration.statistics.iteration.SystemIterationResult;
+import calibration.statistics.iteration.TrajectoryWindow;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
@@ -60,16 +62,23 @@ public class CalibrationBenchmark {
     private final PaddedLongAdder executionCounter = new PaddedLongAdder(SystemInfo.CPU_COUNT);
 
     private final long configId = System.currentTimeMillis();
+    private final long jvmId = ProcessHandle.current().pid();
     private final TrialConfig trialConfig = getConfig();
     private final CalibrationBenchmarkConfig calibrationConfig = trialConfig.calibrationConfig();
+    private final CalibrationIterationLifecycle iterationLifecycle =
+            new CalibrationIterationLifecycle(this.calibrationConfig.lifecycleMode());
     private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> measurementObservations = new ArrayList<>();
     private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> warmupObservations = new ArrayList<>();
     private final List<IterationResult> calculationResults = new ArrayList<>();
+    private final List<TrajectoryWindow> trajectoryWindows = new ArrayList<>();
     private ForkCalculationResult forkCalculationResult;
     private BenchmarkObserver observer;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
     private final List<PullBucketTreatment> measurementTreatments = new ArrayList<>();
+    private long trajectoryStartNanos;
+    private long windowStartNanos;
+    private long windowStartExecutions;
 
     private static TrialConfig getConfig() {
         String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
@@ -97,6 +106,37 @@ public class CalibrationBenchmark {
         return UnmodifiableBitSet.wrap(surrogate);
     }
 
+    private static void pinHarnessThread(UnmodifiableBitSet workerCpus) {
+        BitSet defaultHarnessCpus = SystemInfo.getCoreInfo(0).getCpuSet();
+        int defaultHarnessCpu = defaultHarnessCpus.nextSetBit(0);
+        int harnessCpu = defaultHarnessCpu;
+        String configuredHarnessCpu = System.getProperty(Constants.HARNESS_CPU_PROP);
+        if (configuredHarnessCpu != null) {
+            try {
+                harnessCpu = Integer.parseInt(configuredHarnessCpu);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                        "Calibration harness CPU must be an integer: " + configuredHarnessCpu, e);
+            }
+        }
+        SystemInfo.CpuInfo harnessInfo = SystemInfo.getCpuInfo(harnessCpu);
+        if (harnessInfo == null) {
+            throw new IllegalArgumentException("Unknown calibration harness CPU: " + harnessCpu);
+        }
+        for (int workerCpu = workerCpus.nextSetBit(0);
+                workerCpu >= 0;
+                workerCpu = workerCpus.nextSetBit(workerCpu + 1)) {
+            SystemInfo.CpuInfo workerInfo = SystemInfo.getCpuInfo(workerCpu);
+            if (workerInfo != null && workerInfo.core() == harnessInfo.core()) {
+                throw new IllegalArgumentException("Calibration harness CPU " + harnessCpu + " shares physical core "
+                        + harnessInfo.core() + " with worker CPU " + workerCpu);
+            }
+        }
+        if (!ThreadTools.setAffinity(harnessCpu)) {
+            throw new IllegalStateException("Unable to pin calibration harness thread to CPU " + harnessCpu);
+        }
+    }
+
     private static void await(long target, PaddedLongAdder counters, long timeoutMs) {
         long now = System.nanoTime();
         long deadline = now + TimeUnit.MILLISECONDS.toNanos(timeoutMs);
@@ -118,12 +158,11 @@ public class CalibrationBenchmark {
     @Setup(Level.Trial)
     public void trialSetup() {
         LOGGER.info("Fork start");
-        // Benchmark thread stays off active cores
-        ThreadTools.setAffinity(SystemInfo.getCoreInfo(0).getCpuSet());
         UnmodifiableBitSet cpuSet = parseBitset(this.calibrationConfig.cpuSet());
         if (cpuSet.isEmpty()) {
             throw new IllegalArgumentException("Cpu set cannot be empty");
         }
+        pinHarnessThread(cpuSet);
         this.observer = new BenchmarkObserver(this.calibrationConfig);
         if (this.calibrationConfig.observePullConvoy()
                 && this.calibrationConfig.pullBucketTreatments().size() != this.trialConfig.iterations()) {
@@ -153,6 +192,7 @@ public class CalibrationBenchmark {
         for (RepeatingSink s : this.sinks) {
             this.controlPlane.addUpstream(s);
         }
+        this.trajectoryStartNanos = System.nanoTime();
     }
 
     @Setup(Level.Iteration)
@@ -175,8 +215,14 @@ public class CalibrationBenchmark {
                 index,
                 count,
                 treatment.id());
-        this.controlPlane.clear(Duration.ofSeconds(1), this::resetBenchmarkSources);
-        this.observer.startObserving();
+        this.iterationLifecycle.beforeWindow(this::resetPhysicalState, () -> {
+            this.observer.startObserving();
+            if (type == IterationType.MEASUREMENT
+                    && this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
+                this.windowStartExecutions = this.executionCounter.sum();
+                this.windowStartNanos = System.nanoTime();
+            }
+        });
     }
 
     @Benchmark
@@ -193,8 +239,15 @@ public class CalibrationBenchmark {
 
     @TearDown(Level.Iteration)
     public void iterationTeardown(IterationParams iterationParams) {
-        PaddedAtomicReferenceArray<HighSpeedMetrics> obs = this.observer.stopObserving();
+        long windowEndExecutions = 0L;
+        long windowEndNanos = 0L;
         IterationType type = iterationParams != null ? iterationParams.getType() : IterationType.MEASUREMENT;
+        if (type == IterationType.MEASUREMENT
+                && this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
+            windowEndExecutions = this.executionCounter.sum();
+            windowEndNanos = System.nanoTime();
+        }
+        PaddedAtomicReferenceArray<HighSpeedMetrics> obs = this.observer.stopObserving();
         int index = type == IterationType.WARMUP ? this.warmupObservations.size() : this.measurementObservations.size();
         int count = type == IterationType.WARMUP ? this.trialConfig.warmups() : this.trialConfig.iterations();
         LOGGER.info("Iteration stop: type={}, index={}, count={}", type, index, count);
@@ -202,8 +255,55 @@ public class CalibrationBenchmark {
             this.warmupObservations.add(obs);
         } else {
             this.measurementObservations.add(obs);
+            if (this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
+                recordTrajectoryWindow(index, windowEndExecutions, windowEndNanos);
+            }
         }
+        this.iterationLifecycle.afterWindow(this::resetPhysicalState);
+    }
+
+    private void resetPhysicalState() {
         this.controlPlane.clear(Duration.ofSeconds(1), this::resetBenchmarkSources);
+    }
+
+    private void recordTrajectoryWindow(int index, long windowEndExecutions, long windowEndNanos) {
+        this.trajectoryWindows.add(createTrajectoryWindow(
+                this.jvmId,
+                index,
+                this.trajectoryStartNanos,
+                this.windowStartNanos,
+                windowEndNanos,
+                this.windowStartExecutions,
+                windowEndExecutions,
+                this.calibrationConfig.totalRequiredExecutions()));
+    }
+
+    static TrajectoryWindow createTrajectoryWindow(
+            long jvmId,
+            int index,
+            long trajectoryStartNanos,
+            long windowStartNanos,
+            long windowEndNanos,
+            long windowStartExecutions,
+            long windowEndExecutions,
+            long minimumRequiredExecutions) {
+        long completedExecutions = windowEndExecutions - windowStartExecutions;
+        long elapsedNanos = windowEndNanos - windowStartNanos;
+        boolean continuouslyFed = completedExecutions >= minimumRequiredExecutions;
+        if (!continuouslyFed) {
+            throw new IllegalStateException("Continuous measurement window " + index + " did not remain fed: completed "
+                    + completedExecutions + " executions, expected at least "
+                    + minimumRequiredExecutions);
+        }
+        double throughput = completedExecutions * 1_000_000_000.0 / elapsedNanos;
+        return new TrajectoryWindow(
+                jvmId,
+                index,
+                windowEndNanos - trajectoryStartNanos,
+                elapsedNanos,
+                completedExecutions,
+                throughput,
+                true);
     }
 
     private void resetBenchmarkSources() {
@@ -271,6 +371,14 @@ public class CalibrationBenchmark {
             throw new RuntimeException("Failed to create output directory: " + targetPath);
         }
         TrialExport.exportAll(targetPath, this.forkCalculationResult, retainPerIteration);
+        if (this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
+            TrialExport.exportTrajectoryTsv(
+                    targetPath,
+                    this.calibrationConfig.lifecycleMode(),
+                    this.trajectoryWindows,
+                    this.forkCalculationResult,
+                    forkMeasurementMetrics);
+        }
         if (this.calibrationConfig.observeContentionStaleness()) {
             TrialExport.exportContentionStalenessTsv(targetPath, forkMeasurementMetrics);
         }

@@ -120,6 +120,17 @@ class ControlPlaneFragmentTest {
     }
 
     @Test
+    void productivityParkingRequiresAnEnabledThresholdAndEligibleSurplusWorker() {
+        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L, 900_000L));
+
+        assertFalse(ControlPlaneFragment.productivityParkRequired(0L, 0.0, true, 2L, 4, 3, 2L, 900_000L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, false, 2L, 4, 3, 2L, 900_000L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 2, 2L, 900_000L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L, 850_000L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 301.0, true, 2L, 4, 3, 2L, 900_000L));
+    }
+
+    @Test
     void closeIsIdempotentBeforeStart() {
         ControlPlaneFragment fragment = create(workerConfig());
 

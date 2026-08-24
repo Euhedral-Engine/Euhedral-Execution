@@ -97,7 +97,12 @@ HarnessConfig
      - `randomizeWork`: Whether frame load varies uniformly.
      - `totalRequiredExecutions`: Frame execution target per JMH invocation.
      - `invocationTimeoutMillis`: Execution timeout guard.
+     - `lifecycleMode`: `RESET` (default) clears physical scheduler state at existing iteration
+       boundaries; `CONTINUOUS` keeps workers, caches, controller history, upstream queues, and source
+       position alive while measurement-local observer buffers and counters segment consecutive windows.
      - `rawSampleLimit`: Circular buffer capacity for raw samples (power-of-two).
+     - `productivityThresholdWeight`: Optional non-negative micro-calibrator work weight forwarded to
+       `euhedral.productivity.thresholdWeight` for productivity-threshold experiments.
      - `decisionWeightProfile` (`string`): Reference to local or namespaced imported decision weight profile (e.g. `"host.baseline"`).
      - `decisionWeights`: 28 fixed weights defining thresholds, costs, park times, and execution policies.
      - Observation Toggles:
@@ -257,6 +262,11 @@ executes the following workflow:
 7. **Artifact Export**:
    [`TrialExport`](src/main/java/calibration/io/TrialExport.java)
    writes TSV files and corresponding `.sha256` checksums into each invocation directory.
+
+`RESET` is the backwards-compatible default. In `CONTINUOUS`, warmup and measurement iterations are
+consecutive windows in one fork/JVM trajectory, not independent replications. Each retained fork also
+writes `trajectory_windows.tsv` and `trajectory_occupancy.tsv`, with checksums, so temporal evolution
+can be inspected without pooling windows as forks.
 
 ---
 
@@ -435,6 +445,8 @@ according to the configured artifact retention flags, alongside their SHA-256 in
 | `vector_fields.tsv` | 5x5 displacement vectors (Delta_C, Delta_B) and magnitudes | [`VectorField`](src/main/java/calibration/statistics/VectorField.java) |
 | `correlations.tsv` | Aligned Pearson and Spearman correlation matrices across observation dimensions | [`CorrelationResult`](src/main/java/calibration/statistics/iteration/CorrelationResult.java) |
 | `contention_staleness.tsv` | Calibration-only bounded per-core contention-observation age, acquisition counters, and idle streak sequence | [`BenchmarkObserver`](src/main/java/calibration/infra/BenchmarkObserver.java) |
+| `trajectory_windows.tsv` | Ordered per-JVM CONTINUOUS window timing, throughput, feeding, dominant-state, centroid, acquisition, idle, and productive-handle summary | [`TrajectoryWindow`](src/main/java/calibration/statistics/iteration/TrajectoryWindow.java) |
+| `trajectory_occupancy.tsv` | Exact idle and execution state occupancy for each ordered CONTINUOUS trajectory window | [`BranchOccupancyResult`](src/main/java/calibration/statistics/iteration/BranchOccupancyResult.java) |
 
 ### Benchmark File Columns (In Order)
 
@@ -452,6 +464,10 @@ according to the configured artifact retention flags, alongside their SHA-256 in
    `iteration`, `scope`, `core`, `metric`, `segment`, `variable1`, `variable2`, `pearson`, `spearman`
 7. **`contention_staleness.tsv`**:
    `iteration`, `core`, `segment`, `sampleIndex`, `cycleEpoch`, `batchEpoch`, `measuredContention`, `lastRawContention`, `contentionObservationCount`, `lastContentionObservationNs`, `cyclesSinceContentionObservation`, `nanosSinceContentionObservation`, `consecutiveIdleDecisions`, `idleDurationSelectedNs`, `successfulAcquisitionCount`, `failedAcquisitionCount`, `totalAcquisitionAttempts`, `executionPath`, `localCacheCount`, `productiveHandleCount`, `registeredWorkers`, `workerRank`
+8. **`trajectory_windows.tsv`**:
+   `jvmId`, `lifecycleMode`, `windowIndex`, `trajectoryElapsedNs`, `windowElapsedNs`, `completedExecutions`, `throughputExecutionsPerSecond`, `continuouslyFed`, `dominantDecisionType`, `dominantState`, `dominantContentionBand`, `dominantBodyBand`, `dominantStateProbability`, `contentionCentroid`, `bodyCentroid`, `successfulAcquisitions`, `failedAcquisitions`, `acquisitionSuccessRatio`, `idleSelectedFraction`, `productiveHandleRatio`
+9. **`trajectory_occupancy.tsv`**:
+   `jvmId`, `lifecycleMode`, `windowIndex`, `decisionType`, `state`, `contentionBand`, `bodyBand`, `count`, `probability`
 
 ---
 

@@ -4,6 +4,7 @@ import calibration.comparisons.schema.CompletedRun;
 import calibration.comparisons.schema.RunArtifacts;
 import calibration.comparisons.schema.RunIdentity;
 import calibration.comparisons.schema.ThroughputResult;
+import calibration.config.CalibrationLifecycleMode;
 import calibration.config.TrialConfig;
 import calibration.infra.Constants;
 import calibration.io.exceptions.ChecksumMismatchException;
@@ -134,6 +135,14 @@ public final class CompletedRunLoader {
         verifyChecksumIfExists(normalizedDir, transPath);
         verifyChecksumIfExists(normalizedDir, vecPath);
         verifyChecksumIfExists(normalizedDir, corrPath);
+        if (trialConfig.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
+            Path trajectoryWindows = tsvDir.resolve(Constants.TRAJECTORY_WINDOWS_TSV);
+            Path trajectoryOccupancy = tsvDir.resolve(Constants.TRAJECTORY_OCCUPANCY_TSV);
+            validateRequiredFile(normalizedDir, trajectoryWindows);
+            validateRequiredFile(normalizedDir, trajectoryOccupancy);
+            verifyChecksumIfExists(normalizedDir, trajectoryWindows);
+            verifyChecksumIfExists(normalizedDir, trajectoryOccupancy);
+        }
 
         SystemForkResult system =
                 parseSystemForkResult(normalizedDir, rawObsPath, statsPath, occPath, transPath, vecPath, corrPath);
@@ -907,7 +916,11 @@ public final class CompletedRunLoader {
                 resolveExistingPath(tsvDir, Constants.CORRELATIONS_TSV),
                 resolveExistingPath(tsvDir, Constants.CORRELATIONS_CHECKSUM),
                 resolveExistingPath(runDir, Constants.BENCHMARK_OUTPUT_LOG),
-                resolveExistingPath(runDir, Constants.BENCHMARK_OUTPUT_LOG));
+                resolveExistingPath(runDir, Constants.BENCHMARK_OUTPUT_LOG),
+                resolveExistingPath(tsvDir, Constants.TRAJECTORY_WINDOWS_TSV),
+                resolveExistingPath(tsvDir, Constants.TRAJECTORY_WINDOWS_CHECKSUM),
+                resolveExistingPath(tsvDir, Constants.TRAJECTORY_OCCUPANCY_TSV),
+                resolveExistingPath(tsvDir, Constants.TRAJECTORY_OCCUPANCY_CHECKSUM));
     }
 
     private static Path findTsvDir(Path normalizedDir) {

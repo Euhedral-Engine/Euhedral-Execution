@@ -10,6 +10,7 @@ import org.jspecify.annotations.NonNull;
 public final class FragmentControlConfig {
     public static final String IDLE_BODY_COST_WEIGHTS = "euhedral.fragment.idle.bodyCostThresholdsPath";
     public static final String IDLE_POLICY_PARK_NS = "euhedral.fragment.idle.parkTimeValuesNsPath";
+    public static final String PRODUCTIVITY_THRESHOLD_WEIGHT = "euhedral.productivity.thresholdWeight";
 
     public static final long DEFAULT_PARK_NS = 15_000L;
 

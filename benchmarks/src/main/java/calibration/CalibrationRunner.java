@@ -19,6 +19,7 @@ import calibration.config.SweepConfig;
 import calibration.config.TrialConfig;
 import calibration.config.TrialSweepExpander;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -367,6 +368,13 @@ public class CalibrationRunner {
         addJVMProperty(jvmArgs, REPEAT_INDEX_PROP, Integer.toString(repeatIndex));
         addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
         addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
+        Integer productivityThresholdWeight = trial.calibrationConfig().productivityThresholdWeight();
+        if (productivityThresholdWeight != null) {
+            addJVMProperty(
+                    jvmArgs,
+                    FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT,
+                    productivityThresholdWeight.toString());
+        }
 
         if (invocationDir != null) {
             try {

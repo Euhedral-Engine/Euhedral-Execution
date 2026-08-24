@@ -1,0 +1,106 @@
+{
+  "calibrationProfiles": {
+    "p4-wu-000-off": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-000-on": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 128, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-048-off": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 48, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-048-on": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 48, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 144, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-096-off": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 96, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-096-on": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 96, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 192, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-144-off": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 144, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-144-on": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 144, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 240, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-216-off": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 216, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-216-on": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 216, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 320, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-288-off": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 288, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    },
+    "p4-wu-288-on": {
+      "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+      "workUnits": 288, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000, "decisionWeightProfile": "default-weights",
+      "productivityThresholdWeight": 384, "rawSampleLimit": 1024,
+      "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+      "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+    }
+  },
+  "decisionWeightProfiles": {
+    "default-weights": {
+      "idleBodyCostWeights": { "xs": 96, "s": 128, "m": 216, "h": 288 },
+      "idleTimeNs": { "xsPark": 1000, "sPark": 0, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+    }
+  }
+}

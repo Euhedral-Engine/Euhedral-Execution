@@ -64,6 +64,13 @@ class TrialConfigDifferTest {
     }
 
     @Test
+    void testProductivityThresholdWeightIsPolicy() {
+        assertEquals(
+                DifferenceCategory.POLICY,
+                TrialConfigDiffer.categorize("/calibrationConfig/productivityThresholdWeight"));
+    }
+
+    @Test
     void testIdlePolicyChangeProducesPolicyDifference() {
         TrialConfig base = baseConfig();
 

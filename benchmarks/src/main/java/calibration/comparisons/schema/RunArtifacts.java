@@ -22,10 +22,55 @@ public record RunArtifacts(
         @Nullable String correlationsPath,
         @Nullable String correlationsChecksumPath,
         @Nullable String benchmarkOutputPath,
-        @Nullable String jmhResultPath) {
+        @Nullable String jmhResultPath,
+        @Nullable String trajectoryWindowsPath,
+        @Nullable String trajectoryWindowsChecksumPath,
+        @Nullable String trajectoryOccupancyPath,
+        @Nullable String trajectoryOccupancyChecksumPath) {
 
     public RunArtifacts {
         Objects.requireNonNull(rootDirectory, "rootDirectory must not be null");
+    }
+
+    /// Backwards-compatible constructor for result sets without long-horizon trajectory artifacts.
+    public RunArtifacts(
+            @NonNull String rootDirectory,
+            @Nullable String trialConfigPath,
+            @Nullable String rawObservationsPath,
+            @Nullable String rawObservationsChecksumPath,
+            @Nullable String statisticsPath,
+            @Nullable String statisticsChecksumPath,
+            @Nullable String occupancyPath,
+            @Nullable String occupancyChecksumPath,
+            @Nullable String transitionsPath,
+            @Nullable String transitionsChecksumPath,
+            @Nullable String vectorFieldsPath,
+            @Nullable String vectorFieldsChecksumPath,
+            @Nullable String correlationsPath,
+            @Nullable String correlationsChecksumPath,
+            @Nullable String benchmarkOutputPath,
+            @Nullable String jmhResultPath) {
+        this(
+                rootDirectory,
+                trialConfigPath,
+                rawObservationsPath,
+                rawObservationsChecksumPath,
+                statisticsPath,
+                statisticsChecksumPath,
+                occupancyPath,
+                occupancyChecksumPath,
+                transitionsPath,
+                transitionsChecksumPath,
+                vectorFieldsPath,
+                vectorFieldsChecksumPath,
+                correlationsPath,
+                correlationsChecksumPath,
+                benchmarkOutputPath,
+                jmhResultPath,
+                null,
+                null,
+                null,
+                null);
     }
 
     public static RunArtifacts standard(@NonNull String rootDirectory) {
@@ -47,6 +92,10 @@ public record RunArtifacts(
                 rootDirectory + sep + Constants.CORRELATIONS_TSV,
                 rootDirectory + sep + Constants.CORRELATIONS_CHECKSUM,
                 rootDirectory + sep + Constants.BENCHMARK_OUTPUT_LOG,
-                rootDirectory + sep + Constants.BENCHMARK_OUTPUT_LOG);
+                rootDirectory + sep + Constants.BENCHMARK_OUTPUT_LOG,
+                rootDirectory + sep + Constants.TRAJECTORY_WINDOWS_TSV,
+                rootDirectory + sep + Constants.TRAJECTORY_WINDOWS_CHECKSUM,
+                rootDirectory + sep + Constants.TRAJECTORY_OCCUPANCY_TSV,
+                rootDirectory + sep + Constants.TRAJECTORY_OCCUPANCY_CHECKSUM);
     }
 }
