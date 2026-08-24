@@ -16,6 +16,8 @@
   "runOptions": {
     // Optional: Whether trial execution order is randomized
     "randomizeTrialOrder": true,
+    // Optional: balance repeated sweep treatments in forward/reverse execution pairs
+    "balancedTrialOrder": false,
     // Optional: Seed for random number generation
     "randomSeed": 42,
     // Optional: Stop execution on first trial failure

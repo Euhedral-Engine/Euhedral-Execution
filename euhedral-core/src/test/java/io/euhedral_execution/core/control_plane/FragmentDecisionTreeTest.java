@@ -505,7 +505,7 @@ class FragmentDecisionTreeTest {
         assertEquals(-1L, tree.idle(1L, 1L, 2L, 4, 1, 850_000L));
         verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, -1, 850_000L, 1.0);
 
-        assertEquals(1_000L, tree.idle(2L, 1L, 2L, 4, 1, 850_001L));
+        assertEquals(50_000L, tree.idle(2L, 1L, 2L, 4, 1, 850_001L));
         verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
     }
 

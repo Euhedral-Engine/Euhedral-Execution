@@ -19,6 +19,7 @@ class FragmentDecisionWeightsTest {
         assertNotNull(weights);
         assertEquals(BodyCostWeights.DEFAULTS, weights.idleBodyCostWeights());
         assertEquals(IdlePolicy.DEFAULT, weights.idleTimeNs());
+        assertEquals(new IdlePolicy(50_000, 0, 0, 0, 0), weights.idleTimeNs());
     }
 
     @Test

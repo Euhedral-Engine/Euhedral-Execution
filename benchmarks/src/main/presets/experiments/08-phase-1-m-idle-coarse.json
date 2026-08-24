@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "id": "08-phase-1-m-idle-coarse",
+  "name": "Phase 1 M Ordinary Idle Duration Coarse Sweep",
+  "description": "Corrected CONTINUOUS calibration of mPark only at the midpoint 172-work M fixture, with productivity participation disabled.",
+  "labels": { "phase": "phase-1-idle-duration", "bodyBand": "M", "topology": "i9-14900k-23-worker-11-source" },
+  "imports": [{ "path": "../profiles/phase-1-idle-duration.json", "namespace": "phase1" }],
+  "runOptions": { "randomizeTrialOrder": false, "balancedTrialOrder": true, "failFast": true, "repeatCount": 1 },
+  "artifacts": {
+    "outputDirectory": "experiments/08-phase-1-m-idle-coarse",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "m-idle-ns",
+      "baseTrialId": "phase1-m-base",
+      "description": "Two independent JVM replicas per M idle treatment in complementary order.",
+      "enabled": true,
+      "repetitions": 2,
+      "group": "phase-1-m-idle-coarse",
+      "parameters": [
+        { "path": "/calibrationConfig/decisionWeights/idleTimeNs/mPark", "values": [0, 5000, 25000, 50000, 250000] }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "phase1-m-base",
+      "name": "Phase 1 M coarse template",
+      "group": "phase-1-m-idle-coarse",
+      "description": "172-work midpoint M fixture; only mPark is swept.",
+      "tags": ["phase-1", "m", "continuous", "productivity-off", "coarse"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 6,
+      "warmupTime": "2s",
+      "measurementTime": "5s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=0"],
+      "calibrationConfig": {
+        "cpuSet": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+        "parallelSources": 11,
+        "orderedSources": 0,
+        "workUnits": 172,
+        "randomizeWork": false,
+        "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 60000,
+        "lifecycleMode": "CONTINUOUS",
+        "decisionWeightProfile": "phase1.phase1-starting-reference",
+        "productivityThresholdWeight": 0,
+        "rawSampleLimit": 1024,
+        "observeCycleStart": true,
+        "observeBatchProgress": true,
+        "observeBatchComplete": true,
+        "observeRawBodyCost": true,
+        "observeIdleDecision": true,
+        "observeExecDecision": true,
+        "observeContentionStaleness": true
+      }
+    }
+  ]
+}

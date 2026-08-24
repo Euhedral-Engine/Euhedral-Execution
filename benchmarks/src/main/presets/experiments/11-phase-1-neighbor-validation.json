@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "id": "11-phase-1-neighbor-validation",
+  "name": "Phase 1 Neighboring Source Validation",
+  "description": "Compact portability check for the only selected nonzero ordinary-idle value: XS 50 us versus the 0 ns control at 8 and 16 parallel sources around the 11-source calibration fixture. S/M/H/XH remain at selected 0 ns.",
+  "labels": { "phase": "phase-1-idle-duration", "purpose": "neighbor-validation", "bodyBand": "XS" },
+  "imports": [{ "path": "../profiles/phase-1-idle-duration.json", "namespace": "phase1" }],
+  "runOptions": { "randomizeTrialOrder": false, "balancedTrialOrder": true, "failFast": true, "repeatCount": 1 },
+  "artifacts": {
+    "outputDirectory": "experiments/11-phase-1-neighbor-validation",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "xs-neighbor-validation",
+      "baseTrialId": "phase1-xs-neighbor-base",
+      "description": "Two independent balanced JVM replicas for the 2x2 source-count/XS-idle portability matrix.",
+      "enabled": true,
+      "repetitions": 2,
+      "group": "phase-1-neighbor-validation",
+      "parameters": [
+        { "path": "/calibrationConfig/parallelSources", "values": [8, 16] },
+        { "path": "/calibrationConfig/decisionWeights/idleTimeNs/xsPark", "values": [0, 50000] }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "phase1-xs-neighbor-base",
+      "name": "Phase 1 XS neighbor validation template",
+      "group": "phase-1-neighbor-validation",
+      "description": "True no-op XS body; source count and XS candidate/control are the only axes.",
+      "tags": ["phase-1", "xs", "continuous", "productivity-off", "neighbor-validation"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 6,
+      "warmupTime": "2s",
+      "measurementTime": "5s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=0"],
+      "calibrationConfig": {
+        "cpuSet": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+        "parallelSources": 8,
+        "orderedSources": 0,
+        "workUnits": 0,
+        "randomizeWork": false,
+        "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 60000,
+        "lifecycleMode": "CONTINUOUS",
+        "decisionWeights": {
+          "idleBodyCostWeights": { "xs": 96, "s": 128, "m": 216, "h": 288 },
+          "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
+        },
+        "productivityThresholdWeight": 0,
+        "rawSampleLimit": 1024,
+        "observeCycleStart": true,
+        "observeBatchProgress": true,
+        "observeBatchComplete": true,
+        "observeRawBodyCost": true,
+        "observeIdleDecision": true,
+        "observeExecDecision": true,
+        "observeContentionStaleness": true
+      }
+    }
+  ]
+}

@@ -75,8 +75,7 @@ class TrialConfigDifferTest {
         TrialConfig base = baseConfig();
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L));
+                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(), new IdlePolicy(51_000L, 0L, 0L, 0L, 0L));
 
         TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
 
@@ -86,8 +85,8 @@ class TrialConfigDifferTest {
         ConfigurationDifference diff = diffs.getFirst();
         assertEquals("/calibrationConfig/decisionWeights/idleTimeNs/xsPark", diff.path());
         assertEquals(DifferenceCategory.POLICY, diff.category());
-        assertEquals(LongNode.valueOf(1_000), diff.baselineValue());
-        assertEquals(LongNode.valueOf(2_000), diff.candidateValue());
+        assertEquals(LongNode.valueOf(50_000), diff.baselineValue());
+        assertEquals(LongNode.valueOf(51_000), diff.candidateValue());
     }
 
     @Test

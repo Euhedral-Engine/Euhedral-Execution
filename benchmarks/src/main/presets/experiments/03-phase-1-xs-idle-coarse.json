@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "03-phase-1-xs-idle-coarse",
+  "name": "Phase 1 XS Ordinary Idle Duration Coarse Sweep",
+  "description": "Corrected CONTINUOUS calibration of xsPark only. Productivity participation is disabled by threshold weight zero. The 23-worker/11-source fixture is continuously fed and previously showed near-saturated contention with ordinary idle participation.",
+  "labels": {
+    "phase": "phase-1-idle-duration",
+    "bodyBand": "XS",
+    "topology": "i9-14900k-23-worker-11-source"
+  },
+  "imports": [
+    {
+      "path": "../profiles/phase-1-idle-duration.json",
+      "namespace": "phase1"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "balancedTrialOrder": true,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/03-phase-1-xs-idle-coarse",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "xs-idle-ns",
+      "baseTrialId": "phase1-xs-base",
+      "description": "Two independently started JVM replicas per XS idle treatment, ordered as a complementary forward/reverse pair.",
+      "enabled": true,
+      "repetitions": 2,
+      "group": "phase-1-xs-idle-coarse",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/decisionWeights/idleTimeNs/xsPark",
+          "description": "XS ordinary idle duration in nanoseconds",
+          "values": [0, 1000, 5000, 15000, 50000]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "phase1-xs-base",
+      "name": "Phase 1 XS coarse template",
+      "group": "phase-1-xs-idle-coarse",
+      "description": "True-no-op XS fixture; only xsPark is swept.",
+      "tags": ["phase-1", "xs", "continuous", "productivity-off", "coarse"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 6,
+      "warmupTime": "2s",
+      "measurementTime": "5s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Deuhedral.calibration.harnessCpu=0"
+      ],
+      "calibrationProfile": "phase1.ordinary-idle-continuous-23w-11s"
+    }
+  ]
+}

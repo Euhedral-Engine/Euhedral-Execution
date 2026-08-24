@@ -1,0 +1,30 @@
+{
+  "calibrationProfiles": {
+    "ordinary-idle-continuous-23w-11s": {
+      "cpuSet": [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31],
+      "parallelSources": 11,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 60000,
+      "lifecycleMode": "CONTINUOUS",
+      "decisionWeightProfile": "phase1-starting-reference",
+      "productivityThresholdWeight": 0,
+      "rawSampleLimit": 1024,
+      "observeCycleStart": true,
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": true,
+      "observeExecDecision": true,
+      "observeContentionStaleness": true
+    }
+  },
+  "decisionWeightProfiles": {
+    "phase1-starting-reference": {
+      "idleBodyCostWeights": { "xs": 96, "s": 128, "m": 216, "h": 288 },
+      "idleTimeNs": { "xsPark": 1000, "sPark": 0, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+    }
+  }
+}

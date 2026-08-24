@@ -108,7 +108,7 @@ public final class FragmentControlConfig {
                     throw new ExceptionInInitializerError(e);
                 }
             } else {
-                DEFAULT = new IdlePolicy(1_000, 0, 5_000, 5_000, 5_000); // XH Contention
+                DEFAULT = new IdlePolicy(50_000, 0, 0, 0, 0);
             }
         }
 

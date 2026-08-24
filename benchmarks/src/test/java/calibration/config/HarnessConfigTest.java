@@ -295,6 +295,7 @@ class HarnessConfigTest {
             {
               "runOptions": {
                 "randomizeTrialOrder": true,
+                "balancedTrialOrder": false,
                 "randomSeed": 42,
                 "failFast": false,
                 "repeatCount": 3
@@ -332,6 +333,7 @@ class HarnessConfigTest {
         HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
         assertNotNull(config.runOptions());
         assertEquals(Boolean.TRUE, config.runOptions().randomizeTrialOrder());
+        assertEquals(Boolean.FALSE, config.runOptions().balancedTrialOrder());
         assertEquals(Long.valueOf(42L), config.runOptions().randomSeed());
         assertEquals(Boolean.FALSE, config.runOptions().failFast());
         assertEquals(Integer.valueOf(3), config.runOptions().repeatCount());
@@ -366,6 +368,11 @@ class HarnessConfigTest {
 
         assertThrows(IllegalArgumentException.class, () -> new HarnessRunOptions(null, null, null, 0));
         assertThrows(IllegalArgumentException.class, () -> new HarnessRunOptions(null, null, null, -1));
+    }
+
+    @Test
+    void rejectRandomizedAndBalancedOrderTogether() {
+        assertThrows(IllegalArgumentException.class, () -> new HarnessRunOptions(true, true, 42L, true, 1));
     }
 
     /// Verifies HarnessRunOptions accepts any long for randomSeed and null booleans.

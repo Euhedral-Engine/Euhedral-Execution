@@ -1,0 +1,25 @@
+{
+  "strategy": "CROSS",
+  "baseline": {
+    "id": "xh-0ns-control",
+    "runs": [
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__0__sample_0_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__0__sample_1_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "xh-nonzero-treatments",
+    "runs": [
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__1__sample_0_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__1__sample_1_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__2__sample_0_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__2__sample_1_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__3__sample_0_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__3__sample_1_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__4__sample_0_repeat_0",
+      "experiments/10-phase-1-xh-idle-coarse/phase1-xh-base__xh-idle-ns__4__sample_1_repeat_0"
+    ]
+  },
+  "options": { "includeDiagnostics": true, "failFast": true },
+  "outputDirectory": "experiments/10-phase-1-xh-idle-coarse/comparisons"
+}

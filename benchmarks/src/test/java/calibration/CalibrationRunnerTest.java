@@ -13,6 +13,7 @@ import calibration.comparisons.schema.ComparisonSet;
 import calibration.comparisons.schema.RunReference;
 import calibration.config.ArtifactConfig;
 import calibration.config.CalibrationBenchmarkConfig;
+import calibration.config.CalibrationLifecycleMode;
 import calibration.config.ComparisonConfig;
 import calibration.config.ComparisonKeyConfig;
 import calibration.config.ComparisonOptions;
@@ -299,6 +300,42 @@ class CalibrationRunnerTest {
     }
 
     @Test
+    void balancedSweepOrderUsesComplementaryPositionsForEachReplicaPair() {
+        TrialConfig baseDisabled = dummyTrialConfig("base1", false);
+        SweepParameter param = dummySweepParameter("/calibrationConfig/workUnits", List.of(100, 200, 300));
+        SweepConfig sweep = new SweepConfig("s1", "base1", "desc", true, 4, null, null, List.of(param));
+        HarnessRunOptions options = new HarnessRunOptions(false, true, null, true, 1);
+        HarnessConfig harnessConfig = new HarnessConfig(
+                null, null, null, null, null, options, null, null, null, List.of(sweep), null, List.of(baseDisabled));
+
+        List<TrialConfig> resolved = CalibrationRunner.resolveTrials(harnessConfig, mapper);
+
+        assertEquals(
+                List.of(100, 200, 300, 300, 200, 100, 200, 300, 100, 100, 300, 200),
+                resolved.stream().map(t -> t.calibrationConfig().workUnits()).toList());
+    }
+
+    @Test
+    void balancedSweepOrderRejectsNonRepeatedExplicitTrials() {
+        HarnessRunOptions options = new HarnessRunOptions(false, true, null, true, 1);
+        HarnessConfig harnessConfig = new HarnessConfig(
+                null,
+                null,
+                null,
+                null,
+                null,
+                options,
+                null,
+                null,
+                null,
+                null,
+                null,
+                List.of(dummyTrialConfig("t1", true), dummyTrialConfig("t2", true)));
+
+        assertThrows(IllegalArgumentException.class, () -> CalibrationRunner.resolveTrials(harnessConfig, mapper));
+    }
+
+    @Test
     void resolveTrialsDuplicateFinalTrialIdRejectionExplicitDuplicates() {
         TrialConfig t1 = dummyTrialConfig("dup1", true);
         TrialConfig t2 = dummyTrialConfig("dup1", true);
@@ -441,6 +478,238 @@ class CalibrationRunnerTest {
         assertEquals(6, comparison.baseline().runs().size());
         assertEquals(6, comparison.candidate().runs().size());
         assertEquals(List.of("/calibrationConfig/workUnits"), comparison.key().paths());
+    }
+
+    @Test
+    void phase1XsCoarsePresetBalancesReplicasAndVariesOnlyXsIdleDuration() throws Exception {
+        HarnessConfig harness = CalibrationRunner.loadConfig(
+                "src/main/presets/experiments/03-phase-1-xs-idle-coarse.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+
+        assertEquals(10, trials.size());
+        assertEquals(
+                List.of(0L, 1000L, 5000L, 15000L, 50000L, 50000L, 15000L, 5000L, 1000L, 0L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::xsPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.forks() == 1));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 0));
+        assertTrue(trials.stream()
+                .allMatch(trial -> trial.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.sPark() == 0L && idle.mPark() == 5000L && idle.hPark() == 5000L && idle.xhPark() == 5000L;
+        }));
+        assertEquals(
+                Set.of(0, 1),
+                trials.stream()
+                        .map(trial -> trial.origin().sampleIndex())
+                        .collect(java.util.stream.Collectors.toSet()));
+
+        ComparisonConfig comparison = this.mapper.readValue(
+                new File("src/main/presets/comparisons/03-phase-1-xs-idle-coarse.json"), ComparisonConfig.class);
+        assertEquals(ComparisonStrategy.CROSS, comparison.strategy());
+        assertEquals(2, comparison.baseline().runs().size());
+        assertEquals(8, comparison.candidate().runs().size());
+    }
+
+    @Test
+    void phase1XsRefinementPresetRetainsAnchorAndExtendsOnlyXsIdleDuration() throws Exception {
+        HarnessConfig harness = CalibrationRunner.loadConfig(
+                "src/main/presets/experiments/04-phase-1-xs-idle-refinement.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+
+        assertEquals(
+                List.of(25000L, 50000L, 100000L, 250000L, 500000L, 500000L, 250000L, 100000L, 50000L, 25000L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::xsPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.forks() == 1));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 0));
+        assertTrue(trials.stream()
+                .allMatch(trial -> trial.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+    }
+
+    @Test
+    void phase1SCoarsePresetUsesIntendedFixtureAndVariesOnlySIdleDuration() throws Exception {
+        HarnessConfig harness =
+                CalibrationRunner.loadConfig("src/main/presets/experiments/05-phase-1-s-idle-coarse.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+
+        assertEquals(
+                List.of(0L, 5000L, 25000L, 50000L, 250000L, 250000L, 50000L, 25000L, 5000L, 0L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::sPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.forks() == 1));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 96));
+        assertTrue(trials.stream()
+                .allMatch(trial -> trial.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.xsPark() == 1000L && idle.mPark() == 5000L && idle.hPark() == 5000L && idle.xhPark() == 5000L;
+        }));
+    }
+
+    @Test
+    void phase1SFixtureQualificationVariesWorkWithoutChangingPolicy() throws Exception {
+        HarnessConfig harness = CalibrationRunner.loadConfig(
+                "src/main/presets/experiments/06-phase-1-s-fixture-qualification.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+
+        assertEquals(
+                Set.of(104, 112, 120, 128),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::workUnits)
+                        .collect(java.util.stream.Collectors.toSet()));
+        assertTrue(trials.stream().allMatch(trial -> trial.forks() == 1));
+        assertTrue(trials.stream()
+                .allMatch(trial -> trial.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertEquals(
+                1L,
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .distinct()
+                        .count());
+    }
+
+    @Test
+    void phase1QualifiedSCoarsePresetUses112WorkAndVariesOnlySIdle() throws Exception {
+        HarnessConfig harness =
+                CalibrationRunner.loadConfig("src/main/presets/experiments/07-phase-1-s-idle-coarse.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+        assertEquals(10, trials.size());
+        assertEquals(
+                List.of(0L, 5000L, 25000L, 50000L, 250000L, 250000L, 50000L, 25000L, 5000L, 0L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::sPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 112));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.xsPark() == 1000L && idle.mPark() == 5000L && idle.hPark() == 5000L && idle.xhPark() == 5000L;
+        }));
+    }
+
+    @Test
+    void phase1MCoarsePresetUsesMidpointFixtureAndVariesOnlyMIdle() throws Exception {
+        HarnessConfig harness =
+                CalibrationRunner.loadConfig("src/main/presets/experiments/08-phase-1-m-idle-coarse.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+        assertEquals(10, trials.size());
+        assertEquals(
+                List.of(0L, 5000L, 25000L, 50000L, 250000L, 250000L, 50000L, 25000L, 5000L, 0L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::mPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 172));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.xsPark() == 1000L && idle.sPark() == 0L && idle.hPark() == 5000L && idle.xhPark() == 5000L;
+        }));
+    }
+
+    @Test
+    void phase1HCoarsePresetUsesMidpointFixtureAndVariesOnlyHIdle() throws Exception {
+        HarnessConfig harness =
+                CalibrationRunner.loadConfig("src/main/presets/experiments/09-phase-1-h-idle-coarse.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+        assertEquals(10, trials.size());
+        assertEquals(
+                List.of(0L, 5000L, 25000L, 50000L, 250000L, 250000L, 50000L, 25000L, 5000L, 0L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::hPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 252));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.xsPark() == 1000L && idle.sPark() == 0L && idle.mPark() == 5000L && idle.xhPark() == 5000L;
+        }));
+    }
+
+    @Test
+    void phase1XhCoarsePresetUsesAboveThresholdFixtureAndVariesOnlyXhIdle() throws Exception {
+        HarnessConfig harness = CalibrationRunner.loadConfig(
+                "src/main/presets/experiments/10-phase-1-xh-idle-coarse.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+        assertEquals(10, trials.size());
+        assertEquals(
+                List.of(0L, 5000L, 25000L, 50000L, 250000L, 250000L, 50000L, 25000L, 5000L, 0L),
+                trials.stream()
+                        .map(TrialConfig::calibrationConfig)
+                        .map(CalibrationBenchmarkConfig::decisionWeights)
+                        .map(FragmentDecisionWeights::idleTimeNs)
+                        .map(FragmentControlConfig.IdlePolicy::xhPark)
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 384));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.xsPark() == 1000L && idle.sPark() == 0L && idle.mPark() == 5000L && idle.hPark() == 5000L;
+        }));
+    }
+
+    @Test
+    void phase1NeighborValidationBalancesSourceAndXsCandidateMatrix() throws Exception {
+        HarnessConfig harness = CalibrationRunner.loadConfig(
+                "src/main/presets/experiments/11-phase-1-neighbor-validation.json", this.mapper);
+        List<TrialConfig> trials = CalibrationRunner.resolveTrials(harness, this.mapper);
+        assertEquals(8, trials.size());
+        assertEquals(
+                List.of("8:0", "8:50000", "16:0", "16:50000", "16:50000", "16:0", "8:50000", "8:0"),
+                trials.stream()
+                        .map(trial -> {
+                            CalibrationBenchmarkConfig config = trial.calibrationConfig();
+                            return config.parallelSources() + ":"
+                                    + config.decisionWeights().idleTimeNs().xsPark();
+                        })
+                        .toList());
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().workUnits() == 0));
+        assertTrue(trials.stream().allMatch(trial -> trial.calibrationConfig().productivityThresholdWeight() == 0));
+        assertTrue(trials.stream().allMatch(trial -> {
+            FragmentControlConfig.IdlePolicy idle =
+                    trial.calibrationConfig().decisionWeights().idleTimeNs();
+            return idle.sPark() == 0L && idle.mPark() == 0L && idle.hPark() == 0L && idle.xhPark() == 0L;
+        }));
+        ComparisonConfig comparison = this.mapper.readValue(
+                new File("src/main/presets/comparisons/11-phase-1-neighbor-validation.json"), ComparisonConfig.class);
+        assertEquals(ComparisonStrategy.KEYED, comparison.strategy());
+        assertEquals(
+                List.of("/calibrationConfig/parallelSources", "/origin/sampleIndex"),
+                comparison.key().paths());
     }
 
     @Test
