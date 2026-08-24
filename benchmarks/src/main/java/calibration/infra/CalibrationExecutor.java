@@ -1,5 +1,6 @@
 package calibration.infra;
 
+import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.AbstractExecutor;
 import io.euhedral_execution.core.utils.MicroCalibrator;
@@ -27,6 +28,10 @@ public class CalibrationExecutor extends AbstractExecutor {
                     frame.getIdHash(), (int) Math.unsignedMultiplyHigh(frame.getRoutingHash(), workUnitLimit));
         } else {
             this.calibrator.cpuWork(frame.getIdHash(), this.workUnitLimit);
+        }
+
+        if (frame instanceof NoOpFrame nof) {
+            nof.cpu = super.cpu;
         }
     }
 
