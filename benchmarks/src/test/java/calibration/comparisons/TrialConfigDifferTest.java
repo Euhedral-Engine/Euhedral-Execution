@@ -71,6 +71,13 @@ class TrialConfigDifferTest {
     }
 
     @Test
+    void testProductivityGateModeIsPolicy() {
+        assertEquals(
+                DifferenceCategory.POLICY,
+                TrialConfigDiffer.categorize("/calibrationConfig/productivityGateMode"));
+    }
+
+    @Test
     void testIdlePolicyChangeProducesPolicyDifference() {
         TrialConfig base = baseConfig();
 

@@ -267,12 +267,16 @@ public final class ControlPlaneFragment extends WorkRequester {
                 boolean productivityParked = false;
                 if (localCache == 0L) {
                     long contention = this.upstreamQueue.getContention();
-                    if (productivityParkRequired(contention)) {
+                    if (productivityParkRequired()) {
                         // Return to the owner loop after one bounded park so reset and interrupt state
                         // are observed before this worker parks again.
                         LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
                         idleDurationSelectedNs = FragmentControlConfig.DEFAULT_PARK_NS;
                         productivityParked = true;
+                        if (this.observeContentionStaleness
+                                && this.state.productivityExclusionCount < Long.MAX_VALUE) {
+                            this.state.productivityExclusionCount++;
+                        }
                     } else {
                         idleDurationSelectedNs = this.controlPolicy.idle(
                                 this.state.cycleEpoch,
@@ -294,6 +298,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                 }
                 if (productivityParked) {
+                    if (this.observeContentionStaleness) {
+                        recordContentionStaleness(idleDurationSelectedNs, -1, localCache, true);
+                    }
                     continue;
                 }
 
@@ -327,7 +334,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                         this.state.registeredWorkers,
                         this.upstreamQueue.getContention());
                 if (this.observeContentionStaleness) {
-                    recordContentionStaleness(idleDurationSelectedNs, path, localCache);
+                    recordContentionStaleness(idleDurationSelectedNs, path.ordinal(), localCache, false);
                 }
                 if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
@@ -426,7 +433,10 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private void recordContentionStaleness(
-            long idleDurationSelectedNs, ExecutionPath executionPath, long localCacheCount) {
+            long idleDurationSelectedNs,
+            int executionPath,
+            long localCacheCount,
+            boolean productivityExcluded) {
         long observationCount = this.upstreamQueue.getContentionObservationCount();
         if (observationCount != this.state.lastContentionObservationCount) {
             this.state.lastContentionObservationCount = observationCount;
@@ -454,11 +464,15 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.upstreamQueue.getSuccessfulAcquisitionCount(),
                 this.upstreamQueue.getFailedAcquisitionCount(),
                 this.upstreamQueue.getTotalAcquisitionAttempts(),
-                executionPath.ordinal(),
+                executionPath,
                 localCacheCount,
                 this.state.productiveHandleCount,
                 this.state.registeredWorkers,
-                this.state.workerRank);
+                this.state.workerRank,
+                productivityExcluded,
+                this.state.productivityExclusionCount,
+                this.productivityThresholdNs,
+                this.controlPolicy.smoothedBodyCostNs());
     }
 
     /// Records loop execution telemetry and advances policy only at a batch boundary.
@@ -545,11 +559,21 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private long resolveProductivityThresholdNs() {
-        String configuredWeight = System.getProperty(FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT);
-        if (configuredWeight == null || configuredWeight.isBlank()) {
-            return this.controlPolicy.defaultProductivityThresholdNs();
+        String gateMode = System.getProperty(FragmentControlConfig.PRODUCTIVITY_GATE_MODE);
+        if (gateMode != null && !gateMode.isBlank()) {
+            if (!this.config.benchmarkMode()) {
+                throw new IllegalStateException("Forced productivity gate mode is only valid in benchmark mode");
+            }
+            return switch (gateMode) {
+                case "FORCE_OFF" -> 0L;
+                case "FORCE_ON" -> Long.MAX_VALUE;
+                default -> throw new IllegalArgumentException("Unknown productivity gate mode: " + gateMode);
+            };
         }
-        int weight = Integer.parseInt(configuredWeight);
+        String configuredWeight = System.getProperty(FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT);
+        int weight = configuredWeight == null || configuredWeight.isBlank()
+                ? FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT
+                : Integer.parseInt(configuredWeight);
         if (weight <= 0) {
             return 0L;
         }
@@ -558,13 +582,12 @@ public final class ControlPlaneFragment extends WorkRequester {
         return calibrator.benchmark(weight);
     }
 
-    private boolean productivityParkRequired(long contention) {
+    private boolean productivityParkRequired() {
         if (this.productivityThresholdNs <= 0L
                 || !this.controlPolicy.hasBodyCostHistory()
                 || this.state.upstreamCount <= 0L
                 || this.state.registeredWorkers <= 1
                 || this.state.workerRank <= 0
-                || contention <= FragmentDecisionTree.CONTENTION_THRESHOLD
                 || this.controlPolicy.smoothedBodyCostNs() > this.productivityThresholdNs) {
             return false;
         }
@@ -575,8 +598,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.upstreamCount,
                 this.state.registeredWorkers,
                 this.state.workerRank,
-                this.upstreamQueue.getProductiveHandleCount(),
-                contention);
+                this.upstreamQueue.getProductiveHandleCount());
     }
 
     static boolean productivityParkRequired(
@@ -586,14 +608,12 @@ public final class ControlPlaneFragment extends WorkRequester {
             long upstreamHandles,
             int registeredWorkers,
             int workerRank,
-            long productiveHandles,
-            long contention) {
+            long productiveHandles) {
         return thresholdNs > 0L
                 && hasBodyCostHistory
                 && upstreamHandles > 0L
                 && registeredWorkers > 1
                 && workerRank > 0
-                && contention > FragmentDecisionTree.CONTENTION_THRESHOLD
                 && workerRank > productiveHandles
                 && bodyCostNs <= thresholdNs;
     }
@@ -762,6 +782,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         int registeredWorkers = 0;
         long productiveHandleCount = 0;
         int workerRank = -1;
+        long productivityExclusionCount;
 
         long cycleEpoch = -1;
         long batchEpoch = 0;
@@ -780,6 +801,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.registeredWorkers = 0;
             this.productiveHandleCount = 0;
             this.workerRank = -1;
+            this.productivityExclusionCount = 0L;
             this.cycleEpoch = -1L;
             this.batchEpoch = 0L;
             this.lastContentionObservationCount = 0L;

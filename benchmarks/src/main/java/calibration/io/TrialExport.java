@@ -128,7 +128,7 @@ public final class TrialExport {
         Path windowsFile = outputDir.resolve(Constants.TRAJECTORY_WINDOWS_TSV);
         try (BufferedWriter writer = Files.newBufferedWriter(windowsFile, StandardCharsets.UTF_8)) {
             writer.write(
-                    "jvmId\tlifecycleMode\twindowIndex\ttrajectoryElapsedNs\twindowElapsedNs\tcompletedExecutions\tthroughputExecutionsPerSecond\tcontinuouslyFed\tdominantDecisionType\tdominantState\tdominantContentionBand\tdominantBodyBand\tdominantStateProbability\tcontentionCentroid\tbodyCentroid\tsuccessfulAcquisitions\tfailedAcquisitions\tacquisitionSuccessRatio\tidleSelectedFraction\tproductiveHandleRatio\n");
+                    "jvmId\tlifecycleMode\twindowIndex\ttrajectoryElapsedNs\twindowElapsedNs\tcompletedExecutions\tthroughputExecutionsPerSecond\tcontinuouslyFed\tdominantDecisionType\tdominantState\tdominantContentionBand\tdominantBodyBand\tdominantStateProbability\tcontentionCentroid\tbodyCentroid\tsuccessfulAcquisitions\tfailedAcquisitions\tacquisitionSuccessRatio\tidleSelectedFraction\tordinaryIdleSelectedFraction\tproductivityExclusions\tproductivityExcludedFraction\tproductiveHandleRatio\n");
             for (int i = 0; i < windows.size(); i++) {
                 TrajectoryWindow window = windows.get(i);
                 IterationResult iteration = forkResult.iterations().get(i);
@@ -163,6 +163,9 @@ public final class TrialExport {
                         + acquisition.failures() + "\t"
                         + acquisition.successRatio() + "\t"
                         + acquisition.idleSelectedFraction() + "\t"
+                        + acquisition.ordinaryIdleSelectedFraction() + "\t"
+                        + acquisition.productivityExclusions() + "\t"
+                        + acquisition.productivityExcludedFraction() + "\t"
                         + productiveHandleRatio + "\n");
             }
         }
@@ -269,6 +272,9 @@ public final class TrialExport {
         long failures = 0L;
         long retainedSamples = 0L;
         long idleSelectedSamples = 0L;
+        long ordinaryIdleSelectedSamples = 0L;
+        long productivityExcludedSamples = 0L;
+        long productivityExclusions = 0L;
         for (HighSpeedMetrics core : metrics) {
             if (core == null || core.contentionStalenessSteadyState.length == 0) {
                 continue;
@@ -282,17 +288,36 @@ public final class TrialExport {
             long[] last = core.contentionStalenessSteadyState[count - 1];
             successes += Math.max(0L, last[10] - first[10]);
             failures += Math.max(0L, last[11] - first[11]);
+            productivityExclusions += Math.max(0L, last[19] - first[19]);
             retainedSamples += count;
             for (int sample = 0; sample < count; sample++) {
-                if (core.contentionStalenessSteadyState[sample][9] >= 0L) {
+                long[] retained = core.contentionStalenessSteadyState[sample];
+                if (retained[9] >= 0L) {
                     idleSelectedSamples++;
+                }
+                if (retained[9] >= 0L && retained[18] == 0L) {
+                    ordinaryIdleSelectedSamples++;
+                }
+                if (retained[18] != 0L) {
+                    productivityExcludedSamples++;
                 }
             }
         }
         long attempts = successes + failures;
         double successRatio = attempts == 0L ? Double.NaN : (double) successes / attempts;
         double idleFraction = retainedSamples == 0L ? Double.NaN : (double) idleSelectedSamples / retainedSamples;
-        return new AcquisitionWindow(successes, failures, successRatio, idleFraction);
+        double ordinaryIdleFraction =
+                retainedSamples == 0L ? Double.NaN : (double) ordinaryIdleSelectedSamples / retainedSamples;
+        double productivityExcludedFraction =
+                retainedSamples == 0L ? Double.NaN : (double) productivityExcludedSamples / retainedSamples;
+        return new AcquisitionWindow(
+                successes,
+                failures,
+                successRatio,
+                idleFraction,
+                ordinaryIdleFraction,
+                productivityExclusions,
+                productivityExcludedFraction);
     }
 
     private record DominantState(
@@ -300,8 +325,16 @@ public final class TrialExport {
 
     private record CombinedCentroid(double contention, double body) {}
 
-    private record AcquisitionWindow(long successes, long failures, double successRatio, double idleSelectedFraction) {
-        private static final AcquisitionWindow EMPTY = new AcquisitionWindow(0L, 0L, Double.NaN, Double.NaN);
+    private record AcquisitionWindow(
+            long successes,
+            long failures,
+            double successRatio,
+            double idleSelectedFraction,
+            double ordinaryIdleSelectedFraction,
+            long productivityExclusions,
+            double productivityExcludedFraction) {
+        private static final AcquisitionWindow EMPTY =
+                new AcquisitionWindow(0L, 0L, Double.NaN, Double.NaN, Double.NaN, 0L, Double.NaN);
     }
 
     /// Exports the bounded, chronologically aligned staleness samples retained for each core and iteration.
@@ -314,7 +347,7 @@ public final class TrialExport {
         Path file = outputDir.resolve(Constants.CONTENTION_STALENESS_TSV);
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "iteration\tcore\tsegment\tsampleIndex\tcycleEpoch\tbatchEpoch\tmeasuredContention\tlastRawContention\tcontentionObservationCount\tlastContentionObservationNs\tcyclesSinceContentionObservation\tnanosSinceContentionObservation\tconsecutiveIdleDecisions\tidleDurationSelectedNs\tsuccessfulAcquisitionCount\tfailedAcquisitionCount\ttotalAcquisitionAttempts\texecutionPath\tlocalCacheCount\tproductiveHandleCount\tregisteredWorkers\tworkerRank\n");
+                    "iteration\tcore\tsegment\tsampleIndex\tcycleEpoch\tbatchEpoch\tmeasuredContention\tlastRawContention\tcontentionObservationCount\tlastContentionObservationNs\tcyclesSinceContentionObservation\tnanosSinceContentionObservation\tconsecutiveIdleDecisions\tidleDurationSelectedNs\tsuccessfulAcquisitionCount\tfailedAcquisitionCount\ttotalAcquisitionAttempts\texecutionPath\tlocalCacheCount\tproductiveHandleCount\tregisteredWorkers\tworkerRank\tproductivityExcluded\tproductivityExclusionCount\tproductivityThresholdNs\tsmoothedBodyCostNs\n");
             for (int iteration = 0; iteration < measurementIterations.size(); iteration++) {
                 List<HighSpeedMetrics> metrics = measurementIterations.get(iteration);
                 if (metrics == null) {
@@ -377,7 +410,11 @@ public final class TrialExport {
                     + sample[14] + "\t"
                     + sample[15] + "\t"
                     + sample[16] + "\t"
-                    + sample[17] + "\n");
+                    + sample[17] + "\t"
+                    + sample[18] + "\t"
+                    + sample[19] + "\t"
+                    + sample[20] + "\t"
+                    + Double.longBitsToDouble(sample[21]) + "\n");
         }
     }
 

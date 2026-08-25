@@ -281,11 +281,6 @@ final class FragmentDecisionTree {
         return this.smoothedBodyCostNs;
     }
 
-    /// Returns the calibrated default productivity threshold used when no override is configured.
-    long defaultProductivityThresholdNs() {
-        return this.idleBodyCostThresholds.m;
-    }
-
     /// Updates one non-overlapping second minimum and confirms expensive work across two windows.
     private void updateBodyCostEstimate() {
         double minimum = Double.POSITIVE_INFINITY;

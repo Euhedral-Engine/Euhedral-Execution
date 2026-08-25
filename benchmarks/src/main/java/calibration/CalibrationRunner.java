@@ -446,6 +446,12 @@ public class CalibrationRunner {
                     FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT,
                     productivityThresholdWeight.toString());
         }
+        if (trial.calibrationConfig().productivityGateMode() != calibration.config.ProductivityGateMode.AUTO) {
+            addJVMProperty(
+                    jvmArgs,
+                    FragmentControlConfig.PRODUCTIVITY_GATE_MODE,
+                    trial.calibrationConfig().productivityGateMode().name());
+        }
 
         if (invocationDir != null) {
             try {

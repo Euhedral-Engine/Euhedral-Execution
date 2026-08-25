@@ -30,6 +30,7 @@ public record CalibrationBenchmarkConfig(
         List<PullBucketTreatment> pullBucketTreatments,
         boolean observePullConvoy,
         @Nullable Integer productivityThresholdWeight,
+        ProductivityGateMode productivityGateMode,
         CalibrationLifecycleMode lifecycleMode) {
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
@@ -73,6 +74,7 @@ public record CalibrationBenchmarkConfig(
                 List.of(),
                 false,
                 null,
+                ProductivityGateMode.AUTO,
                 CalibrationLifecycleMode.RESET);
     }
 
@@ -115,6 +117,7 @@ public record CalibrationBenchmarkConfig(
                 List.of(),
                 false,
                 null,
+                ProductivityGateMode.AUTO,
                 CalibrationLifecycleMode.RESET);
     }
 
@@ -158,6 +161,7 @@ public record CalibrationBenchmarkConfig(
                 List.of(),
                 false,
                 null,
+                ProductivityGateMode.AUTO,
                 CalibrationLifecycleMode.RESET);
     }
 
@@ -205,6 +209,7 @@ public record CalibrationBenchmarkConfig(
                 pullBucketTreatments,
                 observePullConvoy,
                 null,
+                ProductivityGateMode.AUTO,
                 CalibrationLifecycleMode.RESET);
     }
 
@@ -253,7 +258,58 @@ public record CalibrationBenchmarkConfig(
                 pullBucketTreatments,
                 observePullConvoy,
                 productivityThresholdWeight,
+                ProductivityGateMode.AUTO,
                 CalibrationLifecycleMode.RESET);
+    }
+
+    /// Backwards-compatible constructor without an explicit productivity-gate mode.
+    public CalibrationBenchmarkConfig(
+            List<Integer> cpuSet,
+            int parallelSources,
+            int orderedSources,
+            int workUnits,
+            boolean randomizeWork,
+            long totalRequiredExecutions,
+            long invocationTimeoutMillis,
+            @Nullable String decisionWeightProfile,
+            @Nullable FragmentDecisionWeights decisionWeights,
+            int rawSampleLimit,
+            boolean observeCycleStart,
+            boolean observeBatchProgress,
+            boolean observeBatchComplete,
+            boolean observeRawBodyCost,
+            boolean observeIdleDecision,
+            boolean observeExecDecision,
+            boolean observeContentionStaleness,
+            int pullBucketFork,
+            @Nullable List<PullBucketTreatment> pullBucketTreatments,
+            boolean observePullConvoy,
+            @Nullable Integer productivityThresholdWeight,
+            CalibrationLifecycleMode lifecycleMode) {
+        this(
+                cpuSet,
+                parallelSources,
+                orderedSources,
+                workUnits,
+                randomizeWork,
+                totalRequiredExecutions,
+                invocationTimeoutMillis,
+                decisionWeightProfile,
+                decisionWeights,
+                rawSampleLimit,
+                observeCycleStart,
+                observeBatchProgress,
+                observeBatchComplete,
+                observeRawBodyCost,
+                observeIdleDecision,
+                observeExecDecision,
+                observeContentionStaleness,
+                pullBucketFork,
+                pullBucketTreatments,
+                observePullConvoy,
+                productivityThresholdWeight,
+                ProductivityGateMode.AUTO,
+                lifecycleMode);
     }
 
     @JsonCreator
@@ -279,6 +335,7 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("pullBucketTreatments") @Nullable List<PullBucketTreatment> pullBucketTreatments,
             @JsonProperty("observePullConvoy") boolean observePullConvoy,
             @JsonProperty("productivityThresholdWeight") @Nullable Integer productivityThresholdWeight,
+            @JsonProperty("productivityGateMode") @Nullable ProductivityGateMode productivityGateMode,
             @JsonProperty("lifecycleMode") @Nullable CalibrationLifecycleMode lifecycleMode) {
         Objects.requireNonNull(cpuSet, "CalibrationBenchmarkConfig cpuSet cannot be null");
         this.cpuSet = List.copyOf(cpuSet);
@@ -302,6 +359,7 @@ public record CalibrationBenchmarkConfig(
         this.pullBucketTreatments = pullBucketTreatments == null ? List.of() : List.copyOf(pullBucketTreatments);
         this.observePullConvoy = observePullConvoy;
         this.productivityThresholdWeight = productivityThresholdWeight;
+        this.productivityGateMode = productivityGateMode == null ? ProductivityGateMode.AUTO : productivityGateMode;
         this.lifecycleMode = lifecycleMode == null ? CalibrationLifecycleMode.RESET : lifecycleMode;
         validate();
     }
@@ -332,6 +390,10 @@ public record CalibrationBenchmarkConfig(
         }
         if (this.productivityThresholdWeight != null && this.productivityThresholdWeight < 0) {
             throw new IllegalArgumentException("productivityThresholdWeight must not be negative");
+        }
+        if (this.productivityGateMode != ProductivityGateMode.AUTO && this.productivityThresholdWeight != null) {
+            throw new IllegalArgumentException(
+                    "Forced productivityGateMode cannot be combined with productivityThresholdWeight");
         }
         if (this.lifecycleMode == CalibrationLifecycleMode.CONTINUOUS
                 && this.pullBucketTreatments.stream()
@@ -374,6 +436,7 @@ public record CalibrationBenchmarkConfig(
                 this.pullBucketTreatments,
                 this.observePullConvoy,
                 this.productivityThresholdWeight,
+                this.productivityGateMode,
                 this.lifecycleMode);
     }
 
@@ -401,6 +464,7 @@ public record CalibrationBenchmarkConfig(
                 this.pullBucketTreatments,
                 this.observePullConvoy,
                 this.productivityThresholdWeight,
+                this.productivityGateMode,
                 this.lifecycleMode);
     }
 
@@ -429,6 +493,7 @@ public record CalibrationBenchmarkConfig(
                 this.pullBucketTreatments,
                 this.observePullConvoy,
                 this.productivityThresholdWeight,
+                this.productivityGateMode,
                 lifecycleMode);
     }
 }

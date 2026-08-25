@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -26,6 +27,14 @@ import org.mockito.Mockito;
 
 @Isolated
 class ControlPlaneFragmentTest {
+
+    @Test
+    void defaultProductivityThresholdUsesDedicatedCalibratedWeight() {
+        assertEquals(40, FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT);
+        assertNotEquals(
+                FragmentControlConfig.BodyCostWeights.DEFAULTS.m(),
+                FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT);
+    }
 
     private final List<ControlPlaneFragment> fragments = new ArrayList<>();
 
@@ -120,14 +129,19 @@ class ControlPlaneFragmentTest {
     }
 
     @Test
-    void productivityParkingRequiresAnEnabledThresholdAndEligibleSurplusWorker() {
-        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L, 900_000L));
+    void productivityParkingDependsOnBodyCostAndSurplusWorkerEligibilityWithoutContention() {
+        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L));
+        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 300.0, true, 2L, 4, 3, 2L));
+        assertTrue(ControlPlaneFragment.productivityParkRequired(
+                Long.MAX_VALUE, 1_000_000.0, true, 2L, 4, 3, 2L));
 
-        assertFalse(ControlPlaneFragment.productivityParkRequired(0L, 0.0, true, 2L, 4, 3, 2L, 900_000L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, false, 2L, 4, 3, 2L, 900_000L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 2, 2L, 900_000L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L, 850_000L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 301.0, true, 2L, 4, 3, 2L, 900_000L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(0L, 0.0, true, 2L, 4, 3, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, false, 2L, 4, 3, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 0L, 4, 3, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 1, 1, 0L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 0, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 2, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 301.0, true, 2L, 4, 3, 2L));
     }
 
     @Test

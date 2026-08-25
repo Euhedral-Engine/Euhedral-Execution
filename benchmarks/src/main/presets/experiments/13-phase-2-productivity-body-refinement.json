@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "id": "13-phase-2-productivity-body-refinement",
+  "name": "Phase 2 Productivity Body Threshold Local Refinement",
+  "description": "Refines only the corrected contention-independent forced productivity OFF/ON sign-change bracket between the true no-op and workUnits 112 on the CONTINUOUS 23-worker/11-source anchor.",
+  "labels": {
+    "phase": "phase-2-productivity-body-threshold",
+    "purpose": "forced-local-refinement",
+    "topology": "i9-14900k-23-worker-11-source",
+    "coarseBracket": "workUnits-0-to-112"
+  },
+  "imports": [
+    {
+      "path": "../profiles/phase-2-productivity-body-threshold.json",
+      "namespace": "phase2"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "balancedTrialOrder": true,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/13-phase-2-productivity-body-refinement",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "phase2-productivity-body-refinement",
+      "baseTrialId": "phase2-productivity-refinement-base",
+      "description": "Four independent JVM replicas, arranged as two complementary balanced-order pairs, at six interior body fixtures.",
+      "enabled": true,
+      "repetitions": 4,
+      "group": "phase-2-productivity-body-refinement",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [16, 32, 48, 64, 80, 96]
+        },
+        {
+          "path": "/calibrationConfig/productivityGateMode",
+          "values": ["FORCE_OFF", "FORCE_ON"]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "phase2-productivity-refinement-base",
+      "name": "Phase 2 productivity body refinement template",
+      "group": "phase-2-productivity-body-refinement",
+      "description": "Fixed 23/11 CONTINUOUS fixture; interior body cost and forced productivity mode are the only sweep axes.",
+      "hypothesis": "The corrected no-op/112 sign change resolves to a stable measured-body region within these interior fixtures.",
+      "tags": ["phase-2", "productivity", "body-cost", "continuous", "forced-on-off", "refinement", "contention-independent"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 6,
+      "warmupTime": "2s",
+      "measurementTime": "5s",
+      "jvmArgs": [
+        "-XX:+UseThreadPriorities",
+        "--enable-native-access=ALL-UNNAMED",
+        "-Deuhedral.calibration.harnessCpu=0"
+      ],
+      "calibrationProfile": "phase2.continuous-23w-11s"
+    }
+  ]
+}

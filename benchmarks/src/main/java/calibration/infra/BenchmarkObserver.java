@@ -241,7 +241,11 @@ public class BenchmarkObserver extends FragmentObserver {
             long localCacheCount,
             long productiveHandleCount,
             int registeredWorkers,
-            int workerRank) {
+            int workerRank,
+            boolean productivityExcluded,
+            long productivityExclusionCount,
+            long productivityThresholdNs,
+            double smoothedBodyCostNs) {
         if (!this.config.observeContentionStaleness()) {
             return;
         }
@@ -268,7 +272,11 @@ public class BenchmarkObserver extends FragmentObserver {
                 localCacheCount,
                 productiveHandleCount,
                 registeredWorkers,
-                workerRank);
+                workerRank,
+                productivityExcluded,
+                productivityExclusionCount,
+                productivityThresholdNs,
+                smoothedBodyCostNs);
     }
 
     @Override
@@ -423,9 +431,9 @@ public class BenchmarkObserver extends FragmentObserver {
             this.execSteadyStateDecisionState = new long[rawSampleLimit][5];
             this.execSteadyStateSmoothedBodyCost = new double[rawSampleLimit];
 
-            this.contentionStalenessHead = observeContentionStaleness ? new long[rawSampleLimit][18] : new long[0][];
+            this.contentionStalenessHead = observeContentionStaleness ? new long[rawSampleLimit][22] : new long[0][];
             this.contentionStalenessSteadyState =
-                    observeContentionStaleness ? new long[rawSampleLimit][18] : new long[0][];
+                    observeContentionStaleness ? new long[rawSampleLimit][22] : new long[0][];
             this.pullConvoyHead = observePullConvoy ? new long[rawSampleLimit][9] : new long[0][];
             this.pullConvoySteadyState = observePullConvoy ? new long[rawSampleLimit][9] : new long[0][];
         }
@@ -763,6 +771,54 @@ public class BenchmarkObserver extends FragmentObserver {
                 long productiveHandleCount,
                 int registeredWorkers,
                 int workerRank) {
+            recordContentionStaleness(
+                    cycleEpoch,
+                    batchEpoch,
+                    measuredContention,
+                    lastRawContention,
+                    contentionObservationCount,
+                    lastContentionObservationNs,
+                    cyclesSinceContentionObservation,
+                    nanosSinceContentionObservation,
+                    consecutiveIdleDecisions,
+                    idleDurationSelectedNs,
+                    successfulAcquisitionCount,
+                    failedAcquisitionCount,
+                    totalAcquisitionAttempts,
+                    executionPath,
+                    localCacheCount,
+                    productiveHandleCount,
+                    registeredWorkers,
+                    workerRank,
+                    false,
+                    0L,
+                    0L,
+                    0.0);
+        }
+
+        public void recordContentionStaleness(
+                long cycleEpoch,
+                long batchEpoch,
+                long measuredContention,
+                long lastRawContention,
+                long contentionObservationCount,
+                long lastContentionObservationNs,
+                long cyclesSinceContentionObservation,
+                long nanosSinceContentionObservation,
+                long consecutiveIdleDecisions,
+                long idleDurationSelectedNs,
+                long successfulAcquisitionCount,
+                long failedAcquisitionCount,
+                long totalAcquisitionAttempts,
+                int executionPath,
+                long localCacheCount,
+                long productiveHandleCount,
+                int registeredWorkers,
+                int workerRank,
+                boolean productivityExcluded,
+                long productivityExclusionCount,
+                long productivityThresholdNs,
+                double smoothedBodyCostNs) {
             int idx = (int) (this.contentionStalenessObservations & this.mask);
             if (this.contentionStalenessObservations++ < this.rawSampleLimit) {
                 recordContentionStalenessSample(
@@ -784,7 +840,11 @@ public class BenchmarkObserver extends FragmentObserver {
                         localCacheCount,
                         productiveHandleCount,
                         registeredWorkers,
-                        workerRank);
+                        workerRank,
+                        productivityExcluded,
+                        productivityExclusionCount,
+                        productivityThresholdNs,
+                        smoothedBodyCostNs);
             }
             recordContentionStalenessSample(
                     this.contentionStalenessSteadyState[idx],
@@ -805,7 +865,11 @@ public class BenchmarkObserver extends FragmentObserver {
                     localCacheCount,
                     productiveHandleCount,
                     registeredWorkers,
-                    workerRank);
+                    workerRank,
+                    productivityExcluded,
+                    productivityExclusionCount,
+                    productivityThresholdNs,
+                    smoothedBodyCostNs);
         }
 
         private static void recordContentionStalenessSample(
@@ -827,7 +891,11 @@ public class BenchmarkObserver extends FragmentObserver {
                 long localCacheCount,
                 long productiveHandleCount,
                 int registeredWorkers,
-                int workerRank) {
+                int workerRank,
+                boolean productivityExcluded,
+                long productivityExclusionCount,
+                long productivityThresholdNs,
+                double smoothedBodyCostNs) {
             sample[0] = cycleEpoch;
             sample[1] = batchEpoch;
             sample[2] = measuredContention;
@@ -846,6 +914,10 @@ public class BenchmarkObserver extends FragmentObserver {
             sample[15] = productiveHandleCount;
             sample[16] = registeredWorkers;
             sample[17] = workerRank;
+            sample[18] = productivityExcluded ? 1L : 0L;
+            sample[19] = productivityExclusionCount;
+            sample[20] = productivityThresholdNs;
+            sample[21] = Double.doubleToRawLongBits(smoothedBodyCostNs);
         }
 
         public void align() {

@@ -33,8 +33,10 @@ class TrajectoryExportTest {
         metrics.recordIdle(1, 1, 1, 2, 900_000L, 216.0);
         metrics.recordIdle(2, 2, 1, 2, 910_000L, 216.0);
         metrics.recordExec(1, 1, 1, 0, 900_000L, 216.0);
-        metrics.recordContentionStaleness(1, 1, 900_000L, 900_000L, 1, 1, 0, 0, 1, 5_000L, 10, 5, 15, 1, 4, 9, 23, 1);
-        metrics.recordContentionStaleness(2, 2, 910_000L, 910_000L, 2, 2, 0, 0, 2, 5_000L, 18, 7, 25, 1, 8, 8, 23, 2);
+        metrics.recordContentionStaleness(
+                1, 1, 900_000L, 900_000L, 1, 1, 0, 0, 1, 5_000L, 10, 5, 15, 1, 4, 9, 23, 1, false, 0, 109L, 108.0);
+        metrics.recordContentionStaleness(
+                2, 2, 910_000L, 910_000L, 2, 2, 0, 0, 2, 15_000L, 18, 7, 25, 1, 8, 8, 23, 2, true, 1, 109L, 107.0);
 
         CoreIterationResult core = HighSpeedMetricsStatistics.calculate(0, 3, metrics);
         SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(metrics));
@@ -62,6 +64,9 @@ class TrajectoryExportTest {
                 Files.readString(second.resolve(Constants.TRAJECTORY_WINDOWS_CHECKSUM)));
         assertTrue(Files.readString(first.resolve(Constants.TRAJECTORY_WINDOWS_TSV))
                 .contains("42\tCONTINUOUS\t0\t10000\t5000\t1000\t2.0E8\ttrue"));
+        String trajectory = Files.readString(first.resolve(Constants.TRAJECTORY_WINDOWS_TSV));
+        assertTrue(trajectory.contains("ordinaryIdleSelectedFraction\tproductivityExclusions\tproductivityExcludedFraction"));
+        assertTrue(trajectory.contains("\t1\t0.5\t"));
         assertEquals(
                 21,
                 Files.readAllLines(first.resolve(Constants.TRAJECTORY_OCCUPANCY_TSV))

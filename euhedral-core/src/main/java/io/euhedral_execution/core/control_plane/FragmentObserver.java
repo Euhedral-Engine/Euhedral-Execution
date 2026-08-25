@@ -130,7 +130,11 @@ public abstract class FragmentObserver {
             long localCacheCount,
             long productiveHandleCount,
             int registeredWorkers,
-            int workerRank) {}
+            int workerRank,
+            boolean productivityExcluded,
+            long productivityExclusionCount,
+            long productivityThresholdNs,
+            double smoothedBodyCostNs) {}
 
     /// Records one bounded source-handle acquisition observation for calibration runs.
     public void pullConvoyState(

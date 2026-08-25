@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "id": "17-phase-2-productivity-body-one-source-auto-40",
+  "name": "Phase 2 Productivity Body One-Source AUTO Weight 40",
+  "description": "Validates worker-calibrated AUTO weight 40 immediately around the anchor crossover at the critical 23/1 topology.",
+  "labels": {
+    "phase": "phase-2-productivity-body-threshold",
+    "purpose": "one-source-automatic-policy-validation",
+    "candidate": "per-worker-calibrated-weight-40"
+  },
+  "imports": [
+    {
+      "path": "../profiles/phase-2-productivity-body-threshold.json",
+      "namespace": "phase2"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": false,
+    "balancedTrialOrder": true,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/17-phase-2-productivity-body-one-source-auto-40",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": true,
+    "retainPerIterationResults": true
+  },
+  "sweeps": [
+    {
+      "id": "phase2-one-source-auto-40",
+      "baseTrialId": "phase2-one-source-auto-40-base",
+      "description": "Two independent AUTO weight-40 JVMs immediately below and above the anchor crossover.",
+      "enabled": true,
+      "repetitions": 2,
+      "group": "phase-2-productivity-body-one-source-auto-40",
+      "parameters": [
+        {
+          "path": "/calibrationConfig/parallelSources",
+          "values": [1]
+        },
+        {
+          "path": "/calibrationConfig/workUnits",
+          "values": [48, 64]
+        },
+        {
+          "path": "/calibrationConfig/productivityGateMode",
+          "values": ["AUTO"]
+        },
+        {
+          "path": "/calibrationConfig/productivityThresholdWeight",
+          "values": [40]
+        }
+      ]
+    }
+  ],
+  "trials": [
+    {
+      "id": "phase2-one-source-auto-40-base",
+      "name": "Phase 2 one-source AUTO weight 40 template",
+      "group": "phase-2-productivity-body-one-source-auto-40",
+      "description": "Critical 23/1 AUTO check with each worker independently calibrating productivity threshold weight 40.",
+      "tags": ["phase-2", "productivity", "body-cost", "source-deficit", "one-source", "continuous", "automatic-policy", "per-worker-calibration", "contention-independent"],
+      "enabled": false,
+      "forks": 1,
+      "warmups": 2,
+      "iterations": 6,
+      "warmupTime": "2s",
+      "measurementTime": "5s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=0"],
+      "calibrationProfile": "phase2.continuous-23w-11s"
+    }
+  ]
+}
