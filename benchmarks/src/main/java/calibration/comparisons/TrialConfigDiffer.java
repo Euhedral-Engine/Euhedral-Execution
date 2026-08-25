@@ -109,8 +109,12 @@ public final class TrialConfigDiffer {
         if (normalized.startsWith("decisionWeights")
                 || normalized.startsWith("decisionWeightProfile")
                 || normalized.startsWith("productivityThresholdWeight")
-                || normalized.startsWith("productivityGateMode")) {
+                || normalized.startsWith("productivityGateMode")
+                || normalized.startsWith("forcedActiveParticipantCount")) {
             return DifferenceCategory.POLICY;
+        }
+        if (normalized.startsWith("cacheParkNs") || normalized.startsWith("cacheActuatorVersion")) {
+            return DifferenceCategory.ACTUATOR;
         }
         if (normalized.startsWith("lifecycleMode")) {
             return DifferenceCategory.LIFECYCLE;

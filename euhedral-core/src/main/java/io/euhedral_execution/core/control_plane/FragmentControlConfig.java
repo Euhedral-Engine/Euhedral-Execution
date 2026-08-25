@@ -12,8 +12,12 @@ public final class FragmentControlConfig {
     public static final String IDLE_POLICY_PARK_NS = "euhedral.fragment.idle.parkTimeValuesNsPath";
     public static final String PRODUCTIVITY_THRESHOLD_WEIGHT = "euhedral.productivity.thresholdWeight";
     public static final String PRODUCTIVITY_GATE_MODE = "euhedral.calibration.productivityGateMode";
+    public static final String FORCED_ACTIVE_PARTICIPANT_COUNT = "euhedral.calibration.forcedActiveParticipantCount";
+    public static final String CACHE_PARK_NS = "euhedral.fragment.cache.parkNs";
 
     public static final long DEFAULT_PARK_NS = 15_000L;
+    public static final long DEFAULT_CACHE_PARK_NS = 15_000L;
+    public static final String CACHE_ACTUATOR_VERSION = "cache-v1";
     public static final int DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT = 40;
 
     public final BodyCostThresholds idleBodyCostThresholds;

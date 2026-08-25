@@ -3,6 +3,7 @@ package calibration.config;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
@@ -31,9 +32,13 @@ public record CalibrationBenchmarkConfig(
         boolean observePullConvoy,
         @Nullable Integer productivityThresholdWeight,
         ProductivityGateMode productivityGateMode,
+        @Nullable Integer forcedActiveParticipantCount,
+        @NonNull Long cacheParkNs,
+        @NonNull String cacheActuatorVersion,
         CalibrationLifecycleMode lifecycleMode) {
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
+    public static final String LEGACY_CACHE_ACTUATOR_VERSION = "legacy-unspecified";
 
     /// Convenience constructor with inline decisionWeights and without decisionWeightProfile.
     public CalibrationBenchmarkConfig(
@@ -312,6 +317,60 @@ public record CalibrationBenchmarkConfig(
                 lifecycleMode);
     }
 
+    /// Backwards-compatible constructor without CACHE participation treatment fields.
+    public CalibrationBenchmarkConfig(
+            List<Integer> cpuSet,
+            int parallelSources,
+            int orderedSources,
+            int workUnits,
+            boolean randomizeWork,
+            long totalRequiredExecutions,
+            long invocationTimeoutMillis,
+            @Nullable String decisionWeightProfile,
+            @Nullable FragmentDecisionWeights decisionWeights,
+            int rawSampleLimit,
+            boolean observeCycleStart,
+            boolean observeBatchProgress,
+            boolean observeBatchComplete,
+            boolean observeRawBodyCost,
+            boolean observeIdleDecision,
+            boolean observeExecDecision,
+            boolean observeContentionStaleness,
+            int pullBucketFork,
+            @Nullable List<PullBucketTreatment> pullBucketTreatments,
+            boolean observePullConvoy,
+            @Nullable Integer productivityThresholdWeight,
+            ProductivityGateMode productivityGateMode,
+            CalibrationLifecycleMode lifecycleMode) {
+        this(
+                cpuSet,
+                parallelSources,
+                orderedSources,
+                workUnits,
+                randomizeWork,
+                totalRequiredExecutions,
+                invocationTimeoutMillis,
+                decisionWeightProfile,
+                decisionWeights,
+                rawSampleLimit,
+                observeCycleStart,
+                observeBatchProgress,
+                observeBatchComplete,
+                observeRawBodyCost,
+                observeIdleDecision,
+                observeExecDecision,
+                observeContentionStaleness,
+                pullBucketFork,
+                pullBucketTreatments,
+                observePullConvoy,
+                productivityThresholdWeight,
+                productivityGateMode,
+                null,
+                FragmentControlConfig.DEFAULT_CACHE_PARK_NS,
+                FragmentControlConfig.CACHE_ACTUATOR_VERSION,
+                lifecycleMode);
+    }
+
     @JsonCreator
     public CalibrationBenchmarkConfig(
             @JsonProperty("cpuSet") List<Integer> cpuSet,
@@ -336,6 +395,9 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("observePullConvoy") boolean observePullConvoy,
             @JsonProperty("productivityThresholdWeight") @Nullable Integer productivityThresholdWeight,
             @JsonProperty("productivityGateMode") @Nullable ProductivityGateMode productivityGateMode,
+            @JsonProperty("forcedActiveParticipantCount") @Nullable Integer forcedActiveParticipantCount,
+            @JsonProperty("cacheParkNs") @Nullable Long cacheParkNs,
+            @JsonProperty("cacheActuatorVersion") @Nullable String cacheActuatorVersion,
             @JsonProperty("lifecycleMode") @Nullable CalibrationLifecycleMode lifecycleMode) {
         Objects.requireNonNull(cpuSet, "CalibrationBenchmarkConfig cpuSet cannot be null");
         this.cpuSet = List.copyOf(cpuSet);
@@ -360,6 +422,9 @@ public record CalibrationBenchmarkConfig(
         this.observePullConvoy = observePullConvoy;
         this.productivityThresholdWeight = productivityThresholdWeight;
         this.productivityGateMode = productivityGateMode == null ? ProductivityGateMode.AUTO : productivityGateMode;
+        this.forcedActiveParticipantCount = forcedActiveParticipantCount;
+        this.cacheParkNs = cacheParkNs == null ? FragmentControlConfig.DEFAULT_CACHE_PARK_NS : cacheParkNs;
+        this.cacheActuatorVersion = cacheActuatorVersion == null ? LEGACY_CACHE_ACTUATOR_VERSION : cacheActuatorVersion;
         this.lifecycleMode = lifecycleMode == null ? CalibrationLifecycleMode.RESET : lifecycleMode;
         validate();
     }
@@ -394,6 +459,15 @@ public record CalibrationBenchmarkConfig(
         if (this.productivityGateMode != ProductivityGateMode.AUTO && this.productivityThresholdWeight != null) {
             throw new IllegalArgumentException(
                     "Forced productivityGateMode cannot be combined with productivityThresholdWeight");
+        }
+        if (this.forcedActiveParticipantCount != null && this.forcedActiveParticipantCount <= 0) {
+            throw new IllegalArgumentException("forcedActiveParticipantCount must be positive");
+        }
+        if (this.cacheParkNs < 0L) {
+            throw new IllegalArgumentException("cacheParkNs must not be negative");
+        }
+        if (this.cacheActuatorVersion.isBlank()) {
+            throw new IllegalArgumentException("cacheActuatorVersion must not be blank");
         }
         if (this.lifecycleMode == CalibrationLifecycleMode.CONTINUOUS
                 && this.pullBucketTreatments.stream()
@@ -437,6 +511,9 @@ public record CalibrationBenchmarkConfig(
                 this.observePullConvoy,
                 this.productivityThresholdWeight,
                 this.productivityGateMode,
+                this.forcedActiveParticipantCount,
+                this.cacheParkNs,
+                this.cacheActuatorVersion,
                 this.lifecycleMode);
     }
 
@@ -465,6 +542,9 @@ public record CalibrationBenchmarkConfig(
                 this.observePullConvoy,
                 this.productivityThresholdWeight,
                 this.productivityGateMode,
+                this.forcedActiveParticipantCount,
+                this.cacheParkNs,
+                this.cacheActuatorVersion,
                 this.lifecycleMode);
     }
 
@@ -494,6 +574,47 @@ public record CalibrationBenchmarkConfig(
                 this.observePullConvoy,
                 this.productivityThresholdWeight,
                 this.productivityGateMode,
+                this.forcedActiveParticipantCount,
+                this.cacheParkNs,
+                this.cacheActuatorVersion,
                 lifecycleMode);
+    }
+
+    /// Resolves a legacy omitted actuator identity to the exact actuator implemented by this runtime.
+    public CalibrationBenchmarkConfig withCurrentCacheActuatorIdentity() {
+        if (FragmentControlConfig.CACHE_ACTUATOR_VERSION.equals(this.cacheActuatorVersion)) {
+            return this;
+        }
+        if (!LEGACY_CACHE_ACTUATOR_VERSION.equals(this.cacheActuatorVersion)) {
+            throw new IllegalArgumentException(
+                    "Unsupported cacheActuatorVersion for execution: " + this.cacheActuatorVersion);
+        }
+        return new CalibrationBenchmarkConfig(
+                this.cpuSet,
+                this.parallelSources,
+                this.orderedSources,
+                this.workUnits,
+                this.randomizeWork,
+                this.totalRequiredExecutions,
+                this.invocationTimeoutMillis,
+                this.decisionWeightProfile,
+                this.decisionWeights,
+                this.rawSampleLimit,
+                this.observeCycleStart,
+                this.observeBatchProgress,
+                this.observeBatchComplete,
+                this.observeRawBodyCost,
+                this.observeIdleDecision,
+                this.observeExecDecision,
+                this.observeContentionStaleness,
+                this.pullBucketFork,
+                this.pullBucketTreatments,
+                this.observePullConvoy,
+                this.productivityThresholdWeight,
+                this.productivityGateMode,
+                this.forcedActiveParticipantCount,
+                this.cacheParkNs,
+                FragmentControlConfig.CACHE_ACTUATOR_VERSION,
+                this.lifecycleMode);
     }
 }

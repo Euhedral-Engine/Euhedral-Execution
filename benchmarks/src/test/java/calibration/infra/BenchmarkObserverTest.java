@@ -133,11 +133,11 @@ class BenchmarkObserverTest {
     void productivityExclusionTelemetryRemainsAlignedWithContentionSamples() {
         HighSpeedMetrics metrics = new HighSpeedMetrics(7, 2);
         metrics.recordContentionStaleness(
-                1, 1, 900_000L, 900_000L, 1, 1, 0, 0, 1, 15_000L, 1, 0, 1, 0, 0, 1, 23, 12, true, 1, 110L, 90.0);
+                1, 1, 900_000L, 900_000L, 1, 1, 0, 0, 1, 15_000L, 1, 0, 1, 0, 0, 1, 23, 12, true, 1, 110L, 90.0, true);
         metrics.recordContentionStaleness(
-                2, 1, 900_000L, 900_000L, 2, 2, 0, 0, 2, 15_000L, 1, 0, 1, 0, 0, 1, 23, 12, true, 2, 111L, 91.0);
+                2, 1, 900_000L, 900_000L, 2, 2, 0, 0, 2, 15_000L, 1, 0, 1, 0, 0, 1, 23, 12, true, 2, 111L, 91.0, true);
         metrics.recordContentionStaleness(
-                3, 1, 900_000L, 900_000L, 3, 3, 0, 0, 0, -1L, 2, 0, 2, 0, 1, 1, 23, 12, false, 2, 112L, 92.0);
+                3, 1, 900_000L, 900_000L, 3, 3, 0, 0, 0, -1L, 2, 0, 2, 0, 1, 1, 23, 12, false, 2, 112L, 92.0, false);
 
         metrics.align();
 
@@ -147,6 +147,7 @@ class BenchmarkObserverTest {
         assertEquals(2L, metrics.contentionStalenessSteadyState[1][19]);
         assertEquals(112L, metrics.contentionStalenessSteadyState[1][20]);
         assertEquals(92.0, Double.longBitsToDouble(metrics.contentionStalenessSteadyState[1][21]));
+        assertEquals(0L, metrics.contentionStalenessSteadyState[1][22]);
     }
 
     @Test

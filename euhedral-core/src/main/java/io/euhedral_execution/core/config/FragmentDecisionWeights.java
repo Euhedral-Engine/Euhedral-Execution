@@ -18,7 +18,7 @@ public record FragmentDecisionWeights(
     public FragmentDecisionWeights {
         Objects.requireNonNull(idleBodyCostWeights);
         Objects.requireNonNull(idleTimeNs);
-        Objects.requireNonNull(paretoWeights);
+        paretoWeights = Objects.requireNonNullElse(paretoWeights, ParetoWeights.DEFAULT);
     }
 
     public record BodyCostWeights(int xs, int s, int m, int h) {

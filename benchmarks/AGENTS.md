@@ -105,6 +105,11 @@ HarnessConfig
        `euhedral.productivity.thresholdWeight` for productivity-threshold experiments.
      - `productivityGateMode`: Benchmark-only `AUTO`, `FORCE_OFF`, or `FORCE_ON` control. Forced modes
        bypass threshold calibration so physical OFF/ON response surfaces do not depend on a threshold selector.
+     - `forcedActiveParticipantCount`: Optional benchmark-only one-based rank cutoff. Ranks above the
+       cutoff use CACHE without being unregistered; ranks at or below it retain ordinary DIRECT/STAGED
+       selection.
+     - `cacheParkNs`: Non-negative CACHE miss park duration, persisted as part of fixture identity.
+     - `cacheActuatorVersion`: Semantic CACHE actuator identity. New runs currently resolve to `cache-v1`.
      - `decisionWeightProfile` (`string`): Reference to local or namespaced imported decision weight profile (e.g. `"host.baseline"`).
      - `decisionWeights`: 28 fixed weights defining thresholds, costs, park times, and execution policies.
      - Observation Toggles:
@@ -114,8 +119,9 @@ HarnessConfig
        - `observeRawBodyCost`: Unfiltered execution cost samples.
        - `observeIdleDecision`: Idle action decision evaluations.
        - `observeExecDecision`: Execution action decision evaluations.
-      - `observeContentionStaleness`: Bounded per-cycle acquisition freshness, idle-streak,
-        productivity-exclusion, resolved productivity-threshold, and same-cycle smoothed-body diagnostics.
+      - `observeContentionStaleness`: Bounded per-cycle acquisition freshness, exact decision inputs,
+        body-history readiness, idle-streak, productivity-exclusion, resolved productivity-threshold,
+        and same-cycle smoothed-body diagnostics.
 
 #### Host Topology and CPU-to-Core Mapping (Intel Core i9-14900K)
 

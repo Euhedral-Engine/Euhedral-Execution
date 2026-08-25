@@ -50,7 +50,7 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(null);
 
         assertEquals(0.0, tree.serviceTimeNs());
-        assertFalse(tree.missRequiresPark());
+        assertEquals(FragmentControlConfig.DEFAULT_CACHE_PARK_NS, tree.cacheParkNs());
 
         // Initial batch size starts at 2
         assertEquals(2L, tree.completeBatch(16L));
@@ -271,6 +271,16 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
+    void completeBatch_initialAndNoServiceTime() {
+        FragmentDecisionTree tree = createDefaultTree(null);
+
+        // Without service time (serviceTimeNs == 0.0), completeBatch keeps batchSize at 2 (bounded by eligibleCap)
+        assertEquals(2L, tree.completeBatch(16L));
+        assertEquals(2L, tree.completeBatch(2L));
+        assertEquals(2L, tree.completeBatch(1L)); // cap < 2 is treated as cap = 2
+    }
+
+    @Test
     void missRequiresPark_andRecordProgress_behavior() {
         FragmentDecisionTree tree = createDefaultTree(null);
 
@@ -292,16 +302,6 @@ class FragmentDecisionTreeTest {
             assertFalse(tree.missRequiresPark(), "Miss " + i + " after progress should not require park");
         }
         assertTrue(tree.missRequiresPark());
-    }
-
-    @Test
-    void completeBatch_initialAndNoServiceTime() {
-        FragmentDecisionTree tree = createDefaultTree(null);
-
-        // Without service time (serviceTimeNs == 0.0), completeBatch keeps batchSize at 2 (bounded by eligibleCap)
-        assertEquals(2L, tree.completeBatch(16L));
-        assertEquals(2L, tree.completeBatch(2L));
-        assertEquals(2L, tree.completeBatch(1L)); // cap < 2 is treated as cap = 2
     }
 
     @Test
@@ -638,7 +638,7 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(null);
         populateBodyCosts(tree, 32, 100L);
 
-        // contention <= 0.5 returns false
+        // CAN_CACHE_EXECUTE is false by default at every contention value.
         assertFalse(tree.shouldCacheExecute(0.5, 2L, 4, 2));
         assertFalse(tree.shouldCacheExecute(0.1, 2L, 4, 2));
 
@@ -646,8 +646,38 @@ class FragmentDecisionTreeTest {
         assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 1));
         assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 0));
 
-        // CAN_CACHE_EXECUTE is false by default
         assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 2));
         assertFalse(tree.shouldCacheExecute(0.8, 0L, 4, 2));
+    }
+
+    @Test
+    void forcedParticipantCountCachesOnlyRanksAboveTheCutoff() {
+        FragmentDecisionTree tree =
+                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 2, 7_500L);
+        populateBodyCosts(tree, 32, 100L);
+
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 2));
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(2L, 1L, 2L, 2L, 4, 900_000L, 2));
+        assertEquals(ExecutionPath.CACHE, tree.executionPath(3L, 1L, 2L, 2L, 4, 100L, 3));
+        assertEquals(7_500L, tree.cacheParkNs());
+    }
+
+    @Test
+    void forcedCacheDoesNotRequireBodyHistoryOrUpstreamHandles() {
+        FragmentDecisionTree tree =
+                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 1, 7_500L);
+
+        assertTrue(tree.willCacheExecute(0L, 0L, 4, 0L, 2));
+        assertEquals(ExecutionPath.CACHE, tree.executionPath(1L, 1L, 0L, 0L, 4, 0L, 2));
+    }
+
+    @Test
+    void forcedParticipantConfigurationRejectsInvalidValues() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 0, 1L));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 1, -1L));
     }
 }

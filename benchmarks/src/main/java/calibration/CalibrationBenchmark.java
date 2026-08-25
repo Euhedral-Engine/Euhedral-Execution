@@ -106,6 +106,30 @@ public class CalibrationBenchmark {
         return UnmodifiableBitSet.wrap(surrogate);
     }
 
+    private static void validateForcedActiveParticipantCount(
+            UnmodifiableBitSet workerCpus, Integer forcedActiveParticipantCount) {
+        if (forcedActiveParticipantCount == null) {
+            return;
+        }
+        BitSet workerCores = new BitSet();
+        for (int workerCpu = workerCpus.nextSetBit(0);
+                workerCpu >= 0;
+                workerCpu = workerCpus.nextSetBit(workerCpu + 1)) {
+            SystemInfo.CpuInfo workerInfo = SystemInfo.getCpuInfo(workerCpu);
+            if (workerInfo == null) {
+                throw new IllegalArgumentException("Unknown calibration worker CPU: " + workerCpu);
+            }
+            workerCores.set(workerInfo.core());
+        }
+        int registeredWorkers = workerCores.cardinality();
+        if (forcedActiveParticipantCount > registeredWorkers) {
+            throw new IllegalArgumentException("forcedActiveParticipantCount "
+                    + forcedActiveParticipantCount
+                    + " exceeds resolved registered worker count "
+                    + registeredWorkers);
+        }
+    }
+
     private static void pinHarnessThread(UnmodifiableBitSet workerCpus) {
         BitSet defaultHarnessCpus = SystemInfo.getCoreInfo(0).getCpuSet();
         int defaultHarnessCpu = defaultHarnessCpus.nextSetBit(0);
@@ -162,6 +186,7 @@ public class CalibrationBenchmark {
         if (cpuSet.isEmpty()) {
             throw new IllegalArgumentException("Cpu set cannot be empty");
         }
+        validateForcedActiveParticipantCount(cpuSet, this.calibrationConfig.forcedActiveParticipantCount());
         pinHarnessThread(cpuSet);
         this.observer = new BenchmarkObserver(this.calibrationConfig);
         if (this.calibrationConfig.observePullConvoy()

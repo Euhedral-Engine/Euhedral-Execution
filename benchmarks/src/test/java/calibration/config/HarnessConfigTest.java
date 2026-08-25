@@ -7,9 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -2021,6 +2024,57 @@ class HarnessConfigTest {
         CalibrationBenchmarkConfig withNewProfile = withWeights.withDecisionWeightProfile("profile-b");
         assertEquals("profile-b", withNewProfile.decisionWeightProfile());
         assertEquals(FragmentDecisionWeights.DEFAULT, withNewProfile.decisionWeights());
+    }
+
+    @Test
+    void cacheParticipationFieldsDefaultPersistAndValidate() throws Exception {
+        CalibrationBenchmarkConfig defaults = dummyCalibrationConfig();
+        assertNull(defaults.forcedActiveParticipantCount());
+        assertEquals(FragmentControlConfig.DEFAULT_CACHE_PARK_NS, defaults.cacheParkNs());
+        assertEquals(FragmentControlConfig.CACHE_ACTUATOR_VERSION, defaults.cacheActuatorVersion());
+
+        ObjectNode configuredJson = mapper.valueToTree(defaults);
+        configuredJson.put("forcedActiveParticipantCount", 3);
+        configuredJson.put("cacheParkNs", 7_500L);
+        CalibrationBenchmarkConfig configured = mapper.treeToValue(configuredJson, CalibrationBenchmarkConfig.class);
+
+        assertEquals(3, configured.forcedActiveParticipantCount());
+        assertEquals(7_500L, configured.cacheParkNs());
+        assertEquals(FragmentControlConfig.CACHE_ACTUATOR_VERSION, configured.cacheActuatorVersion());
+        assertEquals(
+                configured, mapper.readValue(mapper.writeValueAsString(configured), CalibrationBenchmarkConfig.class));
+
+        ObjectNode invalidCount = configuredJson.deepCopy();
+        invalidCount.put("forcedActiveParticipantCount", 0);
+        assertThrows(
+                JsonMappingException.class, () -> mapper.treeToValue(invalidCount, CalibrationBenchmarkConfig.class));
+
+        ObjectNode invalidPark = configuredJson.deepCopy();
+        invalidPark.put("cacheParkNs", -1L);
+        assertThrows(
+                JsonMappingException.class, () -> mapper.treeToValue(invalidPark, CalibrationBenchmarkConfig.class));
+
+        ObjectNode invalidVersion = configuredJson.deepCopy();
+        invalidVersion.put("cacheActuatorVersion", "   ");
+        assertThrows(
+                JsonMappingException.class, () -> mapper.treeToValue(invalidVersion, CalibrationBenchmarkConfig.class));
+    }
+
+    @Test
+    void omittedCacheActuatorFieldsRemainDistinguishableUntilExecution() throws Exception {
+        ObjectNode legacyJson = mapper.valueToTree(dummyCalibrationConfig());
+        legacyJson.remove("forcedActiveParticipantCount");
+        legacyJson.remove("cacheParkNs");
+        legacyJson.remove("cacheActuatorVersion");
+
+        CalibrationBenchmarkConfig legacy = mapper.treeToValue(legacyJson, CalibrationBenchmarkConfig.class);
+
+        assertNull(legacy.forcedActiveParticipantCount());
+        assertEquals(FragmentControlConfig.DEFAULT_CACHE_PARK_NS, legacy.cacheParkNs());
+        assertEquals(CalibrationBenchmarkConfig.LEGACY_CACHE_ACTUATOR_VERSION, legacy.cacheActuatorVersion());
+        assertEquals(
+                FragmentControlConfig.CACHE_ACTUATOR_VERSION,
+                legacy.withCurrentCacheActuatorIdentity().cacheActuatorVersion());
     }
 
     /// Verifies error when trial references a non-existent calibrationProfile.

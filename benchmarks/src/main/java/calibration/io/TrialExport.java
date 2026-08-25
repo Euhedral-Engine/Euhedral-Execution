@@ -347,7 +347,7 @@ public final class TrialExport {
         Path file = outputDir.resolve(Constants.CONTENTION_STALENESS_TSV);
         try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8)) {
             writer.write(
-                    "iteration\tcore\tsegment\tsampleIndex\tcycleEpoch\tbatchEpoch\tmeasuredContention\tlastRawContention\tcontentionObservationCount\tlastContentionObservationNs\tcyclesSinceContentionObservation\tnanosSinceContentionObservation\tconsecutiveIdleDecisions\tidleDurationSelectedNs\tsuccessfulAcquisitionCount\tfailedAcquisitionCount\ttotalAcquisitionAttempts\texecutionPath\tlocalCacheCount\tproductiveHandleCount\tregisteredWorkers\tworkerRank\tproductivityExcluded\tproductivityExclusionCount\tproductivityThresholdNs\tsmoothedBodyCostNs\n");
+                    "iteration\tcore\tsegment\tsampleIndex\tcycleEpoch\tbatchEpoch\tmeasuredContention\tlastRawContention\tcontentionObservationCount\tlastContentionObservationNs\tcyclesSinceContentionObservation\tnanosSinceContentionObservation\tconsecutiveIdleDecisions\tidleDurationSelectedNs\tsuccessfulAcquisitionCount\tfailedAcquisitionCount\ttotalAcquisitionAttempts\texecutionPath\tlocalCacheCount\tproductiveHandleCount\tregisteredWorkers\tworkerRank\tproductivityExcluded\tproductivityExclusionCount\tproductivityThresholdNs\tsmoothedBodyCostNs\tbodyHistoryReady\n");
             for (int iteration = 0; iteration < measurementIterations.size(); iteration++) {
                 List<HighSpeedMetrics> metrics = measurementIterations.get(iteration);
                 if (metrics == null) {
@@ -414,7 +414,8 @@ public final class TrialExport {
                     + sample[18] + "\t"
                     + sample[19] + "\t"
                     + sample[20] + "\t"
-                    + Double.longBitsToDouble(sample[21]) + "\n");
+                    + Double.longBitsToDouble(sample[21]) + "\t"
+                    + sample[22] + "\n");
         }
     }
 

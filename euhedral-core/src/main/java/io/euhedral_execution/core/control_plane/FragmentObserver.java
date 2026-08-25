@@ -136,6 +136,60 @@ public abstract class FragmentObserver {
             long productivityThresholdNs,
             double smoothedBodyCostNs) {}
 
+    /// Adds explicit body-history readiness while preserving the prior observer hook.
+    protected void contentionStalenessState(
+            int core,
+            int socket,
+            long cycleEpoch,
+            long batchEpoch,
+            long measuredContention,
+            long lastRawContention,
+            long contentionObservationCount,
+            long lastContentionObservationNs,
+            long cyclesSinceContentionObservation,
+            long nanosSinceContentionObservation,
+            long consecutiveIdleDecisions,
+            long idleDurationSelectedNs,
+            long successfulAcquisitionCount,
+            long failedAcquisitionCount,
+            long totalAcquisitionAttempts,
+            int executionPath,
+            long localCacheCount,
+            long productiveHandleCount,
+            int registeredWorkers,
+            int workerRank,
+            boolean productivityExcluded,
+            long productivityExclusionCount,
+            long productivityThresholdNs,
+            double smoothedBodyCostNs,
+            boolean bodyHistoryReady) {
+        contentionStalenessState(
+                core,
+                socket,
+                cycleEpoch,
+                batchEpoch,
+                measuredContention,
+                lastRawContention,
+                contentionObservationCount,
+                lastContentionObservationNs,
+                cyclesSinceContentionObservation,
+                nanosSinceContentionObservation,
+                consecutiveIdleDecisions,
+                idleDurationSelectedNs,
+                successfulAcquisitionCount,
+                failedAcquisitionCount,
+                totalAcquisitionAttempts,
+                executionPath,
+                localCacheCount,
+                productiveHandleCount,
+                registeredWorkers,
+                workerRank,
+                productivityExcluded,
+                productivityExclusionCount,
+                productivityThresholdNs,
+                smoothedBodyCostNs);
+    }
+
     /// Records one bounded source-handle acquisition observation for calibration runs.
     public void pullConvoyState(
             long eventNs,

@@ -481,6 +481,7 @@ class CalibrationRunnerTest {
         assertTrue(jvmArgs.contains("-Deuhedral.calibration.repeatIndex=1"));
         assertTrue(jvmArgs.contains("-Deuhedral.calibration.trialId=t1"));
         assertTrue(jvmArgs.contains("-Deuhedral.calibration.trialName=trial-name"));
+        assertTrue(jvmArgs.contains("-D" + FragmentControlConfig.CACHE_PARK_NS + "=15000"));
         assertTrue(jvmArgs.contains("-Deuhedral.calibration.outputDirectory=" + invocationDir.getCanonicalPath()));
         assertTrue(jvmArgs.contains("-Xmx1g"));
 
@@ -491,6 +492,54 @@ class CalibrationRunnerTest {
 
         assertTrue(configIdx < outputDirIdx);
         assertTrue(outputDirIdx < customArgIdx);
+    }
+
+    @Test
+    void buildJvmArgsForwardsCacheParticipationTreatment() {
+        TrialConfig base = dummyTrialConfig("cache-treatment", true);
+        CalibrationBenchmarkConfig cal = base.calibrationConfig();
+        CalibrationBenchmarkConfig treatment = new CalibrationBenchmarkConfig(
+                cal.cpuSet(),
+                cal.parallelSources(),
+                cal.orderedSources(),
+                cal.workUnits(),
+                cal.randomizeWork(),
+                cal.totalRequiredExecutions(),
+                cal.invocationTimeoutMillis(),
+                cal.decisionWeightProfile(),
+                cal.decisionWeights(),
+                cal.rawSampleLimit(),
+                cal.observeCycleStart(),
+                cal.observeBatchProgress(),
+                cal.observeBatchComplete(),
+                cal.observeRawBodyCost(),
+                cal.observeIdleDecision(),
+                cal.observeExecDecision(),
+                cal.observeContentionStaleness(),
+                cal.pullBucketFork(),
+                cal.pullBucketTreatments(),
+                cal.observePullConvoy(),
+                cal.productivityThresholdWeight(),
+                cal.productivityGateMode(),
+                3,
+                7_500L,
+                FragmentControlConfig.CACHE_ACTUATOR_VERSION,
+                cal.lifecycleMode());
+
+        TrialConfig configuredTrial = new TrialConfig(
+                base.forks(),
+                base.warmups(),
+                base.iterations(),
+                List.of(
+                        "-D" + FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT + "=9",
+                        "-D" + FragmentControlConfig.CACHE_PARK_NS + "=1"),
+                treatment);
+        List<String> jvmArgs = CalibrationRunner.buildJvmArgs(configuredTrial, 0, 0, "/tmp/config.json", null);
+
+        assertTrue(jvmArgs.contains("-D" + FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT + "=3"));
+        assertTrue(jvmArgs.contains("-D" + FragmentControlConfig.CACHE_PARK_NS + "=7500"));
+        assertFalse(jvmArgs.contains("-D" + FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT + "=9"));
+        assertFalse(jvmArgs.contains("-D" + FragmentControlConfig.CACHE_PARK_NS + "=1"));
     }
 
     @Test

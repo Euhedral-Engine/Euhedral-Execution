@@ -30,31 +30,32 @@ and [
 
 ### Exact CACHE behavior
 
-The production CACHE path is currently guarded by the JVM property
-`euhedral.fragment.cacheExecutePath`, whose default is `false`. When that feature is enabled and the
-decision tree returns `CACHE`, one fragment cycle behaves as follows:
+The automatic production CACHE path is guarded by the JVM property
+`euhedral.fragment.cacheExecutePath`, whose default is `false`. The benchmark-only forced cutoff
+bypasses that feature flag for ranks above the cutoff. When the decision tree returns `CACHE`, one
+fragment cycle behaves as follows:
 
-1. If the local cache is initially empty, the ordinary idle policy may park before path selection.
+1. CACHE selection is previewed before ordinary idle selection; a CACHE worker does not take the
+   ordinary idle-policy park.
 2. Local cached frames are drained and executed.
-3. The execution path is selected.
+3. The execution path is selected. A forced CACHE rank remains CACHE even without body history or
+   upstream handles.
 4. Remote routing caches are pulled and executed for every path, including CACHE.
 5. CACHE does not call the direct upstream pull, upstream request, or request-and-pull paths.
-6. If CACHE found no local or remote cached work, 64 consecutive misses spin; the 65th and later
-   misses park for `1_000 ns`.
-7. If CACHE executed at least one cached frame, the loop records progress and then parks for
-   `FragmentControlConfig.DEFAULT_PARK_NS`, currently `15_000 ns`.
+6. If CACHE found no local or remote cached work, it immediately parks for the configured
+   `cacheParkNs`, currently `15_000 ns` by default.
+7. If CACHE executed at least one cached frame, the loop records progress and continues without the
+   CACHE miss park.
 
 Consequently, CACHE is cache-only with respect to upstream acquisition, but it is not inactive. Both
 worker-local cache work and remotely routed cache work remain executable. Remote-cache pulls walk
 routing-cache parents; they do not call `UpstreamQueue`. Only DIRECT and STAGED reach the
 high-contention upstream handle domain.
 
-The current park placement differs from the intended description "park after exhausting cache
-opportunities": the `15_000 ns` park occurs after successful cached execution, while an exhausted
-CACHE path uses the separate spin-then-`1_000 ns` miss behavior. Ordinary idling can also occur
-before a remote-cache opportunity is checked. This actuator detail must be made explicit and stable
-before generating labels. It does not require a new policy model, but training data must not pool
-runs produced by different CACHE loop semantics.
+DIRECT and STAGED retain their existing bounded miss behavior: 64 misses spin and later misses park
+for `1_000 ns`, with the streak reset by productive execution. CACHE has a separate, explicit
+miss-only park. The completed fixture persists `cacheParkNs` and `cacheActuatorVersion=cache-v1`, so
+training data must not pool this actuator with legacy or differently configured loop semantics.
 
 ### Which ranks acquire upstream
 
@@ -63,7 +64,7 @@ CACHE. Any rank greater than 1 for which the marginal is positive may select CAC
 retain the ordinary DIRECT/STAGED choice. The code does not enforce that participating ranks form a
 prefix.
 
-For calibration, the required treatment is more specific:
+For calibration, Step 1 adds the following treatment:
 
 ```text
 rank <= forcedActiveParticipantCount:
@@ -73,9 +74,11 @@ rank > forcedActiveParticipantCount:
     force the exact current CACHE actuator
 ```
 
-All ranks remain registered and alive. Ranks above the cutoff must still drain local and remote
-caches. This cannot be represented by removing CPUs, reducing registered workers, or by the old
-`ProductivityGateMode.FORCE_ON` treatment.
+All ranks remain registered and alive. Ranks above the cutoff still drain local and remote caches.
+The cutoff is accepted only in benchmark mode, must be positive, and is checked against the resolved
+physical worker count before a trial starts. Ranks at or below the cutoff cannot be automatically
+withdrawn, so the treatment forms an exact participation prefix. This is not represented by
+removing CPUs, reducing registered workers, or by the old `ProductivityGateMode.FORCE_ON` treatment.
 
 ### Runtime input signals
 
@@ -119,20 +122,19 @@ active population `K` is valid only when participation is a rank prefix. The for
 treatment provides that condition by construction.
 
 The decision call obtains productive handles, contention, and rank directly at the decision point,
-while registered workers has the completed-batch timing described above. The staleness export uses
-the fragment's last completed-batch values for productive handles, registered workers, and rank.
-That is normally identical in a static fixture, but the clean training interface should capture the
-exact values passed to the decision rather than relying on that timing assumption.
+while registered workers has the completed-batch timing described above. Step 1 passes those exact
+decision values into `contention_staleness.tsv` and adds `bodyHistoryReady`; the export no longer
+substitutes the fragment's previous completed-batch values for `P`, `R`, or rank.
 
 ### Guards and edge cases
 
 | Condition                      | Current behavior                                                         | Training implication                                                                        |
 |--------------------------------|--------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
-| no upstream handles            | `SKIP_THEN_DIRECT`; when handles return, one DIRECT transition is forced | Not a fitted observation. Preserve as actuator validation.                                  |
+| no upstream handles            | Normal ranks use `SKIP_THEN_DIRECT`; forced-above-cutoff ranks remain CACHE | Not a fitted observation. Preserve as actuator validation.                               |
 | `registeredWorkers <= 1`       | DIRECT                                                                   | Not a fitted observation.                                                                   |
 | `workerRank <= 1`              | CACHE is disallowed                                                      | `K=1` is not a trainable withdrawal decision; the first adjacent pair is `K=2` versus 1.    |
 | `productiveHandles <= 0`       | CACHE immediately when the feature is enabled and earlier guards pass    | This bypasses all eight weights. Keep as a guard test, not a coefficient-fitting row.       |
-| fewer than 32 body samples     | DIRECT                                                                   | Exclude the window/pair until body history is ready.                                        |
+| fewer than 32 body samples     | Normal ranks use DIRECT; forced-above-cutoff ranks remain CACHE           | Exclude the window/pair until body history is ready.                                        |
 | no contention history          | contention reads as zero                                                 | The active `K` training context must have an actual observation; reject uninitialized rows. |
 | CACHE for a sustained interval | contention stops refreshing                                              | Retain as diagnostic state, but do not use it as if it were an action-independent input.    |
 
@@ -239,10 +241,9 @@ ranks above `K` use CACHE. In arm B, ranks `1..K-1` use normal DIRECT/STAGED and
 higher ranks in CACHE. Only rank `K` changes its upstream participation eligibility between the two
 arms.
 
-The cleanest implementation is a small extension of `CalibrationBenchmarkConfig` and the existing
-sweep/treatment plumbing. Add a nullable `forcedActiveParticipantCount`; pass it as a benchmark JVM
-property or benchmark-only fragment configuration; classify the resulting config difference as
-`POLICY`; and persist it in the expanded `trial_config.json`. Do not reuse
+Step 1 implements this through `CalibrationBenchmarkConfig` and the existing sweep/treatment
+plumbing. The nullable `forcedActiveParticipantCount` is passed as an authoritative benchmark JVM
+property, classified as `POLICY`, and persisted in the expanded `trial_config.json`. Do not reuse
 `ProductivityGateMode.FORCE_ON`: that old threshold gate is currently disconnected from the main
 cycle and its historical behavior is not the current CACHE actuator.
 
@@ -375,22 +376,22 @@ body history, non-finite values, changing `R`, or materially changing `P` within
 | Imports                     | ALREADY EXISTS: recursive namespaced imports with cycle checks                          | `imports`, `ProfileLibraryLoader`                                                            | None                                                                        | Reuse.                                                                              |
 | Preset composition          | ALREADY EXISTS: calibration and decision-weight profiles                                | `calibrationProfile`, `decisionWeightProfile`                                                | None                                                                        | Reuse.                                                                              |
 | Balanced ordering           | ALREADY EXISTS: complementary forward/reverse repeated-sweep order with rotating starts | `runOptions.balancedTrialOrder`, `TrialOrigin` sample/candidate indices                      | Requires one repeated sweep; not general Williams generation                | Represent each adjacent pair as the candidates of one repeated sweep.               |
-| Forced policy treatments    | PARTIAL: old productivity gate mode and other policy sweeps exist                       | `productivityGateMode`, `productivityThresholdWeight`                                        | Old treatment is disconnected/different from CACHE and has no rank cutoff   | Add `forcedActiveParticipantCount`.                                                 |
-| Worker ranking              | ALREADY EXISTS in runtime and telemetry                                                 | `workerRank` in cycle/batch statistics and `contention_staleness.tsv`                        | Forced cutoff absent                                                        | Reuse rank; add cutoff treatment only.                                              |
-| Benchmark-mode controls     | ALREADY EXISTS: observer and benchmark-only protections/properties                      | `FragmentConfig.benchmarkMode`, runner JVM properties                                        | CACHE feature flag is not a persisted treatment                             | Wire the forced cutoff through existing benchmark config.                           |
+| Forced policy treatments    | ALREADY EXISTS after Step 1: rank-prefix CACHE treatment composes through normal profiles/sweeps | `forcedActiveParticipantCount`, runner JVM property                                    | None for Java harness execution                                              | Reuse; do not use the old productivity gate as a substitute.                        |
+| Worker ranking              | ALREADY EXISTS in runtime, treatment, and telemetry                                      | `workerRank`, forced cutoff, `contention_staleness.tsv`                                      | End-to-end cache-consumption proof remains for the vertical slice            | Reuse rank and validate the one-pair treatment.                                     |
+| Benchmark-mode controls     | ALREADY EXISTS: cutoff is guarded by benchmark mode and validated against physical workers | `FragmentConfig.benchmarkMode`, runner JVM properties, trial-start validation             | None for Step 1                                                             | Reuse.                                                                              |
 | Per-window telemetry        | ALREADY EXISTS                                                                          | `trajectory_windows.tsv`, `trajectory_occupancy.tsv`                                         | Exact continuous rank-K inputs require a join to per-core staleness samples | Loader joins on fork/iteration; no new large export.                                |
 | Fork-level throughput       | ALREADY EXISTS                                                                          | `benchmark_output.log`, parsed `forkScores`                                                  | None                                                                        | Reuse auxiliary execution throughput selected by `JmhOutputParser`.                 |
-| Comparison summaries        | ALREADY EXISTS                                                                          | `comparisons/comparison_summary.tsv`                                                         | No adjacent active-count key yet                                            | Exclude cutoff from fixture key and classify it as POLICY.                          |
+| Comparison summaries        | ALREADY EXISTS; adjacent cutoffs compare as compatible POLICY treatments                 | `comparisons/comparison_summary.tsv`, `TrialConfigDiffer`                                    | Python still needs to identify/join adjacent `K/K-1` pairs                  | Use trial identity or the small external manifest.                                  |
 | Variance/CV                 | ALREADY EXISTS                                                                          | baseline/candidate variance, stddev, CV, and fork count in comparison summary                | Existing summary omits calculated uncertainty/practical margin              | Recompute exactly in Python from exported fields.                                   |
 | Ordered trajectories        | ALREADY EXISTS                                                                          | `jvmId`, `windowIndex`, elapsed time, throughput, feeding status in `trajectory_windows.tsv` | No loader yet                                                               | Read it in Python.                                                                  |
 | Deterministic TSV artifacts | ALREADY EXISTS                                                                          | tab-separated exports with stable headers/order                                              | None                                                                        | Reuse.                                                                              |
 | Checksums                   | ALREADY EXISTS                                                                          | digest-only `.sha256` sidecars                                                               | No Python validation                                                        | Compare each file's calculated SHA-256 directly to its sidecar text.                |
-| Comparison compatibility    | ALREADY EXISTS                                                                          | `TrialConfigDiffer`, `ComparisonCompatibilityAnalyzer`, configuration differences TSV        | New cutoff would default to HARNESS/partial                                 | Categorize cutoff as POLICY; require all fixture fields equal in Python.            |
-| Fixture metadata            | PARTIAL                                                                                 | expanded `trial_config.json`, CPU set, source/work/JMH/lifecycle/JVM fields, labels          | CACHE actuator/park identity and normalized host topology ID are absent     | Persist actuator fields; supply a small dataset manifest with topology/host family. |
-| Productive handle telemetry | ALREADY EXISTS                                                                          | `productiveHandleCount`, `productiveHandleRatio`, `contention_staleness.tsv`                 | Exact decision-time value can lag in current staleness export               | Record the local value passed to the decision.                                      |
-| Registered-worker telemetry | ALREADY EXISTS                                                                          | cycle/batch statistics and `contention_staleness.tsv`                                        | Same possible last-batch lag                                                | Record the local value passed to the decision.                                      |
+| Comparison compatibility    | ALREADY EXISTS after Step 1                                                             | cutoff is POLICY; park/version are ACTUATOR and incompatible                                 | Python must repeat strict fixture checks across manually paired run roots    | Reuse Java output and validate again at load time.                                  |
+| Fixture metadata            | PARTIAL                                                                                 | expanded config now persists cutoff, CACHE park/version, CPU/work/JMH/lifecycle/JVM fields   | Normalized host topology ID remains external                                | Supply a small dataset manifest with topology/host family.                          |
+| Productive handle telemetry | ALREADY EXISTS with exact decision value after Step 1                                   | `productiveHandleCount`, `productiveHandleRatio`, `contention_staleness.tsv`                 | None for Java export                                                        | Use the active-arm rank-K rows.                                                      |
+| Registered-worker telemetry | ALREADY EXISTS with exact decision value after Step 1                                   | cycle/batch statistics and `contention_staleness.tsv`                                        | None for Java export                                                        | Use exact staleness-row value and cross-check fixture metadata.                     |
 | Contention telemetry        | ALREADY EXISTS                                                                          | measured/raw contention, attempt counters, observation count/age                             | CACHE values go stale, as expected                                          | Use active `K` state for fitting and staleness as a validity check.                 |
-| Smoothed-body telemetry     | ALREADY EXISTS                                                                          | `smoothedBodyCostNs` in `contention_staleness.tsv`, body summaries                           | Readiness is not explicit in the row                                        | Add/derive `bodyHistoryReady`; exact boolean is preferable.                         |
+| Smoothed-body telemetry     | ALREADY EXISTS with explicit readiness after Step 1                                     | `smoothedBodyCostNs`, `bodyHistoryReady` in `contention_staleness.tsv`                       | None for Java export                                                        | Reject non-ready feature rows.                                                       |
 | Python model I/O            | MISSING                                                                                 | None                                                                                         | No Python package/loader                                                    | Add the small external loader/trainer/save/load utilities after harness validation. |
 
 ## Minimum dataset and Python input strategy
@@ -613,11 +614,11 @@ this plan.
 
 | Category       | File/component                                                                                                       | Current behavior                                                                                              | Required behavior                                                                                                                                         | Why training needs it                                          | Approximate scope                                                              |
 |----------------|----------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------|--------------------------------------------------------------------------------|
-| REQUIRED       | `CalibrationBenchmarkConfig`, config validation, runner property wiring                                              | Only old productivity threshold/gate treatments exist                                                         | Add nullable `forcedActiveParticipantCount`; validate it as positive at config load and `<= registered workers` after runtime topology resolution         | Express exact adjacent participation without disabling workers | One config field, validation, JVM/config handoff, focused tests                |
-| REQUIRED       | `FragmentDecisionTree` or a benchmark-only path-selection seam                                                       | Automatic CACHE is only a global feature flag and per-worker equation                                         | Ranks above the configured cutoff return CACHE; ranks at/below it use unchanged normal selection                                                          | Makes K and K-1 causal treatments                              | Small conditional around path selection, benchmark-mode guard, unit tests      |
-| REQUIRED       | `ControlPlaneFragment` CACHE branch and `FragmentControlConfig`                                                      | Success parks 15 us; exhausted cache spins then parks 1 us; ordinary idle can precede remote cache            | Freeze and document one exact actuator, expose its park duration, and place the configured CACHE park according to the intended cache-exhaustion contract | Labels are conditional on actuator semantics                   | Small loop/config change plus local/remote/no-upstream/park tests; no redesign |
-| REQUIRED       | Expanded `trial_config.json` and comparison differ                                                                   | Cutoff/park/actuator identity are absent; unknown fields classify as HARNESS                                  | Persist cutoff, park duration, and actuator version; classify only cutoff as POLICY and require park/actuator equality                                    | Prevent silent pooling and allow clean comparison              | Record fields, differ categories, loader tests                                 |
-| REQUIRED       | Decision-point staleness observation in `ControlPlaneFragment` / `contention_staleness.tsv`                          | Decision uses fresh local `P`, contention, and rank, while export can use previous batch state for `P/R/rank` | Record the exact values passed to `executionPath`, plus body-history-ready                                                                                | Feature rows must reproduce inference inputs                   | Reuse existing TSV with a few columns/arguments and tests                      |
+| ALREADY EXISTS | `CalibrationBenchmarkConfig`, config validation, runner property wiring                                              | Step 1 added nullable `forcedActiveParticipantCount`, positive/topology validation, and authoritative JVM handoff | Reuse unchanged                                                                                                                                        | Expresses adjacent participation without disabling workers     | Implemented with focused config/runner tests                                   |
+| ALREADY EXISTS | `FragmentDecisionTree` benchmark-only path-selection seam                                                            | Step 1 forces ranks above cutoff to CACHE and confines ranks at/below it to normal DIRECT/STAGED selection    | Reuse unchanged                                                                                                                                           | Makes K and K-1 causal treatments                              | Implemented with decision-tree tests                                            |
+| ALREADY EXISTS | `ControlPlaneFragment` CACHE branch and `FragmentControlConfig`                                                      | Step 1 defines `cache-v1`: skip ordinary idle, execute local/remote caches, park configured duration only on exhaustion | Validate under a running multi-rank topology in Step 3                                                                                              | Labels are conditional on actuator semantics                   | Implementation complete; end-to-end actuator proof remains                    |
+| ALREADY EXISTS | Expanded `trial_config.json` and comparison differ                                                                   | Step 1 persists cutoff, park, and version; cutoff is POLICY and park/version are incompatible ACTUATOR fields | Reuse unchanged                                                                                                                                           | Prevents silent pooling and permits adjacent comparisons       | Implemented with serialization/differ/compatibility tests                      |
+| ALREADY EXISTS | Decision-point staleness observation in `ControlPlaneFragment` / `contention_staleness.tsv`                          | Step 1 records exact decision `P/R/rank`, contention, body value, and `bodyHistoryReady`                      | Reuse unchanged                                                                                                                                           | Feature rows can reproduce inference inputs                    | Implemented by extending the existing TSV, not adding another artifact         |
 | REQUIRED       | External Python utility                                                                                              | No Python loader/model                                                                                        | Validate joins/checksums, construct one active-context row per pair, label, fit, save/load, evaluate, export                                              | Produces the requested eight weights                           | Small NumPy/SciPy package; no production dependency                            |
 | NICE TO HAVE   | Dataset manifest/run metadata                                                                                        | CPU set exists but host/topology family and runtime commit are not normalized                                 | Record `topologyId`, runtime commit, and fixture family once                                                                                              | Safer grouped splits and provenance                            | Small external JSON manifest; no Java exporter required initially              |
 | NICE TO HAVE   | Derived `pairs.tsv`                                                                                                  | Evidence remains distributed across artifacts                                                                 | Cache one auditable summary row per pair                                                                                                                  | Easier review without duplicating telemetry                    | Python output only                                                             |
@@ -637,9 +638,10 @@ Retained artifacts should be classified by actuator semantics before they enter 
 | Invalid as current-CACHE labels        | Old `FORCE_ON`/`FORCE_OFF` productivity comparisons in `00`, `01`, `02`, and `12` through `17`; worker-scale arms that physically change worker topology; RESET arms for trajectory labels; the pre-`c01ce91b` CPU-attribution runs | Preserve for history and diagnostics, but do not train the current actuator from their A/B outcome.                                                                                                    |
 | Genuinely missing                      | Adjacent rank-cutoff comparisons using exact current CACHE semantics across useful contention, log-body, `P/R`, raw `R`, and `K` regions                                                                                            | Generate only after the vertical slice passes.                                                                                                                                                         |
 
-Historical JSON may also predate the current `paretoWeights` schema. The Python loader should be
-tolerant enough to identify and classify such artifacts, but it must not silently assign them a
-current model or actuator version.
+Historical JSON may also predate the current `paretoWeights` schema. Java config loading now uses
+the current default eight weights when that field is absent so retained harness presets remain
+readable. Missing actuator identity remains explicitly `legacy-unspecified`; neither Java comparison
+nor the Python loader may silently assign an old completed run the current actuator version.
 
 ## Dataset coverage strategy
 
@@ -712,7 +714,7 @@ Only after this slice passes should the missing physical surface be enumerated a
 
 ## Explicit non-goals
 
-- Implementing the Python model or any harness/runtime change in this task.
+- Implementing the Python model or Steps 2 through 8 as part of the Step 1 change.
 - Tuning CACHE park duration.
 - Redesigning the calibration harness, scheduler decision tree, contention sensor, or worker-rank
   scheme.
@@ -728,8 +730,9 @@ Only after this slice passes should the missing physical surface be enumerated a
 
 ## Minimum implementation sequence
 
-1. **Step 1 - small harness fixes:** freeze the exact CACHE actuator and park identity, add the
-   forced CACHE-above-rank treatment, persist and classify it, and export exact decision inputs.
+1. **Step 1 - small harness fixes (implemented):** `cache-v1` freezes the CACHE exhaustion park,
+   adds the forced CACHE-above-rank treatment, persists/classifies its identity, and exports exact
+   decision inputs plus body readiness.
 2. **Step 2 - Python loader:** implement checksum/compatibility validation and joins over existing
    comparison, throughput, trajectory, staleness, and config artifacts.
 3. **Step 3 - one-pair vertical validation:** run the small CONTINUOUS `K` versus `K-1` slice and

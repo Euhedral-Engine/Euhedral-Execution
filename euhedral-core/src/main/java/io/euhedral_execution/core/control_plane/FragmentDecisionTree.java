@@ -30,10 +30,11 @@ final class FragmentDecisionTree {
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
     static final int SPIN_MISSES = 64;
-
     private final int core;
     private final int socket;
     private final FragmentObserver observer;
+    private final Integer forcedActiveParticipantCount;
+    private final long cacheParkNs;
 
     private final BodyCostThresholds idleBodyCostThresholds;
     private final IdlePolicy idleTimeNs;
@@ -55,10 +56,28 @@ final class FragmentDecisionTree {
             @Nullable FragmentObserver observer,
             int core,
             int socket) {
+        this(decisionWeights, observer, core, socket, null, FragmentControlConfig.DEFAULT_CACHE_PARK_NS);
+    }
+
+    FragmentDecisionTree(
+            @NonNull FragmentDecisionWeights decisionWeights,
+            @Nullable FragmentObserver observer,
+            int core,
+            int socket,
+            @Nullable Integer forcedActiveParticipantCount,
+            long cacheParkNs) {
         Objects.requireNonNull(decisionWeights);
+        if (forcedActiveParticipantCount != null && forcedActiveParticipantCount <= 0) {
+            throw new IllegalArgumentException("forcedActiveParticipantCount must be positive");
+        }
+        if (cacheParkNs < 0L) {
+            throw new IllegalArgumentException("cacheParkNs must not be negative");
+        }
         this.observer = observer;
         this.core = core;
         this.socket = socket;
+        this.forcedActiveParticipantCount = forcedActiveParticipantCount;
+        this.cacheParkNs = cacheParkNs;
 
         FragmentControlConfig config = new FragmentControlConfig(decisionWeights);
         this.idleBodyCostThresholds = config.idleBodyCostThresholds;
@@ -159,6 +178,11 @@ final class FragmentDecisionTree {
             int registeredWorkers,
             long contention,
             int workerRank) {
+        if (isForcedCacheRank(workerRank)) {
+            recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
+            this.executionPath = ExecutionPath.CACHE;
+            return this.executionPath;
+        }
         if (upstreamHandles <= 0) {
             this.executionPath = ExecutionPath.SKIP_THEN_DIRECT;
             return this.executionPath;
@@ -173,7 +197,9 @@ final class FragmentDecisionTree {
             return this.executionPath;
         }
 
-        if (shouldCacheExecute((double) contention / 1_000_000.0, productiveHandles, registeredWorkers, workerRank)) {
+        if (this.forcedActiveParticipantCount == null
+                && shouldCacheExecute(
+                        (double) contention / 1_000_000.0, productiveHandles, registeredWorkers, workerRank)) {
             recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
             this.executionPath = ExecutionPath.CACHE;
             return ExecutionPath.CACHE;
@@ -189,15 +215,32 @@ final class FragmentDecisionTree {
         return ExecutionPath.STAGED;
     }
 
-    boolean shouldCacheExecute(
-        double contention,
-        long productiveHandles,
-        int registeredWorkers,
-        int workerRank) {
+    /// Returns whether the current inputs would select CACHE without mutating decision state or telemetry.
+    boolean willCacheExecute(
+            long productiveHandles, long upstreamHandles, int registeredWorkers, long contention, int workerRank) {
+        if (isForcedCacheRank(workerRank)) {
+            return true;
+        }
+        if (this.forcedActiveParticipantCount != null
+                || upstreamHandles <= 0
+                || registeredWorkers <= 1
+                || this.bodyCostHistoryCount < BODY_COST_MIN_HISTORY
+                || this.executionPath == ExecutionPath.SKIP_THEN_DIRECT) {
+            return false;
+        }
+        return shouldCacheExecute((double) contention / 1_000_000.0, productiveHandles, registeredWorkers, workerRank);
+    }
 
-        if (workerRank <= 1
-            || registeredWorkers <= 1
-            || !CAN_CACHE_EXECUTE) {
+    private boolean isForcedCacheRank(int workerRank) {
+        if (this.forcedActiveParticipantCount == null || workerRank <= 0) {
+            return false;
+        }
+        return workerRank > this.forcedActiveParticipantCount;
+    }
+
+    boolean shouldCacheExecute(double contention, long productiveHandles, int registeredWorkers, int workerRank) {
+
+        if (workerRank <= 1 || registeredWorkers <= 1 || !CAN_CACHE_EXECUTE) {
             return false;
         }
 
@@ -208,14 +251,12 @@ final class FragmentDecisionTree {
         double body = Math.log1p(this.smoothedBodyCostNs);
         double workers = registeredWorkers;
 
-        double phrFactor =
-            this.paretoWeights.phrWeight()
+        double phrFactor = this.paretoWeights.phrWeight()
                 + this.paretoWeights.contentionPhrWeight() * contention
                 + this.paretoWeights.bodyPhrWeight() * body
                 + this.paretoWeights.registeredWorkersPhrWeight() * workers;
 
-        double workerFactor =
-            this.paretoWeights.activeWorkersWeight()
+        double workerFactor = this.paretoWeights.activeWorkersWeight()
                 + this.paretoWeights.contentionWorkersWeight() * contention
                 + this.paretoWeights.bodyWorkersWeight() * body
                 + this.paretoWeights.registeredActiveWorkersWeight() * workers;
@@ -223,17 +264,23 @@ final class FragmentDecisionTree {
         double activeWorkers = workerRank;
 
         double marginalProductivity =
-            phrFactor
-                * productiveHandles
-                / (activeWorkers * (activeWorkers - 1.0))
-                - workerFactor;
+                phrFactor * productiveHandles / (activeWorkers * (activeWorkers - 1.0)) - workerFactor;
 
         return marginalProductivity > 0.0;
     }
 
-    private void recordExecDecision(long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention) {
-        if(this.observer != null) {
-            this.observer.execBranchDecision(this.core, this.socket, cycleEpoch, batchEpoch, contentionPolicy, bodyPolicy, contention, this.smoothedBodyCostNs);
+    private void recordExecDecision(
+            long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention) {
+        if (this.observer != null) {
+            this.observer.execBranchDecision(
+                    this.core,
+                    this.socket,
+                    cycleEpoch,
+                    batchEpoch,
+                    contentionPolicy,
+                    bodyPolicy,
+                    contention,
+                    this.smoothedBodyCostNs);
         }
     }
 
@@ -331,6 +378,11 @@ final class FragmentDecisionTree {
     /// Returns whether the body-cost estimator has completed its minimum history window.
     boolean hasBodyCostHistory() {
         return this.bodyCostHistoryCount >= BODY_COST_MIN_HISTORY;
+    }
+
+    /// Returns the configured CACHE miss park duration for this actuator fixture.
+    long cacheParkNs() {
+        return this.cacheParkNs;
     }
 
     /// Returns the current sparse executor-body estimate in nanoseconds.

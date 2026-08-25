@@ -194,6 +194,11 @@ public class CalibrationRunner {
             Collections.shuffle(resolvedTrials, new Random(seed));
         }
 
+        resolvedTrials = resolvedTrials.stream()
+                .map(trial ->
+                        trial.withCalibrationConfig(trial.calibrationConfig().withCurrentCacheActuatorIdentity()))
+                .toList();
+
         return resolvedTrials;
     }
 
@@ -452,7 +457,6 @@ public class CalibrationRunner {
                     FragmentControlConfig.PRODUCTIVITY_GATE_MODE,
                     trial.calibrationConfig().productivityGateMode().name());
         }
-
         if (invocationDir != null) {
             try {
                 addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getCanonicalPath());
@@ -485,6 +489,22 @@ public class CalibrationRunner {
         if (trial.jvmArgs() != null) {
             jvmArgs.addAll(trial.jvmArgs());
         }
+
+        // These values define the persisted treatment/actuator identity. Do not allow an
+        // untracked custom JVM argument to override the completed trial configuration.
+        removeJVMProperty(jvmArgs, FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        removeJVMProperty(jvmArgs, FragmentControlConfig.CACHE_PARK_NS);
+        Integer forcedActiveParticipantCount = trial.calibrationConfig().forcedActiveParticipantCount();
+        if (forcedActiveParticipantCount != null) {
+            addJVMProperty(
+                    jvmArgs,
+                    FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT,
+                    forcedActiveParticipantCount.toString());
+        }
+        addJVMProperty(
+                jvmArgs,
+                FragmentControlConfig.CACHE_PARK_NS,
+                trial.calibrationConfig().cacheParkNs().toString());
 
         return jvmArgs;
     }
@@ -538,6 +558,11 @@ public class CalibrationRunner {
         if (value != null && !value.isBlank()) {
             jvmArgs.add("-D" + property + "=" + value);
         }
+    }
+
+    private static void removeJVMProperty(List<String> jvmArgs, String property) {
+        String prefix = "-D" + property + "=";
+        jvmArgs.removeIf(arg -> arg.equals("-D" + property) || arg.startsWith(prefix));
     }
 
     static final class MainError extends RuntimeException {

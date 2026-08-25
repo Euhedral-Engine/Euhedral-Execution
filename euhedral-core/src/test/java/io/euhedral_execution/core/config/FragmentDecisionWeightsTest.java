@@ -54,6 +54,20 @@ class FragmentDecisionWeightsTest {
     }
 
     @Test
+    void jsonWithoutParetoWeightsUsesCurrentDefault() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+
+        FragmentDecisionWeights weights = mapper.readValue("""
+                {
+                  "idleBodyCostWeights": {"xs": 1, "s": 2, "m": 3, "h": 4},
+                  "idleTimeNs": {"xsPark": 5, "sPark": 6, "mPark": 7, "hPark": 8, "xhPark": 9}
+                }
+                """, FragmentDecisionWeights.class);
+
+        assertEquals(ParetoWeights.DEFAULT, weights.paretoWeights());
+    }
+
+    @Test
     void equalsAndHashCode_verifyRecordContract() {
         FragmentDecisionWeights weights1 = FragmentDecisionWeights.DEFAULT;
         FragmentDecisionWeights weights2 = new FragmentDecisionWeights(

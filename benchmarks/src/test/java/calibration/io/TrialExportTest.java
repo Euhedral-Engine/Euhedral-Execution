@@ -207,13 +207,13 @@ class TrialExportTest {
 
         assertEquals(5, lines.size());
         assertTrue(lines.get(0).startsWith("iteration\tcore\tsegment\tsampleIndex\tcycleEpoch"));
-        assertTrue(lines.get(0).endsWith("productivityThresholdNs\tsmoothedBodyCostNs"));
+        assertTrue(lines.get(0).endsWith("productivityThresholdNs\tsmoothedBodyCostNs\tbodyHistoryReady"));
         assertTrue(lines.get(1).startsWith("0\t9\thead\t0\t10\t1\t800000"));
         assertTrue(lines.get(2).startsWith("0\t9\thead\t1\t11\t1\t810000"));
         assertTrue(lines.get(3).startsWith("0\t9\tsteadyState\t0\t11\t1\t810000"));
         assertTrue(lines.get(3).contains("\tSTAGED\t"));
         assertTrue(lines.get(4).startsWith("0\t9\tsteadyState\t1\t12\t1\t820000"));
-        assertTrue(lines.get(4).endsWith("\t0\t0.0"));
+        assertTrue(lines.get(4).endsWith("\t0\t0.0\t0"));
         assertEquals(
                 computeSha256(tsv),
                 Files.readString(checksum, StandardCharsets.UTF_8).trim());

@@ -245,7 +245,8 @@ public class BenchmarkObserver extends FragmentObserver {
             boolean productivityExcluded,
             long productivityExclusionCount,
             long productivityThresholdNs,
-            double smoothedBodyCostNs) {
+            double smoothedBodyCostNs,
+            boolean bodyHistoryReady) {
         if (!this.config.observeContentionStaleness()) {
             return;
         }
@@ -276,7 +277,8 @@ public class BenchmarkObserver extends FragmentObserver {
                 productivityExcluded,
                 productivityExclusionCount,
                 productivityThresholdNs,
-                smoothedBodyCostNs);
+                smoothedBodyCostNs,
+                bodyHistoryReady);
     }
 
     @Override
@@ -431,9 +433,9 @@ public class BenchmarkObserver extends FragmentObserver {
             this.execSteadyStateDecisionState = new long[rawSampleLimit][5];
             this.execSteadyStateSmoothedBodyCost = new double[rawSampleLimit];
 
-            this.contentionStalenessHead = observeContentionStaleness ? new long[rawSampleLimit][22] : new long[0][];
+            this.contentionStalenessHead = observeContentionStaleness ? new long[rawSampleLimit][23] : new long[0][];
             this.contentionStalenessSteadyState =
-                    observeContentionStaleness ? new long[rawSampleLimit][22] : new long[0][];
+                    observeContentionStaleness ? new long[rawSampleLimit][23] : new long[0][];
             this.pullConvoyHead = observePullConvoy ? new long[rawSampleLimit][9] : new long[0][];
             this.pullConvoySteadyState = observePullConvoy ? new long[rawSampleLimit][9] : new long[0][];
         }
@@ -793,7 +795,8 @@ public class BenchmarkObserver extends FragmentObserver {
                     false,
                     0L,
                     0L,
-                    0.0);
+                    0.0,
+                    false);
         }
 
         public void recordContentionStaleness(
@@ -818,7 +821,8 @@ public class BenchmarkObserver extends FragmentObserver {
                 boolean productivityExcluded,
                 long productivityExclusionCount,
                 long productivityThresholdNs,
-                double smoothedBodyCostNs) {
+                double smoothedBodyCostNs,
+                boolean bodyHistoryReady) {
             int idx = (int) (this.contentionStalenessObservations & this.mask);
             if (this.contentionStalenessObservations++ < this.rawSampleLimit) {
                 recordContentionStalenessSample(
@@ -844,7 +848,8 @@ public class BenchmarkObserver extends FragmentObserver {
                         productivityExcluded,
                         productivityExclusionCount,
                         productivityThresholdNs,
-                        smoothedBodyCostNs);
+                        smoothedBodyCostNs,
+                        bodyHistoryReady);
             }
             recordContentionStalenessSample(
                     this.contentionStalenessSteadyState[idx],
@@ -869,7 +874,8 @@ public class BenchmarkObserver extends FragmentObserver {
                     productivityExcluded,
                     productivityExclusionCount,
                     productivityThresholdNs,
-                    smoothedBodyCostNs);
+                    smoothedBodyCostNs,
+                    bodyHistoryReady);
         }
 
         private static void recordContentionStalenessSample(
@@ -895,7 +901,8 @@ public class BenchmarkObserver extends FragmentObserver {
                 boolean productivityExcluded,
                 long productivityExclusionCount,
                 long productivityThresholdNs,
-                double smoothedBodyCostNs) {
+                double smoothedBodyCostNs,
+                boolean bodyHistoryReady) {
             sample[0] = cycleEpoch;
             sample[1] = batchEpoch;
             sample[2] = measuredContention;
@@ -918,6 +925,7 @@ public class BenchmarkObserver extends FragmentObserver {
             sample[19] = productivityExclusionCount;
             sample[20] = productivityThresholdNs;
             sample[21] = Double.doubleToRawLongBits(smoothedBodyCostNs);
+            sample[22] = bodyHistoryReady ? 1L : 0L;
         }
 
         public void align() {

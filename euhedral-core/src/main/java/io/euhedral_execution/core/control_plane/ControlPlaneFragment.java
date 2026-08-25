@@ -209,8 +209,13 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ThreadTools.setTimerResolution(1);
                 super.register();
                 this.mainThread = Thread.currentThread();
-                this.controlPolicy =
-                        new FragmentDecisionTree(this.config.decisionWeights(), this.observer, this.core, this.socket);
+                this.controlPolicy = new FragmentDecisionTree(
+                        this.config.decisionWeights(),
+                        this.observer,
+                        this.core,
+                        this.socket,
+                        resolveForcedActiveParticipantCount(),
+                        resolveCacheParkNs());
                 this.productivityThresholdNs = resolveProductivityThresholdNs();
 
                 try {
@@ -264,7 +269,14 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
 
                 long idleDurationSelectedNs = -1L;
-                if (localCache == 0L) {
+                boolean cacheSelected = localCache == 0L
+                        && this.controlPolicy.willCacheExecute(
+                                this.upstreamQueue.getProductiveHandleCount(),
+                                newUpCount,
+                                this.state.registeredWorkers,
+                                this.upstreamQueue.getContention(),
+                                super.getThreadRank(this.core));
+                if (localCache == 0L && !cacheSelected) {
                     long contention = this.upstreamQueue.getContention();
                     idleDurationSelectedNs = this.controlPolicy.idle(
                             this.state.cycleEpoch,
@@ -287,6 +299,32 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
                     this.state.upstreamCount = this.upstreamQueue.getTrueUpstreamCount();
+                    if (cacheSelected) {
+                        long productiveHandleCount = this.upstreamQueue.getProductiveHandleCount();
+                        int registeredWorkers = this.state.registeredWorkers;
+                        long contention = this.upstreamQueue.getContention();
+                        int workerRank = super.getThreadRank(this.core);
+                        ExecutionPath path = this.controlPolicy.executionPath(
+                                this.state.cycleEpoch,
+                                this.state.batchEpoch,
+                                productiveHandleCount,
+                                newUpCount,
+                                registeredWorkers,
+                                contention,
+                                workerRank);
+                        if (this.observeContentionStaleness) {
+                            recordContentionStaleness(
+                                    idleDurationSelectedNs,
+                                    path.ordinal(),
+                                    localCache,
+                                    productiveHandleCount,
+                                    registeredWorkers,
+                                    workerRank,
+                                    contention,
+                                    false);
+                        }
+                        LockSupport.parkNanos(this.controlPolicy.cacheParkNs());
+                    }
                     continue;
                 }
 
@@ -308,16 +346,29 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                 }
 
+                long productiveHandleCount = this.upstreamQueue.getProductiveHandleCount();
+                long upstreamHandleCount = this.upstreamQueue.getCachedUpCount();
+                int registeredWorkers = this.state.registeredWorkers;
+                long contention = this.upstreamQueue.getContention();
+                int workerRank = super.getThreadRank(this.core);
                 ExecutionPath path = this.controlPolicy.executionPath(
                         this.state.cycleEpoch,
                         this.state.batchEpoch,
-                        this.upstreamQueue.getProductiveHandleCount(),
-                        this.upstreamQueue.getCachedUpCount(),
-                        this.state.registeredWorkers,
-                        this.upstreamQueue.getContention(),
-                        super.getThreadRank(this.core));
+                        productiveHandleCount,
+                        upstreamHandleCount,
+                        registeredWorkers,
+                        contention,
+                        workerRank);
                 if (this.observeContentionStaleness) {
-                    recordContentionStaleness(idleDurationSelectedNs, path.ordinal(), localCache, false);
+                    recordContentionStaleness(
+                            idleDurationSelectedNs,
+                            path.ordinal(),
+                            localCache,
+                            productiveHandleCount,
+                            registeredWorkers,
+                            workerRank,
+                            contention,
+                            false);
                 }
 
                 if (limit > 0L) {
@@ -371,10 +422,13 @@ public final class ControlPlaneFragment extends WorkRequester {
                             processed += count;
                         }
                     }
-                } else if (processed <= 0 && this.controlPolicy.missRequiresPark()) {
+                } else if (path == ExecutionPath.CACHE && processed <= 0L) {
+                    LockSupport.parkNanos(this.controlPolicy.cacheParkNs());
+                    continue;
+                } else if (processed <= 0L && this.controlPolicy.missRequiresPark()) {
                     LockSupport.parkNanos(1_000L);
                     continue;
-                } else if (processed <= 0) {
+                } else if (processed <= 0L) {
                     Thread.onSpinWait();
                     continue;
                 }
@@ -383,11 +437,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long nowNs = System.nanoTime();
                 recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
                 this.controlPolicy.recordProgress();
-                if (path == ExecutionPath.CACHE) {
-                    LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
-                } else {
-                    Thread.onSpinWait();
-                }
+                Thread.onSpinWait();
             }
         } catch (Exception e) {
             this.logger.error("[CRITICAL] Terminal error encountered in the main loop. Exiting.", e);
@@ -409,7 +459,14 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private void recordContentionStaleness(
-            long idleDurationSelectedNs, int executionPath, long localCacheCount, boolean productivityExcluded) {
+            long idleDurationSelectedNs,
+            int executionPath,
+            long localCacheCount,
+            long productiveHandleCount,
+            int registeredWorkers,
+            int workerRank,
+            long measuredContention,
+            boolean productivityExcluded) {
         long observationCount = this.upstreamQueue.getContentionObservationCount();
         if (observationCount != this.state.lastContentionObservationCount) {
             this.state.lastContentionObservationCount = observationCount;
@@ -426,7 +483,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.socket,
                 this.state.cycleEpoch,
                 this.state.batchEpoch,
-                this.upstreamQueue.getContention(),
+                measuredContention,
                 this.upstreamQueue.getLastRawContention(),
                 observationCount,
                 lastObservationNs,
@@ -439,13 +496,14 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.upstreamQueue.getTotalAcquisitionAttempts(),
                 executionPath,
                 localCacheCount,
-                this.state.productiveHandleCount,
-                this.state.registeredWorkers,
-                this.state.workerRank,
+                productiveHandleCount,
+                registeredWorkers,
+                workerRank,
                 productivityExcluded,
                 this.state.productivityExclusionCount,
                 this.productivityThresholdNs,
-                this.controlPolicy.smoothedBodyCostNs());
+                this.controlPolicy.smoothedBodyCostNs(),
+                this.controlPolicy.hasBodyCostHistory());
     }
 
     /// Records loop execution telemetry and advances policy only at a batch boundary.
@@ -553,6 +611,43 @@ public final class ControlPlaneFragment extends WorkRequester {
         MicroCalibrator calibrator = new MicroCalibrator();
         calibrator.warmup();
         return calibrator.benchmark(weight);
+    }
+
+    private Integer resolveForcedActiveParticipantCount() {
+        String configuredCount = System.getProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        if (configuredCount == null || configuredCount.isBlank()) {
+            return null;
+        }
+        if (!this.config.benchmarkMode()) {
+            throw new IllegalStateException("Forced active participant count is only valid in benchmark mode");
+        }
+        int count;
+        try {
+            count = Integer.parseInt(configuredCount);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Forced active participant count must be an integer", e);
+        }
+        if (count <= 0) {
+            throw new IllegalArgumentException("Forced active participant count must be positive");
+        }
+        return count;
+    }
+
+    private static long resolveCacheParkNs() {
+        String configuredParkNs = System.getProperty(FragmentControlConfig.CACHE_PARK_NS);
+        if (configuredParkNs == null || configuredParkNs.isBlank()) {
+            return FragmentControlConfig.DEFAULT_CACHE_PARK_NS;
+        }
+        long parkNs;
+        try {
+            parkNs = Long.parseLong(configuredParkNs);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("CACHE park duration must be a long integer", e);
+        }
+        if (parkNs < 0L) {
+            throw new IllegalArgumentException("CACHE park duration must not be negative");
+        }
+        return parkNs;
     }
 
     private boolean productivityParkRequired() {

@@ -78,6 +78,20 @@ class TrialConfigDifferTest {
     }
 
     @Test
+    void testForcedActiveParticipantCountIsPolicy() {
+        assertEquals(
+                DifferenceCategory.POLICY,
+                TrialConfigDiffer.categorize("/calibrationConfig/forcedActiveParticipantCount"));
+    }
+
+    @Test
+    void testCacheActuatorIdentityFieldsAreActuatorDifferences() {
+        assertEquals(DifferenceCategory.ACTUATOR, TrialConfigDiffer.categorize("/calibrationConfig/cacheParkNs"));
+        assertEquals(
+                DifferenceCategory.ACTUATOR, TrialConfigDiffer.categorize("/calibrationConfig/cacheActuatorVersion"));
+    }
+
+    @Test
     void testIdlePolicyChangeProducesPolicyDifference() {
         TrialConfig base = baseConfig();
 

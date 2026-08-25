@@ -34,9 +34,11 @@ class TrajectoryExportTest {
         metrics.recordIdle(2, 2, 1, 2, 910_000L, 216.0);
         metrics.recordExec(1, 1, 1, 0, 900_000L, 216.0);
         metrics.recordContentionStaleness(
-                1, 1, 900_000L, 900_000L, 1, 1, 0, 0, 1, 5_000L, 10, 5, 15, 1, 4, 9, 23, 1, false, 0, 109L, 108.0);
+                1, 1, 900_000L, 900_000L, 1, 1, 0, 0, 1, 5_000L, 10, 5, 15, 1, 4, 9, 23, 1, false, 0, 109L, 108.0,
+                true);
         metrics.recordContentionStaleness(
-                2, 2, 910_000L, 910_000L, 2, 2, 0, 0, 2, 15_000L, 18, 7, 25, 1, 8, 8, 23, 2, true, 1, 109L, 107.0);
+                2, 2, 910_000L, 910_000L, 2, 2, 0, 0, 2, 15_000L, 18, 7, 25, 1, 8, 8, 23, 2, true, 1, 109L, 107.0,
+                true);
 
         CoreIterationResult core = HighSpeedMetricsStatistics.calculate(0, 3, metrics);
         SystemIterationResult system = HighSpeedMetricsStatistics.calculateSystem(0, List.of(metrics));

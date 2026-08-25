@@ -108,6 +108,88 @@ class ComparisonCompatibilityAnalyzerTest {
     }
 
     @Test
+    void testCacheParkDifferenceIsIncompatible() {
+        TrialConfig baseConfig = baseTrialConfig();
+        CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
+        CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
+                cal.cpuSet(),
+                cal.parallelSources(),
+                cal.orderedSources(),
+                cal.workUnits(),
+                cal.randomizeWork(),
+                cal.totalRequiredExecutions(),
+                cal.invocationTimeoutMillis(),
+                cal.decisionWeightProfile(),
+                cal.decisionWeights(),
+                cal.rawSampleLimit(),
+                cal.observeCycleStart(),
+                cal.observeBatchProgress(),
+                cal.observeBatchComplete(),
+                cal.observeRawBodyCost(),
+                cal.observeIdleDecision(),
+                cal.observeExecDecision(),
+                cal.observeContentionStaleness(),
+                cal.pullBucketFork(),
+                cal.pullBucketTreatments(),
+                cal.observePullConvoy(),
+                cal.productivityThresholdWeight(),
+                cal.productivityGateMode(),
+                cal.forcedActiveParticipantCount(),
+                cal.cacheParkNs() + 1L,
+                cal.cacheActuatorVersion(),
+                cal.lifecycleMode());
+
+        ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(
+                createCompletedRun(baseConfig, "ops/s"),
+                createCompletedRun(baseConfig.withCalibrationConfig(candCal), "ops/s"));
+
+        assertEquals(CompatibilityStatus.INCOMPATIBLE, compat.status());
+        assertFalse(compat.isComparable());
+        assertTrue(compat.reasons().getFirst().contains("CACHE actuator differs"));
+    }
+
+    @Test
+    void testAdjacentParticipationCutoffsAreCompatiblePolicyTreatments() {
+        TrialConfig baseConfig = baseTrialConfig();
+        CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
+        CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
+                cal.cpuSet(),
+                cal.parallelSources(),
+                cal.orderedSources(),
+                cal.workUnits(),
+                cal.randomizeWork(),
+                cal.totalRequiredExecutions(),
+                cal.invocationTimeoutMillis(),
+                cal.decisionWeightProfile(),
+                cal.decisionWeights(),
+                cal.rawSampleLimit(),
+                cal.observeCycleStart(),
+                cal.observeBatchProgress(),
+                cal.observeBatchComplete(),
+                cal.observeRawBodyCost(),
+                cal.observeIdleDecision(),
+                cal.observeExecDecision(),
+                cal.observeContentionStaleness(),
+                cal.pullBucketFork(),
+                cal.pullBucketTreatments(),
+                cal.observePullConvoy(),
+                cal.productivityThresholdWeight(),
+                cal.productivityGateMode(),
+                1,
+                cal.cacheParkNs(),
+                cal.cacheActuatorVersion(),
+                cal.lifecycleMode());
+
+        ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(
+                createCompletedRun(baseConfig, "ops/s"),
+                createCompletedRun(baseConfig.withCalibrationConfig(candCal), "ops/s"));
+
+        assertEquals(CompatibilityStatus.COMPATIBLE, compat.status());
+        assertTrue(compat.isComparable());
+        assertTrue(compat.reasons().isEmpty());
+    }
+
+    @Test
     void testPolicyPlusIdentityChangesRemainCompatible() {
         TrialConfig baseConfig = baseTrialConfig();
 

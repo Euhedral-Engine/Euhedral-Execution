@@ -59,6 +59,11 @@
       "invocationTimeoutMillis": 60000,
       // Optional: RESET (default) or CONTINUOUS persistent scheduler trajectory
       "lifecycleMode": "RESET",
+      // Optional benchmark-only cutoff; ranks above this value use CACHE while remaining registered
+      "forcedActiveParticipantCount": null,
+      // CACHE miss park duration and semantic actuator identity retained in completed fixtures
+      "cacheParkNs": 15000,
+      "cacheActuatorVersion": "cache-v1",
       // Optional: Reusable decision weights profile reference
       // "decisionWeightProfile": "default-weights",
       // Optional: Inline decision weights configuration
@@ -84,6 +89,9 @@
       "totalRequiredExecutions": 32000000,
       "invocationTimeoutMillis": 6000,
       "lifecycleMode": "CONTINUOUS",
+      "forcedActiveParticipantCount": null,
+      "cacheParkNs": 15000,
+      "cacheActuatorVersion": "cache-v1",
       // Optional: Reusable decision weights profile reference
       "decisionWeightProfile": "common.imported-weights",
       "rawSampleLimit": 1024,

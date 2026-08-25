@@ -11,6 +11,9 @@
       "randomizeWork": true,
       "totalRequiredExecutions": 500000,
       "invocationTimeoutMillis": 30000,
+      "forcedActiveParticipantCount": null,
+      "cacheParkNs": 15000,
+      "cacheActuatorVersion": "cache-v1",
       // References decision weight profile within this library
       "decisionWeightProfile": "imported-weights",
       "rawSampleLimit": 1024,
