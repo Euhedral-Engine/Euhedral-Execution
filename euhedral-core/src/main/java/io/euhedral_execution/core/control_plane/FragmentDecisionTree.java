@@ -3,9 +3,10 @@ package io.euhedral_execution.core.control_plane;
 import static io.euhedral_execution.core.control_plane.FragmentControlConfig.DEFAULT_PARK_NS;
 
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
 import java.util.Objects;
 import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
@@ -15,6 +16,9 @@ import org.jspecify.annotations.Nullable;
 ///
 /// All fields use plain access because one pinned fragment thread owns the policy for its lifetime.
 final class FragmentDecisionTree {
+    private static final String ENABLE_CACHE_EXECUTE_PROP = "euhedral.fragment.cacheExecutePath";
+    private static final boolean CAN_CACHE_EXECUTE =
+            Boolean.parseBoolean(System.getProperty(ENABLE_CACHE_EXECUTE_PROP, "false"));
     static final long CONTENTION_THRESHOLD = 850_000; // 85%
 
     static final long DIRECT_BATCH_WORK_TARGET_NS = 250_000L;
@@ -33,6 +37,7 @@ final class FragmentDecisionTree {
 
     private final BodyCostThresholds idleBodyCostThresholds;
     private final IdlePolicy idleTimeNs;
+    private final ParetoWeights paretoWeights;
 
     private final long maxBodyCostThreshold;
     private final double[] bodyCostWindow = new double[BODY_COST_WINDOW_SAMPLES];
@@ -59,6 +64,7 @@ final class FragmentDecisionTree {
         this.idleBodyCostThresholds = config.idleBodyCostThresholds;
         this.idleTimeNs = config.idleTimeNs;
         this.maxBodyCostThreshold = this.idleBodyCostThresholds.h;
+        this.paretoWeights = decisionWeights.paretoWeights();
         reset();
     }
 
@@ -146,7 +152,13 @@ final class FragmentDecisionTree {
     }
 
     ExecutionPath executionPath(
-            long cycleEpoch, long batchEpoch, long upstreamHandles, long registeredWorkers, long contention) {
+            long cycleEpoch,
+            long batchEpoch,
+            long productiveHandles,
+            long upstreamHandles,
+            int registeredWorkers,
+            long contention,
+            int workerRank) {
         if (upstreamHandles <= 0) {
             this.executionPath = ExecutionPath.SKIP_THEN_DIRECT;
             return this.executionPath;
@@ -161,23 +173,68 @@ final class FragmentDecisionTree {
             return this.executionPath;
         }
 
-        this.executionPath = executionPath(cycleEpoch, batchEpoch, contention);
-        return this.executionPath;
-    }
+        if (shouldCacheExecute((double) contention / 1_000_000.0, productiveHandles, registeredWorkers, workerRank)) {
+            recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
+            this.executionPath = ExecutionPath.CACHE;
+            return ExecutionPath.CACHE;
+        }
 
-    private ExecutionPath executionPath(long cycleEpoch, long batchEpoch, long contention) {
         if (contention <= CONTENTION_THRESHOLD) {
-            if (this.observer != null) {
-                this.observer.execBranchDecision(
-                        this.core, this.socket, cycleEpoch, batchEpoch, 0, 0, contention, this.smoothedBodyCostNs);
-            }
+            recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
+            this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;
         }
-        if (this.observer != null) {
-            this.observer.execBranchDecision(
-                    this.core, this.socket, cycleEpoch, batchEpoch, 1, 0, contention, this.smoothedBodyCostNs);
-        }
+        recordExecDecision(cycleEpoch, batchEpoch, 1, 0, contention);
+        this.executionPath = ExecutionPath.STAGED;
         return ExecutionPath.STAGED;
+    }
+
+    boolean shouldCacheExecute(
+        double contention,
+        long productiveHandles,
+        int registeredWorkers,
+        int workerRank) {
+
+        if (workerRank <= 1
+            || registeredWorkers <= 1
+            || !CAN_CACHE_EXECUTE) {
+            return false;
+        }
+
+        if (productiveHandles <= 0) {
+            return true;
+        }
+
+        double body = Math.log1p(this.smoothedBodyCostNs);
+        double workers = registeredWorkers;
+
+        double phrFactor =
+            this.paretoWeights.phrWeight()
+                + this.paretoWeights.contentionPhrWeight() * contention
+                + this.paretoWeights.bodyPhrWeight() * body
+                + this.paretoWeights.registeredWorkersPhrWeight() * workers;
+
+        double workerFactor =
+            this.paretoWeights.activeWorkersWeight()
+                + this.paretoWeights.contentionWorkersWeight() * contention
+                + this.paretoWeights.bodyWorkersWeight() * body
+                + this.paretoWeights.registeredActiveWorkersWeight() * workers;
+
+        double activeWorkers = workerRank;
+
+        double marginalProductivity =
+            phrFactor
+                * productiveHandles
+                / (activeWorkers * (activeWorkers - 1.0))
+                - workerFactor;
+
+        return marginalProductivity > 0.0;
+    }
+
+    private void recordExecDecision(long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention) {
+        if(this.observer != null) {
+            this.observer.execBranchDecision(this.core, this.socket, cycleEpoch, batchEpoch, contentionPolicy, bodyPolicy, contention, this.smoothedBodyCostNs);
+        }
     }
 
     /// Records one aggregate execution sample in nanoseconds across `frames` completed frames.

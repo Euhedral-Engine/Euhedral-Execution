@@ -65,7 +65,8 @@ class TrajectoryExportTest {
         assertTrue(Files.readString(first.resolve(Constants.TRAJECTORY_WINDOWS_TSV))
                 .contains("42\tCONTINUOUS\t0\t10000\t5000\t1000\t2.0E8\ttrue"));
         String trajectory = Files.readString(first.resolve(Constants.TRAJECTORY_WINDOWS_TSV));
-        assertTrue(trajectory.contains("ordinaryIdleSelectedFraction\tproductivityExclusions\tproductivityExcludedFraction"));
+        assertTrue(trajectory.contains(
+                "ordinaryIdleSelectedFraction\tproductivityExclusions\tproductivityExcludedFraction"));
         assertTrue(trajectory.contains("\t1\t0.5\t"));
         assertEquals(
                 21,

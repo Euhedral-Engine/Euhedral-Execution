@@ -10,8 +10,9 @@ import calibration.config.TrialConfig;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -73,8 +74,7 @@ class TrialConfigDifferTest {
     @Test
     void testProductivityGateModeIsPolicy() {
         assertEquals(
-                DifferenceCategory.POLICY,
-                TrialConfigDiffer.categorize("/calibrationConfig/productivityGateMode"));
+                DifferenceCategory.POLICY, TrialConfigDiffer.categorize("/calibrationConfig/productivityGateMode"));
     }
 
     @Test
@@ -82,7 +82,9 @@ class TrialConfigDifferTest {
         TrialConfig base = baseConfig();
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(), new IdlePolicy(51_000L, 0L, 0L, 0L, 0L));
+                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
+                new IdlePolicy(51_000L, 0L, 0L, 0L, 0L),
+                ParetoWeights.DEFAULT);
 
         TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
 
@@ -101,7 +103,9 @@ class TrialConfigDifferTest {
         TrialConfig base = baseConfig();
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                new BodyCostWeights(100, 140, 220, 300), FragmentDecisionWeights.DEFAULT.idleTimeNs());
+                new BodyCostWeights(100, 140, 220, 300),
+                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
+                ParetoWeights.DEFAULT);
 
         TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
 

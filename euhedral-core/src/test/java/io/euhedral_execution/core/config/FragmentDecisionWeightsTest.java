@@ -2,12 +2,14 @@ package io.euhedral_execution.core.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import org.junit.jupiter.api.Test;
 
 class FragmentDecisionWeightsTest {
@@ -17,19 +19,25 @@ class FragmentDecisionWeightsTest {
         FragmentDecisionWeights weights = FragmentDecisionWeights.DEFAULT;
 
         assertNotNull(weights);
-        assertEquals(BodyCostWeights.DEFAULTS, weights.idleBodyCostWeights());
-        assertEquals(IdlePolicy.DEFAULT, weights.idleTimeNs());
+        assertEquals(FragmentDecisionWeights.BodyCostWeights.DEFAULTS, weights.idleBodyCostWeights());
+        assertEquals(FragmentDecisionWeights.IdlePolicy.DEFAULT, weights.idleTimeNs());
         assertEquals(new IdlePolicy(50_000, 0, 0, 0, 0), weights.idleTimeNs());
     }
 
     @Test
     void constructor_withNullIdleBodyCostWeights_throwsNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new FragmentDecisionWeights(null, IdlePolicy.DEFAULT));
+        assertThrows(
+                NullPointerException.class,
+                () -> new FragmentDecisionWeights(
+                        null, FragmentDecisionWeights.IdlePolicy.DEFAULT, ParetoWeights.DEFAULT));
     }
 
     @Test
     void constructor_withNullIdleTimeNs_throwsNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new FragmentDecisionWeights(BodyCostWeights.DEFAULTS, null));
+        assertThrows(
+                NullPointerException.class,
+                () -> new FragmentDecisionWeights(
+                        FragmentDecisionWeights.BodyCostWeights.DEFAULTS, null, ParetoWeights.DEFAULT));
     }
 
     @Test
@@ -48,13 +56,16 @@ class FragmentDecisionWeightsTest {
     @Test
     void equalsAndHashCode_verifyRecordContract() {
         FragmentDecisionWeights weights1 = FragmentDecisionWeights.DEFAULT;
-        FragmentDecisionWeights weights2 = new FragmentDecisionWeights(BodyCostWeights.DEFAULTS, IdlePolicy.DEFAULT);
-        FragmentDecisionWeights weights3 =
-                new FragmentDecisionWeights(new BodyCostWeights(10, 20, 30, 40), IdlePolicy.DEFAULT);
+        FragmentDecisionWeights weights2 = new FragmentDecisionWeights(
+                FragmentDecisionWeights.BodyCostWeights.DEFAULTS,
+                FragmentDecisionWeights.IdlePolicy.DEFAULT,
+                ParetoWeights.DEFAULT);
+        FragmentDecisionWeights weights3 = new FragmentDecisionWeights(
+                new BodyCostWeights(10, 20, 30, 40), FragmentDecisionWeights.IdlePolicy.DEFAULT, ParetoWeights.DEFAULT);
 
         assertEquals(weights1, weights2);
         assertEquals(weights1.hashCode(), weights2.hashCode());
         assertNotNull(weights1.toString());
-        assertFalse(weights1.equals(weights3));
+        assertNotEquals(weights1, weights3);
     }
 }

@@ -33,6 +33,10 @@ import calibration.statistics.iteration.ScalarSummary;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.TextNode;
+import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -103,7 +107,7 @@ class ComparisonExportTest {
             String name,
             String group,
             String sourcePath,
-            io.euhedral_execution.core.config.FragmentDecisionWeights decisionWeights,
+            FragmentDecisionWeights decisionWeights,
             double baseScore,
             int metricOffset) {
         RunIdentity identity = new RunIdentity(id, name, group, 0, null, sourcePath);
@@ -117,9 +121,7 @@ class ComparisonExportTest {
                 1000L,
                 5000L,
                 null,
-                decisionWeights != null
-                        ? decisionWeights
-                        : io.euhedral_execution.core.config.FragmentDecisionWeights.DEFAULT,
+                decisionWeights != null ? decisionWeights : FragmentDecisionWeights.DEFAULT,
                 1024,
                 true,
                 true,
@@ -162,15 +164,14 @@ class ComparisonExportTest {
     }
 
     private static ComparisonResult createPopulatedComparisonResult() {
-        var baseWeights = io.euhedral_execution.core.config.FragmentDecisionWeights.DEFAULT;
+        var baseWeights = FragmentDecisionWeights.DEFAULT;
 
-        var cand1Weights = new io.euhedral_execution.core.config.FragmentDecisionWeights(
-                new io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights(100, 140, 220, 300),
-                baseWeights.idleTimeNs());
-        var cand2Weights = new io.euhedral_execution.core.config.FragmentDecisionWeights(
+        var cand1Weights = new FragmentDecisionWeights(
+                new BodyCostWeights(100, 140, 220, 300), baseWeights.idleTimeNs(), ParetoWeights.DEFAULT);
+        var cand2Weights = new FragmentDecisionWeights(
                 baseWeights.idleBodyCostWeights(),
-                new io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy(
-                        2_000L, 0L, 5_000L, 5_000L, 5_000L));
+                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L),
+                ParetoWeights.DEFAULT);
 
         CompletedRun baseline =
                 createCompletedRun("base-trial", "Baseline Trial", "grp-1", "/runs/base", baseWeights, 1000.0, 0);

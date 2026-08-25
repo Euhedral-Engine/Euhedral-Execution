@@ -14,9 +14,10 @@ import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 
@@ -30,7 +31,7 @@ class FragmentDecisionTreeTest {
     }
 
     private static FragmentDecisionWeights createCustomWeights(BodyCostWeights bodyWeights, IdlePolicy idlePolicy) {
-        return new FragmentDecisionWeights(bodyWeights, idlePolicy);
+        return new FragmentDecisionWeights(bodyWeights, idlePolicy, ParetoWeights.DEFAULT);
     }
 
     private static void populateBodyCosts(FragmentDecisionTree tree, int count, long valueNs) {
@@ -55,7 +56,7 @@ class FragmentDecisionTreeTest {
         assertEquals(2L, tree.completeBatch(16L));
 
         // When upstream handles is 0, executionPath returns SKIP_THEN_DIRECT
-        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 4, 100L));
+        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 0L, 4, 100L, 0));
     }
 
     @Test
@@ -112,7 +113,7 @@ class FragmentDecisionTreeTest {
         tree.recordBodyCost(-50L);
 
         // Less than 32 samples will keep execution path returning DIRECT
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 4, 100L));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0));
     }
 
     @Test
@@ -126,7 +127,7 @@ class FragmentDecisionTreeTest {
 
         // With history count 31 < 32 (BODY_COST_MIN_HISTORY), executionPath returns DIRECT early without calling
         // observer
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 4, 100L));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0));
         verify(observer, never())
                 .execBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
@@ -147,7 +148,7 @@ class FragmentDecisionTreeTest {
         assertEquals(200.0, tree.smoothedBodyCostNs());
 
         // Now history count is 32 >= BODY_COST_MIN_HISTORY. Second minimum (200.0) should be active.
-        tree.executionPath(1L, 1L, 2L, 4, 100L);
+        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE),
@@ -168,7 +169,7 @@ class FragmentDecisionTreeTest {
         // All 32 samples are 75ns: minimum = 75.0, secondMinimum = 75.0
         populateBodyCosts(tree, 32, 75L);
 
-        tree.executionPath(1L, 1L, 2L, 4, 100L);
+        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(75.0));
@@ -183,7 +184,7 @@ class FragmentDecisionTreeTest {
         populateBodyCosts(tree, 32, 50_000_000L);
 
         // Window 1: expensiveConfirmationWindows = 1 < 2, smoothedBodyCostNs remains 0.0
-        tree.executionPath(1L, 1L, 2L, 4, 100L);
+        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(0.0));
@@ -194,7 +195,7 @@ class FragmentDecisionTreeTest {
         populateBodyCosts(tree, 32, 50_000_000L);
 
         // expensiveConfirmationWindows reaches 2, smoothedBodyCostNs updates to 50_000_000.0
-        tree.executionPath(2L, 1L, 2L, 4, 100L);
+        tree.executionPath(2L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(2L), eq(1L), anyInt(), anyInt(), eq(100L), eq(50_000_000.0));
@@ -203,7 +204,7 @@ class FragmentDecisionTreeTest {
 
         // Window 3: Provide a 3rd window of expensive work (covers expensiveConfirmationWindows >= 2 branch)
         populateBodyCosts(tree, 32, 50_000_000L);
-        tree.executionPath(3L, 1L, 2L, 4, 100L);
+        tree.executionPath(3L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(3L), eq(1L), anyInt(), anyInt(), eq(100L), eq(50_000_000.0));
@@ -221,7 +222,7 @@ class FragmentDecisionTreeTest {
         // immediately)
         populateBodyCosts(tree, 32, 150L);
 
-        tree.executionPath(1L, 1L, 2L, 4, 100L);
+        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(150.0));
@@ -231,14 +232,16 @@ class FragmentDecisionTreeTest {
     void recordBodyCost_circularBufferUpdatesEvery32Samples() {
         FragmentObserver observer = mock(FragmentObserver.class);
         FragmentDecisionTree tree = new FragmentDecisionTree(
-                createCustomWeights(new BodyCostWeights(10_000, 10_000, 10_000, 10_000), IdlePolicy.DEFAULT),
+                createCustomWeights(
+                        new BodyCostWeights(10_000, 10_000, 10_000, 10_000),
+                        FragmentDecisionWeights.IdlePolicy.DEFAULT),
                 observer,
                 TEST_CORE,
                 TEST_SOCKET);
 
         // Window 1: 32 samples of 100ns -> second minimum 100.0
         populateBodyCosts(tree, 32, 100L);
-        tree.executionPath(1L, 1L, 2L, 4, 100L);
+        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(100.0));
@@ -247,7 +250,7 @@ class FragmentDecisionTreeTest {
 
         // Window 2: 32 samples of 300ns -> circular buffer overwrites, second minimum becomes 300.0
         populateBodyCosts(tree, 32, 300L);
-        tree.executionPath(2L, 1L, 2L, 4, 100L);
+        tree.executionPath(2L, 1L, 2L, 2L, 4, 100L, 0);
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(2L), eq(1L), anyInt(), anyInt(), eq(100L), eq(300.0));
@@ -325,7 +328,7 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(null);
         populateBodyCosts(tree, 32, 100L);
 
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(1L, 1L, 2L, 4, 900_000L));
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(1L, 1L, 2L, 2L, 4, 900_000L, 0));
 
         // STAGED target is 8_000_000 ns. Set service time to 10_000 ns.
         // raw = 8_000_000 / 10_000 = 800. highestOneBit(800) = 512. Desired = 512.
@@ -545,7 +548,7 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 4, 100L));
+        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 0L, 4, 100L, 0));
         verify(observer, never())
                 .execBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
@@ -557,8 +560,8 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 1, 100L));
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 0, 100L));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 1, 100L, 0));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 0, 100L, 0));
         verify(observer, never())
                 .execBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
@@ -570,7 +573,7 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 31, 100L);
 
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 4, 100L));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0));
         verify(observer, never())
                 .execBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
@@ -582,8 +585,8 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 100L);
 
-        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 4, 100L));
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(2L, 1L, 2L, 4, 100L));
+        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 0L, 0L, 4, 100L, 0));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(2L, 1L, 2L, 2L, 4, 100L, 0));
         verify(observer, never())
                 .execBranchDecision(
                         anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
@@ -595,10 +598,10 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(observer);
         populateBodyCosts(tree, 32, 1L);
 
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 4, 850_000L));
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 850_000L, 0));
         verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 850_000L, 1.0);
 
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(2L, 1L, 2L, 4, 850_001L));
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(2L, 1L, 2L, 2L, 4, 850_001L, 0));
         verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
     }
 
@@ -607,7 +610,44 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(null);
         populateBodyCosts(tree, 32, 100L);
 
-        ExecutionPath path = tree.executionPath(1L, 1L, 2L, 4, 100L);
+        ExecutionPath path = tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0);
         assertEquals(ExecutionPath.DIRECT, path);
+    }
+
+    @Test
+    void executionPath_withProductiveHandlesAndWorkerRank() {
+        FragmentObserver observer = mock(FragmentObserver.class);
+        FragmentDecisionTree tree = createDefaultTree(observer);
+        populateBodyCosts(tree, 32, 1L);
+
+        // Zero upstream handles -> SKIP_THEN_DIRECT
+        assertEquals(ExecutionPath.SKIP_THEN_DIRECT, tree.executionPath(1L, 1L, 2L, 0L, 4, 100L, 2));
+
+        // Registered workers <= 1 -> DIRECT
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(2L, 1L, 2L, 2L, 1, 100L, 2));
+
+        // Low contention -> DIRECT
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(3L, 1L, 2L, 2L, 4, 850_000L, 2));
+
+        // High contention -> STAGED
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(4L, 1L, 2L, 2L, 4, 850_001L, 2));
+    }
+
+    @Test
+    void shouldCacheExecute_verifiesGuards() {
+        FragmentDecisionTree tree = createDefaultTree(null);
+        populateBodyCosts(tree, 32, 100L);
+
+        // contention <= 0.5 returns false
+        assertFalse(tree.shouldCacheExecute(0.5, 2L, 4, 2));
+        assertFalse(tree.shouldCacheExecute(0.1, 2L, 4, 2));
+
+        // workerRank <= 1 returns false
+        assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 1));
+        assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 0));
+
+        // CAN_CACHE_EXECUTE is false by default
+        assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 2));
+        assertFalse(tree.shouldCacheExecute(0.8, 0L, 4, 2));
     }
 }

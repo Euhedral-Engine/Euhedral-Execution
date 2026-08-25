@@ -264,28 +264,15 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
 
                 long idleDurationSelectedNs = -1L;
-                boolean productivityParked = false;
                 if (localCache == 0L) {
                     long contention = this.upstreamQueue.getContention();
-                    if (productivityParkRequired()) {
-                        // Return to the owner loop after one bounded park so reset and interrupt state
-                        // are observed before this worker parks again.
-                        LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
-                        idleDurationSelectedNs = FragmentControlConfig.DEFAULT_PARK_NS;
-                        productivityParked = true;
-                        if (this.observeContentionStaleness
-                                && this.state.productivityExclusionCount < Long.MAX_VALUE) {
-                            this.state.productivityExclusionCount++;
-                        }
-                    } else {
-                        idleDurationSelectedNs = this.controlPolicy.idle(
-                                this.state.cycleEpoch,
-                                this.state.batchEpoch,
-                                this.state.upstreamCount,
-                                this.state.registeredWorkers,
-                                this.state.workerRank,
-                                contention);
-                    }
+                    idleDurationSelectedNs = this.controlPolicy.idle(
+                            this.state.cycleEpoch,
+                            this.state.batchEpoch,
+                            this.state.upstreamCount,
+                            this.state.registeredWorkers,
+                            this.state.workerRank,
+                            contention);
                     localCache = super.getLocalCacheCount();
                 }
                 if (this.observeContentionStaleness) {
@@ -296,12 +283,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                     } else {
                         this.state.consecutiveIdleDecisions = 0L;
                     }
-                }
-                if (productivityParked) {
-                    if (this.observeContentionStaleness) {
-                        recordContentionStaleness(idleDurationSelectedNs, -1, localCache, true);
-                    }
-                    continue;
                 }
 
                 if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
@@ -330,24 +311,28 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ExecutionPath path = this.controlPolicy.executionPath(
                         this.state.cycleEpoch,
                         this.state.batchEpoch,
+                        this.upstreamQueue.getProductiveHandleCount(),
                         this.upstreamQueue.getCachedUpCount(),
                         this.state.registeredWorkers,
-                        this.upstreamQueue.getContention());
+                        this.upstreamQueue.getContention(),
+                        super.getThreadRank(this.core));
                 if (this.observeContentionStaleness) {
                     recordContentionStaleness(idleDurationSelectedNs, path.ordinal(), localCache, false);
                 }
-                if (path == ExecutionPath.DIRECT) {
-                    if (limit > 0L) {
-                        long start = System.nanoTime();
-                        long count = remoteCacheExecute(limit);
-                        long end = System.nanoTime();
-                        if (count > 0L) {
-                            executionFrames += count;
-                            executionElapsedNs += end - start;
-                            processed += count;
-                            limit -= count;
-                        }
+
+                if (limit > 0L) {
+                    long start = System.nanoTime();
+                    long count = remoteCacheExecute(limit);
+                    long end = System.nanoTime();
+                    if (count > 0L) {
+                        executionFrames += count;
+                        executionElapsedNs += end - start;
+                        processed += count;
+                        limit -= count;
                     }
+                }
+
+                if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
                         long start = System.nanoTime();
                         long count = remoteExecute(context, limit);
@@ -384,31 +369,22 @@ public final class ControlPlaneFragment extends WorkRequester {
                             executionFrames += count;
                             executionElapsedNs += end - start;
                             processed += count;
-                            limit -= count;
                         }
                     }
-                    if (limit > 0L) {
-                        long start = System.nanoTime();
-                        long count = remoteExecute(context, limit);
-                        long end = System.nanoTime();
-                        if (count > 0L) {
-                            executionFrames += count;
-                            executionElapsedNs += end - start;
-                            processed += count;
-                        }
-                    }
-                } else {
+                } else if (processed <= 0 && this.controlPolicy.missRequiresPark()) {
+                    LockSupport.parkNanos(1_000L);
+                    continue;
+                } else if (processed <= 0) {
+                    Thread.onSpinWait();
                     continue;
                 }
 
                 this.state.completed += processed;
                 long nowNs = System.nanoTime();
-                if (processed > 0L) {
-                    recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
-                    this.controlPolicy.recordProgress();
-                    Thread.onSpinWait();
-                } else if (this.controlPolicy.missRequiresPark()) {
-                    LockSupport.parkNanos(1_000L);
+                recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
+                this.controlPolicy.recordProgress();
+                if (path == ExecutionPath.CACHE) {
+                    LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
                 } else {
                     Thread.onSpinWait();
                 }
@@ -433,10 +409,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private void recordContentionStaleness(
-            long idleDurationSelectedNs,
-            int executionPath,
-            long localCacheCount,
-            boolean productivityExcluded) {
+            long idleDurationSelectedNs, int executionPath, long localCacheCount, boolean productivityExcluded) {
         long observationCount = this.upstreamQueue.getContentionObservationCount();
         if (observationCount != this.state.lastContentionObservationCount) {
             this.state.lastContentionObservationCount = observationCount;

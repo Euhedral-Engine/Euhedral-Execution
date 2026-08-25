@@ -14,8 +14,9 @@ import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.TrialConfig;
 import calibration.statistics.fork.SystemForkResult;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -90,7 +91,8 @@ class ComparisonCompatibilityAnalyzerTest {
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
                 FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L));
+                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L),
+                ParetoWeights.DEFAULT);
 
         TrialConfig candConfig =
                 baseConfig.withCalibrationConfig(baseConfig.calibrationConfig().withDecisionWeights(modifiedWeights));
@@ -110,7 +112,9 @@ class ComparisonCompatibilityAnalyzerTest {
         TrialConfig baseConfig = baseTrialConfig();
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                new BodyCostWeights(100, 140, 220, 300), FragmentDecisionWeights.DEFAULT.idleTimeNs());
+                new BodyCostWeights(100, 140, 220, 300),
+                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
+                ParetoWeights.DEFAULT);
 
         TrialConfig candConfig = new TrialConfig(
                 "trial_2",
@@ -180,7 +184,9 @@ class ComparisonCompatibilityAnalyzerTest {
         TrialConfig baseConfig = baseTrialConfig();
 
         FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                new BodyCostWeights(100, 140, 220, 300), FragmentDecisionWeights.DEFAULT.idleTimeNs());
+                new BodyCostWeights(100, 140, 220, 300),
+                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
+                ParetoWeights.DEFAULT);
 
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
         CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(

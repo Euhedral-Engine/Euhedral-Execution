@@ -82,14 +82,4 @@ public abstract class WorkRequester extends ControlPlaneCache {
             context.upstream.request(demand);
         }
     }
-
-    protected void request(FlowThread.FlowContext context, long remoteCache, long localCache, long batchSize) {
-        long demand = batchSize * this.pullMultiplier;
-
-        if ((remoteCache + localCache) < demand) {
-            demand *= SystemInfo.SOCKET_COUNT;
-            context.originalRequest = demand;
-            context.upstream.request(demand);
-        }
-    }
 }

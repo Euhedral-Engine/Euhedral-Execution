@@ -1,9 +1,9 @@
 package io.euhedral_execution.core.control_plane;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
+import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
 import io.euhedral_execution.core.utils.MicroCalibrator;
-import java.io.File;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
@@ -31,9 +31,10 @@ public final class FragmentControlConfig {
 
     /// Execution strategies selected only at completed-batch boundaries.
     public enum ExecutionPath {
+        CACHE,
         DIRECT,
         STAGED,
-        SKIP_THEN_DIRECT
+        SKIP_THEN_DIRECT,
     }
 
     public static final class BodyCostThresholds {
@@ -54,66 +55,22 @@ public final class FragmentControlConfig {
         public BodyCostThresholds(@NonNull MicroCalibrator calibrator, @NonNull BodyCostWeights weights) {
             Objects.requireNonNull(calibrator);
             Objects.requireNonNull(weights);
-            this.xs = calibrator.benchmark(weights.xs);
-            if (weights.xs == weights.s) {
+            this.xs = calibrator.benchmark(weights.xs());
+            if (weights.xs() == weights.s()) {
                 this.s = this.xs;
             } else {
-                this.s = calibrator.benchmark(weights.s);
+                this.s = calibrator.benchmark(weights.s());
             }
-            if (weights.s == weights.m) {
+            if (weights.s() == weights.m()) {
                 this.m = this.s;
             } else {
-                this.m = calibrator.benchmark(weights.m);
+                this.m = calibrator.benchmark(weights.m());
             }
-            if (weights.m == weights.h) {
+            if (weights.m() == weights.h()) {
                 this.h = this.m;
             } else {
-                this.h = calibrator.benchmark(weights.h);
+                this.h = calibrator.benchmark(weights.h());
             }
         }
-    }
-
-    public record BodyCostWeights(int xs, int s, int m, int h) {
-        public static final BodyCostWeights DEFAULTS;
-
-        static {
-            String prop = System.getProperty(IDLE_BODY_COST_WEIGHTS);
-            if (prop != null) {
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    DEFAULTS = mapper.readValue(new File(prop), BodyCostWeights.class);
-                } catch (Exception e) {
-                    throw new ExceptionInInitializerError(e);
-                }
-            } else {
-                DEFAULTS = new BodyCostWeights(96, 128, 216, 288);
-            }
-        }
-
-        public BodyCostWeights {
-            if (xs > s || s > m || m > h) {
-                throw new IllegalStateException("Body cost weights must be in ascending order");
-            }
-        }
-    }
-
-    public record IdlePolicy(long xsPark, long sPark, long mPark, long hPark, long xhPark) {
-        public static final IdlePolicy DEFAULT;
-
-        static {
-            String prop = System.getProperty(IDLE_POLICY_PARK_NS);
-            if (prop != null) {
-                ObjectMapper mapper = new ObjectMapper();
-                try {
-                    DEFAULT = mapper.readValue(new File(prop), IdlePolicy.class);
-                } catch (Exception e) {
-                    throw new ExceptionInInitializerError(e);
-                }
-            } else {
-                DEFAULT = new IdlePolicy(50_000, 0, 0, 0, 0);
-            }
-        }
-
-        public IdlePolicy {}
     }
 }
