@@ -260,7 +260,7 @@ Throughput remains the objective. Variance and trajectory determine whether the 
 difference is repeatable and settled; they are not separate optimization objectives. Acquisition,
 cache, and occupancy fields are explanatory diagnostics only.
 
-### Existing comparison rule
+### Uncertainty-adjusted comparison rule
 
 The harness already compares independent fork means. For arms A and B it calculates:
 
@@ -268,13 +268,15 @@ The harness already compares independent fork means. For arms A and B it calcula
 delta = mean_B - mean_A
 uncertainty = 2*sqrt(variance_A/n_A + variance_B/n_B)
 practical = 0.01*max(mean_A, mean_B)
-margin = max(uncertainty, practical)
+margin = uncertainty
 ```
 
-It reports B better if `delta > margin`, A better if `delta < -margin`, equivalent if uncertainty is
-within the practical band and `abs(delta) <= practical`, and inconclusive otherwise. The Python
-loader should reproduce this rule from the exported means, variances, and fork counts as an exact
-cross-check.
+It reports B better if `mean_B - uncertainty > mean_A`, and A better if
+`mean_A - uncertainty > mean_B`. This is equivalent to `delta > uncertainty` and
+`delta < -uncertainty`. Variance has no separate hard cutoff, and the one-percent practical band
+does not suppress a winner whose uncertainty-adjusted mean remains higher. If neither policy wins,
+the practical band can still identify a stable tie; otherwise the result is inconclusive. The
+Python loader reproduces this rule from the exported means, variances, and fork counts.
 
 ### Minimal trajectory qualification
 
@@ -284,14 +286,18 @@ Use a fixed, versioned rule rather than selecting a favorable interval after see
 2. For each fork, define the late region as the final half of ordered measurement windows, with at
    least three windows. Compute one late mean per fork. Windows remain correlated and are not added
    to the replication count.
-3. Mark a fork's late region stable when all windows are continuously fed, its throughput CV is at
-   most 5%, and the absolute least-squares slope is at most 1% of the late mean per window. Keep
-   these thresholds in the training configuration.
-4. Apply the existing variance-aware comparison rule to the per-fork late means.
-5. If whole-run and stable-late outcomes name the same winner, use that winner. If the whole run is
-   non-decisive but every fork shows a consistent transition to a stable late winner, use the late
-   winner with reduced confidence. If decisive outcomes conflict, or late behavior is unstable, mark
-   the pair inconclusive. A stable equivalent result is a tie.
+3. Require every late region to remain continuously fed. Retain CV as an auditable dispersion
+   diagnostic, not an eligibility cutoff. A fork is stable when its least-squares slope is within
+   one percent of its late mean per window and improving when its slope is above that band.
+4. Classify the policy trajectory from the mean normalized slope across its independent forks. It
+   is eligible when the aggregate slope is stable or improving, meaning it is at least negative one
+   percent of the late mean per window. Individual noisy forks remain in the aggregate.
+5. Apply the uncertainty-adjusted comparison rule to the per-fork late means.
+6. If whole-run and late outcomes name the same winner, use that winner when the winning policy's
+   aggregate trajectory is stable or improving. The losing policy's trajectory is not a veto. If
+   the whole run is non-decisive but the late result names an eligible winner, use it with reduced
+   confidence. Decisive conflicts, starvation, insufficient windows, or a declining winning-policy
+   trajectory remain inconclusive. A stable equivalent result is a tie.
 
 This gives the requested examples the intended treatment:
 
@@ -315,8 +321,8 @@ pairWeight = min(1, separation / 2)
 ```
 
 This is zero at the decision boundary and reaches one when the observed delta is at least three
-times the governing margin. The governing margin already incorporates across-JVM variance. Multiply
-by `1.0` for stable whole/late agreement or `0.5` for a qualified convergence-only winner.
+times the governing margin. The governing margin is the across-JVM throughput uncertainty.
+Multiply by `1.0` for whole/late agreement or `0.5` for a qualified convergence-only winner.
 
 For a stable equivalent pair, use:
 

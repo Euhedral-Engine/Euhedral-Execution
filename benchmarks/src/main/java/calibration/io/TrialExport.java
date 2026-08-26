@@ -43,7 +43,7 @@ public final class TrialExport {
     private static final String[] SEGMENTS_3 = {"head", "steadyState", "combined"};
     private static final String[] SEGMENTS_2 = {"head", "steadyState"};
     private static final String[] DECISION_TYPES = {"idle", "exec"};
-    private static final String[] EXECUTION_PATHS = {"DIRECT", "STAGED", "SKIP_THEN_DIRECT"};
+    private static final String[] EXECUTION_PATHS = {"CACHE", "DIRECT", "STAGED", "SKIP_THEN_DIRECT"};
 
     private TrialExport() {}
 

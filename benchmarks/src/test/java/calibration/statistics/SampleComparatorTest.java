@@ -26,7 +26,7 @@ class SampleComparatorTest {
         assertEquals(-50.0, comparison.delta(), EPSILON);
         assertEquals(2.0 * Math.sqrt(0.01 + 0.01), comparison.uncertainty(), EPSILON);
         assertEquals(0.01 * 100.0, comparison.practical(), EPSILON);
-        assertEquals(Math.max(comparison.uncertainty(), comparison.practical()), comparison.margin(), EPSILON);
+        assertEquals(comparison.uncertainty(), comparison.margin(), EPSILON);
     }
 
     @Test
@@ -62,11 +62,11 @@ class SampleComparatorTest {
         assertEquals(0.0, comparison.delta(), EPSILON);
         assertEquals(0.0, comparison.uncertainty(), EPSILON);
         assertEquals(1.0, comparison.practical(), EPSILON);
-        assertEquals(1.0, comparison.margin(), EPSILON);
+        assertEquals(0.0, comparison.margin(), EPSILON);
     }
 
     @Test
-    void testEquivalentLowNoiseSamples() {
+    void testUncertaintyAdjustedWinnerIsNotSuppressedByPracticalBand() {
         double meanA = 100.0;
         double varianceA = 0.01;
         long countA = 100L;
@@ -77,10 +77,19 @@ class SampleComparatorTest {
 
         SampleComparison comparison = SampleComparator.compare(meanA, varianceA, countA, meanB, varianceB, countB);
 
-        assertEquals(ComparisonOutcome.EQUIVALENT, comparison.outcome());
+        assertEquals(ComparisonOutcome.B_BETTER, comparison.outcome());
         assertEquals(0.5, comparison.delta(), EPSILON);
         assertTrue(comparison.uncertainty() <= comparison.practical());
         assertTrue(Math.abs(comparison.delta()) <= comparison.practical());
+    }
+
+    @Test
+    void testEquivalentWhenDifferenceDoesNotClearUncertainty() {
+        SampleComparison comparison = SampleComparator.compare(100.0, 0.01, 100L, 100.01, 0.01, 100L);
+
+        assertEquals(ComparisonOutcome.EQUIVALENT, comparison.outcome());
+        assertTrue(Math.abs(comparison.delta()) <= comparison.uncertainty());
+        assertTrue(comparison.uncertainty() <= comparison.practical());
     }
 
     @Test

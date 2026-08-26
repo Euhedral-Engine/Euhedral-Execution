@@ -115,13 +115,13 @@ class PerformanceComparisonCalculatorTest {
     }
 
     @Test
-    void testSmallStableDifferenceInsidePracticalThresholdReturnsEquivalent() {
+    void testUncertaintyAdjustedWinnerInsidePracticalThresholdReturnsBetter() {
         CompletedRun base = createRun("base", List.of(100.0, 100.01, 99.99, 100.0));
         CompletedRun cand = createRun("cand", List.of(100.05, 100.06, 100.04, 100.05));
 
         PerformanceComparison perf = PerformanceComparisonCalculator.compare(base, cand);
         assertNotNull(perf);
-        assertEquals(ComparisonOutcome.EQUIVALENT, perf.outcome());
+        assertEquals(ComparisonOutcome.B_BETTER, perf.outcome());
         assertEquals(0.05, perf.absoluteDelta(), 1e-6);
         assertEquals(0.05, perf.relativeDeltaPercent(), 1e-4);
     }

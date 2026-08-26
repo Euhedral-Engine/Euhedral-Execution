@@ -3,7 +3,7 @@ package calibration.statistics;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 
-/// Variance-aware comparison for two completed Welford samples.
+/// Lower-confidence-bound comparison for two completed Welford samples.
 public final class SampleComparator {
 
     private SampleComparator() {}
@@ -34,7 +34,7 @@ public final class SampleComparator {
         double delta = meanB - meanA;
         double uncertainty = 2.0 * Math.sqrt((varianceA / countA) + (varianceB / countB));
         double practical = 0.01 * Math.max(meanA, meanB);
-        double margin = Math.max(uncertainty, practical);
+        double margin = uncertainty;
 
         ComparisonOutcome outcome;
         if (delta > margin) {

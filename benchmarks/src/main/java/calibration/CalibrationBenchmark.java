@@ -21,6 +21,7 @@ import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -188,6 +189,18 @@ public class CalibrationBenchmark {
         }
         validateForcedActiveParticipantCount(cpuSet, this.calibrationConfig.forcedActiveParticipantCount());
         pinHarnessThread(cpuSet);
+        if (this.calibrationConfig.forcedActiveParticipantCount() != null) {
+            System.setProperty(
+                    FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT,
+                    this.calibrationConfig.forcedActiveParticipantCount().toString());
+        } else {
+            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        }
+        if (this.calibrationConfig.cacheParkNs() != null) {
+            System.setProperty(
+                    FragmentControlConfig.CACHE_PARK_NS,
+                    this.calibrationConfig.cacheParkNs().toString());
+        }
         this.observer = new BenchmarkObserver(this.calibrationConfig);
         if (this.calibrationConfig.observePullConvoy()
                 && this.calibrationConfig.pullBucketTreatments().size() != this.trialConfig.iterations()) {
@@ -414,6 +427,8 @@ public class CalibrationBenchmark {
                     this.measurementTreatments,
                     forkMeasurementMetrics);
         }
+        System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        System.clearProperty(FragmentControlConfig.CACHE_PARK_NS);
     }
 
     @State(Scope.Thread)
