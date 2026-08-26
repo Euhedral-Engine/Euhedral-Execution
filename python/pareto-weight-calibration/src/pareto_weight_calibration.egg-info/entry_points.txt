@@ -1,0 +1,2 @@
+[console_scripts]
+pareto-calibration = pareto_weight_calibration.cli:main

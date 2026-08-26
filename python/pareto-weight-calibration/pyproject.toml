@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pareto-weight-calibration"
+version = "0.1.0"
+description = "External Python loader and Pareto-weight calibration trainer for Euhedral Execution"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Euhedral Execution Team" }
+]
+dependencies = [
+    "numpy>=1.26.0",
+    "scipy>=1.12.0",
+    "pydantic>=2.6.0"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov"
+]
+
+[project.scripts]
+pareto-calibration = "pareto_weight_calibration.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-v --strict-markers"

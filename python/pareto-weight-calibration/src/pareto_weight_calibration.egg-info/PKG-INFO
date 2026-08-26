@@ -1,0 +1,39 @@
+Metadata-Version: 2.4
+Name: pareto-weight-calibration
+Version: 0.1.0
+Summary: External Python loader and Pareto-weight calibration trainer for Euhedral Execution
+Author: Euhedral Execution Team
+Requires-Python: >=3.12
+Description-Content-Type: text/markdown
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: scipy>=1.12.0
+Requires-Dist: pydantic>=2.6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0.0; extra == "dev"
+Requires-Dist: pytest-cov; extra == "dev"
+
+# Pareto Weight Calibration Python Module
+
+This module implements the external calibration pipeline for the eight CACHE-participation coefficients in Euhedral Execution.
+
+See [`docs/design/productivity-participation-python-training-plan.md`](../../docs/design/productivity-participation-python-training-plan.md) and [`docs/design/step-2-python-loader-plan.md`](../../docs/design/step-2-python-loader-plan.md) for full design and architecture specifications.
+
+## Installation
+
+```bash
+cd python/pareto-weight-calibration
+pip install -e ".[dev]"
+```
+
+## CLI Usage
+
+```bash
+# Validate dataset manifest and checksums
+python -m pareto_weight_calibration validate --manifest path/to/manifest.json
+
+# Ingest and export joined pairs
+python -m pareto_weight_calibration load --manifest path/to/manifest.json --output pairs.tsv
+
+# Summarize pairs dataset
+python -m pareto_weight_calibration summary --pairs pairs.tsv
+```
