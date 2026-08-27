@@ -1,4 +1,4 @@
-"""Step 5 Phase 5 Diagnostics and Runtime Parity Verification.
+"""Coefficient-fitting diagnostics and runtime parity verification.
 
 Diagnostics:
     1. Python evaluator parity (marginal dot-product vs unrolled direct physical formula)

@@ -1,4 +1,4 @@
-"""Tests for Step 5 Phase 5 diagnostics (evaluator parity, fixed-state prefix, S_ref stability, ablation, sensitivity)."""
+"""Tests for fitting diagnostics: evaluator parity, prefix, stability, ablation, and sensitivity."""
 
 from __future__ import annotations
 

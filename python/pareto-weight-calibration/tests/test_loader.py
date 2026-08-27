@@ -73,6 +73,10 @@ def test_export_and_cli(mock_run_pair: dict, tmp_path: Path):
     assert row["y"] == "1.0"
     assert float(row["pairWeight"]) > 0.5
     assert row["wholeRunOutcome"] == "K_MINUS_1_WINS"
+    assert row["effectiveOutcome"] == "K_MINUS_1_WINS"
+    assert row["labelEvidenceBasis"] == "WHOLE_AGREEMENT"
+    assert float(row["basisThroughput_K"]) > 0.0
+    assert float(row["basisThroughput_KMinus1"]) > 0.0
 
     # Test CLI summary
     rc_sum = cli_main(["summary", "--pairs", str(out_tsv)])

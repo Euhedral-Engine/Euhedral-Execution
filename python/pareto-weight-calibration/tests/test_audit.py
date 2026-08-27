@@ -19,6 +19,7 @@ from pareto_weight_calibration.types import (
   ActiveStateFeatures,
   ArmPerformance,
   ArtifactEligibility,
+  LabelEvidenceBasis,
   Outcome,
   PairRecord,
   TrajectoryStatus,
@@ -49,6 +50,13 @@ def _make_dummy_record(
       R=R,
       K=K,
   )
+  effective_outcome = (
+    Outcome.K_WINS
+    if y == 0.0
+    else Outcome.K_MINUS_1_WINS
+    if y == 1.0
+    else Outcome.STABLE_TIE
+  )
   return PairRecord(
       pair_id=pair_id,
       topology_id=f"top-{R}",
@@ -76,6 +84,18 @@ def _make_dummy_record(
       k_run_path=Path("/tmp/k"),
       k_minus_1_run_path=Path("/tmp/k_minus_1"),
       eligibility=eligibility,
+      effective_outcome=effective_outcome,
+      label_evidence_basis=(
+        LabelEvidenceBasis.STABLE_TIE
+        if effective_outcome == Outcome.STABLE_TIE
+        else LabelEvidenceBasis.WHOLE_AGREEMENT
+      ),
+      basis_throughput_k=perf.mean,
+      basis_throughput_k_minus_1=perf.mean,
+      basis_delta=0.0,
+      basis_variance_k=perf.variance,
+      basis_variance_k_minus_1=perf.variance,
+      basis_uncertainty=0.1,
   )
 
 
@@ -137,6 +157,23 @@ def test_dataset_assembly_filters_ineligible():
   assert len(ds.records) == 1
   assert ds.records[0].pair_id == "r1"
   assert ds.X.shape == (1, 8)
+
+
+def test_frozen_dataset_rejects_any_excluded_record():
+  """A frozen training manifest must not silently discard a declared row."""
+  records = [
+    _make_dummy_record(
+        "positive", K=2, R=23, S=2, WU=112, c=0.5,
+        body_cost=100.0, P=2.0, y=0.0, weight=1.0,
+    ),
+    _make_dummy_record(
+        "zero", K=3, R=23, S=2, WU=112, c=0.5,
+        body_cost=100.0, P=2.0, y=0.5, weight=0.0,
+    ),
+  ]
+
+  with pytest.raises(ValueError, match="zero: confidence v=0.0 is not > 0.0"):
+    build_dataset(records, require_all_records_retained=True)
 
 
 def test_lapack_rank_and_svd():

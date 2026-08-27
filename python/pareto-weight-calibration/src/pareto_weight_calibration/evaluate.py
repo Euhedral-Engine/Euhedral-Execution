@@ -67,37 +67,36 @@ def extract_record_evidence_basis(
 ) -> Tuple[float, float, float, float, Outcome, LabelEvidenceBasis]:
   """Extracts throughputs, delta, uncertainty, outcome, and evidence basis for a record."""
   outcome = record.effective_outcome
-  if outcome == Outcome.INCONCLUSIVE or outcome is None:
-    if record.y == 0.0:
-      outcome = Outcome.K_WINS
-    elif record.y == 1.0:
-      outcome = Outcome.K_MINUS_1_WINS
-    elif record.y == 0.5:
-      outcome = Outcome.STABLE_TIE
-    else:
-      outcome = record.whole_outcome
-
   basis = record.label_evidence_basis
-  if basis == LabelEvidenceBasis.NONE or basis is None:
-    if outcome == Outcome.STABLE_TIE:
-      basis = LabelEvidenceBasis.STABLE_TIE
-    else:
-      basis = LabelEvidenceBasis.WHOLE_AGREEMENT
+  expected_y = {
+    Outcome.K_WINS: 0.0,
+    Outcome.K_MINUS_1_WINS: 1.0,
+    Outcome.STABLE_TIE: 0.5,
+  }.get(outcome)
+  if expected_y is None:
+    raise ValueError(
+        f"Record {record.pair_id} has non-training effective outcome {outcome.value}"
+    )
+  if record.y != expected_y:
+    raise ValueError(
+        f"Record {record.pair_id} has y={record.y}, expected {expected_y} for {outcome.value}"
+    )
+  if basis == LabelEvidenceBasis.NONE:
+    raise ValueError(
+      f"Record {record.pair_id} has no frozen label evidence basis")
+  if record.basis_throughput_k <= 0.0 or record.basis_throughput_k_minus_1 <= 0.0:
+    raise ValueError(
+        f"Record {record.pair_id} lacks positive throughput values from its frozen evidence basis"
+    )
 
-  if record.basis_throughput_k > 0.0 or record.basis_throughput_k_minus_1 > 0.0:
-    t_k = record.basis_throughput_k
-    t_k_minus_1 = record.basis_throughput_k_minus_1
-    delta = record.basis_delta
-    uncertainty = record.basis_uncertainty
-  else:
-    if basis == LabelEvidenceBasis.LATE_CONVERGENCE:
-      t_k = record.perf_k.late_mean
-      t_k_minus_1 = record.perf_k_minus_1.late_mean
-    else:
-      t_k = record.perf_k.mean
-      t_k_minus_1 = record.perf_k_minus_1.mean
-    delta = t_k_minus_1 - t_k
-    uncertainty = record.uncertainty
+  t_k = record.basis_throughput_k
+  t_k_minus_1 = record.basis_throughput_k_minus_1
+  delta = record.basis_delta
+  uncertainty = record.basis_uncertainty
+  if not np.isfinite(
+      [t_k, t_k_minus_1, delta, uncertainty]).all() or uncertainty < 0.0:
+    raise ValueError(
+      f"Record {record.pair_id} has invalid frozen performance evidence")
 
   return t_k, t_k_minus_1, delta, uncertainty, outcome, basis
 

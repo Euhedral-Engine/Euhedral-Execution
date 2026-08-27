@@ -81,11 +81,11 @@ def compute_bounded_family_influence(
     fc = family_counts[fam]
     fc["total_rows"] += 1
     fc["raw_weight_sum"] += w
-    if r.y == 0.0:
+    if r.effective_outcome == Outcome.K_WINS:
       fc["k_wins"] += 1
-    elif r.y == 1.0:
+    elif r.effective_outcome == Outcome.K_MINUS_1_WINS:
       fc["k_minus_1_wins"] += 1
-    elif r.y == 0.5:
+    elif r.effective_outcome == Outcome.STABLE_TIE:
       fc["stable_tie"] += 1
 
   # familyScale(F) = 1 / max(1.0, sum(v_j))
@@ -113,6 +113,7 @@ def build_dataset(
     records: List[PairRecord],
     min_weight: float = 0.0,
     require_eligible_only: bool = True,
+    require_all_records_retained: bool = False,
 ) -> Dataset:
   """Assembles X, y, v, u, and physical families from PairRecord list.
 
@@ -125,11 +126,41 @@ def build_dataset(
       Dataset dataclass.
   """
   eligible: List[PairRecord] = []
+  excluded: List[str] = []
   for r in records:
     if require_eligible_only and r.eligibility != ArtifactEligibility.ELIGIBLE:
+      excluded.append(
+        f"{r.pair_id}: artifact eligibility is {r.eligibility.value}")
       continue
-    if r.pair_weight > min_weight:
-      eligible.append(r)
+    if not np.isfinite(r.pair_weight) or r.pair_weight <= min_weight:
+      excluded.append(
+        f"{r.pair_id}: confidence v={r.pair_weight!r} is not > {min_weight}")
+      continue
+    expected_y = {
+      Outcome.K_WINS: 0.0,
+      Outcome.K_MINUS_1_WINS: 1.0,
+      Outcome.STABLE_TIE: 0.5,
+    }.get(r.effective_outcome)
+    if expected_y is None:
+      excluded.append(
+          f"{r.pair_id}: effective outcome {r.effective_outcome.value} is not a training outcome"
+      )
+      continue
+    if r.y != expected_y:
+      excluded.append(
+          f"{r.pair_id}: y={r.y} does not match {r.effective_outcome.value} (expected {expected_y})"
+      )
+      continue
+    if r.label_evidence_basis.value == "NONE":
+      excluded.append(f"{r.pair_id}: retained row has no label evidence basis")
+      continue
+    eligible.append(r)
+
+  if require_all_records_retained and excluded:
+    raise ValueError(
+        "Frozen training manifest contains excluded rows: " + "; ".join(
+          excluded)
+    )
 
   if not eligible:
     raise ValueError(

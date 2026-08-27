@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -101,6 +102,33 @@ class DataLoader:
                 f"Arm B (K-1={pair_decl.K - 1}) sample directory not found: {p}"
             )
 
+        frozen = pair_decl.metadata.get("frozenStep4Evidence")
+        if frozen is not None:
+          declared_config_hashes = pair_decl.metadata.get("trialConfigSha256")
+          if not isinstance(declared_config_hashes, dict):
+            raise ValueError(
+                f"Frozen training manifest pair {pair_decl.pair_id} lacks trialConfigSha256"
+            )
+          for arm_name, sample_paths in (
+              ("k", k_sample_paths),
+              ("kMinus1", k_minus_1_sample_paths),
+          ):
+            declared = declared_config_hashes.get(arm_name)
+            if not isinstance(declared, list) or len(declared) != len(
+                sample_paths):
+              raise ValueError(
+                  f"Frozen training manifest pair {pair_decl.pair_id} has invalid "
+                  f"trialConfigSha256.{arm_name}"
+              )
+            for sample_path, expected_digest in zip(sample_paths, declared):
+              config_file = sample_path / "trial_config.json"
+              actual_digest = ChecksumVerifier.compute_sha256(config_file)
+              if actual_digest != expected_digest:
+                raise ValueError(
+                    f"Frozen trial config changed for {pair_decl.pair_id}: "
+                    f"{config_file} declared={expected_digest}, regenerated={actual_digest}"
+                )
+
         # 2. Ingest trial configurations from primary sample
         config_k = load_trial_config(k_sample_paths[0])
         config_k_minus_1 = load_trial_config(k_minus_1_sample_paths[0])
@@ -149,6 +177,7 @@ class DataLoader:
             ),
             manifest,
             require_valid_r=False if "mock" in manifest.topology_id else True,
+            require_sidecars=require_sidecars,
         )
 
         if eligibility in (
@@ -254,9 +283,45 @@ class DataLoader:
             perf_b=perf_k_minus_1,
         )
 
+        if frozen is not None:
+          expected = {
+            "effectiveOutcome": synthesis.effective_outcome.value,
+            "labelEvidenceBasis": synthesis.label_evidence_basis.value,
+            "y": synthesis.y,
+            "pairWeight": synthesis.pair_weight,
+            "basisThroughputK": synthesis.basis_throughput_k,
+            "basisThroughputKMinus1": synthesis.basis_throughput_k_minus_1,
+            "basisDelta": synthesis.basis_delta,
+            "basisVarianceK": synthesis.basis_variance_k,
+            "basisVarianceKMinus1": synthesis.basis_variance_k_minus_1,
+            "basisUncertainty": synthesis.basis_uncertainty,
+          }
+          for key, actual in expected.items():
+            if key not in frozen:
+              raise ValueError(
+                  f"Frozen training manifest pair {pair_decl.pair_id} lacks {key}"
+              )
+            declared = frozen[key]
+            if isinstance(actual, float):
+              if not math.isclose(float(declared), actual, rel_tol=0.0,
+                                  abs_tol=1e-12):
+                raise ValueError(
+                    f"Frozen Step 4 evidence changed for {pair_decl.pair_id}: "
+                    f"{key} declared={declared!r}, regenerated={actual!r}"
+                )
+            elif declared != actual:
+              raise ValueError(
+                  f"Frozen Step 4 evidence changed for {pair_decl.pair_id}: "
+                  f"{key} declared={declared!r}, regenerated={actual!r}"
+              )
+
         # 11. Collect verified artifact checksums across all consumed forks
         checksums: Dict[str, str] = {}
         for idx, sp in enumerate(k_sample_paths):
+          config_file = sp / "trial_config.json"
+          checksums[f"k_arm_sample_{idx}_trial_config_sha256"] = (
+            ChecksumVerifier.compute_sha256(config_file)
+          )
           stale_files = StalenessParser.discover_staleness_files(sp)
           for s_file in stale_files:
             fork_tag = (
@@ -271,6 +336,10 @@ class DataLoader:
             checksums[fork_tag] = ChecksumVerifier.compute_sha256(t_file)
 
         for idx, sp in enumerate(k_minus_1_sample_paths):
+          config_file = sp / "trial_config.json"
+          checksums[f"k_minus_1_arm_sample_{idx}_trial_config_sha256"] = (
+            ChecksumVerifier.compute_sha256(config_file)
+          )
           stale_files = StalenessParser.discover_staleness_files(sp)
           for s_file in stale_files:
             fork_tag = f"k_minus_1_arm_sample_{idx}_{s_file.parent.name}_staleness_sha256"

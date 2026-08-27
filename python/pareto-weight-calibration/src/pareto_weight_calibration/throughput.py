@@ -45,7 +45,8 @@ class ThroughputParser:
           fork_dirs.extend(sorted(subdirs, key=lambda d: d.name))
         else:
           if (p / "benchmark_output.log").exists() or (
-              p / "trajectory_windows.tsv").exists():
+              p / "trajectory_windows.tsv"
+          ).exists():
             fork_dirs.append(p)
 
       return fork_dirs

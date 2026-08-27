@@ -1,4 +1,4 @@
-"""Dataset manifest loader, validator, and frozen Step 5 manifest generator."""
+"""Dataset manifest loader, validator, and frozen training-manifest generator."""
 
 from __future__ import annotations
 
@@ -184,7 +184,7 @@ def save_manifest(manifest: Manifest, output_path: Path) -> None:
     ],
   }
 
-  content = json.dumps(data, indent=2) + "\n"
+  content = json.dumps(data, indent=2, sort_keys=True) + "\n"
   output_path.write_text(content, encoding="utf-8")
 
   digest = hashlib.sha256(content.encode("utf-8")).hexdigest()

@@ -95,45 +95,45 @@ class StalenessParser:
                 try:
                   iter_idx = int(
                       parts[idx_iter]) if idx_iter != -1 and idx_iter < len(
-                    parts) else 0
+                      parts) else 0
                   core = int(
                       parts[idx_core]) if idx_core != -1 and idx_core < len(
-                    parts) else 0
+                      parts) else 0
                   segment = parts[idx_seg] if idx_seg != -1 and idx_seg < len(
-                    parts) else "steadyState"
+                      parts) else "steadyState"
                   sample_idx = int(
                       parts[idx_sidx]) if idx_sidx != -1 and idx_sidx < len(
-                    parts) else row_idx
+                      parts) else row_idx
                   contention = int(parts[idx_cont])
                   raw_contention = int(parts[
                                          idx_raw_cont]) if idx_raw_cont != -1 and idx_raw_cont < len(
-                    parts) else contention
+                      parts) else contention
                   obs_count = int(parts[
                                     idx_obscnt]) if idx_obscnt != -1 and idx_obscnt < len(
-                    parts) else 1
+                      parts) else 1
                   exec_path = parts[
                     idx_path] if idx_path != -1 and idx_path < len(
-                    parts) else "UNKNOWN"
+                      parts) else "UNKNOWN"
                   cache_count = int(
                       parts[idx_cache]) if idx_cache != -1 and idx_cache < len(
-                    parts) else 0
+                      parts) else 0
                   prod_handles = int(
                       parts[idx_prod]) if idx_prod != -1 and idx_prod < len(
-                    parts) else 0
+                      parts) else 0
                   reg_workers = int(parts[idx_reg])
                   rank = int(parts[idx_rank])
                   body_cost = float(
                       parts[idx_body]) if idx_body != -1 and idx_body < len(
-                    parts) else 0.0
+                      parts) else 0.0
 
                   ready_raw = parts[
                     idx_ready].lower() if idx_ready != -1 and idx_ready < len(
-                    parts) else "1"
+                      parts) else "1"
                     ready = ready_raw in ("1", "true", "t", "yes")
 
                   attempts = int(parts[
                                    idx_attempts]) if idx_attempts != -1 and idx_attempts < len(
-                    parts) else 0
+                      parts) else 0
 
                     samples.append(
                         StalenessSample(
@@ -340,21 +340,39 @@ class StalenessParser:
                 c_stale=0.0,
                 P_stale=0.0,
                 local_cache_count=0,
-                execution_path="NOT_FOUND",
+                execution_path="UNKNOWN",
                 acquisitions_attempted=0,
             )
 
-        c_stale = float(np.median([s.measured_contention / 1_000_000.0 for s in rank_samples]))
-        p_stale = float(np.median([float(s.productive_handle_count) for s in rank_samples]))
-        cache_count = int(np.median([s.local_cache_count for s in rank_samples]))
-        paths = [s.execution_path for s in rank_samples]
-        dominant_path = max(set(paths), key=paths.count) if paths else "CACHE"
-        total_attempts = sum(s.total_acquisition_attempts for s in rank_samples)
+        # Look at steadyState first
+        steady = [s for s in rank_samples if s.segment == "steadyState"]
+        target_samples = steady if steady else rank_samples
+
+        sorted_samples = sorted(
+            target_samples,
+            key=lambda s: (s.iteration, s.sample_index),
+        )
+        m = len(sorted_samples)
+        late_start = m // 2
+        late_samples = sorted_samples[late_start:] if m >= 2 else sorted_samples
+
+        c_stale = float(np.median(
+            [s.measured_contention / 1_000_000.0 for s in late_samples]))
+        p_stale = float(
+          np.median([float(s.productive_handle_count) for s in late_samples]))
+        cache_count = int(
+          np.median([s.local_cache_count for s in late_samples]))
+        attempts = int(
+          np.median([s.total_acquisition_attempts for s in late_samples]))
+
+        exec_paths = [s.execution_path for s in late_samples]
+        dominant_path = max(set(exec_paths),
+                            key=exec_paths.count) if exec_paths else "UNKNOWN"
 
         return WithdrawnDiagnosticState(
             c_stale=c_stale,
             P_stale=p_stale,
             local_cache_count=cache_count,
             execution_path=dominant_path,
-            acquisitions_attempted=total_attempts,
+            acquisitions_attempted=attempts,
         )
