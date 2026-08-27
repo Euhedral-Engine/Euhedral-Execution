@@ -112,8 +112,10 @@ class ThroughputParser:
           late_n = len(late_arr)
           late_mean_val = float(np.mean(late_arr))
           late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
-          late_cv_val = float(
-            np.sqrt(late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
+          late_cv_val = (
+            float(np.sqrt(
+              late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
+          )
 
         return ArmPerformance(
             mean=mean_val,

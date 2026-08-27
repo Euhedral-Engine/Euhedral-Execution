@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
+import math
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import numpy as np
@@ -154,6 +155,7 @@ class PairRecord:
     pair_weight: float
     k_run_path: Path
     k_minus_1_run_path: Path
+    parallel_sources: int = 1
     effective_outcome: Outcome = Outcome.INCONCLUSIVE
     label_evidence_basis: LabelEvidenceBasis = LabelEvidenceBasis.NONE
     basis_throughput_k: float = 0.0
@@ -231,3 +233,89 @@ class TrialConfig:
     jvm_args: List[str]
     calibration_config: TrialCalibrationConfig
     raw_json: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DomainConfig:
+  """Deployment domain bounds for mathematical constraints and evaluation."""
+  c_min: float = 0.0
+  c_max: float = 1.0
+  body_cost_min_ns: float = 10.0
+  body_cost_max_ns: float = 5_000_000.0
+  p_min: float = 1.0
+  p_max: float = 32.0
+  r_min: int = 2
+  r_max: int = 32
+  k_min: int = 2
+
+  @property
+  def b_min(self) -> float:
+    return math.log1p(self.body_cost_min_ns)
+
+  @property
+  def b_max(self) -> float:
+    return math.log1p(self.body_cost_max_ns)
+
+  def to_dict(self) -> Dict[str, Any]:
+    return {
+      "c_min": self.c_min,
+      "c_max": self.c_max,
+      "body_cost_min_ns": self.body_cost_min_ns,
+      "body_cost_max_ns": self.body_cost_max_ns,
+      "p_min": self.p_min,
+      "p_max": self.p_max,
+      "r_min": self.r_min,
+      "r_max": self.r_max,
+      "k_min": self.k_min,
+    }
+
+  @classmethod
+  def from_dict(cls, d: Dict[str, Any]) -> DomainConfig:
+    return cls(
+        c_min=float(d.get("c_min", 0.0)),
+        c_max=float(d.get("c_max", 1.0)),
+        body_cost_min_ns=float(d.get("body_cost_min_ns", 10.0)),
+        body_cost_max_ns=float(d.get("body_cost_max_ns", 5_000_000.0)),
+        p_min=float(d.get("p_min", 1.0)),
+        p_max=float(d.get("p_max", 32.0)),
+        r_min=int(d.get("r_min", 2)),
+        r_max=int(d.get("r_max", 32)),
+        k_min=int(d.get("k_min", 2)),
+    )
+
+
+@dataclass
+class Dataset:
+  """Assembled feature matrix, labels, family groupings, and influence weights."""
+  records: List[PairRecord]
+  X: np.ndarray  # (N, 8)
+  y: np.ndarray  # (N,)
+  v: np.ndarray  # (N,) Step 4 confidence weights in (0, 1]
+  u: np.ndarray  # (N,) Bounded family influence weights
+  families: List[str]  # (N,) Physical family name for each observation
+  family_scales: Dict[str, float]
+  family_counts: Dict[str, Dict[str, Any]]
+  U: float  # sum(u_i)
+  n_eff: float  # (sum u_i)^2 / sum(u_i^2)
+
+
+@dataclass
+class IdentifiabilityAuditResult:
+  """Complete diagnostics of dataset rank, spectra, collinearity, and coverage."""
+  numerical_rank: int
+  dimension: int
+  singular_values_raw: np.ndarray
+  singular_values_weighted: np.ndarray
+  lapack_threshold: float
+  condition_number: float
+  smallest_nonzero_singular_value: float
+  is_rank_deficient: bool
+  vifs: Dict[int, float]
+  collinear_dependencies: List[str]
+  coordinate_coverage: Dict[str, Dict[str, Any]]
+  class_conditional_coverage: Dict[str, Dict[str, Any]]
+  separation_detected: bool
+  separation_details: Dict[str, Any]
+  unsupported_feature_groups: List[str]
+  effective_sample_size: float
+  total_influence_weight: float

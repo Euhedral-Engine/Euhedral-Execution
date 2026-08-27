@@ -58,8 +58,9 @@ class TrajectoryAnalyzer:
             raise FileNotFoundError(f"Trajectory file not found: {tsv_path}")
 
         if verify_checksum:
-          ChecksumVerifier.verify_file(tsv_path,
-                                       require_sidecar=require_sidecar)
+          ChecksumVerifier.verify_file(
+              tsv_path, require_sidecar=require_sidecar
+          )
 
         windows: List[WindowRecord] = []
         with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
@@ -229,8 +230,10 @@ class TrajectoryAnalyzer:
         return mean_normalized_slope >= -slope_threshold_pct
 
     @classmethod
-    def discover_trajectory_files(cls, paths: Union[Path, List[Path]]) -> List[
-      Path]:
+    def discover_trajectory_files(
+        cls,
+        paths: Union[Path, List[Path]],
+    ) -> List[Path]:
       """Discovers all trajectory_windows.tsv files across sample directories or fork subdirectories."""
       path_list = [paths] if isinstance(paths, Path) else paths
       files: List[Path] = []
@@ -241,8 +244,10 @@ class TrajectoryAnalyzer:
         if p.is_file() and p.name == "trajectory_windows.tsv":
           files.append(p)
         elif p.is_dir():
-          fork_subdirs = [sub for sub in p.iterdir() if
-                          sub.is_dir() and sub.name.startswith("fork-")]
+          fork_subdirs = [
+            sub for sub in p.iterdir()
+            if sub.is_dir() and sub.name.startswith("fork-")
+          ]
           if fork_subdirs:
             for f_dir in sorted(fork_subdirs, key=lambda d: d.name):
               f_tsv = f_dir / "trajectory_windows.tsv"
@@ -274,8 +279,9 @@ class TrajectoryAnalyzer:
       fork_analyses: List[Tuple[str, List[WindowRecord]]] = []
         for tsv in tsv_candidates:
           windows = cls.parse_trajectory_file(
-              tsv, verify_checksum=verify_checksum,
-              require_sidecar=require_sidecar
+              tsv,
+              verify_checksum=verify_checksum,
+              require_sidecar=require_sidecar,
           )
           # Group by jvm_id within file
           grouped: Dict[str, List[WindowRecord]] = {}
@@ -310,4 +316,5 @@ class TrajectoryAnalyzer:
                 )
             )
 
-        return (fork_results, cls.arm_is_stable_or_improving(fork_results))
+      arm_stable = cls.arm_is_stable_or_improving(fork_results)
+      return (fork_results, arm_stable)

@@ -21,4 +21,30 @@ dependencies {
     testAnnotationProcessor(libs.org.projectlombok.lombok)
 }
 
+tasks.test {
+    filter {
+        excludeTestsMatching("io.euhedral_execution.core.control_plane.FragmentDecisionTreeRuntimeParityTest")
+    }
+}
+
+val sourceSets = the<SourceSetContainer>()
+
+tasks.register<Test>("runtimeParityTest") {
+    description =
+        "Runs dedicated runtime parity tests with -Deuhedral.fragment.cacheExecutePath=true"
+    group = "verification"
+
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+
+    useJUnitPlatform()
+
+    filter {
+        includeTestsMatching("io.euhedral_execution.core.control_plane.FragmentDecisionTreeRuntimeParityTest")
+    }
+
+    systemProperty("euhedral.fragment.cacheExecutePath", "true")
+    jvmArgs("-Xshare:off")
+}
+
 description = "Euhedral Core"

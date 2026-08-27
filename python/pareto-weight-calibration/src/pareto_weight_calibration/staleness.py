@@ -51,8 +51,9 @@ class StalenessParser:
             raise FileNotFoundError(f"Staleness file not found: {tsv_path}")
 
         if verify_checksum:
-          ChecksumVerifier.verify_file(tsv_path,
-                                       require_sidecar=require_sidecar)
+          ChecksumVerifier.verify_file(
+              tsv_path, require_sidecar=require_sidecar
+          )
 
         samples: List[StalenessSample] = []
         with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
@@ -67,7 +68,8 @@ class StalenessParser:
           for col in req_cols:
             if col not in col_map:
               raise StalenessParseError(
-                f"TSV {tsv_path} missing required column: {col}")
+                  f"TSV {tsv_path} missing required column: {col}"
+              )
 
           idx_iter = col_map.get("iteration", -1)
           idx_core = col_map.get("core", -1)
@@ -172,8 +174,10 @@ class StalenessParser:
         if p.is_file() and p.name == "contention_staleness.tsv":
           files.append(p)
         elif p.is_dir():
-          fork_subdirs = [sub for sub in p.iterdir() if
-                          sub.is_dir() and sub.name.startswith("fork-")]
+          fork_subdirs = [
+            sub for sub in p.iterdir()
+            if sub.is_dir() and sub.name.startswith("fork-")
+          ]
           if fork_subdirs:
             for f_dir in sorted(fork_subdirs, key=lambda d: d.name):
               f_tsv = f_dir / "contention_staleness.tsv"
@@ -202,7 +206,8 @@ class StalenessParser:
       files = cls.discover_staleness_files(run_paths)
         if not files:
           raise StalenessParseError(
-            f"No contention_staleness.tsv found in {run_paths}")
+              f"No contention_staleness.tsv found in {run_paths}"
+          )
 
         per_fork_c: List[float] = []
         per_fork_body: List[float] = []
@@ -211,8 +216,9 @@ class StalenessParser:
 
         for file_path in files:
           samples = cls.parse_staleness_file(
-              file_path, verify_checksum=verify_checksum,
-              require_sidecar=require_sidecar
+              file_path,
+              verify_checksum=verify_checksum,
+              require_sidecar=require_sidecar,
           )
           # Filter for target rank, ready body history, initialized contention, finite positive body cost
             eligible = [
@@ -232,12 +238,15 @@ class StalenessParser:
                 continue
 
           # Join to fixed late half of ordered samples
-          sorted_samples = sorted(candidate_samples,
-                                  key=lambda s: (s.iteration, s.sample_index))
+          sorted_samples = sorted(
+              candidate_samples,
+              key=lambda s: (s.iteration, s.sample_index),
+          )
           m = len(sorted_samples)
           late_start = m // 2
-          late_samples = sorted_samples[
-            late_start:] if m >= 2 else sorted_samples
+          late_samples = (
+            sorted_samples[late_start:] if m >= 2 else sorted_samples
+          )
 
           if not late_samples:
             continue
@@ -319,8 +328,9 @@ class StalenessParser:
         for file_path in files:
             all_samples.extend(
                 cls.parse_staleness_file(
-                    file_path, verify_checksum=verify_checksum,
-                    require_sidecar=require_sidecar
+                    file_path,
+                    verify_checksum=verify_checksum,
+                    require_sidecar=require_sidecar,
                 )
             )
 

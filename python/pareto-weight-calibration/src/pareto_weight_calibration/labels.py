@@ -32,15 +32,21 @@ class SynthesisResult:
 
   def __iter__(self):
     """Allows unpacking as (outcome, status, y, weight) for backwards compatibility."""
-    return iter((self.effective_outcome, self.trajectory_status, self.y,
-                 self.pair_weight))
+    return iter((
+      self.effective_outcome,
+      self.trajectory_status,
+      self.y,
+      self.pair_weight,
+    ))
 
 
 class LabelSynthesizer:
     """Computes comparison metrics, target labels (y), and confidence weights."""
 
     @staticmethod
-    def _separation_weight(metrics: ComparisonMetrics, stability_factor: float = 1.0) -> float:
+    def _separation_weight(
+        metrics: ComparisonMetrics, stability_factor: float = 1.0
+    ) -> float:
         margin = metrics.governing_margin
         if margin <= 0.0:
             return stability_factor if abs(metrics.delta) > 0.0 else 0.0
@@ -132,7 +138,9 @@ class LabelSynthesizer:
         # Case 1: High-confidence stable agreement
         if whole == late and whole in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS):
             winner_eligible = (
-                arm_a_trajectory_eligible if whole == Outcome.K_WINS else arm_b_trajectory_eligible
+              arm_a_trajectory_eligible
+              if whole == Outcome.K_WINS
+              else arm_b_trajectory_eligible
             )
             if not winner_eligible:
               return SynthesisResult(
@@ -189,7 +197,8 @@ class LabelSynthesizer:
             weight = (
               max(0.0, 1.0 - abs(whole_metrics.delta) / p)
               * max(0.0, 1.0 - whole_metrics.uncertainty / p)
-              if p > 0 else 0.0
+              if p > 0
+              else 0.0
             )
             return SynthesisResult(
                 effective_outcome=effective_outcome,
@@ -206,9 +215,14 @@ class LabelSynthesizer:
             )
 
         # Case 3: Late convergence (whole-run inconclusive, but late trajectory shows consistent winner)
-        if whole == Outcome.INCONCLUSIVE and late in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS):
+      if whole == Outcome.INCONCLUSIVE and late in (
+          Outcome.K_WINS,
+          Outcome.K_MINUS_1_WINS,
+      ):
             winner_eligible = (
-                arm_a_trajectory_eligible if late == Outcome.K_WINS else arm_b_trajectory_eligible
+              arm_a_trajectory_eligible
+              if late == Outcome.K_WINS
+              else arm_b_trajectory_eligible
             )
             if not winner_eligible:
               return SynthesisResult(

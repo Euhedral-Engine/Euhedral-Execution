@@ -9,8 +9,10 @@ from typing import Dict, List, Optional, Tuple
 
 from pareto_weight_calibration.checksum import ChecksumVerifier
 from pareto_weight_calibration.config import CompatibilityAnalyzer, load_trial_config
-from pareto_weight_calibration.eligibility import EligibilityAuditor, \
-  EligibilityError
+from pareto_weight_calibration.eligibility import (
+  EligibilityAuditor,
+  EligibilityError,
+)
 from pareto_weight_calibration.labels import LabelSynthesizer
 from pareto_weight_calibration.manifest import load_manifest
 from pareto_weight_calibration.staleness import StalenessParser
@@ -91,7 +93,8 @@ class DataLoader:
         for p in k_sample_paths:
           if not p.exists() or not p.is_dir():
             raise FileNotFoundError(
-              f"Arm A (K={pair_decl.K}) sample directory not found: {p}")
+                f"Arm A (K={pair_decl.K}) sample directory not found: {p}"
+            )
         for p in k_minus_1_sample_paths:
           if not p.exists() or not p.is_dir():
             raise FileNotFoundError(
@@ -148,8 +151,10 @@ class DataLoader:
             require_valid_r=False if "mock" in manifest.topology_id else True,
         )
 
-        if eligibility in (ArtifactEligibility.INELIGIBLE,
-                           ArtifactEligibility.UNVERIFIABLE):
+        if eligibility in (
+            ArtifactEligibility.INELIGIBLE,
+            ArtifactEligibility.UNVERIFIABLE,
+        ):
           msg = f"Pair {pair_decl.pair_id} is {eligibility.value}: {'; '.join(elig_reasons)}"
           if strict_compatibility:
             raise EligibilityError(msg)
@@ -157,12 +162,14 @@ class DataLoader:
 
         # 6. Trajectory analysis for Arm A and Arm B across all pooled forks
         forks_k, stable_k = TrajectoryAnalyzer.analyze_run_directory(
-            k_sample_paths, verify_checksum=verify_checksums,
-            require_sidecar=require_sidecars
+            k_sample_paths,
+            verify_checksum=verify_checksums,
+            require_sidecar=require_sidecars,
         )
         forks_k_minus_1, stable_k_minus_1 = TrajectoryAnalyzer.analyze_run_directory(
-            k_minus_1_sample_paths, verify_checksum=verify_checksums,
-            require_sidecar=require_sidecars
+            k_minus_1_sample_paths,
+            verify_checksum=verify_checksums,
+            require_sidecar=require_sidecars,
         )
 
         if not forks_k:
@@ -184,7 +191,8 @@ class DataLoader:
               stable_k = len(forks_k) > 0
           if not forks_k:
             raise FileNotFoundError(
-              f"Missing or invalid trajectory windows for Arm A: {k_sample_paths}")
+                f"Missing or invalid trajectory windows for Arm A: {k_sample_paths}"
+            )
 
         if not forks_k_minus_1:
           if not strict_compatibility:
@@ -210,7 +218,8 @@ class DataLoader:
         # 7. Compute pooled arm performance across all discovered forks
         perf_k = ThroughputParser.compute_arm_performance(forks_k)
         perf_k_minus_1 = ThroughputParser.compute_arm_performance(
-          forks_k_minus_1)
+            forks_k_minus_1
+        )
 
         # 8. Extract authoritative active decision features from Arm A (rank K)
         features = StalenessParser.extract_active_features(
@@ -229,8 +238,12 @@ class DataLoader:
         )
 
         # 10. Compare arms and synthesize labels, weights, and evidence basis
-        whole_metrics = LabelSynthesizer.compare_arms(perf_k, perf_k_minus_1, use_late=False)
-        late_metrics = LabelSynthesizer.compare_arms(perf_k, perf_k_minus_1, use_late=True)
+        whole_metrics = LabelSynthesizer.compare_arms(
+            perf_k, perf_k_minus_1, use_late=False
+        )
+        late_metrics = LabelSynthesizer.compare_arms(
+            perf_k, perf_k_minus_1, use_late=True
+        )
 
         synthesis = LabelSynthesizer.synthesize_label_and_weight(
             whole_metrics=whole_metrics,
@@ -246,11 +259,15 @@ class DataLoader:
         for idx, sp in enumerate(k_sample_paths):
           stale_files = StalenessParser.discover_staleness_files(sp)
           for s_file in stale_files:
-            fork_tag = f"k_arm_sample_{idx}_{s_file.parent.name}_staleness_sha256"
+            fork_tag = (
+              f"k_arm_sample_{idx}_{s_file.parent.name}_staleness_sha256"
+            )
             checksums[fork_tag] = ChecksumVerifier.compute_sha256(s_file)
           traj_files = TrajectoryAnalyzer.discover_trajectory_files(sp)
           for t_file in traj_files:
-            fork_tag = f"k_arm_sample_{idx}_{t_file.parent.name}_trajectory_sha256"
+            fork_tag = (
+              f"k_arm_sample_{idx}_{t_file.parent.name}_trajectory_sha256"
+            )
             checksums[fork_tag] = ChecksumVerifier.compute_sha256(t_file)
 
         for idx, sp in enumerate(k_minus_1_sample_paths):
@@ -265,10 +282,22 @@ class DataLoader:
 
         # Maintain legacy keys for backwards compatibility with pairs.tsv export
         if checksums:
-          first_k_stale = next((v for k, v in checksums.items() if
-                                "k_arm" in k and "staleness" in k), "")
-          first_b_stale = next((v for k, v in checksums.items() if
-                                "k_minus_1" in k and "staleness" in k), "")
+          first_k_stale = next(
+              (
+                v
+                for k, v in checksums.items()
+                if "k_arm" in k and "staleness" in k
+              ),
+              "",
+          )
+          first_b_stale = next(
+              (
+                v
+                for k, v in checksums.items()
+                if "k_minus_1" in k and "staleness" in k
+              ),
+              "",
+          )
           checksums["k_run_staleness_sha256"] = first_k_stale
           checksums["k_minus_1_run_staleness_sha256"] = first_b_stale
 
@@ -281,6 +310,7 @@ class DataLoader:
             K=pair_decl.K,
             registered_workers=features.R,
             work_units=cal_k.work_units,
+            parallel_sources=cal_k.parallel_sources + cal_k.ordered_sources,
             features=features,
             withdrawn_diagnostics=withdrawn,
             perf_k=perf_k,
@@ -320,31 +350,31 @@ class DataLoader:
         strict_compatibility: bool = True,
         require_sidecars: bool = False,
     ) -> List[PairRecord]:
-        """Loads and processes all pairs in a dataset manifest.
+      """Loads and joins all pairs defined in a dataset manifest.
 
-        Args:
-            manifest_path: Path to dataset_manifest.json.
-            verify_checksums: Whether to enforce SHA-256 validation.
-            min_weight: Filter out pairs with pair_weight below this threshold.
-            strict_compatibility: Reject mismatched arms or ineligible pairs.
-            require_sidecars: Whether to require .sha256 sidecars.
+      Args:
+          manifest_path: Path to dataset_manifest.json.
+          verify_checksums: Whether to verify artifact .sha256 sidecars.
+          min_weight: Minimum pair_weight threshold to include record.
+          strict_compatibility: Whether to halt on invalid fixtures or ineligible artifacts.
+          require_sidecars: Whether to require .sha256 sidecars for all files.
 
-        Returns:
-            List of validated PairRecord objects.
-        """
-        manifest = load_manifest(manifest_path,
-                                 verify_checksum=verify_checksums)
+      Returns:
+          List of verified PairRecords.
+      """
+      manifest = load_manifest(manifest_path, verify_checksum=verify_checksums)
         records: List[PairRecord] = []
 
         for pair_decl in manifest.pairs:
-            record = cls.load_pair(
+          rec = cls.load_pair(
                 manifest=manifest,
                 pair_decl=pair_decl,
                 verify_checksums=verify_checksums,
                 strict_compatibility=strict_compatibility,
                 require_sidecars=require_sidecars,
             )
-            if record is not None and record.pair_weight >= min_weight:
-                records.append(record)
+          if rec is not None:
+            if rec.pair_weight >= min_weight:
+              records.append(rec)
 
         return records
