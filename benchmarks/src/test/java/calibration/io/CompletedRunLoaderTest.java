@@ -129,16 +129,16 @@ class CompletedRunLoaderTest {
 
         // 2. benchmark_output.log
         String logContent = """
-                # JMH version: 1.37
-                # Benchmark: calibration.benchmarks.CalibrationBenchmark.benchmark
-                # Fork: 1 of 1
-                Iteration   1: 12345.678 ops/s
-                Iteration   2: 12456.789 ops/s
-                Iteration   3: 12567.890 ops/s
+            # JMH version: 1.37
+            # Benchmark: calibration.benchmarks.CalibrationBenchmark.benchmark
+            # Fork: 1 of 1
+            Iteration   1: 12345.678 ops/s
+            Iteration   2: 12456.789 ops/s
+            Iteration   3: 12567.890 ops/s
 
-                Benchmark                                                 Mode  Cnt      Score     Error  Units
-                CalibrationBenchmark.benchmark                           thrpt    3  12456.786 +/- 123.456  ops/s
-                """;
+            Benchmark                                                 Mode  Cnt      Score     Error  Units
+            CalibrationBenchmark.benchmark                           thrpt    3  12456.786 +/- 123.456  ops/s
+            """;
         Files.writeString(runDir.resolve(Constants.BENCHMARK_OUTPUT_LOG), logContent, StandardCharsets.UTF_8);
 
         // 3. TSV exports with checksums
@@ -243,19 +243,19 @@ class CompletedRunLoaderTest {
         Files.writeString(
                 runDir.resolve("trial_config.json"), MAPPER.writeValueAsString(config), StandardCharsets.UTF_8);
         Files.writeString(runDir.resolve(Constants.BENCHMARK_OUTPUT_LOG), """
-                # Fork: 1 of 2
-                Iteration   1: 1.0 ops/s
-                                 executions: 1000.0 ops/s
-                Iteration   2: 1.0 ops/s
-                                 executions: 1200.0 ops/s
-                # Fork: 2 of 2
-                Iteration   1: 1.0 ops/s
-                                 executions: 1400.0 ops/s
-                Iteration   2: 1.0 ops/s
-                                 executions: 1600.0 ops/s
-                Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
-                  1300.0 +/- 100.0 ops/s [Average]
-                """, StandardCharsets.UTF_8);
+            # Fork: 1 of 2
+            Iteration   1: 1.0 ops/s
+                             executions: 1000.0 ops/s
+            Iteration   2: 1.0 ops/s
+                             executions: 1200.0 ops/s
+            # Fork: 2 of 2
+            Iteration   1: 1.0 ops/s
+                             executions: 1400.0 ops/s
+            Iteration   2: 1.0 ops/s
+                             executions: 1600.0 ops/s
+            Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
+              1300.0 +/- 100.0 ops/s [Average]
+            """, StandardCharsets.UTF_8);
 
         Path firstFork = runDir.resolve("fork-100-200");
         Path secondFork = runDir.resolve("fork-300-400");
@@ -424,5 +424,28 @@ class CompletedRunLoaderTest {
         TrialExport.writeChecksum(runDir.resolve(Constants.RAW_OBSERVATION_TSV));
 
         assertThrows(MalformedArtifactException.class, () -> CompletedRunLoader.load(runDir));
+    }
+
+    @Test
+    void testLoadsRunWithoutObserverData(@TempDir Path tempDir) throws Exception {
+        Path runDir = tempDir.resolve("run_no_observer");
+        Files.createDirectories(runDir);
+        TrialConfig config = createTrialConfig("no_obs", "No Observer", "g");
+        Files.writeString(
+                runDir.resolve("trial_config.json"), MAPPER.writeValueAsString(config), StandardCharsets.UTF_8);
+        Files.writeString(runDir.resolve(Constants.BENCHMARK_OUTPUT_LOG), """
+            # Fork: 1 of 1
+            Iteration   1: 1.0 ops/s
+                             executions: 5000.0 ops/s
+            Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
+              5000.0 +/- 100.0 ops/s [Average]
+            """, StandardCharsets.UTF_8);
+
+        CompletedRun run = CompletedRunLoader.load(runDir);
+        assertNotNull(run);
+        assertEquals("no_obs", run.identity().trialId());
+        assertEquals(5000.0, run.throughput().score(), 1e-6);
+        assertEquals(0L, run.system().cycleStartTotal());
+        assertEquals(0L, run.system().execDecisionTotal());
     }
 }

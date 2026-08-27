@@ -22,6 +22,9 @@ class FragmentDecisionWeightsTest {
         assertEquals(FragmentDecisionWeights.BodyCostWeights.DEFAULTS, weights.idleBodyCostWeights());
         assertEquals(FragmentDecisionWeights.IdlePolicy.DEFAULT, weights.idleTimeNs());
         assertEquals(new IdlePolicy(50_000, 0, 0, 0, 0), weights.idleTimeNs());
+        assertEquals(
+                FragmentDecisionWeights.DEFAULT_BODY_COST_DIRECT_THRESHOLD_WEIGHT,
+                weights.bodyCostDirectThresholdWeight());
     }
 
     @Test
@@ -38,6 +41,14 @@ class FragmentDecisionWeightsTest {
                 NullPointerException.class,
                 () -> new FragmentDecisionWeights(
                         FragmentDecisionWeights.BodyCostWeights.DEFAULTS, null, ParetoWeights.DEFAULT));
+    }
+
+    @Test
+    void constructor_withNegativeBodyCostDirectThresholdWeight_throwsIllegalArgumentException() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new FragmentDecisionWeights(
+                        BodyCostWeights.DEFAULTS, IdlePolicy.DEFAULT, -1, ParetoWeights.DEFAULT));
     }
 
     @Test
@@ -65,6 +76,9 @@ class FragmentDecisionWeightsTest {
                 """, FragmentDecisionWeights.class);
 
         assertEquals(ParetoWeights.DEFAULT, weights.paretoWeights());
+        assertEquals(
+                FragmentDecisionWeights.DEFAULT_BODY_COST_DIRECT_THRESHOLD_WEIGHT,
+                weights.bodyCostDirectThresholdWeight());
     }
 
     @Test

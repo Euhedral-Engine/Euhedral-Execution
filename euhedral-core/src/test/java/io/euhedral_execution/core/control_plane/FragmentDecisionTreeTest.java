@@ -615,6 +615,16 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
+    void executionPath_stagesLowContentionWhenBodyCostExceedsDirectThreshold() {
+        FragmentDecisionWeights weights =
+                new FragmentDecisionWeights(BodyCostWeights.DEFAULTS, IdlePolicy.DEFAULT, 0, ParetoWeights.DEFAULT);
+        FragmentDecisionTree tree = new FragmentDecisionTree(weights, null, TEST_CORE, TEST_SOCKET);
+        populateBodyCosts(tree, 32, 1L);
+
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 0));
+    }
+
+    @Test
     void executionPath_withProductiveHandlesAndWorkerRank() {
         FragmentObserver observer = mock(FragmentObserver.class);
         FragmentDecisionTree tree = createDefaultTree(observer);

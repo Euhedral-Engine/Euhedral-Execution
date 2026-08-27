@@ -1,6 +1,7 @@
 package io.euhedral_execution.core.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
@@ -10,15 +11,44 @@ import org.jspecify.annotations.NonNull;
 public record FragmentDecisionWeights(
         @NonNull BodyCostWeights idleBodyCostWeights,
         @NonNull IdlePolicy idleTimeNs,
+        int bodyCostDirectThresholdWeight,
         @NonNull ParetoWeights paretoWeights) {
-    public static final FragmentDecisionWeights DEFAULT =
-            new FragmentDecisionWeights(BodyCostWeights.DEFAULTS, IdlePolicy.DEFAULT, ParetoWeights.DEFAULT);
+    public static final int DEFAULT_BODY_COST_DIRECT_THRESHOLD_WEIGHT = 272;
+    public static final FragmentDecisionWeights DEFAULT = new FragmentDecisionWeights(
+            BodyCostWeights.DEFAULTS,
+            IdlePolicy.DEFAULT,
+            DEFAULT_BODY_COST_DIRECT_THRESHOLD_WEIGHT,
+            ParetoWeights.DEFAULT);
 
-    @JsonCreator
     public FragmentDecisionWeights {
         Objects.requireNonNull(idleBodyCostWeights);
         Objects.requireNonNull(idleTimeNs);
+        if (bodyCostDirectThresholdWeight < 0) {
+            throw new IllegalArgumentException("bodyCostDirectThresholdWeight must not be negative");
+        }
         paretoWeights = Objects.requireNonNullElse(paretoWeights, ParetoWeights.DEFAULT);
+    }
+
+    public FragmentDecisionWeights(
+            @NonNull BodyCostWeights idleBodyCostWeights,
+            @NonNull IdlePolicy idleTimeNs,
+            @NonNull ParetoWeights paretoWeights) {
+        this(idleBodyCostWeights, idleTimeNs, DEFAULT_BODY_COST_DIRECT_THRESHOLD_WEIGHT, paretoWeights);
+    }
+
+    @JsonCreator
+    static FragmentDecisionWeights fromJson(
+            @JsonProperty("idleBodyCostWeights") @NonNull BodyCostWeights idleBodyCostWeights,
+            @JsonProperty("idleTimeNs") @NonNull IdlePolicy idleTimeNs,
+            @JsonProperty("bodyCostDirectThresholdWeight") Integer bodyCostDirectThresholdWeight,
+            @JsonProperty("paretoWeights") ParetoWeights paretoWeights) {
+        return new FragmentDecisionWeights(
+                idleBodyCostWeights,
+                idleTimeNs,
+                bodyCostDirectThresholdWeight == null
+                        ? DEFAULT_BODY_COST_DIRECT_THRESHOLD_WEIGHT
+                        : bodyCostDirectThresholdWeight,
+                paretoWeights);
     }
 
     public record BodyCostWeights(int xs, int s, int m, int h) {

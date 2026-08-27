@@ -30,6 +30,7 @@ final class FragmentDecisionTree {
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
     static final int SPIN_MISSES = 64;
+
     private final int core;
     private final int socket;
     private final FragmentObserver observer;
@@ -39,6 +40,7 @@ final class FragmentDecisionTree {
     private final BodyCostThresholds idleBodyCostThresholds;
     private final IdlePolicy idleTimeNs;
     private final ParetoWeights paretoWeights;
+    private final long bodyCostDirectThreshold;
 
     private final long maxBodyCostThreshold;
     private final double[] bodyCostWindow = new double[BODY_COST_WINDOW_SAMPLES];
@@ -84,6 +86,7 @@ final class FragmentDecisionTree {
         this.idleTimeNs = config.idleTimeNs;
         this.maxBodyCostThreshold = this.idleBodyCostThresholds.h;
         this.paretoWeights = decisionWeights.paretoWeights();
+        this.bodyCostDirectThreshold = config.bodyCostDirectThreshold;
         reset();
     }
 
@@ -205,7 +208,7 @@ final class FragmentDecisionTree {
             return ExecutionPath.CACHE;
         }
 
-        if (contention <= CONTENTION_THRESHOLD) {
+        if (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold) {
             recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
             this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;

@@ -249,11 +249,11 @@ class ControlPlaneFragmentThreadTest {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
         System.setProperty(FragmentControlConfig.CACHE_PARK_NS, "50000");
 
-        ControlPlaneFragment fragment1 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
                         .clone(cloneConfigOnCoreIndex(0)));
-        ControlPlaneFragment fragment2 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
                         .clone(cloneConfigOnCoreIndex(1)));
         LatticeVertex distributor = connect(fragment1, fragment2);
 
@@ -302,11 +302,11 @@ class ControlPlaneFragmentThreadTest {
     void forcedCacheWorkerExecutesRemoteCachedFrame() {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
-        ControlPlaneFragment fragment1 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
                         .clone(cloneConfigOnCoreIndex(0)));
-        ControlPlaneFragment fragment2 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
                         .clone(cloneConfigOnCoreIndex(1)));
         LatticeVertex distributor = connect(fragment1, fragment2);
 
@@ -324,7 +324,8 @@ class ControlPlaneFragmentThreadTest {
                 }
 
                 @Override
-                public long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+                public long pull(
+                        Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
                     return 0;
                 }
 
@@ -362,14 +363,16 @@ class ControlPlaneFragmentThreadTest {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
         System.setProperty(FragmentControlConfig.CACHE_PARK_NS, "10000");
 
-        ControlPlaneFragment fragment1 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
                         .clone(cloneConfigOnCoreIndex(0)));
-        ControlPlaneFragment fragment2 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
                         .clone(cloneConfigOnCoreIndex(1)));
 
-        try (fragment1; fragment2; LatticeVertex ignored = connect(fragment1, fragment2)) {
+        try (fragment1;
+                fragment2;
+                LatticeVertex ignored = connect(fragment1, fragment2)) {
             fragment1.start();
             fragment2.start();
             Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
@@ -401,33 +404,99 @@ class ControlPlaneFragmentThreadTest {
             }
 
             @Override
-            protected void cycleStartState(int core, int socket, long cycleEpoch, long batchEpoch, long completed, long batchSize, long upstreamCount, int registeredWorkers, long productiveHandleCount, int workerRank, long contention, double throughput) {}
+            protected void cycleStartState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long completed,
+                    long batchSize,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double throughput) {}
 
             @Override
-            protected void batchProgressState(int core, int socket, long cycleEpoch, long batchEpoch, long upstreamCount, int registeredWorkers, long productiveHandleCount, int workerRank, long contention, double avgServiceTime) {}
+            protected void batchProgressState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime) {}
 
             @Override
-            protected void batchCompleteState(int core, int socket, long cycleEpoch, long batchEpoch, long upstreamCount, int registeredWorkers, long productiveHandleCount, int workerRank, long contention, double avgServiceTime, double throughput) {}
+            protected void batchCompleteState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime,
+                    double throughput) {}
 
             @Override
             protected void rawBodyCost(int core, int socket, long cycleEpoch, long batchEpoch, long rawBodyCost) {}
 
             @Override
-            protected void idleBranchDecision(int core, int socket, long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention, double smoothedBodyCost) {}
+            protected void idleBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
 
             @Override
-            protected void execBranchDecision(int core, int socket, long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention, double smoothedBodyCost) {}
+            protected void execBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
 
             @Override
             protected void contentionStalenessState(
-                    int core, int socket, long cycleEpoch, long batchEpoch, long measuredContention,
-                    long lastRawContention, long contentionObservationCount, long lastContentionObservationNs,
-                    long cyclesSinceContentionObservation, long nanosSinceContentionObservation,
-                    long consecutiveIdleDecisions, long idleDurationSelectedNs, long successfulAcquisitionCount,
-                    long failedAcquisitionCount, long totalAcquisitionAttempts, int executionPath,
-                    long localCacheCount, long productiveHandleCount, int registeredWorkers, int workerRank,
-                    boolean productivityExcluded, long productivityExclusionCount, long productivityThresholdNs,
-                    double smoothedBodyCostNs, boolean bodyHistoryReady) {
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long measuredContention,
+                    long lastRawContention,
+                    long contentionObservationCount,
+                    long lastContentionObservationNs,
+                    long cyclesSinceContentionObservation,
+                    long nanosSinceContentionObservation,
+                    long consecutiveIdleDecisions,
+                    long idleDurationSelectedNs,
+                    long successfulAcquisitionCount,
+                    long failedAcquisitionCount,
+                    long totalAcquisitionAttempts,
+                    int executionPath,
+                    long localCacheCount,
+                    long productiveHandleCount,
+                    int registeredWorkers,
+                    int workerRank,
+                    boolean productivityExcluded,
+                    long productivityExclusionCount,
+                    long productivityThresholdNs,
+                    double smoothedBodyCostNs,
+                    boolean bodyHistoryReady) {
                 if (workerRank == 2) {
                     observedPath.set(executionPath);
                     observedRank.set(workerRank);
@@ -471,22 +540,71 @@ class ControlPlaneFragmentThreadTest {
     private static FragmentObserver createRecordingObserver() {
         return new FragmentObserver() {
             @Override
-            protected void cycleStartState(int core, int socket, long cycleEpoch, long batchEpoch, long completed, long batchSize, long upstreamCount, int registeredWorkers, long productiveHandleCount, int workerRank, long contention, double throughput) {}
+            protected void cycleStartState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long completed,
+                    long batchSize,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double throughput) {}
 
             @Override
-            protected void batchProgressState(int core, int socket, long cycleEpoch, long batchEpoch, long upstreamCount, int registeredWorkers, long productiveHandleCount, int workerRank, long contention, double avgServiceTime) {}
+            protected void batchProgressState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime) {}
 
             @Override
-            protected void batchCompleteState(int core, int socket, long cycleEpoch, long batchEpoch, long upstreamCount, int registeredWorkers, long productiveHandleCount, int workerRank, long contention, double avgServiceTime, double throughput) {}
+            protected void batchCompleteState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime,
+                    double throughput) {}
 
             @Override
             protected void rawBodyCost(int core, int socket, long cycleEpoch, long batchEpoch, long rawBodyCost) {}
 
             @Override
-            protected void idleBranchDecision(int core, int socket, long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention, double smoothedBodyCost) {}
+            protected void idleBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
 
             @Override
-            protected void execBranchDecision(int core, int socket, long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention, double smoothedBodyCost) {}
+            protected void execBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
         };
     }
 
@@ -524,7 +642,8 @@ class ControlPlaneFragmentThreadTest {
         }
         BitSet cpus = new BitSet();
         cpus.set(selectedCpu);
-        return new CloneConfig("fragment-cycle-test", SystemInfo.getCpuInfo(selectedCpu).core(), cpus);
+        return new CloneConfig(
+                "fragment-cycle-test", SystemInfo.getCpuInfo(selectedCpu).core(), cpus);
     }
 
     /// Connects the fragment behind the cached single-route topology used in production.

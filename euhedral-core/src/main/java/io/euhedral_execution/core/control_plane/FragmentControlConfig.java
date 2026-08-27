@@ -21,6 +21,7 @@ public final class FragmentControlConfig {
     public static final int DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT = 40;
 
     public final BodyCostThresholds idleBodyCostThresholds;
+    public final long bodyCostDirectThreshold;
     public final IdlePolicy idleTimeNs;
 
     public FragmentControlConfig(@NonNull FragmentDecisionWeights weights) {
@@ -31,6 +32,28 @@ public final class FragmentControlConfig {
         MicroCalibrator calibrator = new MicroCalibrator();
         calibrator.warmup();
         this.idleBodyCostThresholds = new BodyCostThresholds(calibrator, weights.idleBodyCostWeights());
+        this.bodyCostDirectThreshold = benchmarkThreshold(
+                calibrator,
+                weights.bodyCostDirectThresholdWeight(),
+                weights.idleBodyCostWeights(),
+                this.idleBodyCostThresholds);
+    }
+
+    private static long benchmarkThreshold(
+            MicroCalibrator calibrator, int weight, BodyCostWeights idleWeights, BodyCostThresholds idleThresholds) {
+        if (weight == idleWeights.xs()) {
+            return idleThresholds.xs;
+        }
+        if (weight == idleWeights.s()) {
+            return idleThresholds.s;
+        }
+        if (weight == idleWeights.m()) {
+            return idleThresholds.m;
+        }
+        if (weight == idleWeights.h()) {
+            return idleThresholds.h;
+        }
+        return calibrator.benchmark(weight);
     }
 
     /// Execution strategies selected only at completed-batch boundaries.

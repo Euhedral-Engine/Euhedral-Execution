@@ -122,30 +122,41 @@ public final class CompletedRunLoader {
         Path vecPath = tsvDir.resolve(Constants.VECTOR_FIELDS_TSV);
         Path corrPath = tsvDir.resolve(Constants.CORRELATIONS_TSV);
 
-        validateRequiredFile(normalizedDir, rawObsPath);
-        validateRequiredFile(normalizedDir, statsPath);
-        validateRequiredFile(normalizedDir, occPath);
-        validateRequiredFile(normalizedDir, transPath);
-        validateRequiredFile(normalizedDir, vecPath);
-        validateRequiredFile(normalizedDir, corrPath);
+        boolean hasObserverData = Files.exists(rawObsPath)
+                || Files.exists(statsPath)
+                || Files.exists(occPath)
+                || Files.exists(transPath)
+                || Files.exists(vecPath)
+                || Files.exists(corrPath);
 
-        verifyChecksumIfExists(normalizedDir, rawObsPath);
-        verifyChecksumIfExists(normalizedDir, statsPath);
-        verifyChecksumIfExists(normalizedDir, occPath);
-        verifyChecksumIfExists(normalizedDir, transPath);
-        verifyChecksumIfExists(normalizedDir, vecPath);
-        verifyChecksumIfExists(normalizedDir, corrPath);
-        if (trialConfig.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
-            Path trajectoryWindows = tsvDir.resolve(Constants.TRAJECTORY_WINDOWS_TSV);
-            Path trajectoryOccupancy = tsvDir.resolve(Constants.TRAJECTORY_OCCUPANCY_TSV);
-            validateRequiredFile(normalizedDir, trajectoryWindows);
-            validateRequiredFile(normalizedDir, trajectoryOccupancy);
-            verifyChecksumIfExists(normalizedDir, trajectoryWindows);
-            verifyChecksumIfExists(normalizedDir, trajectoryOccupancy);
+        SystemForkResult system;
+        if (hasObserverData) {
+            validateRequiredFile(normalizedDir, rawObsPath);
+            validateRequiredFile(normalizedDir, statsPath);
+            validateRequiredFile(normalizedDir, occPath);
+            validateRequiredFile(normalizedDir, transPath);
+            validateRequiredFile(normalizedDir, vecPath);
+            validateRequiredFile(normalizedDir, corrPath);
+
+            verifyChecksumIfExists(normalizedDir, rawObsPath);
+            verifyChecksumIfExists(normalizedDir, statsPath);
+            verifyChecksumIfExists(normalizedDir, occPath);
+            verifyChecksumIfExists(normalizedDir, transPath);
+            verifyChecksumIfExists(normalizedDir, vecPath);
+            verifyChecksumIfExists(normalizedDir, corrPath);
+            if (trialConfig.calibrationConfig().lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
+                Path trajectoryWindows = tsvDir.resolve(Constants.TRAJECTORY_WINDOWS_TSV);
+                Path trajectoryOccupancy = tsvDir.resolve(Constants.TRAJECTORY_OCCUPANCY_TSV);
+                validateRequiredFile(normalizedDir, trajectoryWindows);
+                validateRequiredFile(normalizedDir, trajectoryOccupancy);
+                verifyChecksumIfExists(normalizedDir, trajectoryWindows);
+                verifyChecksumIfExists(normalizedDir, trajectoryOccupancy);
+            }
+
+            system = parseSystemForkResult(normalizedDir, rawObsPath, statsPath, occPath, transPath, vecPath, corrPath);
+        } else {
+            system = SystemForkResult.EMPTY;
         }
-
-        SystemForkResult system =
-                parseSystemForkResult(normalizedDir, rawObsPath, statsPath, occPath, transPath, vecPath, corrPath);
 
         RunIdentity identity = buildIdentity(normalizedDir, trialConfig);
         RunArtifacts artifacts = buildArtifacts(normalizedDir, tsvDir);
