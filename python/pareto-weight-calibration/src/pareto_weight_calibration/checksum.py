@@ -6,11 +6,15 @@ import hashlib
 from pathlib import Path
 
 
-class ChecksumMismatchError(Exception):
+class ChecksumVerificationError(Exception):
+  """Base exception for checksum verification failures."""
+
+
+class ChecksumMismatchError(ChecksumVerificationError):
     """Raised when calculated artifact SHA-256 does not match sidecar digest."""
 
 
-class MissingChecksumError(Exception):
+class MissingChecksumError(ChecksumVerificationError):
     """Raised when an expected .sha256 sidecar is missing."""
 
 

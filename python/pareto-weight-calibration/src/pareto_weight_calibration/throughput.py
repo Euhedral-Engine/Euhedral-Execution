@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 import numpy as np
 
 from pareto_weight_calibration.types import ArmPerformance, ForkThroughput
@@ -14,7 +14,6 @@ class ThroughputParseError(Exception):
     """Raised when throughput logs cannot be parsed or contain no scores."""
 
 
-# Regex matching JMH fork score lines (e.g. "Iteration   1: 12345.678 ops/s" or "Fork 1: 12345.678 ops/s")
 FORK_SCORE_PATTERN = re.compile(
     r"(?:Fork\s+\d+:\s+|Iteration\s+\d+:\s+)?([0-9]+(?:\.[0-9]+)?)\s*(?:±\s*[0-9]+(?:\.[0-9]+)?\s*)?ops/s",
     re.IGNORECASE,
@@ -30,15 +29,26 @@ class ThroughputParser:
     """Extracts fork-level and whole-run throughput from benchmark artifacts."""
 
     @classmethod
-    def find_fork_dirs(cls, run_dir: Path) -> List[Path]:
-        """Finds sorted JMH fork subdirectories if present."""
-        if not run_dir.is_dir():
-            return []
-        fork_dirs = [
-            p for p in run_dir.iterdir()
-            if p.is_dir() and p.name.startswith("fork-")
+    def find_fork_dirs(cls, paths: Union[Path, List[Path]]) -> List[Path]:
+      """Finds sorted JMH fork subdirectories across one or more sample directories."""
+      path_list = [paths] if isinstance(paths, Path) else paths
+      fork_dirs: List[Path] = []
+
+      for p in path_list:
+        if not p.is_dir():
+          continue
+        subdirs = [
+          sub for sub in p.iterdir()
+          if sub.is_dir() and sub.name.startswith("fork-")
         ]
-        return sorted(fork_dirs, key=lambda p: p.name)
+        if subdirs:
+          fork_dirs.extend(sorted(subdirs, key=lambda d: d.name))
+        else:
+          if (p / "benchmark_output.log").exists() or (
+              p / "trajectory_windows.tsv").exists():
+            fork_dirs.append(p)
+
+      return fork_dirs
 
     @classmethod
     def parse_log_file(cls, log_path: Path) -> List[float]:
@@ -49,12 +59,9 @@ class ThroughputParser:
         scores: List[float] = []
         text = log_path.read_text(encoding="utf-8", errors="replace")
 
-        # First, look for iteration/fork lines
         for line in text.splitlines():
             line_str = line.strip()
-            # Check for JMH iteration result lines
             if "ops/s" in line_str:
-                # Match lines like "Iteration   1: 45123.456 ops/s"
                 match = re.search(r"Iteration\s+\d+:\s+([0-9]+(?:\.[0-9]+)?)\s+ops/s", line_str)
                 if match:
                     try:
@@ -63,7 +70,6 @@ class ThroughputParser:
                         pass
 
         if not scores:
-            # Fallback to result summary line
             for match in JMH_RESULT_LINE_PATTERN.finditer(text):
                 try:
                     scores.append(float(match.group(1)))
@@ -78,12 +84,12 @@ class ThroughputParser:
         forks: List[ForkThroughput],
         late_means: Optional[List[float]] = None,
     ) -> ArmPerformance:
-        """Computes statistical summary across all fork results.
+      """Computes statistical summary across all fork results ($n=4$ in 4-fork runs).
 
-        Args:
-            forks: List of ForkThroughput results.
-            late_means: Optional list of late-window mean throughput per fork.
-        """
+      Args:
+          forks: List of ForkThroughput results.
+          late_means: Optional list of late-window mean throughput per fork.
+      """
         if not forks:
             raise ThroughputParseError("Cannot compute performance for empty fork list")
 
@@ -101,9 +107,13 @@ class ThroughputParser:
             late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
             late_cv_val = float(np.sqrt(late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
         else:
-            late_mean_val = mean_val
-            late_var_val = var_val
-            late_cv_val = cv_val
+          late_means_from_forks = [f.late_mean_ops_per_sec for f in forks]
+          late_arr = np.array(late_means_from_forks, dtype=np.float64)
+          late_n = len(late_arr)
+          late_mean_val = float(np.mean(late_arr))
+          late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
+          late_cv_val = float(
+            np.sqrt(late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
 
         return ArmPerformance(
             mean=mean_val,

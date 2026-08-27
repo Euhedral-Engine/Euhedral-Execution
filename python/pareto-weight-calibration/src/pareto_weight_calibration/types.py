@@ -28,6 +28,21 @@ class TrajectoryStatus(str, Enum):
     INSUFFICIENT_WINDOWS = "INSUFFICIENT_WINDOWS"
 
 
+class ArtifactEligibility(str, Enum):
+  """Three-state classification of calibration artifact eligibility."""
+  ELIGIBLE = "ELIGIBLE"
+  INELIGIBLE = "INELIGIBLE"
+  UNVERIFIABLE = "UNVERIFIABLE"
+
+
+class LabelEvidenceBasis(str, Enum):
+  """Evidence basis used for label synthesis and validation regret."""
+  WHOLE_AGREEMENT = "WHOLE_AGREEMENT"
+  LATE_CONVERGENCE = "LATE_CONVERGENCE"
+  STABLE_TIE = "STABLE_TIE"
+  NONE = "NONE"
+
+
 @dataclass(frozen=True)
 class ForkThroughput:
     """Throughput and late-trajectory summary for an individual JMH fork."""
@@ -41,6 +56,7 @@ class ForkThroughput:
     late_has_sufficient_windows: bool = True
     late_cv: float = 0.0
     late_slope: float = 0.0
+    fork_identifier: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -138,6 +154,17 @@ class PairRecord:
     pair_weight: float
     k_run_path: Path
     k_minus_1_run_path: Path
+    effective_outcome: Outcome = Outcome.INCONCLUSIVE
+    label_evidence_basis: LabelEvidenceBasis = LabelEvidenceBasis.NONE
+    basis_throughput_k: float = 0.0
+    basis_throughput_k_minus_1: float = 0.0
+    basis_delta: float = 0.0
+    basis_variance_k: float = 0.0
+    basis_variance_k_minus_1: float = 0.0
+    basis_uncertainty: float = 0.0
+    eligibility: ArtifactEligibility = ArtifactEligibility.ELIGIBLE
+    k_sample_paths: List[Path] = field(default_factory=list)
+    k_minus_1_sample_paths: List[Path] = field(default_factory=list)
     artifact_checksums: Dict[str, str] = field(default_factory=dict)
 
 
@@ -148,6 +175,8 @@ class ManifestPair:
     k_run_path: Path
     k_minus_1_run_path: Path
     K: int
+    k_sample_paths: List[Path] = field(default_factory=list)
+    k_minus_1_sample_paths: List[Path] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 

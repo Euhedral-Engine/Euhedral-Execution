@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 import numpy as np
 
 from pareto_weight_calibration.checksum import ChecksumVerifier
@@ -51,13 +51,15 @@ class TrajectoryAnalyzer:
         cls,
         tsv_path: Path,
         verify_checksum: bool = True,
+        require_sidecar: bool = False,
     ) -> List[WindowRecord]:
-        """Loads and parses trajectory_windows.tsv, validating SHA-256 sidecar if present."""
+      """Loads and parses trajectory_windows.tsv, validating SHA-256 sidecar if requested."""
         if not tsv_path.exists() or not tsv_path.is_file():
             raise FileNotFoundError(f"Trajectory file not found: {tsv_path}")
 
         if verify_checksum:
-            ChecksumVerifier.verify_file(tsv_path, require_sidecar=False)
+          ChecksumVerifier.verify_file(tsv_path,
+                                       require_sidecar=require_sidecar)
 
         windows: List[WindowRecord] = []
         with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
@@ -138,7 +140,7 @@ class TrajectoryAnalyzer:
                 rejection_reason=f"Insufficient late windows ({len(late_wins)} < {min_late_windows})",
             )
 
-        # 1. Check feeding continuity
+        # 1. Check feeding continuity in late region
         if any(not w.continuously_fed for w in late_wins):
             return ForkTrajectoryAnalysis(
                 fork_identifier=jvm_id,
@@ -163,12 +165,9 @@ class TrajectoryAnalyzer:
         late_std = float(np.sqrt(late_var))
         late_cv = float(late_std / late_mean) if late_mean > 0 else 0.0
 
-        # CV remains a confidence diagnostic. The argument is retained for API
-        # compatibility but is not an eligibility cutoff because fork-level variance
-        # is already reflected in the throughput lower bound.
         _ = cv_threshold
 
-        # 2. Fit OLS slope over window index.
+        # 2. Fit OLS slope over window index in late region
         x_centered = indices - np.mean(indices)
         y_centered = throughputs - late_mean
         denom = float(np.sum(x_centered**2))
@@ -230,49 +229,75 @@ class TrajectoryAnalyzer:
         return mean_normalized_slope >= -slope_threshold_pct
 
     @classmethod
+    def discover_trajectory_files(cls, paths: Union[Path, List[Path]]) -> List[
+      Path]:
+      """Discovers all trajectory_windows.tsv files across sample directories or fork subdirectories."""
+      path_list = [paths] if isinstance(paths, Path) else paths
+      files: List[Path] = []
+
+      for p in path_list:
+        if not p.exists():
+          continue
+        if p.is_file() and p.name == "trajectory_windows.tsv":
+          files.append(p)
+        elif p.is_dir():
+          fork_subdirs = [sub for sub in p.iterdir() if
+                          sub.is_dir() and sub.name.startswith("fork-")]
+          if fork_subdirs:
+            for f_dir in sorted(fork_subdirs, key=lambda d: d.name):
+              f_tsv = f_dir / "trajectory_windows.tsv"
+              if f_tsv.exists():
+                files.append(f_tsv)
+          else:
+            direct = p / "trajectory_windows.tsv"
+            if direct.exists():
+              files.append(direct)
+      return files
+
+    @classmethod
     def analyze_run_directory(
         cls,
-        run_dir: Path,
+        run_paths: Union[Path, List[Path]],
         verify_checksum: bool = True,
+        require_sidecar: bool = False,
     ) -> Tuple[List[ForkThroughput], bool]:
-        """Analyzes all fork trajectories in a run directory.
+      """Analyzes all fork trajectories in run directories or sample directories.
 
-        Returns:
-            Tuple of (fork-level results, aggregate arm trajectory is stable or improving).
-        """
-        # Look for trajectory_windows.tsv in run_dir or in fork subdirs
-        tsv_candidates: List[Path] = []
-        direct_tsv = run_dir / "trajectory_windows.tsv"
-        if direct_tsv.exists():
-            tsv_candidates.append(direct_tsv)
-        else:
-            fork_subdirs = [p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith("fork-")]
-            for f_dir in sorted(fork_subdirs, key=lambda p: p.name):
-                f_tsv = f_dir / "trajectory_windows.tsv"
-                if f_tsv.exists():
-                    tsv_candidates.append(f_tsv)
-
+      Returns:
+          Tuple of (fork-level results, aggregate arm trajectory is stable or improving).
+      """
+      tsv_candidates = cls.discover_trajectory_files(run_paths)
         if not tsv_candidates:
-            # Fallback if no trajectory TSV exists
             return ([], False)
 
-        all_windows: List[WindowRecord] = []
+      # Parse per-file or per-jvm_id windows
+      fork_analyses: List[Tuple[str, List[WindowRecord]]] = []
         for tsv in tsv_candidates:
-            all_windows.extend(cls.parse_trajectory_file(tsv, verify_checksum=verify_checksum))
-
-        # Group by jvm_id
-        grouped: Dict[str, List[WindowRecord]] = {}
-        for w in all_windows:
+          windows = cls.parse_trajectory_file(
+              tsv, verify_checksum=verify_checksum,
+              require_sidecar=require_sidecar
+          )
+          # Group by jvm_id within file
+          grouped: Dict[str, List[WindowRecord]] = {}
+          for w in windows:
             grouped.setdefault(w.jvm_id, []).append(w)
+          for jvm_id, wins in sorted(grouped.items()):
+            fork_id = f"{tsv.parent.name}:{jvm_id}"
+            fork_analyses.append((fork_id, wins))
 
         fork_results: List[ForkThroughput] = []
-        for fork_idx, (jvm_id, wins) in enumerate(sorted(grouped.items())):
+      for fork_idx, (fork_id, wins) in enumerate(fork_analyses):
             analysis = cls.analyze_fork(wins)
+            mean_all = (
+              float(np.mean([w.throughput for w in analysis.all_windows]))
+              if analysis.all_windows
+              else 0.0
+            )
 
             fork_results.append(
                 ForkThroughput(
                     fork_index=fork_idx,
-                    mean_ops_per_sec=float(np.mean([w.throughput for w in analysis.all_windows])) if analysis.all_windows else 0.0,
+                    mean_ops_per_sec=mean_all,
                     window_scores=[w.throughput for w in analysis.all_windows],
                     late_mean_ops_per_sec=analysis.late_mean,
                     is_late_stable=analysis.is_stable,
@@ -281,6 +306,7 @@ class TrajectoryAnalyzer:
                     late_has_sufficient_windows=analysis.has_sufficient_windows,
                     late_cv=analysis.late_cv,
                     late_slope=analysis.late_slope,
+                    fork_identifier=fork_id,
                 )
             )
 

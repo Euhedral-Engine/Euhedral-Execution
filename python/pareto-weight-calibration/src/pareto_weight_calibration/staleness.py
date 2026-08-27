@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import csv
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 import numpy as np
 
 from pareto_weight_calibration.checksum import ChecksumVerifier
@@ -45,40 +44,94 @@ class StalenessParser:
         cls,
         tsv_path: Path,
         verify_checksum: bool = True,
+        require_sidecar: bool = False,
     ) -> List[StalenessSample]:
         """Parses a contention_staleness.tsv file into structured samples."""
         if not tsv_path.exists() or not tsv_path.is_file():
             raise FileNotFoundError(f"Staleness file not found: {tsv_path}")
 
         if verify_checksum:
-            ChecksumVerifier.verify_file(tsv_path, require_sidecar=False)
+          ChecksumVerifier.verify_file(tsv_path,
+                                       require_sidecar=require_sidecar)
 
         samples: List[StalenessSample] = []
         with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
-            reader = csv.DictReader(f, delimiter="\t")
-            if not reader.fieldnames:
+          header_line = f.readline()
+          if not header_line:
                 raise StalenessParseError(f"Empty or headerless TSV: {tsv_path}")
 
-            for row_idx, row in enumerate(reader):
+          headers = [h.strip() for h in header_line.split("\t")]
+          col_map = {h: idx for idx, h in enumerate(headers)}
+
+          req_cols = ["measuredContention", "workerRank", "registeredWorkers"]
+          for col in req_cols:
+            if col not in col_map:
+              raise StalenessParseError(
+                f"TSV {tsv_path} missing required column: {col}")
+
+          idx_iter = col_map.get("iteration", -1)
+          idx_core = col_map.get("core", -1)
+          idx_seg = col_map.get("segment", -1)
+          idx_sidx = col_map.get("sampleIndex", -1)
+          idx_cont = col_map["measuredContention"]
+          idx_raw_cont = col_map.get("lastRawContention", -1)
+          idx_obscnt = col_map.get("contentionObservationCount", -1)
+          idx_path = col_map.get("executionPath", -1)
+          idx_cache = col_map.get("localCacheCount", -1)
+          idx_prod = col_map.get("productiveHandleCount", -1)
+          idx_reg = col_map["registeredWorkers"]
+          idx_rank = col_map["workerRank"]
+          idx_body = col_map.get("smoothedBodyCostNs", -1)
+          idx_ready = col_map.get("bodyHistoryReady", -1)
+          idx_attempts = col_map.get("totalAcquisitionAttempts", -1)
+
+          for row_idx, line in enumerate(f):
+            line = line.strip()
+            if not line:
+              continue
+            parts = line.split("\t")
                 try:
-                    iter_idx = int(row.get("iteration", 0))
-                    core = int(row.get("core", 0))
-                    segment = row.get("segment", "steadyState")
-                    sample_idx = int(row.get("sampleIndex", row_idx))
-                    contention = int(row["measuredContention"])
-                    raw_contention = int(row.get("lastRawContention", contention))
-                    obs_count = int(row.get("contentionObservationCount", 1))
-                    exec_path = row.get("executionPath", "UNKNOWN")
-                    cache_count = int(row.get("localCacheCount", 0))
-                    prod_handles = int(row.get("productiveHandleCount", 0))
-                    reg_workers = int(row.get("registeredWorkers", 0))
-                    rank = int(row.get("workerRank", 0))
-                    body_cost = float(row.get("smoothedBodyCostNs", 0.0))
-                    
-                    ready_raw = row.get("bodyHistoryReady", "1").strip().lower()
+                  iter_idx = int(
+                      parts[idx_iter]) if idx_iter != -1 and idx_iter < len(
+                    parts) else 0
+                  core = int(
+                      parts[idx_core]) if idx_core != -1 and idx_core < len(
+                    parts) else 0
+                  segment = parts[idx_seg] if idx_seg != -1 and idx_seg < len(
+                    parts) else "steadyState"
+                  sample_idx = int(
+                      parts[idx_sidx]) if idx_sidx != -1 and idx_sidx < len(
+                    parts) else row_idx
+                  contention = int(parts[idx_cont])
+                  raw_contention = int(parts[
+                                         idx_raw_cont]) if idx_raw_cont != -1 and idx_raw_cont < len(
+                    parts) else contention
+                  obs_count = int(parts[
+                                    idx_obscnt]) if idx_obscnt != -1 and idx_obscnt < len(
+                    parts) else 1
+                  exec_path = parts[
+                    idx_path] if idx_path != -1 and idx_path < len(
+                    parts) else "UNKNOWN"
+                  cache_count = int(
+                      parts[idx_cache]) if idx_cache != -1 and idx_cache < len(
+                    parts) else 0
+                  prod_handles = int(
+                      parts[idx_prod]) if idx_prod != -1 and idx_prod < len(
+                    parts) else 0
+                  reg_workers = int(parts[idx_reg])
+                  rank = int(parts[idx_rank])
+                  body_cost = float(
+                      parts[idx_body]) if idx_body != -1 and idx_body < len(
+                    parts) else 0.0
+
+                  ready_raw = parts[
+                    idx_ready].lower() if idx_ready != -1 and idx_ready < len(
+                    parts) else "1"
                     ready = ready_raw in ("1", "true", "t", "yes")
 
-                    attempts = int(row.get("totalAcquisitionAttempts", 0))
+                  attempts = int(parts[
+                                   idx_attempts]) if idx_attempts != -1 and idx_attempts < len(
+                    parts) else 0
 
                     samples.append(
                         StalenessSample(
@@ -99,7 +152,7 @@ class StalenessParser:
                             total_acquisition_attempts=attempts,
                         )
                     )
-                except (KeyError, ValueError) as e:
+                except (IndexError, ValueError) as e:
                     raise StalenessParseError(
                         f"Malformed row #{row_idx} in {tsv_path}: {e}"
                     ) from e
@@ -107,40 +160,61 @@ class StalenessParser:
         return samples
 
     @classmethod
-    def discover_staleness_files(cls, run_dir: Path) -> List[Path]:
-        """Discovers all contention_staleness.tsv files across root or fork subdirectories."""
+    def discover_staleness_files(cls, paths: Union[Path, List[Path]]) -> List[
+      Path]:
+      """Discovers all contention_staleness.tsv files across sample directories or fork subdirectories."""
+      path_list = [paths] if isinstance(paths, Path) else paths
         files: List[Path] = []
-        direct = run_dir / "contention_staleness.tsv"
-        if direct.exists():
-            files.append(direct)
-        else:
-            fork_subdirs = [p for p in run_dir.iterdir() if p.is_dir() and p.name.startswith("fork-")]
-            for f_dir in sorted(fork_subdirs, key=lambda p: p.name):
-                f_tsv = f_dir / "contention_staleness.tsv"
-                if f_tsv.exists():
-                    files.append(f_tsv)
+
+      for p in path_list:
+        if not p.exists():
+          continue
+        if p.is_file() and p.name == "contention_staleness.tsv":
+          files.append(p)
+        elif p.is_dir():
+          fork_subdirs = [sub for sub in p.iterdir() if
+                          sub.is_dir() and sub.name.startswith("fork-")]
+          if fork_subdirs:
+            for f_dir in sorted(fork_subdirs, key=lambda d: d.name):
+              f_tsv = f_dir / "contention_staleness.tsv"
+              if f_tsv.exists():
+                files.append(f_tsv)
+          else:
+            direct = p / "contention_staleness.tsv"
+            if direct.exists():
+              files.append(direct)
         return files
 
     @classmethod
     def extract_active_features(
         cls,
-        run_dir: Path,
+        run_paths: Union[Path, List[Path]],
         target_rank: int,
         verify_checksum: bool = True,
+        require_sidecar: bool = False,
+        expected_r: Optional[int] = None,
     ) -> ActiveStateFeatures:
-        """Extracts decision-point features for rank == target_rank in the active arm (Arm A)."""
-        files = cls.discover_staleness_files(run_dir)
+      """Extracts decision-point features for rank == target_rank in the active arm (Arm A).
+
+      Joins only the fixed late half of measurement windows/samples.
+      Enforces authoritative physical R extracted from telemetry rows.
+      """
+      files = cls.discover_staleness_files(run_paths)
         if not files:
-            raise StalenessParseError(f"No contention_staleness.tsv found in {run_dir}")
+          raise StalenessParseError(
+            f"No contention_staleness.tsv found in {run_paths}")
 
         per_fork_c: List[float] = []
         per_fork_body: List[float] = []
         per_fork_p: List[float] = []
-        registered_workers_observed: Optional[int] = None
+      fork_r_values: List[int] = []
 
         for file_path in files:
-            samples = cls.parse_staleness_file(file_path, verify_checksum=verify_checksum)
-            # Filter for target rank, steady state segment, ready body history, and initialized contention
+          samples = cls.parse_staleness_file(
+              file_path, verify_checksum=verify_checksum,
+              require_sidecar=require_sidecar
+          )
+          # Filter for target rank, ready body history, initialized contention, finite positive body cost
             eligible = [
                 s for s in samples
                 if s.worker_rank == target_rank
@@ -150,19 +224,40 @@ class StalenessParser:
                 and math.isfinite(s.smoothed_body_cost_ns)
             ]
 
-            # Prefer steadyState segment if present
+          # Prefer steadyState segment
             steady_eligible = [s for s in eligible if s.segment == "steadyState"]
-            used_samples = steady_eligible if steady_eligible else eligible
+          candidate_samples = steady_eligible if steady_eligible else eligible
 
-            if not used_samples:
+          if not candidate_samples:
                 continue
 
-            if registered_workers_observed is None:
-                registered_workers_observed = used_samples[0].registered_workers
+          # Join to fixed late half of ordered samples
+          sorted_samples = sorted(candidate_samples,
+                                  key=lambda s: (s.iteration, s.sample_index))
+          m = len(sorted_samples)
+          late_start = m // 2
+          late_samples = sorted_samples[
+            late_start:] if m >= 2 else sorted_samples
 
-            c_vals = [s.measured_contention / 1_000_000.0 for s in used_samples]
-            body_vals = [s.smoothed_body_cost_ns for s in used_samples]
-            p_vals = [float(s.productive_handle_count) for s in used_samples]
+          if not late_samples:
+            continue
+
+          # Verify registeredWorkers consistency within fork
+          fork_r_set = {s.registered_workers for s in late_samples}
+          if len(fork_r_set) > 1:
+            raise StalenessParseError(
+                f"Inconsistent registeredWorkers within fork {file_path}: {fork_r_set}"
+            )
+          fork_r = next(iter(fork_r_set))
+          if fork_r <= 0:
+            raise StalenessParseError(
+                f"Invalid registeredWorkers R={fork_r} in {file_path}"
+            )
+          fork_r_values.append(fork_r)
+
+          c_vals = [s.measured_contention / 1_000_000.0 for s in late_samples]
+          body_vals = [s.smoothed_body_cost_ns for s in late_samples]
+          p_vals = [float(s.productive_handle_count) for s in late_samples]
 
             per_fork_c.append(float(np.median(c_vals)))
             per_fork_body.append(float(np.median(body_vals)))
@@ -170,7 +265,20 @@ class StalenessParser:
 
         if not per_fork_c:
             raise StalenessParseError(
-                f"No eligible steady-state rank-{target_rank} telemetry with ready body history found in {run_dir}"
+                f"No eligible steady-state rank-{target_rank} telemetry with ready body history found in {run_paths}"
+            )
+
+      # Cross-fork consistency check for registeredWorkers
+      distinct_r = set(fork_r_values)
+      if len(distinct_r) > 1:
+        raise StalenessParseError(
+            f"Inconsistent registeredWorkers across forks: {distinct_r}"
+        )
+      authoritative_r = fork_r_values[0]
+
+      if expected_r is not None and authoritative_r != expected_r:
+        raise StalenessParseError(
+            f"Authoritative R={authoritative_r} does not match expected R={expected_r}"
             )
 
         # Cross-fork medians
@@ -178,26 +286,26 @@ class StalenessParser:
         body_median = float(np.median(per_fork_body))
         p_median = float(np.median(per_fork_p))
         b_median = float(np.log1p(body_median))
-        r_val = registered_workers_observed or 0
 
         return ActiveStateFeatures(
             c=c_median,
             smoothed_body_cost_ns=body_median,
             b=b_median,
             P=p_median,
-            R=r_val,
+            R=authoritative_r,
             K=target_rank,
         )
 
     @classmethod
     def extract_withdrawn_diagnostics(
         cls,
-        run_dir: Path,
+        run_paths: Union[Path, List[Path]],
         target_rank: int,
         verify_checksum: bool = True,
+        require_sidecar: bool = False,
     ) -> WithdrawnDiagnosticState:
         """Extracts post-treatment diagnostic state for rank == target_rank in Arm B (CACHE)."""
-        files = cls.discover_staleness_files(run_dir)
+        files = cls.discover_staleness_files(run_paths)
         if not files:
             return WithdrawnDiagnosticState(
                 c_stale=0.0,
@@ -210,7 +318,10 @@ class StalenessParser:
         all_samples: List[StalenessSample] = []
         for file_path in files:
             all_samples.extend(
-                cls.parse_staleness_file(file_path, verify_checksum=verify_checksum)
+                cls.parse_staleness_file(
+                    file_path, verify_checksum=verify_checksum,
+                    require_sidecar=require_sidecar
+                )
             )
 
         rank_samples = [s for s in all_samples if s.worker_rank == target_rank]

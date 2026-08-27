@@ -1,4 +1,4 @@
-"""Step 3 Vertical Slice End-to-End Validation Test."""
+"""Vertical Slice End-to-End Validation Test."""
 
 import json
 from pathlib import Path
@@ -11,7 +11,7 @@ from pareto_weight_calibration.model import JavaParetoWeights, MarginalModel
 from pareto_weight_calibration.types import Outcome, TrajectoryStatus
 
 
-def test_step3_vertical_slice_end_to_end():
+def test_vertical_slice_end_to_end():
     repo_root = Path(__file__).resolve().parents[3]
     experiment_dir = repo_root / "experiments" / "02-vertical-slice-k4-vs-k3"
     manifest_path = experiment_dir / "dataset_manifest.json"
