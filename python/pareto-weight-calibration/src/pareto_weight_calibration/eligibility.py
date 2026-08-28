@@ -23,7 +23,7 @@ from pareto_weight_calibration.types import (
 
 logger = logging.getLogger(__name__)
 
-VALID_AUTHORITATIVE_R: Set[int] = {7, 23}
+VALID_AUTHORITATIVE_R: Set[int] = {7, 15, 23}
 
 
 class EligibilityError(Exception):

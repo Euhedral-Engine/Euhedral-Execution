@@ -43,11 +43,10 @@ class ThroughputParser:
         ]
         if subdirs:
           fork_dirs.extend(sorted(subdirs, key=lambda d: d.name))
-        else:
-          if (p / "benchmark_output.log").exists() or (
-              p / "trajectory_windows.tsv"
-          ).exists():
-            fork_dirs.append(p)
+        elif (p / "benchmark_output.log").exists() or (
+            p / "trajectory_windows.tsv"
+        ).exists():
+          fork_dirs.append(p)
 
       return fork_dirs
 
@@ -115,7 +114,7 @@ class ThroughputParser:
           late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
           late_cv_val = (
             float(np.sqrt(
-              late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
+                late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
           )
 
         return ArmPerformance(

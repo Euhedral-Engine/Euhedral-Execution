@@ -442,8 +442,7 @@ class DataLoader:
                 strict_compatibility=strict_compatibility,
                 require_sidecars=require_sidecars,
             )
-          if rec is not None:
-            if rec.pair_weight >= min_weight:
-              records.append(rec)
+          if rec is not None and rec.pair_weight >= min_weight:
+            records.append(rec)
 
         return records

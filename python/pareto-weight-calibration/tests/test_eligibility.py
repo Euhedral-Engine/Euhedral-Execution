@@ -160,6 +160,39 @@ def test_authoritative_r_extraction_and_cpu_set_rejection(tmp_path: Path):
   assert np.isclose(vec[3], 23.0 * features.q)
 
 
+def test_r15_surface_is_authoritative(tmp_path: Path):
+  """Verifies that the intermediate 15-worker training topology is eligible."""
+  k_s0, k_s1 = create_four_fork_sample_fixture(
+      tmp_path, k_cutoff=8, reg_workers=15, cpu_set_count=15, is_active=True
+  )
+  k_minus_1_s0, k_minus_1_s1 = create_four_fork_sample_fixture(
+      tmp_path, k_cutoff=7, reg_workers=15, cpu_set_count=15, is_active=False
+  )
+  manifest = Manifest(
+      schema_version=1,
+      runtime_commit="testcommit",
+      cache_actuator_version="cache-v1",
+      cache_park_ns=15000,
+      topology_id="mock-r15",
+      pairs=[],
+  )
+  pair = ManifestPair(
+      pair_id="r15-authoritative",
+      k_run_path=k_s0,
+      k_minus_1_run_path=k_minus_1_s0,
+      K=8,
+      k_sample_paths=[k_s0, k_s1],
+      k_minus_1_sample_paths=[k_minus_1_s0, k_minus_1_s1],
+  )
+
+  eligibility, reasons = EligibilityAuditor.audit_pair(
+      pair, manifest, require_sidecars=True
+  )
+
+  assert eligibility == ArtifactEligibility.ELIGIBLE
+  assert reasons == []
+
+
 def test_inconsistent_r_across_forks_fails(tmp_path: Path):
   """Verifies that inconsistent registeredWorkers across forks causes fail-closed parse error."""
   s0 = tmp_path / "inconsistent_arm__sample_0_repeat_0"

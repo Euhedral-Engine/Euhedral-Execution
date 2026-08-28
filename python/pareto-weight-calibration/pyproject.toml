@@ -26,6 +26,9 @@ dev = [
 [project.scripts]
 pareto-calibration = "pareto_weight_calibration.cli:main"
 pareto-participation-pipeline = "pareto_weight_calibration.pipeline:main"
+pareto-participation-peak-pipeline = "pareto_weight_calibration.peak_pipeline:main"
+pareto-participation-side-evaluation = "pareto_weight_calibration.side_of_peak:main"
+pareto-participation-action-pipeline = "pareto_weight_calibration.action_pipeline:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

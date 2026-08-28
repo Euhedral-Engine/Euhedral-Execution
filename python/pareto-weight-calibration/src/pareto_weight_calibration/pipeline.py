@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict, is_dataclass
+from concurrent.futures import ProcessPoolExecutor
+from dataclasses import asdict, is_dataclass, replace
 from enum import Enum
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -167,6 +169,24 @@ def load_frozen_training_manifest(path: Path) -> Manifest:
   return manifest
 
 
+def _load_frozen_pair_process(args):
+  manifest, pair = args
+  record = DataLoader.load_pair(
+      manifest=manifest,
+      pair_decl=pair,
+      verify_checksums=True,
+      strict_compatibility=True,
+      require_sidecars=True,
+  )
+  if record is None or record.eligibility != ArtifactEligibility.ELIGIBLE:
+    raise ValueError(f"Frozen pair {pair.pair_id} was not eligible")
+  return replace(
+      record,
+      perf_k=replace(record.perf_k, forks=[]),
+      perf_k_minus_1=replace(record.perf_k_minus_1, forks=[]),
+  )
+
+
 def _metric_summary(metrics: Any) -> dict[str, Any]:
   return {
     "supportedRelativeRegret": metrics.supported_rel_regret,
@@ -184,25 +204,64 @@ def _metric_summary(metrics: Any) -> dict[str, Any]:
   }
 
 
-def run_pipeline(manifest_path: Path, domain_path: Path, output_dir: Path) -> \
-dict[str, Any]:
+def run_pipeline(
+    manifest_path: Path,
+    domain_path: Path,
+    output_dir: Path,
+    supplemental_pairs_path: Path | None = None,
+    supplemental_manifest_path: Path | None = None,
+    supplemental_compatibility_audit_path: Path | None = None,
+) -> dict[str, Any]:
   """Runs strict ingestion, audit, grouped fitting, and deterministic artifact export."""
   manifest = load_frozen_training_manifest(manifest_path)
   ChecksumVerifier.verify_file(domain_path, require_sidecar=True)
   domain = load_domain_config(domain_path)
 
-  records = []
-  for pair in manifest.pairs:
-    record = DataLoader.load_pair(
-        manifest=manifest,
-        pair_decl=pair,
-        verify_checksums=True,
-        strict_compatibility=True,
-        require_sidecars=True,
+  worker_count = min(24, max(1, os.cpu_count() or 1), len(manifest.pairs))
+  load_args = [(manifest, pair) for pair in manifest.pairs]
+  if len(load_args) < 16:
+    records = [_load_frozen_pair_process(args) for args in load_args]
+  else:
+    with ProcessPoolExecutor(max_workers=worker_count) as executor:
+      records = list(executor.map(_load_frozen_pair_process, load_args))
+
+  supplemental_count = 0
+  if (supplemental_pairs_path is None) != (supplemental_manifest_path is None):
+    raise ValueError(
+        "Supplemental compact pairs and supplemental manifest must be provided together"
     )
-    if record is None or record.eligibility != ArtifactEligibility.ELIGIBLE:
-      raise ValueError(f"Frozen pair {pair.pair_id} was not eligible")
-    records.append(record)
+  if supplemental_pairs_path is not None and supplemental_manifest_path is not None:
+    from pareto_weight_calibration.compact import load_compact_frozen_records
+
+    supplemental_records = load_compact_frozen_records(
+        supplemental_pairs_path, supplemental_manifest_path
+    )
+    duplicate_ids = {record.pair_id for record in records} & {
+      record.pair_id for record in supplemental_records
+    }
+    if duplicate_ids:
+      raise ValueError(
+        f"Duplicate primary/supplemental pair IDs: {sorted(duplicate_ids)}")
+    supplemental_count = len(supplemental_records)
+    records.extend(supplemental_records)
+    if supplemental_compatibility_audit_path is None:
+      raise ValueError(
+        "Supplemental compact evidence requires an execution-path compatibility audit")
+    ChecksumVerifier.verify_file(
+        supplemental_compatibility_audit_path, require_sidecar=True
+    )
+    compatibility_audit = json.loads(
+        supplemental_compatibility_audit_path.read_text(encoding="utf-8")
+    )
+    if compatibility_audit.get("status") != "VALID_FOR_COMBINED_TRAINING":
+      raise ValueError(
+        "Supplemental execution-path compatibility audit did not pass")
+    if compatibility_audit.get(
+        "compactEvidenceSha256") != ChecksumVerifier.compute_sha256(
+        supplemental_pairs_path
+    ):
+      raise ValueError(
+        "Supplemental compatibility audit refers to different compact evidence")
 
   dataset = build_dataset(
       records,
@@ -210,7 +269,7 @@ dict[str, Any]:
       require_eligible_only=True,
       require_all_records_retained=True,
   )
-  if len(dataset.records) != len(manifest.pairs):
+  if len(dataset.records) != len(manifest.pairs) + supplemental_count:
     raise ValueError("Frozen training manifest was not retained exactly")
 
   output_dir.mkdir(parents=True, exist_ok=True)
@@ -227,6 +286,7 @@ dict[str, Any]:
       audit_path,
       {
         "manifestPairCount": len(manifest.pairs),
+        "supplementalPairCount": supplemental_count,
         "datasetRowCount": len(dataset.records),
         "familyCounts": dataset.family_counts,
         "audit": audit,
@@ -298,6 +358,22 @@ dict[str, Any]:
 
   manifest_digest = ChecksumVerifier.compute_sha256(manifest_path)
   domain_digest = ChecksumVerifier.compute_sha256(domain_path)
+  supplemental_provenance = None
+  if supplemental_pairs_path is not None and supplemental_manifest_path is not None:
+    supplemental_provenance = {
+      "pairsPath": str(supplemental_pairs_path),
+      "pairsSha256": ChecksumVerifier.compute_sha256(supplemental_pairs_path),
+      "manifestPath": str(supplemental_manifest_path),
+      "manifestSha256": ChecksumVerifier.compute_sha256(
+        supplemental_manifest_path),
+      "pairCount": supplemental_count,
+      "provenanceLimit": "checksum-validated compact evidence; raw run directories unavailable",
+      "executionPathCompatibilityAuditPath": str(
+        supplemental_compatibility_audit_path),
+      "executionPathCompatibilityAuditSha256": ChecksumVerifier.compute_sha256(
+          supplemental_compatibility_audit_path
+      ),
+    }
   model = {
     "schemaVersion": 1,
     "status": "INTERNAL_ACCEPTANCE_PASSED" if internal_acceptance else "NO_ADMISSIBLE_MODEL",
@@ -308,6 +384,18 @@ dict[str, Any]:
       "lambda": l2_reg,
       "activeIndices": active_indices,
       "physicalWeights": fit.w_phys_full,
+      "equation": "m=(w0+w1*c+w2*ln(1+bodyNs)+w3*R)*P/(K*(K-1))-(w4+w5*c+w6*ln(1+bodyNs)+w7*R)",
+      "actionMapping": "m <= 0 participates; m > 0 selects CACHE",
+      "namedJavaFieldMapping": {
+        "phrWeight": fit.w_phys_full[0],
+        "contentionPhrWeight": fit.w_phys_full[1],
+        "bodyPhrWeight": fit.w_phys_full[2],
+        "registeredWorkersPhrWeight": fit.w_phys_full[3],
+        "activeWorkersWeight": fit.w_phys_full[4],
+        "contentionWorkersWeight": fit.w_phys_full[5],
+        "bodyWorkersWeight": fit.w_phys_full[6],
+        "registeredActiveWorkersWeight": fit.w_phys_full[7],
+      },
       "featureScales": scales,
     },
     "optimizer": fit,
@@ -338,12 +426,13 @@ dict[str, Any]:
       "trainingPairsSha256": pairs_digest,
       "identifiabilityAuditPath": str(audit_path),
       "identifiabilityAuditSha256": audit_digest,
+      "supplementalCompactEvidence": supplemental_provenance,
       "sourceArtifactChecksums": {
         record.pair_id: record.artifact_checksums for record in dataset.records
       },
     },
   }
-  model_path = output_dir / "candidate_model.json"
+  model_path = output_dir / "step5_candidate_model.json"
   model_digest = _write_json_with_sidecar(model_path, model)
 
   grid_results = {
@@ -357,6 +446,7 @@ dict[str, Any]:
   summary = {
     "status": model["status"],
     "manifestPairCount": len(manifest.pairs),
+    "supplementalPairCount": supplemental_count,
     "datasetRowCount": len(dataset.records),
     "physicalFamilyCount": len(dataset.family_counts),
     "totalInfluenceWeight": dataset.U,
@@ -378,12 +468,22 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--manifest", type=Path, required=True)
   parser.add_argument("--domain", type=Path, required=True)
   parser.add_argument("--output-dir", type=Path, required=True)
+  parser.add_argument("--supplemental-pairs", type=Path)
+  parser.add_argument("--supplemental-manifest", type=Path)
+  parser.add_argument("--supplemental-compatibility-audit", type=Path)
   return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
   args = _build_parser().parse_args(argv)
-  summary = run_pipeline(args.manifest, args.domain, args.output_dir)
+  summary = run_pipeline(
+      args.manifest,
+      args.domain,
+      args.output_dir,
+      args.supplemental_pairs,
+      args.supplemental_manifest,
+      args.supplemental_compatibility_audit,
+  )
   print(json.dumps(_jsonable(summary), indent=2, sort_keys=True))
   return 0
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from concurrent.futures import ProcessPoolExecutor
+import os
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
@@ -73,6 +75,20 @@ class LOFOGridResult:
   parsimony_result: ParsimonySelectionResult
   all_structures: List[str]
   all_lambdas: List[float]
+
+
+def _run_candidate_process(args: Tuple[
+  Dataset, DomainConfig, str, float, List[str], float
+]) -> Tuple[str, float, LOFOResult]:
+  dataset, domain, struct, l2, distinct_families, neutral_threshold = args
+  return struct, l2, run_single_lofo_candidate(
+      dataset=dataset,
+      domain=domain,
+      structure_name=struct,
+      l2_reg=l2,
+      distinct_families=distinct_families,
+      neutral_threshold=neutral_threshold,
+  )
 
 
 def compute_fold_influence_weights(
@@ -284,17 +300,17 @@ def execute_lofo_grid_search(
     s: {} for s in structures
   }
 
-  # Execute LOFO for every structure and lambda
-  for struct in structures:
-    for l2 in lambdas:
-      res = run_single_lofo_candidate(
-          dataset=dataset,
-          domain=domain,
-          structure_name=struct,
-          l2_reg=l2,
-          distinct_families=distinct_families,
-          neutral_threshold=neutral_threshold,
-      )
+  # Candidate fits are independent. executor.map preserves the frozen lattice order.
+  candidates = [(struct, l2) for struct in structures for l2 in lambdas]
+
+  worker_count = min(24, max(1, os.cpu_count() or 1), len(candidates))
+  process_args = [
+    (dataset, domain, struct, l2, distinct_families, neutral_threshold)
+    for struct, l2 in candidates
+  ]
+  with ProcessPoolExecutor(max_workers=worker_count) as executor:
+    candidate_results = executor.map(_run_candidate_process, process_args)
+    for struct, l2, res in candidate_results:
       results[(struct, l2)] = res
       if res.is_valid:
         eval_by_structure_and_lambda[struct][l2] = res.pooled_metrics
