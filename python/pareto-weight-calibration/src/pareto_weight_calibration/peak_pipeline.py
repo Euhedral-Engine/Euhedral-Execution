@@ -1213,11 +1213,18 @@ def run_peak_pipeline(
 
 def _parser() -> argparse.ArgumentParser:
   parser = argparse.ArgumentParser(
-    description="Fit and validate a global participation peak model")
+      description="Fit and validate a global participation peak model")
   parser.add_argument("--training-pairs", type=Path, required=True)
   parser.add_argument("--legacy-pairs", type=Path, required=True)
   parser.add_argument("--step5-candidate", type=Path, required=True)
   parser.add_argument("--output-dir", type=Path, required=True)
+  parser.add_argument(
+      "--device",
+      type=str,
+      choices=["auto", "cuda", "cpu"],
+      default="auto",
+      help="Execution device: auto (CUDA if available), cuda (require CUDA), cpu (NumPy/SciPy reference)",
+  )
   return parser
 
 

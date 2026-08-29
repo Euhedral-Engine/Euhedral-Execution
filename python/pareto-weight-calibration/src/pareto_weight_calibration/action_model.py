@@ -12,6 +12,7 @@ from scipy.optimize import minimize
 from scipy.special import expit
 
 from pareto_weight_calibration.constraints import MODEL_STRUCTURES
+from pareto_weight_calibration.device import is_cuda, resolve_device
 from pareto_weight_calibration.optimizer import fit_constrained_model
 from pareto_weight_calibration.scaling import compute_training_scales
 from pareto_weight_calibration.types import DomainConfig
@@ -242,8 +243,16 @@ def bounded_mu(eta: np.ndarray | float,
 
 
 def fit_boundary(
-    rows: Sequence[ActionRow], structure: str, l2: float, temperature: float
+    rows: Sequence[ActionRow],
+    structure: str,
+    l2: float,
+    temperature: float,
+    device: Optional[Any] = None,
 ) -> BoundaryFit:
+  if is_cuda(device):
+    from pareto_weight_calibration.cuda_backend import cuda_fit_boundary
+    return cuda_fit_boundary(rows, structure, l2, temperature, device=device)
+
   if temperature not in TEMPERATURE_GRID:
     raise ValueError("temperature must come from the frozen grid")
   if l2 not in BOUNDARY_L2_GRID:
@@ -497,11 +506,13 @@ def evaluate_action_predictions(
       "observedRelativeLoss") / total_weight,
     "familyBalancedSupportedRelativeRegret": float(np.mean(family_regrets)),
     "worstFamilySupportedRelativeRegret": max(family_regrets),
-    "weightedActionAccuracy": math.fsum(
-        weights[index] * float(attached[index]["loss"]["correct"])
-        for index in decisive_indices
-    )
-                              / decisive_weight,
+    "weightedActionAccuracy": _ratio(
+        math.fsum(
+            weights[index] * float(attached[index]["loss"]["correct"])
+            for index in decisive_indices
+        ),
+        decisive_weight,
+    ),
     "defaultAccuracy": _ratio(
         math.fsum(
             weights[index] * float(attached[index]["loss"]["correct"])
@@ -654,7 +665,15 @@ def complexity_admissible(
   return lower_pooled_regret and worst_family_guard and improved_family_count > 1
 
 
-def inner_validate_boundary(rows: Sequence[ActionRow]) -> dict[str, Any]:
+def inner_validate_boundary(
+    rows: Sequence[ActionRow],
+    device: Optional[Any] = None,
+) -> dict[str, Any]:
+  if is_cuda(device):
+    from pareto_weight_calibration.cuda_backend import \
+      batched_inner_validate_boundary
+    return batched_inner_validate_boundary(rows, device=device)
+
   folds = grouped_family_folds(row.family_id for row in rows)
   candidates = []
   for structure in BOUNDARY_STRUCTURES:

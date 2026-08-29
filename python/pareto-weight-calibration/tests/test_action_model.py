@@ -19,6 +19,7 @@ from pareto_weight_calibration.action_model import (
   action_loss,
   bounded_mu,
   complexity_admissible,
+  evaluate_action_predictions,
   expected_supported_action_loss,
   feature_values,
   fit_scaler,
@@ -155,6 +156,12 @@ def test_indeterminate_has_no_decisive_regret() -> None:
   actual = row(action=INDETERMINATE, cost=999.0)
   assert expected_supported_action_loss(actual, 0.75) == 0.0
   assert action_loss(actual, CACHE)["correct"] is None
+  metrics = evaluate_action_predictions(
+      [actual],
+      [{"pairId": actual.pair_id, "familyId": actual.family_id,
+        "currentK": actual.current_k, "action": CACHE}],
+  )
+  assert metrics["weightedActionAccuracy"] is None
 
 
 def test_family_influence_and_action_cost_remain_separate() -> None:

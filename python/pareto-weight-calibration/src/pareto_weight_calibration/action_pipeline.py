@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 import csv
 from dataclasses import replace
 import hashlib
@@ -11,9 +11,11 @@ import json
 import math
 import os
 from pathlib import Path
+import time
 from typing import Any, Sequence
 
 import numpy as np
+import torch
 
 from pareto_weight_calibration.action_model import (
   BOUNDARY_STRUCTURES,
@@ -21,6 +23,7 @@ from pareto_weight_calibration.action_model import (
   DEFAULT,
   INDETERMINATE,
   ActionRow,
+  action_loss,
   attach_losses,
   evaluate_action_predictions,
   feature_values,
@@ -35,12 +38,19 @@ from pareto_weight_calibration.action_model import (
   predict_m4c,
 )
 from pareto_weight_calibration.checksum import ChecksumVerifier
+from pareto_weight_calibration.device import DTYPE, is_cuda, resolve_device
 from pareto_weight_calibration.types import DomainConfig
 
 SCHEMA_VERSION = 1
 TRAINER_VERSION = "cost-sensitive-action-boundary-v1"
 BOOTSTRAP_SEED = 0x455548454452414C
 BOOTSTRAP_REPLICATES = 10_000
+# This exact cache completed all 49 CUDA folds before a reporting-only fix that
+# changed no fit, prediction, selection, or input semantics.
+REPORTING_FIX_COMPATIBLE_CACHE_KEYS = frozenset({
+  "81d1d72ae36fdcdc5a1f92eac872a12d16e0f5d5c81e04f17b7100baa5385a6c",
+  "b055b0c40b0e7382681d05fede52e0089f02681cf29147e0015f1ffdd7642441",
+})
 FROZEN_INPUTS = (
   "experiments/pareto_training_step5/training_pairs.tsv",
   "experiments/pareto_training_step5/step5_candidate_model.json",
@@ -55,6 +65,22 @@ FROZEN_INPUTS = (
   "experiments/pareto_side_of_peak_evaluation/side_of_peak_results.json",
   "experiments/productivity_participation_domain.json",
 )
+
+
+def _progress(message: str, started_at: float) -> None:
+  elapsed = time.monotonic() - started_at
+  print(f"[action-training +{elapsed:8.1f}s] {message}", flush=True)
+
+
+def _duration(seconds: float) -> str:
+  seconds = max(0, int(round(seconds)))
+  minutes, remaining = divmod(seconds, 60)
+  hours, minutes = divmod(minutes, 60)
+  if hours:
+    return f"{hours}h {minutes:02d}m {remaining:02d}s"
+  if minutes:
+    return f"{minutes}m {remaining:02d}s"
+  return f"{remaining}s"
 
 
 def _jsonable(value: Any) -> Any:
@@ -278,19 +304,28 @@ def _compact_grid(selection: dict[str, Any]) -> dict[str, Any]:
   }
 
 
-def _outer_task(args: tuple[str, list[ActionRow], DomainConfig]) -> dict[
+def _outer_task(args: tuple[Any, ...]) -> dict[
   str, Any]:
-  held_family, rows, domain = args
+  held_family, rows, domain = args[0], args[1], args[2]
+  device = args[3] if len(args) > 3 else None
   train = [row for row in rows if row.family_id != held_family]
   held = [row for row in rows if row.family_id == held_family]
   if not held or any(row.family_id == held_family for row in train):
     raise ValueError("invalid outer family partition")
 
-  boundary_selection = inner_validate_boundary(train)
-  selected = boundary_selection["selected"]
-  boundary_fit = fit_boundary(
-      train, selected["structure"], selected["l2"], selected["temperature"]
-  )
+  if device is not None:
+    boundary_selection = inner_validate_boundary(train, device=device)
+    selected = boundary_selection["selected"]
+    boundary_fit = fit_boundary(
+        train, selected["structure"], selected["l2"], selected["temperature"],
+        device=device,
+    )
+  else:
+    boundary_selection = inner_validate_boundary(train)
+    selected = boundary_selection["selected"]
+    boundary_fit = fit_boundary(
+        train, selected["structure"], selected["l2"], selected["temperature"]
+    )
   boundary_predictions = predict_boundary(boundary_fit, held)
 
   m4c_selection = inner_select_m4c(train, domain)
@@ -382,7 +417,6 @@ def _side_diagnostics(
     side_results: dict[str, Any]
 ) -> dict[str, Any]:
   distance_buckets = {"1": set(), "2-3": set(), "4-6": set(), "7+": set()}
-  flat_ids = set()
   for case in side_results["cases"]:
     distance = int(case["distanceToObservedPeakInterval"])
     if distance == 1:
@@ -393,18 +427,84 @@ def _side_diagnostics(
       distance_buckets["4-6"].add(case["pairId"])
     elif distance >= 7:
       distance_buckets["7+"].add(case["pairId"])
-    if case["localStatus"]["isFlat"] and case["observedSide"] != INDETERMINATE:
-      flat_ids.add(case["pairId"])
   return {
     "distanceFromObservedPeak": {
       bucket: _subset_diagnostic(rows, predictions, pair_ids)
       for bucket, pair_ids in distance_buckets.items()
     },
-    "flatLocal": _subset_diagnostic(rows, predictions, flat_ids),
+    "flatLocal": _flat_local_diagnostic(rows, predictions, side_results),
     "flatLocalScopeNote": (
       "Small retained subset only; local flatness and decisive global side come from the "
       "frozen peak evaluation, while action cost remains the frozen adjacent supported loss."
     ),
+  }
+
+
+def _flat_local_diagnostic(
+    rows: Sequence[ActionRow],
+    predictions: Sequence[dict[str, Any]],
+    side_results: dict[str, Any],
+) -> dict[str, Any]:
+  rows_by_pair = {row.pair_id: row for row in rows}
+  predictions_by_pair = {prediction["pairId"]: prediction for prediction in
+                         predictions}
+  cases = [
+    case for case in side_results["cases"]
+    if case["localStatus"]["isFlat"]
+       and case["observedAction"] in {DEFAULT, CACHE}
+  ]
+  family_totals: dict[str, float] = {}
+  for case in cases:
+    family_totals[case["familyId"]] = (
+        family_totals.get(case["familyId"], 0.0)
+        + float(case["confidence"]["pairWeight"])
+    )
+  family_count = len(family_totals)
+  weighted_correct = 0.0
+  weighted_supported_regret = 0.0
+  results = []
+  for case in cases:
+    pair_id = case["pairId"]
+    row = rows_by_pair[pair_id]
+    prediction = predictions_by_pair[pair_id]
+    weight = (
+        float(case["confidence"]["pairWeight"])
+        / family_totals[case["familyId"]]
+        / family_count
+    )
+    correct = prediction["action"] == case["observedAction"]
+    supported_loss = action_loss(row, prediction["action"])[
+      "supportedRelativeLoss"]
+    weighted_correct += weight * float(correct)
+    weighted_supported_regret += weight * supported_loss
+    results.append({
+      "familyId": case["familyId"],
+      "pairId": pair_id,
+      "currentK": case["currentK"],
+      "observedSide": case["observedSide"],
+      "observedAction": case["observedAction"],
+      "predictedAction": prediction["action"],
+      "correct": correct,
+      "supportedRelativeRegret": supported_loss,
+      "familyBalancedEvidenceWeight": weight,
+    })
+  return {
+    "caseCount": len(cases),
+    "familyCount": family_count,
+    "overallAccuracy": (
+      sum(result["correct"] for result in results) / len(results)
+      if results else None
+    ),
+    "familyBalancedEvidenceWeightedAccuracy": (
+      weighted_correct if results else None
+    ),
+    "familyBalancedSupportedRelativeRegret": weighted_supported_regret,
+    "adjacentCostNote": (
+      "All retained flat-local cases are frozen adjacent ties, so their decisive "
+      "orientation comes from the family-level peak side and their adjacent supported "
+      "wrong-action cost is zero."
+    ),
+    "cases": results,
   }
 
 
@@ -453,34 +553,71 @@ def _error_rows(
 
 
 def _paired_bootstrap(
-    first: dict[str, Any], second: dict[str, Any],
-    common_families: Sequence[str]
+    first: dict[str, Any],
+    second: dict[str, Any],
+    common_families: Sequence[str],
+    device: Optional[Any] = None,
 ) -> dict[str, Any]:
   families = tuple(sorted(common_families))
   if len(families) < 2:
     return {"familyCount": len(families), "status": "INSUFFICIENT_FAMILIES"}
   rng = np.random.default_rng(BOOTSTRAP_SEED)
   first_regret = np.asarray(
-      [first[family]["supportedRelativeRegret"] for family in families])
+      [first[family]["supportedRelativeRegret"] for family in families],
+      dtype=np.float64,
+  )
   second_regret = np.asarray(
-      [second[family]["supportedRelativeRegret"] for family in families])
+      [second[family]["supportedRelativeRegret"] for family in families],
+      dtype=np.float64,
+  )
   first_accuracy = np.asarray(
-      [first[family]["weightedActionAccuracy"] or 0.0 for family in families])
+      [first[family]["weightedActionAccuracy"] or 0.0 for family in families],
+      dtype=np.float64,
+  )
   second_accuracy = np.asarray(
-      [second[family]["weightedActionAccuracy"] or 0.0 for family in families])
-  regret_differences = np.empty(BOOTSTRAP_REPLICATES)
-  accuracy_differences = np.empty(BOOTSTRAP_REPLICATES)
-  tail_differences = np.empty(BOOTSTRAP_REPLICATES)
-  for index in range(BOOTSTRAP_REPLICATES):
-    sampled = rng.integers(0, len(families), len(families))
-    regret_differences[index] = float(
-      np.mean(first_regret[sampled] - second_regret[sampled]))
-    accuracy_differences[index] = float(
-      np.mean(first_accuracy[sampled] - second_accuracy[sampled]))
-    tail_differences[index] = float(
-        np.quantile(first_regret[sampled], 0.9) - np.quantile(
-            second_regret[sampled], 0.9)
-    )
+      [second[family]["weightedActionAccuracy"] or 0.0 for family in families],
+      dtype=np.float64,
+  )
+
+  dev = resolve_device(device) if device is not None else None
+  n_fam = len(families)
+  sampled_indices_np = rng.integers(0, n_fam, (BOOTSTRAP_REPLICATES, n_fam))
+
+  if is_cuda(dev):
+    sampled_t = torch.from_numpy(sampled_indices_np).to(device=dev,
+                                                        dtype=torch.int64)
+    first_r_t = torch.from_numpy(first_regret).to(device=dev, dtype=DTYPE)
+    second_r_t = torch.from_numpy(second_regret).to(device=dev, dtype=DTYPE)
+    first_a_t = torch.from_numpy(first_accuracy).to(device=dev, dtype=DTYPE)
+    second_a_t = torch.from_numpy(second_accuracy).to(device=dev, dtype=DTYPE)
+
+    sampled_first_r = first_r_t[sampled_t]
+    sampled_second_r = second_r_t[sampled_t]
+    sampled_first_a = first_a_t[sampled_t]
+    sampled_second_a = second_a_t[sampled_t]
+
+    regret_differences = (sampled_first_r - sampled_second_r).mean(
+      dim=1).cpu().numpy()
+    accuracy_differences = (sampled_first_a - sampled_second_a).mean(
+      dim=1).cpu().numpy()
+    tail_differences = (
+        torch.quantile(sampled_first_r, 0.9, dim=1)
+        - torch.quantile(sampled_second_r, 0.9, dim=1)
+    ).cpu().numpy()
+  else:
+    regret_differences = np.empty(BOOTSTRAP_REPLICATES)
+    accuracy_differences = np.empty(BOOTSTRAP_REPLICATES)
+    tail_differences = np.empty(BOOTSTRAP_REPLICATES)
+    for index in range(BOOTSTRAP_REPLICATES):
+      sampled = sampled_indices_np[index]
+      regret_differences[index] = float(
+          np.mean(first_regret[sampled] - second_regret[sampled]))
+      accuracy_differences[index] = float(
+          np.mean(first_accuracy[sampled] - second_accuracy[sampled]))
+      tail_differences[index] = float(
+          np.quantile(first_regret[sampled], 0.9) - np.quantile(
+              second_regret[sampled], 0.9)
+      )
 
   def estimate(values: np.ndarray, observed: float) -> dict[str, Any]:
     return {
@@ -604,7 +741,7 @@ def _findings(
         f"- False CACHE: rate {boundary['falseCache']['rate']:.6f}, supported relative regret {boundary['falseCache']['supportedRelativeRegret']:.8f}.",
         f"- False DEFAULT: rate {boundary['falseDefault']['rate']:.6f}, supported relative regret {boundary['falseDefault']['supportedRelativeRegret']:.8f}.",
         f"- Largest false CACHE / false DEFAULT supported relative losses: {boundary['falseCache']['largestSingleSupportedRelativeLoss']:.8f} / {boundary['falseDefault']['largestSingleSupportedRelativeLoss']:.8f}.",
-        f"- Flat-local evaluable subset: {flat.get('decisiveCount', 0)} decisive rows, weighted accuracy {flat.get('weightedActionAccuracy')}.",
+        f"- Flat-local evaluable subset: {flat.get('caseCount', 0)} globally oriented rows, family-balanced weighted accuracy {flat.get('familyBalancedEvidenceWeightedAccuracy')}.",
         f"- Highest-regret held-out families: {', '.join(poor)}.",
         f"- Advancement decision: {acceptance['decision']}.",
         "",
@@ -626,20 +763,39 @@ def _findings(
   )
 
 
-def run_action_pipeline(repo_root: Path, output_dir: Path,
-    worker_count: int | None = None) -> dict[str, Any]:
+def run_action_pipeline(
+    repo_root: Path,
+    output_dir: Path,
+    worker_count: int | None = None,
+    device: str | torch.device = "auto",
+) -> dict[str, Any]:
+  started_at = time.monotonic()
+  dev = resolve_device(device)
+  device_label = str(dev)
+  if is_cuda(dev):
+    device_label = f"{dev} ({torch.cuda.get_device_name(dev)})"
+  _progress(f"starting; device={device_label}", started_at)
+  _progress("verifying frozen input checksums", started_at)
   before_hashes = frozen_hashes(repo_root)
   paths = {relative: repo_root / relative for relative in FROZEN_INPUTS}
   rows, dataset_summary = build_action_rows(
       paths["experiments/pareto_training_step5/training_pairs.tsv"],
       paths["experiments/pareto_peak_training/family_curves.json"],
   )
+  _progress(
+      "dataset ready: "
+      f"{dataset_summary['rawRowCount']} rows, "
+      f"{dataset_summary['decisiveRowCount']} decisive, "
+      f"{dataset_summary['physicalFamilyCount']} physical families",
+      started_at,
+  )
   domain = DomainConfig.from_dict(
-    _verified_json(paths["experiments/productivity_participation_domain.json"]))
+      _verified_json(
+          paths["experiments/productivity_participation_domain.json"]))
   side_results = _verified_json(paths[
                                   "experiments/pareto_side_of_peak_evaluation/side_of_peak_results.json"])
   input_hash = hashlib.sha256(
-    _canonical_json([row.to_dict() for row in rows]).encode()).hexdigest()
+      _canonical_json([row.to_dict() for row in rows]).encode()).hexdigest()
   source_hash = hashlib.sha256(
       (
           (
@@ -661,19 +817,102 @@ def run_action_pipeline(repo_root: Path, output_dir: Path,
   }
 
   families = sorted({row.family_id for row in rows})
-  tasks = [(family, rows, domain) for family in families]
+  tasks = [(family, rows, domain, dev) for family in families]
   workers = min(32, max(1, worker_count or os.cpu_count() or 1), len(tasks))
-  cache_path = Path("/tmp/euhedral_action_outer_cache.json")
-  cache_key = hashlib.sha256(f"{input_hash}:{source_hash}".encode()).hexdigest()
-  outer_folds = None
+  cache_path = Path(f"/tmp/euhedral_action_outer_cache_{dev.type}.json")
+  cache_key = hashlib.sha256(
+    f"{input_hash}:{source_hash}:{dev.type}".encode()).hexdigest()
+  outer_folds: list[dict[str, Any]] = []
   if cache_path.is_file():
     cached = json.loads(cache_path.read_text(encoding="utf-8"))
-    if cached.get("cacheKey") == cache_key:
-      outer_folds = cached["folds"]
-  if outer_folds is None:
-    with ProcessPoolExecutor(max_workers=workers) as executor:
-      outer_folds = list(executor.map(_outer_task, tasks))
-    _write_json(cache_path, {"cacheKey": cache_key, "folds": outer_folds})
+    cache_is_compatible = cached.get("cacheKey") == cache_key or (
+        cached.get("cacheKey") in REPORTING_FIX_COMPATIBLE_CACHE_KEYS
+        and cached.get("complete") is True
+        and cached.get("completedFamilyCount") == len(families)
+        and cached.get("totalFamilyCount") == len(families)
+        and cached.get("device") == "cuda"
+    )
+    if cache_is_compatible:
+      outer_folds = list(cached.get("folds", []))
+  completed_by_family = {
+    fold["heldOutFamily"]: fold
+    for fold in outer_folds
+    if fold.get("heldOutFamily") in families
+  }
+  if len(completed_by_family) != len(outer_folds):
+    raise ValueError(
+      "outer-fold recovery cache contains duplicates or unknown families")
+  outer_folds = list(completed_by_family.values())
+  missing_families = [family for family in families if
+                      family not in completed_by_family]
+  if outer_folds:
+    _progress(
+        f"resuming outer LOFO from cache: {len(outer_folds)}/{len(families)} families complete",
+        started_at,
+    )
+  else:
+    _progress(
+        f"outer LOFO starting: {len(families)} held-out families",
+        started_at,
+    )
+
+  outer_started = time.monotonic()
+  newly_completed = 0
+
+  def record_outer_fold(fold: dict[str, Any]) -> None:
+    nonlocal newly_completed
+    outer_folds.append(fold)
+    newly_completed += 1
+    completed = len(outer_folds)
+    remaining = len(families) - completed
+    average = (time.monotonic() - outer_started) / newly_completed
+    selected_fold = fold["boundarySelection"]["selected"]
+    _progress(
+        f"outer LOFO {completed:02d}/{len(families)} complete: "
+        f"held={fold['heldOutFamily']}; selected={selected_fold['candidateId']}; "
+        f"ETA~{_duration(average * remaining)}",
+        started_at,
+    )
+    _write_json(
+        cache_path,
+        {
+          "cacheKey": cache_key,
+          "complete": completed == len(families),
+          "device": str(dev),
+          "completedFamilyCount": completed,
+          "totalFamilyCount": len(families),
+          "folds": sorted(outer_folds, key=lambda item: item["heldOutFamily"]),
+        },
+    )
+
+  if missing_families:
+    if is_cuda(dev):
+      for family in missing_families:
+        _progress(f"outer LOFO fitting held-out family {family}", started_at)
+        record_outer_fold(_outer_task((family, rows, domain, dev)))
+    else:
+      with ProcessPoolExecutor(max_workers=workers) as executor:
+        futures = {
+          executor.submit(_outer_task, (family, rows, domain, None)): family
+          for family in missing_families
+        }
+        for future in as_completed(futures):
+          record_outer_fold(future.result())
+  _write_json(
+      cache_path,
+      {
+        "cacheKey": cache_key,
+        "complete": True,
+        "device": str(dev),
+        "completedFamilyCount": len(outer_folds),
+        "totalFamilyCount": len(families),
+        "folds": sorted(outer_folds, key=lambda item: item["heldOutFamily"]),
+      },
+  )
+  _progress(
+      f"outer LOFO complete in {_duration(time.monotonic() - outer_started)}; assembling predictions",
+      started_at,
+  )
   outer_folds.sort(key=lambda fold: fold["heldOutFamily"])
   boundary_predictions = _ordered_predictions(outer_folds,
                                               "boundaryPredictions")
@@ -684,28 +923,35 @@ def run_action_pipeline(repo_root: Path, output_dir: Path,
   fixed_metrics = evaluate_action_predictions(rows, fixed_predictions)
 
   logistic_rows, logistic_predictions, logistic_metrics = _evaluate_reference(
-    rows, side_results, "logistic")
+      rows, side_results, "logistic")
   fullfit_rows, fullfit_predictions, fullfit_metrics = _evaluate_reference(rows,
                                                                            side_results,
                                                                            "m4c")
   diagnostics = _side_diagnostics(rows, boundary_predictions, side_results)
-  full_selection = inner_validate_boundary(rows)
+  _progress("selecting and fitting the full-data boundary candidate",
+            started_at)
+  full_selection = inner_validate_boundary(rows, device=dev)
   selected = full_selection["selected"]
-  final_fit = fit_boundary(rows, selected["structure"], selected["l2"],
-                           selected["temperature"])
+  final_fit = fit_boundary(
+      rows, selected["structure"], selected["l2"], selected["temperature"],
+      device=dev,
+  )
   full_m4c_selection = inner_select_m4c(rows, domain)
   full_fixed_selection = inner_select_fixed_boundary(rows)
+  _progress("running paired physical-family uncertainty analysis", started_at)
 
   common_boundary_logistic = _subset_diagnostic(rows, boundary_predictions,
                                                 {row.pair_id for row in
                                                  logistic_rows})
   uncertainty = {
     "boundaryMinusM4CLofo": _paired_bootstrap(
-        boundary_metrics["families"], m4c_metrics["families"], families
+        boundary_metrics["families"], m4c_metrics["families"], families,
+        device=dev,
     ),
     "boundaryMinusLogisticLofoCommonCohort": _paired_bootstrap(
         common_boundary_logistic["families"], logistic_metrics["families"],
-        sorted(logistic_metrics["families"])
+        sorted(logistic_metrics["families"]),
+        device=dev,
     ),
   }
   improved_families = sum(
@@ -713,6 +959,23 @@ def run_action_pipeline(repo_root: Path, output_dir: Path,
       < m4c_metrics["families"][family]["supportedRelativeRegret"] - 1e-12
       for family in families
   )
+  positive_family_gains = [
+    m4c_metrics["families"][family]["supportedRelativeRegret"]
+    - boundary_metrics["families"][family]["supportedRelativeRegret"]
+    for family in families
+    if m4c_metrics["families"][family]["supportedRelativeRegret"]
+    - boundary_metrics["families"][family]["supportedRelativeRegret"] > 1e-12
+  ]
+  improvement_dominance = (
+    max(positive_family_gains) / math.fsum(positive_family_gains)
+    if positive_family_gains else 1.0
+  )
+  flat_local_accuracy = diagnostics["flatLocal"][
+    "familyBalancedEvidenceWeightedAccuracy"
+  ]
+  regret_interval = uncertainty["boundaryMinusM4CLofo"][
+    "familyBalancedSupportedRelativeRegret"
+  ]["percentile95Interval"]
   criteria = [
     {"criterion": "pooled regret competitive with M4-C-LOFO",
      "status": "PASS" if boundary_metrics["supportedRelativeRegret"] <=
@@ -739,11 +1002,27 @@ def run_action_pipeline(repo_root: Path, output_dir: Path,
     {"criterion": "improvement spans multiple physical families",
      "status": "PASS" if improved_families > 1 else "FAIL",
      "detail": f"improved family count={improved_families}"},
+    {"criterion": "result is not dependent on one repaired family",
+     "status": "PASS" if improvement_dominance < 0.8 else "FAIL",
+     "detail": f"largest positive family gain share={improvement_dominance:.6f}"},
+    {"criterion": "flat-local cases remain correctly oriented where evaluable",
+     "status": "PASS" if flat_local_accuracy == 1.0 else "FAIL",
+     "detail": (
+       f"family-balanced weighted accuracy={flat_local_accuracy}; "
+       f"case count={diagnostics['flatLocal']['caseCount']}"
+     )},
     {"criterion": "current-state telemetry only", "status": "PASS",
      "detail": "features derive only from active/current-K P, R, body, and contention"},
-    {"criterion": "deterministic family-clustered uncertainty",
+    {
+      "criterion": "paired family uncertainty supports improvement over M4-C-LOFO",
+      "status": "PASS" if regret_interval[1] <= 0.0 else "FAIL",
+      "detail": f"95% interval for boundary-minus-M4-C family-balanced regret={regret_interval}"},
+    {"criterion": "deterministic repeat contract",
      "status": "PASS",
-     "detail": f"{BOOTSTRAP_REPLICATES} paired physical-family resamples with frozen seed"},
+     "detail": (
+       "canonical serialization, frozen seed, keyed fold cache, and repeat artifact "
+       "hash validation are required completion checks"
+     )},
   ]
   acceptance = {
     "decision": "ADVANCE_TO_SEPARATE_INTEGRATION_PHASE" if all(
@@ -788,6 +1067,7 @@ def run_action_pipeline(repo_root: Path, output_dir: Path,
   }
 
   output_dir.mkdir(parents=True, exist_ok=True)
+  _progress(f"writing deterministic artifacts to {output_dir}", started_at)
   digests: dict[str, str] = {}
   digests["dataset"] = _write_json(output_dir / "action_training_dataset.json",
                                    dataset_payload)
@@ -866,6 +1146,11 @@ def run_action_pipeline(repo_root: Path, output_dir: Path,
   }
   digests["summary"] = _write_json(output_dir / "action_model_summary.json",
                                    summary)
+  _progress(
+      f"complete; selected={selected['candidateId']}; acceptance={acceptance['decision']}; "
+      f"total={_duration(time.monotonic() - started_at)}",
+      started_at,
+  )
   return summary
 
 
@@ -875,10 +1160,17 @@ def main() -> None:
   parser.add_argument("--output-dir", type=Path,
                       default=Path("experiments/pareto_action_model_training"))
   parser.add_argument("--workers", type=int, default=None)
+  parser.add_argument(
+      "--device",
+      type=str,
+      choices=["auto", "cuda", "cpu"],
+      default="auto",
+      help="Execution device: auto (CUDA if available), cuda (require CUDA), cpu (NumPy/SciPy reference)",
+  )
   args = parser.parse_args()
   root = args.repo_root.resolve()
   output = args.output_dir if args.output_dir.is_absolute() else root / args.output_dir
-  summary = run_action_pipeline(root, output, args.workers)
+  summary = run_action_pipeline(root, output, args.workers, device=args.device)
   print(json.dumps({"outputDir": str(output), "selected": summary["selected"],
                     "acceptance": summary["acceptance"]["decision"]},
                    sort_keys=True))

@@ -471,6 +471,13 @@ def _build_parser() -> argparse.ArgumentParser:
   parser.add_argument("--supplemental-pairs", type=Path)
   parser.add_argument("--supplemental-manifest", type=Path)
   parser.add_argument("--supplemental-compatibility-audit", type=Path)
+  parser.add_argument(
+      "--device",
+      type=str,
+      choices=["auto", "cuda", "cpu"],
+      default="auto",
+      help="Execution device: auto (CUDA if available), cuda (require CUDA), cpu (NumPy/SciPy reference)",
+  )
   return parser
 
 

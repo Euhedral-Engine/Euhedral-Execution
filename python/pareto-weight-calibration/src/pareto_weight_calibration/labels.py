@@ -122,8 +122,8 @@ class LabelSynthesizer:
           SynthesisResult containing effective_outcome, trajectory_status, y, pair_weight,
           label_evidence_basis, and basis throughput metrics.
       """
-        whole = whole_metrics.outcome
-        late = late_metrics.outcome
+      whole = whole_metrics.outcome
+      late = late_metrics.outcome
 
       # Default basis metrics from whole-run if perfs not supplied
       mean_a = perf_a.mean if perf_a else 0.0
@@ -135,136 +135,17 @@ class LabelSynthesizer:
       late_var_a = perf_a.late_variance if perf_a else 0.0
       late_var_b = perf_b.late_variance if perf_b else 0.0
 
-        # Case 1: High-confidence stable agreement
-        if whole == late and whole in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS):
-            winner_eligible = (
-              arm_a_trajectory_eligible
-              if whole == Outcome.K_WINS
-              else arm_b_trajectory_eligible
-            )
-            if not winner_eligible:
-              return SynthesisResult(
-                  effective_outcome=Outcome.INCONCLUSIVE,
-                  trajectory_status=TrajectoryStatus.INELIGIBLE_TRAJECTORY,
-                  y=0.5,
-                  pair_weight=0.0,
-                  label_evidence_basis=LabelEvidenceBasis.NONE,
-                  basis_throughput_k=mean_a,
-                  basis_throughput_k_minus_1=mean_b,
-                  basis_delta=whole_metrics.delta,
-                  basis_variance_k=var_a,
-                  basis_variance_k_minus_1=var_b,
-                  basis_uncertainty=whole_metrics.uncertainty,
-                )
-            status = TrajectoryStatus.STABLE_AGREEMENT
-            effective_outcome = whole
-            y = 0.0 if whole == Outcome.K_WINS else 1.0
-            weight = cls._separation_weight(whole_metrics)
-            return SynthesisResult(
-                effective_outcome=effective_outcome,
-                trajectory_status=status,
-                y=y,
-                pair_weight=weight,
-                label_evidence_basis=LabelEvidenceBasis.WHOLE_AGREEMENT,
-                basis_throughput_k=mean_a,
-                basis_throughput_k_minus_1=mean_b,
-                basis_delta=whole_metrics.delta,
-                basis_variance_k=var_a,
-                basis_variance_k_minus_1=var_b,
-                basis_uncertainty=whole_metrics.uncertainty,
-            )
-
-        # Case 2: Stable tie
-        if whole == Outcome.STABLE_TIE and late == Outcome.STABLE_TIE:
-            if not (arm_a_trajectory_eligible and arm_b_trajectory_eligible):
-              return SynthesisResult(
-                  effective_outcome=Outcome.INCONCLUSIVE,
-                  trajectory_status=TrajectoryStatus.INELIGIBLE_TRAJECTORY,
-                  y=0.5,
-                  pair_weight=0.0,
-                  label_evidence_basis=LabelEvidenceBasis.NONE,
-                  basis_throughput_k=mean_a,
-                  basis_throughput_k_minus_1=mean_b,
-                  basis_delta=whole_metrics.delta,
-                  basis_variance_k=var_a,
-                  basis_variance_k_minus_1=var_b,
-                  basis_uncertainty=whole_metrics.uncertainty,
-                )
-            status = TrajectoryStatus.STABLE_AGREEMENT
-            effective_outcome = Outcome.STABLE_TIE
-            y = 0.5
-            p = whole_metrics.practical_margin
-            weight = (
-              max(0.0, 1.0 - abs(whole_metrics.delta) / p)
-              * max(0.0, 1.0 - whole_metrics.uncertainty / p)
-              if p > 0
-              else 0.0
-            )
-            return SynthesisResult(
-                effective_outcome=effective_outcome,
-                trajectory_status=status,
-                y=y,
-                pair_weight=weight,
-                label_evidence_basis=LabelEvidenceBasis.STABLE_TIE,
-                basis_throughput_k=mean_a,
-                basis_throughput_k_minus_1=mean_b,
-                basis_delta=whole_metrics.delta,
-                basis_variance_k=var_a,
-                basis_variance_k_minus_1=var_b,
-                basis_uncertainty=whole_metrics.uncertainty,
-            )
-
-        # Case 3: Late convergence (whole-run inconclusive, but late trajectory shows consistent winner)
-      if whole == Outcome.INCONCLUSIVE and late in (
-          Outcome.K_WINS,
-          Outcome.K_MINUS_1_WINS,
-      ):
-            winner_eligible = (
-              arm_a_trajectory_eligible
-              if late == Outcome.K_WINS
-              else arm_b_trajectory_eligible
-            )
-            if not winner_eligible:
-              return SynthesisResult(
-                  effective_outcome=Outcome.INCONCLUSIVE,
-                  trajectory_status=TrajectoryStatus.INELIGIBLE_TRAJECTORY,
-                  y=0.5,
-                  pair_weight=0.0,
-                  label_evidence_basis=LabelEvidenceBasis.NONE,
-                  basis_throughput_k=late_mean_a,
-                  basis_throughput_k_minus_1=late_mean_b,
-                  basis_delta=late_metrics.delta,
-                  basis_variance_k=late_var_a,
-                  basis_variance_k_minus_1=late_var_b,
-                  basis_uncertainty=late_metrics.uncertainty,
-                )
-            status = TrajectoryStatus.LATE_CONVERGENCE
-            effective_outcome = late
-            y = 0.0 if late == Outcome.K_WINS else 1.0
-            weight = cls._separation_weight(late_metrics, stability_factor=0.5)
-            return SynthesisResult(
-                effective_outcome=effective_outcome,
-                trajectory_status=status,
-                y=y,
-                pair_weight=weight,
-                label_evidence_basis=LabelEvidenceBasis.LATE_CONVERGENCE,
-                basis_throughput_k=late_mean_a,
-                basis_throughput_k_minus_1=late_mean_b,
-                basis_delta=late_metrics.delta,
-                basis_variance_k=late_var_a,
-                basis_variance_k_minus_1=late_var_b,
-                basis_uncertainty=late_metrics.uncertainty,
-            )
-
-        # Case 4: Decisive conflict between whole and late
-        if (
-            whole in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS)
-            and late in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS)
-            and whole != late
-        ):
+      # Case 1: High-confidence stable agreement
+      if whole == late and whole in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS):
+        winner_eligible = (
+          arm_a_trajectory_eligible
+          if whole == Outcome.K_WINS
+          else arm_b_trajectory_eligible
+        )
+        if not winner_eligible:
           return SynthesisResult(
               effective_outcome=Outcome.INCONCLUSIVE,
-              trajectory_status=TrajectoryStatus.CONFLICT,
+              trajectory_status=TrajectoryStatus.INELIGIBLE_TRAJECTORY,
               y=0.5,
               pair_weight=0.0,
               label_evidence_basis=LabelEvidenceBasis.NONE,
@@ -274,9 +155,128 @@ class LabelSynthesizer:
               basis_variance_k=var_a,
               basis_variance_k_minus_1=var_b,
               basis_uncertainty=whole_metrics.uncertainty,
-            )
+          )
+        status = TrajectoryStatus.STABLE_AGREEMENT
+        effective_outcome = whole
+        y = 0.0 if whole == Outcome.K_WINS else 1.0
+        weight = cls._separation_weight(whole_metrics)
+        return SynthesisResult(
+            effective_outcome=effective_outcome,
+            trajectory_status=status,
+            y=y,
+            pair_weight=weight,
+            label_evidence_basis=LabelEvidenceBasis.WHOLE_AGREEMENT,
+            basis_throughput_k=mean_a,
+            basis_throughput_k_minus_1=mean_b,
+            basis_delta=whole_metrics.delta,
+            basis_variance_k=var_a,
+            basis_variance_k_minus_1=var_b,
+            basis_uncertainty=whole_metrics.uncertainty,
+        )
 
-        # Case 5: Other non-decisive combinations
+      # Case 2: Stable tie
+      if whole == Outcome.STABLE_TIE and late == Outcome.STABLE_TIE:
+        if not (arm_a_trajectory_eligible and arm_b_trajectory_eligible):
+          return SynthesisResult(
+              effective_outcome=Outcome.INCONCLUSIVE,
+              trajectory_status=TrajectoryStatus.INELIGIBLE_TRAJECTORY,
+              y=0.5,
+              pair_weight=0.0,
+              label_evidence_basis=LabelEvidenceBasis.NONE,
+              basis_throughput_k=mean_a,
+              basis_throughput_k_minus_1=mean_b,
+              basis_delta=whole_metrics.delta,
+              basis_variance_k=var_a,
+              basis_variance_k_minus_1=var_b,
+              basis_uncertainty=whole_metrics.uncertainty,
+          )
+        status = TrajectoryStatus.STABLE_AGREEMENT
+        effective_outcome = Outcome.STABLE_TIE
+        y = 0.5
+        p = whole_metrics.practical_margin
+        weight = (
+          max(0.0, 1.0 - abs(whole_metrics.delta) / p)
+          * max(0.0, 1.0 - whole_metrics.uncertainty / p)
+          if p > 0
+          else 0.0
+        )
+        return SynthesisResult(
+            effective_outcome=effective_outcome,
+            trajectory_status=status,
+            y=y,
+            pair_weight=weight,
+            label_evidence_basis=LabelEvidenceBasis.STABLE_TIE,
+            basis_throughput_k=mean_a,
+            basis_throughput_k_minus_1=mean_b,
+            basis_delta=whole_metrics.delta,
+            basis_variance_k=var_a,
+            basis_variance_k_minus_1=var_b,
+            basis_uncertainty=whole_metrics.uncertainty,
+        )
+
+      # Case 3: Late convergence (whole-run inconclusive, but late trajectory shows consistent winner)
+      if whole == Outcome.INCONCLUSIVE and late in (
+          Outcome.K_WINS,
+          Outcome.K_MINUS_1_WINS,
+      ):
+        winner_eligible = (
+          arm_a_trajectory_eligible
+          if late == Outcome.K_WINS
+          else arm_b_trajectory_eligible
+        )
+        if not winner_eligible:
+          return SynthesisResult(
+              effective_outcome=Outcome.INCONCLUSIVE,
+              trajectory_status=TrajectoryStatus.INELIGIBLE_TRAJECTORY,
+              y=0.5,
+              pair_weight=0.0,
+              label_evidence_basis=LabelEvidenceBasis.NONE,
+              basis_throughput_k=late_mean_a,
+              basis_throughput_k_minus_1=late_mean_b,
+              basis_delta=late_metrics.delta,
+              basis_variance_k=late_var_a,
+              basis_variance_k_minus_1=late_var_b,
+              basis_uncertainty=late_metrics.uncertainty,
+          )
+        status = TrajectoryStatus.LATE_CONVERGENCE
+        effective_outcome = late
+        y = 0.0 if late == Outcome.K_WINS else 1.0
+        weight = cls._separation_weight(late_metrics, stability_factor=0.5)
+        return SynthesisResult(
+            effective_outcome=effective_outcome,
+            trajectory_status=status,
+            y=y,
+            pair_weight=weight,
+            label_evidence_basis=LabelEvidenceBasis.LATE_CONVERGENCE,
+            basis_throughput_k=late_mean_a,
+            basis_throughput_k_minus_1=late_mean_b,
+            basis_delta=late_metrics.delta,
+            basis_variance_k=late_var_a,
+            basis_variance_k_minus_1=late_var_b,
+            basis_uncertainty=late_metrics.uncertainty,
+        )
+
+      # Case 4: Decisive conflict between whole and late
+      if (
+          whole in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS)
+          and late in (Outcome.K_WINS, Outcome.K_MINUS_1_WINS)
+          and whole != late
+      ):
+        return SynthesisResult(
+            effective_outcome=Outcome.INCONCLUSIVE,
+            trajectory_status=TrajectoryStatus.CONFLICT,
+            y=0.5,
+            pair_weight=0.0,
+            label_evidence_basis=LabelEvidenceBasis.NONE,
+            basis_throughput_k=mean_a,
+            basis_throughput_k_minus_1=mean_b,
+            basis_delta=whole_metrics.delta,
+            basis_variance_k=var_a,
+            basis_variance_k_minus_1=var_b,
+            basis_uncertainty=whole_metrics.uncertainty,
+        )
+
+      # Case 5: Other non-decisive combinations
       return SynthesisResult(
           effective_outcome=Outcome.INCONCLUSIVE,
           trajectory_status=(
@@ -293,4 +293,4 @@ class LabelSynthesizer:
           basis_variance_k=var_a,
           basis_variance_k_minus_1=var_b,
           basis_uncertainty=whole_metrics.uncertainty,
-        )
+      )

@@ -54,44 +54,44 @@ class TrajectoryAnalyzer:
         require_sidecar: bool = False,
     ) -> List[WindowRecord]:
       """Loads and parses trajectory_windows.tsv, validating SHA-256 sidecar if requested."""
-        if not tsv_path.exists() or not tsv_path.is_file():
-            raise FileNotFoundError(f"Trajectory file not found: {tsv_path}")
+      if not tsv_path.exists() or not tsv_path.is_file():
+        raise FileNotFoundError(f"Trajectory file not found: {tsv_path}")
 
-        if verify_checksum:
-          ChecksumVerifier.verify_file(
-              tsv_path, require_sidecar=require_sidecar
-          )
+      if verify_checksum:
+        ChecksumVerifier.verify_file(
+            tsv_path, require_sidecar=require_sidecar
+        )
 
-        windows: List[WindowRecord] = []
-        with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
-            reader = csv.DictReader(f, delimiter="\t")
-            if not reader.fieldnames:
-                raise TrajectoryParseError(f"Empty or headerless TSV: {tsv_path}")
+      windows: List[WindowRecord] = []
+      with open(tsv_path, "r", encoding="utf-8", errors="replace") as f:
+        reader = csv.DictReader(f, delimiter="\t")
+        if not reader.fieldnames:
+          raise TrajectoryParseError(f"Empty or headerless TSV: {tsv_path}")
 
-            for row_idx, row in enumerate(reader):
-                try:
-                    jvm_id = row.get("jvmId", f"jvm-{row_idx}")
-                    lifecycle = row.get("lifecycleMode", "CONTINUOUS")
-                    win_idx = int(row.get("windowIndex", row_idx))
-                    thrpt = float(row["throughputExecutionsPerSecond"])
-                    fed_raw = row.get("continuouslyFed", "true").strip().lower()
-                    fed = fed_raw in ("true", "1", "t", "yes")
+        for row_idx, row in enumerate(reader):
+          try:
+            jvm_id = row.get("jvmId", f"jvm-{row_idx}")
+            lifecycle = row.get("lifecycleMode", "CONTINUOUS")
+            win_idx = int(row.get("windowIndex", row_idx))
+            thrpt = float(row["throughputExecutionsPerSecond"])
+            fed_raw = row.get("continuouslyFed", "true").strip().lower()
+            fed = fed_raw in ("true", "1", "t", "yes")
 
-                    windows.append(
-                        WindowRecord(
-                            jvm_id=jvm_id,
-                            lifecycle_mode=lifecycle,
-                            window_index=win_idx,
-                            throughput=thrpt,
-                            continuously_fed=fed,
-                        )
-                    )
-                except (KeyError, ValueError) as e:
-                    raise TrajectoryParseError(
-                        f"Malformed row #{row_idx} in {tsv_path}: {e}"
-                    ) from e
+            windows.append(
+                WindowRecord(
+                    jvm_id=jvm_id,
+                    lifecycle_mode=lifecycle,
+                    window_index=win_idx,
+                    throughput=thrpt,
+                    continuously_fed=fed,
+                )
+            )
+          except (KeyError, ValueError) as e:
+            raise TrajectoryParseError(
+                f"Malformed row #{row_idx} in {tsv_path}: {e}"
+            ) from e
 
-        return windows
+      return windows
 
     @classmethod
     def analyze_fork(
@@ -272,49 +272,49 @@ class TrajectoryAnalyzer:
           Tuple of (fork-level results, aggregate arm trajectory is stable or improving).
       """
       tsv_candidates = cls.discover_trajectory_files(run_paths)
-        if not tsv_candidates:
-            return ([], False)
+      if not tsv_candidates:
+        return ([], False)
 
       # Parse per-file or per-jvm_id windows
       fork_analyses: List[Tuple[str, List[WindowRecord]]] = []
-        for tsv in tsv_candidates:
-          windows = cls.parse_trajectory_file(
-              tsv,
-              verify_checksum=verify_checksum,
-              require_sidecar=require_sidecar,
-          )
-          # Group by jvm_id within file
-          grouped: Dict[str, List[WindowRecord]] = {}
-          for w in windows:
-            grouped.setdefault(w.jvm_id, []).append(w)
-          for jvm_id, wins in sorted(grouped.items()):
-            fork_id = f"{tsv.parent.name}:{jvm_id}"
-            fork_analyses.append((fork_id, wins))
+      for tsv in tsv_candidates:
+        windows = cls.parse_trajectory_file(
+            tsv,
+            verify_checksum=verify_checksum,
+            require_sidecar=require_sidecar,
+        )
+        # Group by jvm_id within file
+        grouped: Dict[str, List[WindowRecord]] = {}
+        for w in windows:
+          grouped.setdefault(w.jvm_id, []).append(w)
+        for jvm_id, wins in sorted(grouped.items()):
+          fork_id = f"{tsv.parent.name}:{jvm_id}"
+          fork_analyses.append((fork_id, wins))
 
-        fork_results: List[ForkThroughput] = []
+      fork_results: List[ForkThroughput] = []
       for fork_idx, (fork_id, wins) in enumerate(fork_analyses):
-            analysis = cls.analyze_fork(wins)
-            mean_all = (
-              float(np.mean([w.throughput for w in analysis.all_windows]))
-              if analysis.all_windows
-              else 0.0
-            )
+        analysis = cls.analyze_fork(wins)
+        mean_all = (
+          float(np.mean([w.throughput for w in analysis.all_windows]))
+          if analysis.all_windows
+          else 0.0
+        )
 
-            fork_results.append(
-                ForkThroughput(
-                    fork_index=fork_idx,
-                    mean_ops_per_sec=mean_all,
-                    window_scores=[w.throughput for w in analysis.all_windows],
-                    late_mean_ops_per_sec=analysis.late_mean,
-                    is_late_stable=analysis.is_stable,
-                    is_late_improving=analysis.is_improving,
-                    late_is_continuously_fed=analysis.continuously_fed,
-                    late_has_sufficient_windows=analysis.has_sufficient_windows,
-                    late_cv=analysis.late_cv,
-                    late_slope=analysis.late_slope,
-                    fork_identifier=fork_id,
-                )
+        fork_results.append(
+            ForkThroughput(
+                fork_index=fork_idx,
+                mean_ops_per_sec=mean_all,
+                window_scores=[w.throughput for w in analysis.all_windows],
+                late_mean_ops_per_sec=analysis.late_mean,
+                is_late_stable=analysis.is_stable,
+                is_late_improving=analysis.is_improving,
+                late_is_continuously_fed=analysis.continuously_fed,
+                late_has_sufficient_windows=analysis.has_sufficient_windows,
+                late_cv=analysis.late_cv,
+                late_slope=analysis.late_slope,
+                fork_identifier=fork_id,
             )
+        )
 
       arm_stable = cls.arm_is_stable_or_improving(fork_results)
       return (fork_results, arm_stable)

@@ -92,72 +92,72 @@ class StalenessParser:
             if not line:
               continue
             parts = line.split("\t")
-                try:
-                  iter_idx = int(
-                      parts[idx_iter]) if idx_iter != -1 and idx_iter < len(
-                      parts) else 0
-                  core = int(
-                      parts[idx_core]) if idx_core != -1 and idx_core < len(
-                      parts) else 0
-                  segment = parts[idx_seg] if idx_seg != -1 and idx_seg < len(
-                      parts) else "steadyState"
-                  sample_idx = int(
-                      parts[idx_sidx]) if idx_sidx != -1 and idx_sidx < len(
-                      parts) else row_idx
-                  contention = int(parts[idx_cont])
-                  raw_contention = int(parts[
-                                         idx_raw_cont]) if idx_raw_cont != -1 and idx_raw_cont < len(
-                      parts) else contention
-                  obs_count = int(parts[
-                                    idx_obscnt]) if idx_obscnt != -1 and idx_obscnt < len(
-                      parts) else 1
-                  exec_path = parts[
-                    idx_path] if idx_path != -1 and idx_path < len(
-                      parts) else "UNKNOWN"
-                  cache_count = int(
-                      parts[idx_cache]) if idx_cache != -1 and idx_cache < len(
-                      parts) else 0
-                  prod_handles = int(
-                      parts[idx_prod]) if idx_prod != -1 and idx_prod < len(
-                      parts) else 0
-                  reg_workers = int(parts[idx_reg])
-                  rank = int(parts[idx_rank])
-                  body_cost = float(
-                      parts[idx_body]) if idx_body != -1 and idx_body < len(
-                      parts) else 0.0
+            try:
+              iter_idx = int(
+                  parts[idx_iter]) if idx_iter != -1 and idx_iter < len(
+                  parts) else 0
+              core = int(
+                  parts[idx_core]) if idx_core != -1 and idx_core < len(
+                  parts) else 0
+              segment = parts[idx_seg] if idx_seg != -1 and idx_seg < len(
+                  parts) else "steadyState"
+              sample_idx = int(
+                  parts[idx_sidx]) if idx_sidx != -1 and idx_sidx < len(
+                  parts) else row_idx
+              contention = int(parts[idx_cont])
+              raw_contention = int(parts[
+                                     idx_raw_cont]) if idx_raw_cont != -1 and idx_raw_cont < len(
+                  parts) else contention
+              obs_count = int(parts[
+                                idx_obscnt]) if idx_obscnt != -1 and idx_obscnt < len(
+                  parts) else 1
+              exec_path = parts[
+                idx_path] if idx_path != -1 and idx_path < len(
+                  parts) else "UNKNOWN"
+              cache_count = int(
+                  parts[idx_cache]) if idx_cache != -1 and idx_cache < len(
+                  parts) else 0
+              prod_handles = int(
+                  parts[idx_prod]) if idx_prod != -1 and idx_prod < len(
+                  parts) else 0
+              reg_workers = int(parts[idx_reg])
+              rank = int(parts[idx_rank])
+              body_cost = float(
+                  parts[idx_body]) if idx_body != -1 and idx_body < len(
+                  parts) else 0.0
 
-                  ready_raw = parts[
-                    idx_ready].lower() if idx_ready != -1 and idx_ready < len(
-                      parts) else "1"
-                    ready = ready_raw in ("1", "true", "t", "yes")
+              ready_raw = parts[
+                idx_ready].lower() if idx_ready != -1 and idx_ready < len(
+                  parts) else "1"
+              ready = ready_raw in ("1", "true", "t", "yes")
 
-                  attempts = int(parts[
-                                   idx_attempts]) if idx_attempts != -1 and idx_attempts < len(
-                      parts) else 0
+              attempts = int(parts[
+                               idx_attempts]) if idx_attempts != -1 and idx_attempts < len(
+                  parts) else 0
 
-                    samples.append(
-                        StalenessSample(
-                            iteration=iter_idx,
-                            core=core,
-                            segment=segment,
-                            sample_index=sample_idx,
-                            measured_contention=contention,
-                            last_raw_contention=raw_contention,
-                            contention_observation_count=obs_count,
-                            execution_path=exec_path,
-                            local_cache_count=cache_count,
-                            productive_handle_count=prod_handles,
-                            registered_workers=reg_workers,
-                            worker_rank=rank,
-                            smoothed_body_cost_ns=body_cost,
-                            body_history_ready=ready,
-                            total_acquisition_attempts=attempts,
-                        )
-                    )
-                except (IndexError, ValueError) as e:
-                    raise StalenessParseError(
-                        f"Malformed row #{row_idx} in {tsv_path}: {e}"
-                    ) from e
+              samples.append(
+                  StalenessSample(
+                      iteration=iter_idx,
+                      core=core,
+                      segment=segment,
+                      sample_index=sample_idx,
+                      measured_contention=contention,
+                      last_raw_contention=raw_contention,
+                      contention_observation_count=obs_count,
+                      execution_path=exec_path,
+                      local_cache_count=cache_count,
+                      productive_handle_count=prod_handles,
+                      registered_workers=reg_workers,
+                      worker_rank=rank,
+                      smoothed_body_cost_ns=body_cost,
+                      body_history_ready=ready,
+                      total_acquisition_attempts=attempts,
+                  )
+              )
+            except (IndexError, ValueError) as e:
+              raise StalenessParseError(
+                  f"Malformed row #{row_idx} in {tsv_path}: {e}"
+              ) from e
 
         return samples
 
@@ -166,7 +166,7 @@ class StalenessParser:
       Path]:
       """Discovers all contention_staleness.tsv files across sample directories or fork subdirectories."""
       path_list = [paths] if isinstance(paths, Path) else paths
-        files: List[Path] = []
+      files: List[Path] = []
 
       for p in path_list:
         if not p.exists():
@@ -187,7 +187,7 @@ class StalenessParser:
             direct = p / "contention_staleness.tsv"
             if direct.exists():
               files.append(direct)
-        return files
+      return files
 
     @classmethod
     def extract_active_features(
@@ -204,78 +204,78 @@ class StalenessParser:
       Enforces authoritative physical R extracted from telemetry rows.
       """
       files = cls.discover_staleness_files(run_paths)
-        if not files:
-          raise StalenessParseError(
-              f"No contention_staleness.tsv found in {run_paths}"
-          )
+      if not files:
+        raise StalenessParseError(
+            f"No contention_staleness.tsv found in {run_paths}"
+        )
 
-        per_fork_c: List[float] = []
-        per_fork_body: List[float] = []
-        per_fork_p: List[float] = []
+      per_fork_c: List[float] = []
+      per_fork_body: List[float] = []
+      per_fork_p: List[float] = []
       fork_r_values: List[int] = []
 
-        for file_path in files:
-          samples = cls.parse_staleness_file(
-              file_path,
-              verify_checksum=verify_checksum,
-              require_sidecar=require_sidecar,
-          )
-          # Filter for target rank, ready body history, initialized contention, finite positive body cost
-            eligible = [
-                s for s in samples
-                if s.worker_rank == target_rank
-                and s.body_history_ready
-                and s.contention_observation_count > 0
-                and s.smoothed_body_cost_ns > 0
-                and math.isfinite(s.smoothed_body_cost_ns)
-            ]
+      for file_path in files:
+        samples = cls.parse_staleness_file(
+            file_path,
+            verify_checksum=verify_checksum,
+            require_sidecar=require_sidecar,
+        )
+        # Filter for target rank, ready body history, initialized contention, finite positive body cost
+        eligible = [
+          s for s in samples
+          if s.worker_rank == target_rank
+             and s.body_history_ready
+             and s.contention_observation_count > 0
+             and s.smoothed_body_cost_ns > 0
+             and math.isfinite(s.smoothed_body_cost_ns)
+        ]
 
-          # Prefer steadyState segment
-            steady_eligible = [s for s in eligible if s.segment == "steadyState"]
-          candidate_samples = steady_eligible if steady_eligible else eligible
+        # Prefer steadyState segment
+        steady_eligible = [s for s in eligible if s.segment == "steadyState"]
+        candidate_samples = steady_eligible if steady_eligible else eligible
 
-          if not candidate_samples:
-                continue
+        if not candidate_samples:
+          continue
 
-          # Join to fixed late half of ordered samples
-          sorted_samples = sorted(
-              candidate_samples,
-              key=lambda s: (s.iteration, s.sample_index),
-          )
-          m = len(sorted_samples)
-          late_start = m // 2
-          late_samples = (
+        # Join to fixed late half of ordered samples
+        sorted_samples = sorted(
+            candidate_samples,
+            key=lambda s: (s.iteration, s.sample_index),
+        )
+        m = len(sorted_samples)
+        late_start = m // 2
+        late_samples = (
             sorted_samples[late_start:] if m >= 2 else sorted_samples
+        )
+
+        if not late_samples:
+          continue
+
+        # Verify registeredWorkers consistency within fork
+        fork_r_set = {s.registered_workers for s in late_samples}
+        if len(fork_r_set) > 1:
+          raise StalenessParseError(
+              f"Inconsistent registeredWorkers within fork {file_path}: {fork_r_set}"
           )
+        fork_r = next(iter(fork_r_set))
+        if fork_r <= 0:
+          raise StalenessParseError(
+              f"Invalid registeredWorkers R={fork_r} in {file_path}"
+          )
+        fork_r_values.append(fork_r)
 
-          if not late_samples:
-            continue
+        c_vals = [s.measured_contention / 1_000_000.0 for s in late_samples]
+        body_vals = [s.smoothed_body_cost_ns for s in late_samples]
+        p_vals = [float(s.productive_handle_count) for s in late_samples]
 
-          # Verify registeredWorkers consistency within fork
-          fork_r_set = {s.registered_workers for s in late_samples}
-          if len(fork_r_set) > 1:
-            raise StalenessParseError(
-                f"Inconsistent registeredWorkers within fork {file_path}: {fork_r_set}"
-            )
-          fork_r = next(iter(fork_r_set))
-          if fork_r <= 0:
-            raise StalenessParseError(
-                f"Invalid registeredWorkers R={fork_r} in {file_path}"
-            )
-          fork_r_values.append(fork_r)
+        per_fork_c.append(float(np.median(c_vals)))
+        per_fork_body.append(float(np.median(body_vals)))
+        per_fork_p.append(float(np.median(p_vals)))
 
-          c_vals = [s.measured_contention / 1_000_000.0 for s in late_samples]
-          body_vals = [s.smoothed_body_cost_ns for s in late_samples]
-          p_vals = [float(s.productive_handle_count) for s in late_samples]
-
-            per_fork_c.append(float(np.median(c_vals)))
-            per_fork_body.append(float(np.median(body_vals)))
-            per_fork_p.append(float(np.median(p_vals)))
-
-        if not per_fork_c:
-            raise StalenessParseError(
-                f"No eligible steady-state rank-{target_rank} telemetry with ready body history found in {run_paths}"
-            )
+      if not per_fork_c:
+        raise StalenessParseError(
+            f"No eligible steady-state rank-{target_rank} telemetry with ready body history found in {run_paths}"
+        )
 
       # Cross-fork consistency check for registeredWorkers
       distinct_r = set(fork_r_values)
@@ -288,22 +288,22 @@ class StalenessParser:
       if expected_r is not None and authoritative_r != expected_r:
         raise StalenessParseError(
             f"Authoritative R={authoritative_r} does not match expected R={expected_r}"
-            )
-
-        # Cross-fork medians
-        c_median = float(np.median(per_fork_c))
-        body_median = float(np.median(per_fork_body))
-        p_median = float(np.median(per_fork_p))
-        b_median = float(np.log1p(body_median))
-
-        return ActiveStateFeatures(
-            c=c_median,
-            smoothed_body_cost_ns=body_median,
-            b=b_median,
-            P=p_median,
-            R=authoritative_r,
-            K=target_rank,
         )
+
+      # Cross-fork medians
+      c_median = float(np.median(per_fork_c))
+      body_median = float(np.median(per_fork_body))
+      p_median = float(np.median(per_fork_p))
+      b_median = float(np.log1p(body_median))
+
+      return ActiveStateFeatures(
+          c=c_median,
+          smoothed_body_cost_ns=body_median,
+          b=b_median,
+          P=p_median,
+          R=authoritative_r,
+          K=target_rank,
+      )
 
     @classmethod
     def extract_withdrawn_diagnostics(

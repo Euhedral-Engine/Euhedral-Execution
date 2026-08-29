@@ -18,6 +18,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+tournament = [
+    "scikit-learn==1.7.2",
+    "torch>=2.6,<3"
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-cov"
@@ -29,6 +33,11 @@ pareto-participation-pipeline = "pareto_weight_calibration.pipeline:main"
 pareto-participation-peak-pipeline = "pareto_weight_calibration.peak_pipeline:main"
 pareto-participation-side-evaluation = "pareto_weight_calibration.side_of_peak:main"
 pareto-participation-action-pipeline = "pareto_weight_calibration.action_pipeline:main"
+pareto-participation-integer-cutoff-evaluation = "pareto_weight_calibration.integer_cutoff:main"
+pareto-model-tournament = "pareto_weight_calibration.model_tournament:main"
+
+[tool.setuptools.package-data]
+pareto_weight_calibration = ["tournament_grid.json", "tournament_inputs.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

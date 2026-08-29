@@ -90,41 +90,44 @@ class ThroughputParser:
           forks: List of ForkThroughput results.
           late_means: Optional list of late-window mean throughput per fork.
       """
-        if not forks:
-            raise ThroughputParseError("Cannot compute performance for empty fork list")
+      if not forks:
+        raise ThroughputParseError(
+          "Cannot compute performance for empty fork list")
 
-        fork_scores = np.array([f.mean_ops_per_sec for f in forks], dtype=np.float64)
-        n = len(fork_scores)
-        mean_val = float(np.mean(fork_scores))
-        var_val = float(np.var(fork_scores, ddof=1)) if n > 1 else 0.0
-        std_val = float(np.sqrt(var_val))
-        cv_val = float(std_val / mean_val) if mean_val > 0 else 0.0
+      fork_scores = np.array([f.mean_ops_per_sec for f in forks],
+                             dtype=np.float64)
+      n = len(fork_scores)
+      mean_val = float(np.mean(fork_scores))
+      var_val = float(np.var(fork_scores, ddof=1)) if n > 1 else 0.0
+      std_val = float(np.sqrt(var_val))
+      cv_val = float(std_val / mean_val) if mean_val > 0 else 0.0
 
-        if late_means and len(late_means) > 0:
-            late_arr = np.array(late_means, dtype=np.float64)
-            late_n = len(late_arr)
-            late_mean_val = float(np.mean(late_arr))
-            late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
-            late_cv_val = float(np.sqrt(late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
-        else:
-          late_means_from_forks = [f.late_mean_ops_per_sec for f in forks]
-          late_arr = np.array(late_means_from_forks, dtype=np.float64)
-          late_n = len(late_arr)
-          late_mean_val = float(np.mean(late_arr))
-          late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
-          late_cv_val = (
+      if late_means and len(late_means) > 0:
+        late_arr = np.array(late_means, dtype=np.float64)
+        late_n = len(late_arr)
+        late_mean_val = float(np.mean(late_arr))
+        late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
+        late_cv_val = float(
+          np.sqrt(late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
+      else:
+        late_means_from_forks = [f.late_mean_ops_per_sec for f in forks]
+        late_arr = np.array(late_means_from_forks, dtype=np.float64)
+        late_n = len(late_arr)
+        late_mean_val = float(np.mean(late_arr))
+        late_var_val = float(np.var(late_arr, ddof=1)) if late_n > 1 else 0.0
+        late_cv_val = (
             float(np.sqrt(
                 late_var_val) / late_mean_val) if late_mean_val > 0 else 0.0
-          )
-
-        return ArmPerformance(
-            mean=mean_val,
-            variance=var_val,
-            std_dev=std_val,
-            cv=cv_val,
-            fork_count=n,
-            late_mean=late_mean_val,
-            late_variance=late_var_val,
-            late_cv=late_cv_val,
-            forks=forks,
         )
+
+      return ArmPerformance(
+          mean=mean_val,
+          variance=var_val,
+          std_dev=std_val,
+          cv=cv_val,
+          fork_count=n,
+          late_mean=late_mean_val,
+          late_variance=late_var_val,
+          late_cv=late_cv_val,
+          forks=forks,
+      )

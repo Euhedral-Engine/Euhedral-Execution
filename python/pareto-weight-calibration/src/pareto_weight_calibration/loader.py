@@ -432,17 +432,17 @@ class DataLoader:
           List of verified PairRecords.
       """
       manifest = load_manifest(manifest_path, verify_checksum=verify_checksums)
-        records: List[PairRecord] = []
+      records: List[PairRecord] = []
 
-        for pair_decl in manifest.pairs:
-          rec = cls.load_pair(
-                manifest=manifest,
-                pair_decl=pair_decl,
-                verify_checksums=verify_checksums,
-                strict_compatibility=strict_compatibility,
-                require_sidecars=require_sidecars,
-            )
-          if rec is not None and rec.pair_weight >= min_weight:
-            records.append(rec)
+      for pair_decl in manifest.pairs:
+        rec = cls.load_pair(
+            manifest=manifest,
+            pair_decl=pair_decl,
+            verify_checksums=verify_checksums,
+            strict_compatibility=strict_compatibility,
+            require_sidecars=require_sidecars,
+        )
+        if rec is not None and rec.pair_weight >= min_weight:
+          records.append(rec)
 
-        return records
+      return records
