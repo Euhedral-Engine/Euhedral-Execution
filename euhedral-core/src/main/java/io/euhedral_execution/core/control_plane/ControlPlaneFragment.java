@@ -245,6 +245,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 this.state.cycleEpoch++;
                 serviceResetRequest();
 
+                long contention = this.upstreamQueue.getEffectiveContention(
+                        this.state.nowNs, this.config.contentionHalfLifeNanos());
                 long newUpCount = this.upstreamQueue.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
                     this.state.upstreamCount = newUpCount;
@@ -252,79 +254,8 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 long localCache = super.getLocalCacheCount();
 
-                if (this.config.benchmarkMode()) {
-                    this.observer.cycleStartState(
-                            this.core,
-                            this.socket,
-                            this.state.cycleEpoch,
-                            this.state.batchEpoch,
-                            this.state.completed,
-                            this.state.batchSize,
-                            newUpCount,
-                            this.state.registeredWorkers,
-                            this.state.productiveHandleCount,
-                            this.state.workerRank,
-                            upstreamQueue.getContention(),
-                            this.state.throughputRecorder.averageUnitsOverTime());
-                }
-
-                long idleDurationSelectedNs = -1L;
-                boolean cacheSelected = localCache == 0L
-                        && this.controlPolicy.willCacheExecute(
-                                this.upstreamQueue.getProductiveHandleCount(),
-                                newUpCount,
-                                this.state.registeredWorkers,
-                                this.upstreamQueue.getContention(),
-                                super.getThreadRank(this.core));
-                if (localCache == 0L && !cacheSelected) {
-                    long contention = this.upstreamQueue.getContention();
-                    idleDurationSelectedNs = this.controlPolicy.idle(
-                            this.state.cycleEpoch,
-                            this.state.batchEpoch,
-                            this.state.upstreamCount,
-                            this.state.registeredWorkers,
-                            this.state.workerRank,
-                            contention);
-                    localCache = super.getLocalCacheCount();
-                }
-                if (this.observeContentionStaleness) {
-                    if (idleDurationSelectedNs >= 0L) {
-                        if (this.state.consecutiveIdleDecisions < Long.MAX_VALUE) {
-                            this.state.consecutiveIdleDecisions++;
-                        }
-                    } else {
-                        this.state.consecutiveIdleDecisions = 0L;
-                    }
-                }
-
                 if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
-                    this.state.upstreamCount = this.upstreamQueue.getTrueUpstreamCount();
-                    if (cacheSelected) {
-                        long productiveHandleCount = this.upstreamQueue.getProductiveHandleCount();
-                        int registeredWorkers = this.state.registeredWorkers;
-                        long contention = this.upstreamQueue.getContention();
-                        int workerRank = super.getThreadRank(this.core);
-                        ExecutionPath path = this.controlPolicy.executionPath(
-                                this.state.cycleEpoch,
-                                this.state.batchEpoch,
-                                productiveHandleCount,
-                                newUpCount,
-                                registeredWorkers,
-                                contention,
-                                workerRank);
-                        if (this.observeContentionStaleness) {
-                            recordContentionStaleness(
-                                    idleDurationSelectedNs,
-                                    path.ordinal(),
-                                    localCache,
-                                    productiveHandleCount,
-                                    registeredWorkers,
-                                    workerRank,
-                                    contention,
-                                    false);
-                        }
-                        LockSupport.parkNanos(this.controlPolicy.cacheParkNs());
-                    }
+                    LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
                     continue;
                 }
 
@@ -344,12 +275,12 @@ public final class ControlPlaneFragment extends WorkRequester {
                         processed += count;
                         limit -= count;
                     }
+                    this.state.nowNs = end;
                 }
 
                 long productiveHandleCount = this.upstreamQueue.getProductiveHandleCount();
                 long upstreamHandleCount = this.upstreamQueue.getCachedUpCount();
                 int registeredWorkers = this.state.registeredWorkers;
-                long contention = this.upstreamQueue.getContention();
                 int workerRank = super.getThreadRank(this.core);
                 ExecutionPath path = this.controlPolicy.executionPath(
                         this.state.cycleEpoch,
@@ -359,17 +290,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                         registeredWorkers,
                         contention,
                         workerRank);
-                if (this.observeContentionStaleness) {
-                    recordContentionStaleness(
-                            idleDurationSelectedNs,
-                            path.ordinal(),
-                            localCache,
-                            productiveHandleCount,
-                            registeredWorkers,
-                            workerRank,
-                            contention,
-                            false);
-                }
 
                 if (limit > 0L) {
                     long start = System.nanoTime();
@@ -381,6 +301,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                         processed += count;
                         limit -= count;
                     }
+                    this.state.nowNs = end;
                 }
 
                 if (path == ExecutionPath.DIRECT) {
@@ -393,9 +314,11 @@ public final class ControlPlaneFragment extends WorkRequester {
                             executionElapsedNs += end - start;
                             processed += count;
                         }
+                        this.state.nowNs = end;
                     }
                     if (processed == 0L) {
                         super.requestAndPull(context, this.state.batchSize);
+                        this.state.nowNs = System.nanoTime();
                     }
                 } else if (path == ExecutionPath.STAGED) {
                     if (limit > 0L) {
@@ -411,6 +334,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                             processed += count;
                             limit -= count;
                         }
+                        this.state.nowNs = end;
                     }
                     if (limit > 0L) {
                         long start = System.nanoTime();
@@ -421,9 +345,11 @@ public final class ControlPlaneFragment extends WorkRequester {
                             executionElapsedNs += end - start;
                             processed += count;
                         }
+                        this.state.nowNs = end;
                     }
                 } else if (path == ExecutionPath.CACHE && processed <= 0L) {
                     LockSupport.parkNanos(this.controlPolicy.cacheParkNs());
+                    this.state.nowNs = System.nanoTime();
                     continue;
                 } else if (processed <= 0L && this.controlPolicy.missRequiresPark()) {
                     LockSupport.parkNanos(1_000L);
@@ -434,8 +360,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
 
                 this.state.completed += processed;
-                long nowNs = System.nanoTime();
-                recordProgress(nowNs, executionElapsedNs, executionFrames, processed);
+                recordProgress(executionElapsedNs, executionFrames, processed, contention);
                 this.controlPolicy.recordProgress();
                 Thread.onSpinWait();
             }
@@ -458,62 +383,14 @@ public final class ControlPlaneFragment extends WorkRequester {
         return super.upstreamPull(context.upstream, this.outputStream, limit);
     }
 
-    private void recordContentionStaleness(
-            long idleDurationSelectedNs,
-            int executionPath,
-            long localCacheCount,
-            long productiveHandleCount,
-            int registeredWorkers,
-            int workerRank,
-            long measuredContention,
-            boolean productivityExcluded) {
-        long observationCount = this.upstreamQueue.getContentionObservationCount();
-        if (observationCount != this.state.lastContentionObservationCount) {
-            this.state.lastContentionObservationCount = observationCount;
-            this.state.lastContentionObservationCycle = this.state.cycleEpoch;
-        }
-
-        long lastObservationNs = this.upstreamQueue.getLastContentionObservationNs();
-        long cyclesSinceObservation =
-                lastObservationNs < 0L ? -1L : this.state.cycleEpoch - this.state.lastContentionObservationCycle;
-        long nanosSinceObservation = lastObservationNs < 0L ? -1L : Math.max(0L, System.nanoTime() - lastObservationNs);
-
-        this.observer.contentionStalenessState(
-                this.core,
-                this.socket,
-                this.state.cycleEpoch,
-                this.state.batchEpoch,
-                measuredContention,
-                this.upstreamQueue.getLastRawContention(),
-                observationCount,
-                lastObservationNs,
-                cyclesSinceObservation,
-                nanosSinceObservation,
-                this.state.consecutiveIdleDecisions,
-                idleDurationSelectedNs,
-                this.upstreamQueue.getSuccessfulAcquisitionCount(),
-                this.upstreamQueue.getFailedAcquisitionCount(),
-                this.upstreamQueue.getTotalAcquisitionAttempts(),
-                executionPath,
-                localCacheCount,
-                productiveHandleCount,
-                registeredWorkers,
-                workerRank,
-                productivityExcluded,
-                this.state.productivityExclusionCount,
-                this.productivityThresholdNs,
-                this.controlPolicy.smoothedBodyCostNs(),
-                this.controlPolicy.hasBodyCostHistory());
-    }
-
     /// Records loop execution telemetry and advances policy only at a batch boundary.
-    private void recordProgress(long nowNs, long executionElapsedNs, long executionFrames, long processed) {
+    private void recordProgress(long executionElapsedNs, long executionFrames, long processed, long contention) {
         this.controlPolicy.recordExecution(executionElapsedNs, executionFrames);
         if (executionElapsedNs > 0L && executionFrames > 0L) {
             long serviceTime = Math.max(1L, executionElapsedNs / executionFrames);
-            this.state.serviceTimeRecorder.recordUnits(nowNs, serviceTime);
+            this.state.serviceTimeRecorder.recordUnits(this.state.nowNs, serviceTime);
         }
-        this.state.throughputRecorder.recordUnits(nowNs, processed);
+        this.state.throughputRecorder.recordUnits(this.state.nowNs, processed);
 
         if (this.state.completed < this.state.batchSize) {
             if (this.config.benchmarkMode()) {
@@ -526,7 +403,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                         this.state.registeredWorkers,
                         this.state.productiveHandleCount,
                         this.state.workerRank,
-                        this.upstreamQueue.getContention(),
+                        contention,
                         this.state.serviceTimeRecorder.averageUnits());
             }
             return;
@@ -547,7 +424,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                     registeredWorkers,
                     productiveHandleCount,
                     workerRank,
-                    upstreamQueue.getContention(),
+                    contention,
                     this.state.serviceTimeRecorder.averageUnits(),
                     this.state.throughputRecorder.averageUnitsOverTime());
             this.state.batchEpoch++;
@@ -858,6 +735,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         long lastContentionObservationCycle = -1L;
         long consecutiveIdleDecisions = 0L;
 
+        long nowNs = System.nanoTime();
+
         void reset() {
             this.batchRecorder.reset();
             this.serviceTimeRecorder.reset();
@@ -881,6 +760,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             if (ControlPlaneFragment.this.controlPolicy != null) {
                 ControlPlaneFragment.this.controlPolicy.reset();
             }
+            this.nowNs = System.nanoTime();
         }
     }
 }

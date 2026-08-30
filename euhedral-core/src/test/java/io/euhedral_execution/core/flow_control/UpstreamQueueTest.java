@@ -198,12 +198,14 @@ class UpstreamQueueTest {
         assertEquals(1L, upstream.acquisitionAttempts);
         assertTrue(queue.hasAcquireContention());
         assertEquals(UpstreamQueue.ACQUIRE_CONTENTION_SCALE, queue.getContention());
+        assertEquals(1L, queue.getContentionEvidenceCount());
 
         upstream.available = true;
 
         assertEquals(64L, queue.pull(frame -> {}, frame -> false, 64));
         assertEquals(1L, handles.sizeLong());
         assertEquals(2L, upstream.acquisitionAttempts);
+        assertEquals(2L, queue.getContentionEvidenceCount());
     }
 
     @Test
@@ -228,6 +230,54 @@ class UpstreamQueueTest {
         assertEquals(500_000L, queue.getContention());
         assertEquals(0.5, queue.getNormalizedAcquireContention());
         assertEquals(1L, unavailable.acquisitionAttempts);
+    }
+
+    @Test
+    void shouldDecayContentionExponentiallyAcrossFractionalAndWholeHalfLives() {
+        assertEquals(1_000_000L, UpstreamQueue.decayContention(1_000_000L, 0L, 1_000L));
+        assertEquals(707_107L, UpstreamQueue.decayContention(1_000_000L, 500L, 1_000L), 2L);
+        assertEquals(500_000L, UpstreamQueue.decayContention(1_000_000L, 1_000L, 1_000L), 1L);
+        assertEquals(250_000L, UpstreamQueue.decayContention(1_000_000L, 2_000L, 1_000L), 1L);
+        assertEquals(125_000L, UpstreamQueue.decayContention(1_000_000L, 3_000L, 1_000L), 1L);
+        assertEquals(0L, UpstreamQueue.decayContention(1_000_000L, 100_000L, 1_000L));
+    }
+
+    @Test
+    void shouldAgeOnlyRealContentionEvidenceWithoutMutatingStoredEstimate() {
+        TestUpstreamHandle unavailable = addHandle();
+        unavailable.available = false;
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertEquals(1_000_000L, queue.getEffectiveContention(10_000L, 1_000L));
+        assertEquals(10_000L, queue.getLastContentionEvidenceNanos());
+        assertEquals(500_000L, queue.getEffectiveContention(11_000L, 1_000L), 1L);
+        assertEquals(1_000_000L, queue.getContention());
+        assertEquals(1L, queue.getContentionEvidenceCount());
+        assertEquals(10_000L, queue.getLastContentionEvidenceNanos());
+    }
+
+    @Test
+    void shouldRefreshDecayAgeWhenNewRealEvidenceArrives() {
+        TestUpstreamHandle unavailable = addHandle();
+        unavailable.available = false;
+        queue.pull(frame -> {}, frame -> false, 64L);
+        queue.getEffectiveContention(10_000L, 1_000L);
+
+        queue.pull(frame -> {}, frame -> false, 64L);
+
+        assertEquals(1_000_000L, queue.getEffectiveContention(11_000L, 1_000L));
+        assertEquals(2L, queue.getContentionEvidenceCount());
+        assertEquals(11_000L, queue.getLastContentionEvidenceNanos());
+    }
+
+    @Test
+    void shouldHandleMissingEvidenceBoundsAndInvalidHalfLife() {
+        assertEquals(0L, queue.getEffectiveContention(10_000L, 1_000L));
+        assertEquals(-1L, queue.getLastContentionEvidenceNanos());
+        assertEquals(
+                UpstreamQueue.ACQUIRE_CONTENTION_SCALE, UpstreamQueue.decayContention(Long.MAX_VALUE, -1L, 1_000L));
+        assertThrows(IllegalArgumentException.class, () -> queue.getEffectiveContention(10_000L, 0L));
+        assertThrows(IllegalArgumentException.class, () -> UpstreamQueue.decayContention(1L, 1L, 0L));
     }
 
     @Test
@@ -271,16 +321,19 @@ class UpstreamQueueTest {
         assertFalse(queue.hasAcquireContention());
         assertEquals(-1L, queue.getAcquireContentionOrUninitialized());
         assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
+        assertEquals(0L, queue.getContentionEvidenceCount());
 
         queue.pull(frame -> {}, frame -> false, 0L);
 
         assertFalse(queue.hasAcquireContention());
+        assertEquals(0L, queue.getContentionEvidenceCount());
         addHandle();
         queue.pull(frame -> {}, frame -> false, 64L);
         queue.pull(frame -> {}, frame -> false, 0L);
         assertTrue(queue.hasAcquireContention());
         assertEquals(0L, queue.getContention());
         assertEquals(0L, queue.getAcquireContentionOrUninitialized());
+        assertEquals(1L, queue.getContentionEvidenceCount());
     }
 
     @Test
@@ -305,6 +358,7 @@ class UpstreamQueueTest {
         assertFalse(queue.hasAcquireContention());
         assertEquals(0L, queue.getContention());
         assertEquals(-1L, queue.getAcquireContentionOrUninitialized());
+        assertEquals(0L, queue.getContentionEvidenceCount());
         assertTrue(Double.isNaN(queue.getNormalizedAcquireContention()));
     }
 

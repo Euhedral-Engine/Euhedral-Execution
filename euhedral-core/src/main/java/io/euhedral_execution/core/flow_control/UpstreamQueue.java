@@ -39,6 +39,7 @@ public class UpstreamQueue {
 
     public static final long ACQUIRE_CONTENTION_SCALE = 1_000_000L;
     private static final long MAX_SCALED_FAILURES = Long.MAX_VALUE / ACQUIRE_CONTENTION_SCALE;
+    private static final double LN_2 = Math.log(2.0);
 
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
     public final int core;
@@ -47,6 +48,14 @@ public class UpstreamQueue {
 
     private final PaddedAtomicLong upstreamCount;
     private final AverageFlow acquireContention = new AverageFlow();
+
+    @Getter
+    private long contentionEvidenceCount;
+
+    @Getter
+    private long lastContentionEvidenceNanos = -1L;
+
+    private long appliedContentionEvidenceCount;
     long cachedUpCount = 0L;
     long nonproductiveCount = 0L;
     private boolean acquireDiagnosticsEnabled;
@@ -130,6 +139,40 @@ public class UpstreamQueue {
         return this.acquireContention.value();
     }
 
+    /// Returns the contention EWMA decayed by its evidence age.
+    public long getEffectiveContention(long nowNs, long halfLifeNanos) {
+        if (halfLifeNanos <= 0L) {
+            throw new IllegalArgumentException("contention half-life must be positive");
+        }
+        if (this.contentionEvidenceCount <= 0L) {
+            return 0L;
+        }
+        if (this.contentionEvidenceCount != this.appliedContentionEvidenceCount) {
+            this.appliedContentionEvidenceCount = this.contentionEvidenceCount;
+            this.lastContentionEvidenceNanos = nowNs;
+        }
+
+        long ageNanos = nowNs - this.lastContentionEvidenceNanos;
+        return decayContention(this.acquireContention.value(), ageNanos, halfLifeNanos);
+    }
+
+    static long decayContention(long storedContention, long ageNanos, long halfLifeNanos) {
+        if (halfLifeNanos <= 0L) {
+            throw new IllegalArgumentException("contention half-life must be positive");
+        }
+        long boundedContention = MathFunctions.clampLong(storedContention, 0L, ACQUIRE_CONTENTION_SCALE);
+        if (ageNanos <= 0L || boundedContention == 0L) {
+            return boundedContention;
+        }
+
+        double multiplier = Math.exp(-LN_2 * ((double) ageNanos / halfLifeNanos));
+        double decayedContention = boundedContention * multiplier;
+        if (!Double.isFinite(decayedContention) || decayedContention <= 0.0) {
+            return 0L;
+        }
+        return MathFunctions.clampLong(Math.round(decayedContention), 0L, ACQUIRE_CONTENTION_SCALE);
+    }
+
     /// Returns the fixed-point EWMA or `-1` when no eligible acquisition cycle has been observed.
     public long getAcquireContentionOrUninitialized() {
         return this.acquireContention.initialized() ? this.acquireContention.value() : -1L;
@@ -145,6 +188,9 @@ public class UpstreamQueue {
     /// Resets acquisition history under the existing worker-owner lifecycle handoff.
     public void resetAcquireContention() {
         this.acquireContention.reset();
+        this.contentionEvidenceCount = 0L;
+        this.appliedContentionEvidenceCount = 0L;
+        this.lastContentionEvidenceNanos = -1L;
         this.contentionObservationCount = 0L;
         this.lastRawContention = -1L;
         this.lastContentionObservationNs = -1L;
@@ -304,6 +350,7 @@ public class UpstreamQueue {
         if (attempts > 0L) {
             long rawContention = scaleAcquireContentionUnchecked(failedAcquires, attempts);
             this.acquireContention.record(rawContention);
+            this.contentionEvidenceCount++;
             if (this.acquireDiagnosticsEnabled) {
                 this.contentionObservationCount++;
                 this.lastRawContention = rawContention;

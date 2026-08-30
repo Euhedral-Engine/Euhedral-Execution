@@ -27,6 +27,7 @@ class FragmentConfigTest {
         assertEquals(FragmentDecisionWeights.DEFAULT, config.decisionWeights());
         assertNull(config.observer());
         assertEquals(4_096L, config.maxBatchSize());
+        assertEquals(FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS, config.contentionHalfLifeNanos());
         assertFalse(config.benchmarkMode());
         assertNull(config.metricPrefix());
         assertNull(config.registry());
@@ -74,14 +75,32 @@ class FragmentConfigTest {
     void constructor_withNullCacheConfig_throwsNullPointerException() {
         assertThrows(
                 NullPointerException.class,
-                () -> new FragmentConfig(null, null, FragmentDecisionWeights.DEFAULT, null, 100, false, null, null));
+                () -> new FragmentConfig(
+                        null,
+                        null,
+                        FragmentDecisionWeights.DEFAULT,
+                        null,
+                        100,
+                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                        false,
+                        null,
+                        null));
     }
 
     @Test
     void constructor_withNullDecisionWeights_throwsNullPointerException() {
         assertThrows(
                 NullPointerException.class,
-                () -> new FragmentConfig(null, CacheConfig.ofDefaults(), null, null, 100, false, null, null));
+                () -> new FragmentConfig(
+                        null,
+                        CacheConfig.ofDefaults(),
+                        null,
+                        null,
+                        100,
+                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                        false,
+                        null,
+                        null));
     }
 
     @Test
@@ -89,12 +108,28 @@ class FragmentConfigTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new FragmentConfig(
-                        null, CacheConfig.ofDefaults(), FragmentDecisionWeights.DEFAULT, null, 0, false, null, null));
+                        null,
+                        CacheConfig.ofDefaults(),
+                        FragmentDecisionWeights.DEFAULT,
+                        null,
+                        0,
+                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                        false,
+                        null,
+                        null));
 
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new FragmentConfig(
-                        null, CacheConfig.ofDefaults(), FragmentDecisionWeights.DEFAULT, null, -1, false, null, null));
+                        null,
+                        CacheConfig.ofDefaults(),
+                        FragmentDecisionWeights.DEFAULT,
+                        null,
+                        -1,
+                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                        false,
+                        null,
+                        null));
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -104,6 +139,23 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         -100,
+                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                        false,
+                        null,
+                        null));
+    }
+
+    @Test
+    void constructor_withInvalidContentionHalfLife_throwsIllegalArgumentException() {
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new FragmentConfig(
+                        null,
+                        CacheConfig.ofDefaults(),
+                        FragmentDecisionWeights.DEFAULT,
+                        null,
+                        100,
+                        0L,
                         false,
                         null,
                         null));
@@ -114,7 +166,15 @@ class FragmentConfigTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new FragmentConfig(
-                        null, CacheConfig.ofDefaults(), FragmentDecisionWeights.DEFAULT, null, 100, true, null, null));
+                        null,
+                        CacheConfig.ofDefaults(),
+                        FragmentDecisionWeights.DEFAULT,
+                        null,
+                        100,
+                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                        true,
+                        null,
+                        null));
     }
 
     @Test
@@ -130,6 +190,7 @@ class FragmentConfigTest {
         assertEquals(3, cloned.getCore());
         assertNotNull(cloned.cacheConfig());
         assertEquals(original.maxBatchSize(), cloned.maxBatchSize());
+        assertEquals(original.contentionHalfLifeNanos(), cloned.contentionHalfLifeNanos());
         assertEquals(original.decisionWeights(), cloned.decisionWeights());
     }
 
@@ -151,6 +212,7 @@ class FragmentConfigTest {
                 FragmentDecisionWeights.DEFAULT,
                 null,
                 1_024,
+                FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                 false,
                 null,
                 null);

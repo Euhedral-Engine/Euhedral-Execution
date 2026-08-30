@@ -1,6 +1,7 @@
 package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -245,7 +246,7 @@ class ControlPlaneFragmentThreadTest {
     }
 
     @Test
-    void forcedCacheWorkerExecutesLocalCacheAndDoesNotPullUpstream() {
+    void forcedCacheWorkerExecutesLocalCacheWhileActiveWorkerConsumesUpstream() {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
         System.setProperty(FragmentControlConfig.CACHE_PARK_NS, "50000");
 
@@ -283,8 +284,6 @@ class ControlPlaneFragmentThreadTest {
             // Fragment 1 (rank 1 <= 1) should pull upstream work
             Awaitility.await().atMost(TIMEOUT).until(() -> receiver1.received.get() > 0);
 
-            // Upstream tracking source was pulled directly by fragment1 without requests from CACHE
-            assertEquals(0, source.requestCalls.get());
             assertNull(receiver1.error.get());
             assertNull(receiver2.error.get());
         } finally {
@@ -389,7 +388,7 @@ class ControlPlaneFragmentThreadTest {
     }
 
     @Test
-    void contentionStalenessRecordsExactDecisionInputs() {
+    void contentionStalenessObserverIsNotInvokedByStreamlinedControlLoop() {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         AtomicBoolean recorded = new AtomicBoolean(false);
@@ -523,11 +522,12 @@ class ControlPlaneFragmentThreadTest {
             fragment1.start();
             fragment2.start();
             Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
-            Awaitility.await().atMost(TIMEOUT).until(recorded::get);
+            fragment2.reset(System.nanoTime() + TIMEOUT.toNanos());
 
-            assertEquals(FragmentControlConfig.ExecutionPath.CACHE.ordinal(), observedPath.get());
-            assertEquals(2, observedRank.get());
-            Awaitility.await().atMost(TIMEOUT).until(() -> observedWorkers.get() >= 2);
+            assertFalse(recorded.get());
+            assertEquals(-1, observedPath.get());
+            assertEquals(-1, observedRank.get());
+            assertEquals(-1, observedWorkers.get());
         } finally {
             fragment1.close();
             fragment2.close();

@@ -12,6 +12,7 @@ import org.jspecify.annotations.Nullable;
 /// @param cloneConfig  See [CloneConfig]
 /// @param cacheConfig  See [CacheConfig]
 /// @param maxBatchSize The maximum size of the batches the fragment can scale up to
+/// @param contentionHalfLifeNanos Half-life for aging acquisition-contention evidence
 /// @param metricPrefix Prefix string to prepend to exported metrics.
 /// @param registry     Registry for reporting collected metrics.
 @SuppressWarnings("unused")
@@ -21,16 +22,23 @@ public record FragmentConfig(
         @NonNull FragmentDecisionWeights decisionWeights,
         @Nullable FragmentObserver observer,
         long maxBatchSize,
+        long contentionHalfLifeNanos,
         boolean benchmarkMode,
         @Nullable String metricPrefix,
         @Nullable MeterRegistry registry)
         implements CloneableObject {
+
+    public static final long DEFAULT_CONTENTION_HALF_LIFE_NANOS = 1_000_000L;
 
     public FragmentConfig {
         Objects.requireNonNull(cacheConfig);
         Objects.requireNonNull(decisionWeights);
         if (maxBatchSize <= 0) {
             throw new IllegalArgumentException("maxBatchSize must be greater than 0. Provided: " + maxBatchSize);
+        }
+        if (contentionHalfLifeNanos <= 0L) {
+            throw new IllegalArgumentException(
+                    "contentionHalfLifeNanos must be greater than 0. Provided: " + contentionHalfLifeNanos);
         }
         if (benchmarkMode && observer == null) {
             throw new IllegalArgumentException("FragmentObserver cannot be null in benchmark mode");
@@ -48,6 +56,7 @@ public record FragmentConfig(
                 FragmentDecisionWeights.DEFAULT,
                 null,
                 4_096,
+                DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                 false,
                 metricPrefix,
                 meterRegistry);
@@ -56,7 +65,16 @@ public record FragmentConfig(
     public static FragmentConfig ofBenchmark(
             @NonNull FragmentObserver observer, @NonNull FragmentDecisionWeights decisionWeights) {
         Objects.requireNonNull(observer);
-        return new FragmentConfig(null, CacheConfig.ofDefaults(), decisionWeights, observer, 4_096, true, null, null);
+        return new FragmentConfig(
+                null,
+                CacheConfig.ofDefaults(),
+                decisionWeights,
+                observer,
+                4_096,
+                DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                true,
+                null,
+                null);
     }
 
     @Override
@@ -67,6 +85,7 @@ public record FragmentConfig(
                 this.decisionWeights,
                 this.observer,
                 this.maxBatchSize,
+                this.contentionHalfLifeNanos,
                 this.benchmarkMode,
                 this.metricPrefix,
                 this.registry);
