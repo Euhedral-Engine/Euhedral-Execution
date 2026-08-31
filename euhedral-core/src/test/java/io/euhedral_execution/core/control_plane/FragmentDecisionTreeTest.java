@@ -636,28 +636,26 @@ class FragmentDecisionTreeTest {
         // Registered workers <= 1 -> DIRECT
         assertEquals(ExecutionPath.DIRECT, tree.executionPath(2L, 1L, 2L, 2L, 1, 100L, 2));
 
-        // Low contention -> DIRECT
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(3L, 1L, 2L, 2L, 4, 850_000L, 2));
+        // A model DEFAULT continues through the existing low-contention branch.
+        assertEquals(ExecutionPath.DIRECT, tree.executionPath(3L, 1L, 2L, 2L, 4, 100L, 2));
 
-        // High contention -> STAGED
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(4L, 1L, 2L, 2L, 4, 850_001L, 2));
+        // The mandatory rank guard leaves the existing high-contention branch unchanged.
+        assertEquals(ExecutionPath.STAGED, tree.executionPath(4L, 1L, 2L, 2L, 4, 850_001L, 1));
     }
 
     @Test
-    void shouldCacheExecute_verifiesGuards() {
+    void shouldCacheExecute_appliesPhysicalGuardsBeforeTheRuntimeModel() {
         FragmentDecisionTree tree = createDefaultTree(null);
-        populateBodyCosts(tree, 32, 100L);
+        populateBodyCosts(tree, 32, 1L);
 
-        // CAN_CACHE_EXECUTE is false by default at every contention value.
-        assertFalse(tree.shouldCacheExecute(0.5, 2L, 4, 2));
-        assertFalse(tree.shouldCacheExecute(0.1, 2L, 4, 2));
-
-        // workerRank <= 1 returns false
         assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 1));
         assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 0));
+        assertFalse(tree.shouldCacheExecute(0.8, 2L, 1, 2));
+        assertTrue(tree.shouldCacheExecute(0.8, 0L, 4, 2));
 
-        assertFalse(tree.shouldCacheExecute(0.8, 2L, 4, 2));
-        assertFalse(tree.shouldCacheExecute(0.8, 0L, 4, 2));
+        assertEquals(
+                ParticipationLogisticModel.shouldCache(2, 1L, 7, tree.smoothedBodyCostNs(), 0.431857),
+                tree.shouldCacheExecute(0.431857, 1L, 7, 2));
     }
 
     @Test

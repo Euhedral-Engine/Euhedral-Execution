@@ -14,6 +14,7 @@ public final class FragmentControlConfig {
     public static final String PRODUCTIVITY_GATE_MODE = "euhedral.calibration.productivityGateMode";
     public static final String FORCED_ACTIVE_PARTICIPANT_COUNT = "euhedral.calibration.forcedActiveParticipantCount";
     public static final String CACHE_PARK_NS = "euhedral.fragment.cache.parkNs";
+    public static final String PARTICIPATION_POLICY_MODE = "euhedral.calibration.participationPolicyMode";
 
     public static final long DEFAULT_PARK_NS = 15_000L;
     public static final long DEFAULT_CACHE_PARK_NS = 15_000L;

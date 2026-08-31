@@ -215,7 +215,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                         this.core,
                         this.socket,
                         resolveForcedActiveParticipantCount(),
-                        resolveCacheParkNs());
+                        resolveCacheParkNs(),
+                        resolveParticipationPolicyEnabled());
                 this.productivityThresholdNs = resolveProductivityThresholdNs();
 
                 try {
@@ -488,6 +489,24 @@ public final class ControlPlaneFragment extends WorkRequester {
         MicroCalibrator calibrator = new MicroCalibrator();
         calibrator.warmup();
         return calibrator.benchmark(weight);
+    }
+
+    private boolean resolveParticipationPolicyEnabled() {
+        String configuredMode = System.getProperty(FragmentControlConfig.PARTICIPATION_POLICY_MODE, "POLICY_ON");
+        return resolveParticipationPolicyEnabled(this.config.benchmarkMode(), configuredMode);
+    }
+
+    static boolean resolveParticipationPolicyEnabled(boolean benchmarkMode, String configuredMode) {
+        return switch (configuredMode) {
+            case "POLICY_ON" -> true;
+            case "POLICY_OFF" -> {
+                if (!benchmarkMode) {
+                    throw new IllegalStateException("POLICY_OFF is only valid in benchmark mode");
+                }
+                yield false;
+            }
+            default -> throw new IllegalArgumentException("Unknown participation policy mode: " + configuredMode);
+        };
     }
 
     private Integer resolveForcedActiveParticipantCount() {

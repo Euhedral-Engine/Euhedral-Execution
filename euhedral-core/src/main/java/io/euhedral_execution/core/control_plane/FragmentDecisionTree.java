@@ -4,7 +4,6 @@ import static io.euhedral_execution.core.control_plane.FragmentControlConfig.DEF
 
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import java.util.Objects;
@@ -16,9 +15,6 @@ import org.jspecify.annotations.Nullable;
 ///
 /// All fields use plain access because one pinned fragment thread owns the policy for its lifetime.
 final class FragmentDecisionTree {
-    private static final String ENABLE_CACHE_EXECUTE_PROP = "euhedral.fragment.cacheExecutePath";
-    private static final boolean CAN_CACHE_EXECUTE =
-            Boolean.parseBoolean(System.getProperty(ENABLE_CACHE_EXECUTE_PROP, "false"));
     static final long CONTENTION_THRESHOLD = 850_000; // 85%
 
     static final long DIRECT_BATCH_WORK_TARGET_NS = 250_000L;
@@ -36,10 +32,10 @@ final class FragmentDecisionTree {
     private final FragmentObserver observer;
     private final Integer forcedActiveParticipantCount;
     private final long cacheParkNs;
+    private final boolean participationPolicyEnabled;
 
     private final BodyCostThresholds idleBodyCostThresholds;
     private final IdlePolicy idleTimeNs;
-    private final ParetoWeights paretoWeights;
     private final long bodyCostDirectThreshold;
 
     private final long maxBodyCostThreshold;
@@ -58,7 +54,7 @@ final class FragmentDecisionTree {
             @Nullable FragmentObserver observer,
             int core,
             int socket) {
-        this(decisionWeights, observer, core, socket, null, FragmentControlConfig.DEFAULT_CACHE_PARK_NS);
+        this(decisionWeights, observer, core, socket, null, FragmentControlConfig.DEFAULT_CACHE_PARK_NS, true);
     }
 
     FragmentDecisionTree(
@@ -68,6 +64,17 @@ final class FragmentDecisionTree {
             int socket,
             @Nullable Integer forcedActiveParticipantCount,
             long cacheParkNs) {
+        this(decisionWeights, observer, core, socket, forcedActiveParticipantCount, cacheParkNs, true);
+    }
+
+    FragmentDecisionTree(
+            @NonNull FragmentDecisionWeights decisionWeights,
+            @Nullable FragmentObserver observer,
+            int core,
+            int socket,
+            @Nullable Integer forcedActiveParticipantCount,
+            long cacheParkNs,
+            boolean participationPolicyEnabled) {
         Objects.requireNonNull(decisionWeights);
         if (forcedActiveParticipantCount != null && forcedActiveParticipantCount <= 0) {
             throw new IllegalArgumentException("forcedActiveParticipantCount must be positive");
@@ -80,12 +87,12 @@ final class FragmentDecisionTree {
         this.socket = socket;
         this.forcedActiveParticipantCount = forcedActiveParticipantCount;
         this.cacheParkNs = cacheParkNs;
+        this.participationPolicyEnabled = participationPolicyEnabled;
 
         FragmentControlConfig config = new FragmentControlConfig(decisionWeights);
         this.idleBodyCostThresholds = config.idleBodyCostThresholds;
         this.idleTimeNs = config.idleTimeNs;
         this.maxBodyCostThreshold = this.idleBodyCostThresholds.h;
-        this.paretoWeights = decisionWeights.paretoWeights();
         this.bodyCostDirectThreshold = config.bodyCostDirectThreshold;
         reset();
     }
@@ -242,34 +249,17 @@ final class FragmentDecisionTree {
     }
 
     boolean shouldCacheExecute(double contention, long productiveHandles, int registeredWorkers, int workerRank) {
-
-        if (workerRank <= 1 || registeredWorkers <= 1 || !CAN_CACHE_EXECUTE) {
+        if (workerRank <= 1 || registeredWorkers <= 1) {
             return false;
         }
-
         if (productiveHandles <= 0) {
             return true;
         }
-
-        double body = Math.log1p(this.smoothedBodyCostNs);
-        double workers = registeredWorkers;
-
-        double phrFactor = this.paretoWeights.phrWeight()
-                + this.paretoWeights.contentionPhrWeight() * contention
-                + this.paretoWeights.bodyPhrWeight() * body
-                + this.paretoWeights.registeredWorkersPhrWeight() * workers;
-
-        double workerFactor = this.paretoWeights.activeWorkersWeight()
-                + this.paretoWeights.contentionWorkersWeight() * contention
-                + this.paretoWeights.bodyWorkersWeight() * body
-                + this.paretoWeights.registeredActiveWorkersWeight() * workers;
-
-        double activeWorkers = workerRank;
-
-        double marginalProductivity =
-                phrFactor * productiveHandles / (activeWorkers * (activeWorkers - 1.0)) - workerFactor;
-
-        return marginalProductivity > 0.0;
+        if (!this.participationPolicyEnabled) {
+            return false;
+        }
+        return ParticipationLogisticModel.shouldCache(
+                workerRank, productiveHandles, registeredWorkers, this.smoothedBodyCostNs, contention);
     }
 
     private void recordExecDecision(
