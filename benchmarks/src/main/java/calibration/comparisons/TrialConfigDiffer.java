@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -92,7 +93,19 @@ public final class TrialConfigDiffer {
             return;
         }
 
-        differences.add(new ConfigurationDifference(currentPath, base, cand, categorize(currentPath)));
+        differences.add(new ConfigurationDifference(currentPath, base, cand, categorize(currentPath, base, cand)));
+    }
+
+    private static DifferenceCategory categorize(String path, JsonNode baseline, JsonNode candidate) {
+        String policyPrefix = "-D" + FragmentControlConfig.PARTICIPATION_POLICY_MODE + "=";
+        if (path.startsWith("/jvmArgs/")
+                && baseline.isTextual()
+                && candidate.isTextual()
+                && baseline.textValue().startsWith(policyPrefix)
+                && candidate.textValue().startsWith(policyPrefix)) {
+            return DifferenceCategory.POLICY;
+        }
+        return categorize(path);
     }
 
     private static boolean isNullOrMissing(@Nullable JsonNode node) {

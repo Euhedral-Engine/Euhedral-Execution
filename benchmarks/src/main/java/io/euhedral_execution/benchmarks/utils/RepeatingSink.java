@@ -36,6 +36,15 @@ public class RepeatingSink extends AbstractIngestSink {
         return this.delegate.isComplete();
     }
 
+    /// Enables or pauses this already-connected source without rebuilding scheduler topology.
+    public void setEnabled(boolean enabled) {
+        this.delegate.enabled.setRelease(enabled);
+    }
+
+    public boolean isEnabled() {
+        return this.delegate.enabled.getAcquire();
+    }
+
     /// Restores deterministic source position while the owning lattice has ingest frozen.
     public void resetForNextIteration() {
         this.delegate.resetForNextIteration();
@@ -44,6 +53,7 @@ public class RepeatingSink extends AbstractIngestSink {
     protected static final class Delegate extends AbstractIngestSink.Delegate {
 
         final AtomicBoolean complete = new AtomicBoolean();
+        final AtomicBoolean enabled = new AtomicBoolean(true);
         private final AbstractFrame[] array;
         int start;
 
@@ -59,6 +69,9 @@ public class RepeatingSink extends AbstractIngestSink {
         @Override
         public long hookOnPull(
                 Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            if (!this.enabled.getOpaque()) {
+                return 0L;
+            }
             long total = 0;
             while (total < demand && !this.complete.getOpaque()) {
                 AbstractFrame frame = this.array[this.start];
@@ -78,6 +91,10 @@ public class RepeatingSink extends AbstractIngestSink {
 
         @Override
         public void hookOnRequest(LatticeReceiver terminal, long demand) {
+            if (!this.enabled.getOpaque()) {
+                addAndGetDemand(-demand);
+                return;
+            }
             int total = 0;
             while (total < demand && !this.complete.getOpaque()) {
                 AbstractFrame frame = this.array[this.start++];

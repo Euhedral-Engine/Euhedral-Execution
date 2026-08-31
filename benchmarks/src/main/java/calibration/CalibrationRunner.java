@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.ChainedOptionsBuilder;
 import org.openjdk.jmh.runner.options.Options;
@@ -162,6 +163,8 @@ public class CalibrationRunner {
         }
 
         resolvedTrials.addAll(generatedSweepTrials);
+        resolvedTrials =
+                filterTrials(resolvedTrials, System.getProperty(calibration.infra.Constants.TRIAL_FILTER_PROP));
         int generatedSweepCount = generatedSweepTrials.size();
         int totalResolvedCount = resolvedTrials.size();
 
@@ -507,6 +510,21 @@ public class CalibrationRunner {
                 trial.calibrationConfig().cacheParkNs().toString());
 
         return jvmArgs;
+    }
+
+    static List<TrialConfig> filterTrials(List<TrialConfig> trials, String trialFilter) {
+        if (trialFilter == null || trialFilter.isBlank()) {
+            return trials;
+        }
+        Pattern pattern = Pattern.compile(trialFilter);
+        List<TrialConfig> filtered = trials.stream()
+                .filter(trial ->
+                        trial.id() != null && pattern.matcher(trial.id()).find())
+                .toList();
+        if (filtered.isEmpty()) {
+            throw new IllegalArgumentException("Trial filter matched no enabled trials: " + trialFilter);
+        }
+        return new ArrayList<>(filtered);
     }
 
     private static void logTrialStart(TrialConfig trial, int trialIndex, int repeatIndex) {

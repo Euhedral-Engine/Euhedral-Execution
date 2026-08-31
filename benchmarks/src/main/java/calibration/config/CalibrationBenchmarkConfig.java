@@ -475,7 +475,16 @@ public record CalibrationBenchmarkConfig(
             throw new IllegalArgumentException(
                     "CONTINUOUS lifecycle cannot change pull-bucket treatment between measurement windows");
         }
+        boolean observesAnyTelemetry = this.observeCycleStart
+                || this.observeBatchProgress
+                || this.observeBatchComplete
+                || this.observeRawBodyCost
+                || this.observeIdleDecision
+                || this.observeExecDecision
+                || this.observeContentionStaleness
+                || this.observePullConvoy;
         if (this.lifecycleMode == CalibrationLifecycleMode.CONTINUOUS
+                && observesAnyTelemetry
                 && (!this.observeCycleStart
                         || !this.observeIdleDecision
                         || !this.observeExecDecision

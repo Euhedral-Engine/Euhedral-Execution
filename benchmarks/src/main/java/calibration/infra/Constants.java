@@ -7,6 +7,9 @@ public final class Constants {
     public static final String TRIAL_ID_PROP = "euhedral.calibration.trialId";
     public static final String TRIAL_INDEX_PROP = "euhedral.calibration.trialIndex";
     public static final String TRIAL_NAME_PROP = "euhedral.calibration.trialName";
+    public static final String DYNAMIC_SCENARIO_PROP = "euhedral.calibration.participationDynamicScenario";
+    public static final String THROUGHPUT_ONLY_PROP = "euhedral.calibration.throughputOnly";
+    public static final String TRIAL_FILTER_PROP = "euhedral.calibration.trialFilter";
 
     public static final String OUTPUT_DIRECTORY_PROP = "euhedral.calibration.outputDirectory";
     public static final String RETAIN_OBSERVER_DATA_PROP = "euhedral.calibration.retainObserverData";

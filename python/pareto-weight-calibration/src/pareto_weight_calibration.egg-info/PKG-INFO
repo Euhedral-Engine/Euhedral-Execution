@@ -8,6 +8,9 @@ Description-Content-Type: text/markdown
 Requires-Dist: numpy>=1.26.0
 Requires-Dist: scipy>=1.12.0
 Requires-Dist: pydantic>=2.6.0
+Provides-Extra: tournament
+Requires-Dist: scikit-learn==1.7.2; extra == "tournament"
+Requires-Dist: torch<3,>=2.6; extra == "tournament"
 Provides-Extra: dev
 Requires-Dist: pytest>=8.0.0; extra == "dev"
 Requires-Dist: pytest-cov; extra == "dev"

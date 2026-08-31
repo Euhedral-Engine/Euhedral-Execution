@@ -1,2 +1,8 @@
 [console_scripts]
 pareto-calibration = pareto_weight_calibration.cli:main
+pareto-model-tournament = pareto_weight_calibration.model_tournament:main
+pareto-participation-action-pipeline = pareto_weight_calibration.action_pipeline:main
+pareto-participation-integer-cutoff-evaluation = pareto_weight_calibration.integer_cutoff:main
+pareto-participation-peak-pipeline = pareto_weight_calibration.peak_pipeline:main
+pareto-participation-pipeline = pareto_weight_calibration.pipeline:main
+pareto-participation-side-evaluation = pareto_weight_calibration.side_of_peak:main
