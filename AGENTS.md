@@ -1,296 +1,289 @@
 # Working on Euhedral
 
-This file is the practical guide for making changes in this repository. Read
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) when a task touches routing, worker lifecycle,
-topology, or frame semantics. The implementation and tests remain the final authority when a
-document and the code disagree.
+This guide covers repository work. Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing
+routing, worker lifecycle, topology, frames, or fragment policy. Implementation and tests are the
+final authority when documentation disagrees with code. Read any nearer `AGENTS.md` for the area
+you are changing, including [benchmarks/AGENTS.md](benchmarks/AGENTS.md) for benchmark work.
 
-Euhedral is a pull-driven execution engine. Persistent workers are pinned to CPUs and ask upstream
-sources for frames. Work moves down through a socket and core routing graph; demand moves back up.
-Most performance and correctness constraints follow from that shape.
+Euhedral is a pull-driven execution engine. Persistent workers request upstream frames through a
+socket/core routing graph. Workers have managed logical CPU associations and request affinity;
+exact physical placement depends on the platform.
 
-## Before changing anything
+## Start with scope and ownership
 
-1. Run `git status --short` and preserve unrelated changes, generated data, and local benchmark
-   output.
-2. Identify the owning module and inspect its `build.gradle.kts` and `module-info.java`.
-3. Read the nearest tests before changing a concurrency or lifecycle contract.
-4. Use the repository toolchain from [`mise.toml`](mise.toml).
-5. Do not commit, push, delete user data, or rewrite unrelated files unless the task explicitly asks
-   for it.
+1. Run `git status --short`. Preserve unrelated edits, staged changes, generated files, and local
+   benchmark output.
+2. Identify the owning module, read its `build.gradle.kts`, and inspect its active
+   `src/main/java/module-info.java` where present.
+3. Read the implementation and nearest behavioral tests before changing a contract. Trace callers
+   before treating a configuration field, comment, or helper as active runtime behavior.
+4. Use the toolchain in [mise.toml](mise.toml). Keep changes within the requested task or phase.
+5. Do not commit, push, delete user data, or rewrite unrelated files unless requested.
 
-Several directories under `data` may contain expensive local runs. Treat them as user-owned even
-when they are untracked.
+Data directories and experiment outputs can contain expensive local runs even when untracked.
+Do not clean, regenerate, or overwrite them as incidental build preparation. Distinguish preparing
+an experiment, validating its configuration, executing benchmarks, fitting models, and changing
+production defaults; authorization for one does not automatically include the others.
 
-## Modules and language levels
+## Modules and toolchain
 
-All Java and Gradle build commands default to the exact tool versions selected by
-[`mise.toml`](mise.toml), currently Java 21 and Gradle 9.6.1. Individual artifacts retain lower
-release targets where possible; a lower target does not authorize a different default JDK or Gradle
-version. A restricted-environment fallback is allowed only under the documented exception below and
-must report the substituted versions and resulting limits.
+The shared Java toolchain is Java 21. Mise currently selects Java 21, Gradle 9.6.1, Zig 0.16.0,
+and apple-codesign 0.29.0. Verify the checked-in configuration rather than using system defaults.
+Lower artifact targets do not authorize substituting another default JDK or Gradle version.
 
-| Module                     | Release | Main responsibility                                   |
-|----------------------------|--------:|-------------------------------------------------------|
-| `euhedral-hashing`         |      11 | xxHash64-based hashing and mixing                     |
-| `euhedral-data-structures` |      11 | Concurrent queues and padded atomics                  |
-| `euhedral-hardware-utils`  |      17 | Topology, resource monitoring, affinity, and JNI      |
-| `euhedral-core`            |      21 | Control plane, frames, routing, ingest, and execution |
-| `euhedral-spring-core`     |      21 | Spring Boot, Kafka, and gRPC integration              |
-| `euhedral-reactor-core`    |      25 | Reactor scheduler and operators                       |
-| `benchmarks`               |      25 | JMH benchmarks                                        |
+| Module                     | Java target | Ownership                                                   |
+|----------------------------|------------:|-------------------------------------------------------------|
+| `euhedral-hashing`         |          11 | xxHash64, mixing, and hash helpers                          |
+| `euhedral-data-structures` |          11 | Concurrent queues, padded atomics, and adders               |
+| `euhedral-hardware-utils`  |          17 | Topology, sampling, pressure, affinity, and JNI             |
+| `euhedral-core`            |          21 | Control plane, routing, frames, ingest, policy, and metrics |
+| `euhedral-reactor-core`    |          21 | Reactor scheduler, operators, and sequencing                |
+| `euhedral-spring-core`     |          21 | Spring Boot, Kafka, and gRPC integration                    |
+| `benchmarks`               |          21 | JMH suites and calibration harnesses                        |
 
-The dependency direction is broadly:
+Lower libraries feed into core; Reactor builds on core; Spring integrates core and Reactor. Keep
+lower-level modules independent of core. Spring currently keeps `module-info.java.disabled` rather
+than an active descriptor; benchmarks has no descriptor.
 
-```text
-hashing + data-structures + hardware-utils
-                  -> core
-                  -> reactor-core
-                  -> spring-core
+[python/pareto-weight-calibration](python/pareto-weight-calibration/) owns offline fitting and
+export
+tools. Its [pyproject.toml](python/pareto-weight-calibration/pyproject.toml) requires Python 3.12 or
+newer. Use a suitable existing environment and run Python tests from that package directory.
 
-core + supporting modules -> benchmarks
-```
+## Build and validation
 
-Keep lower-level modules independent of `euhedral-core`. Integration code belongs in the Reactor or
-Spring modules, not in the queue, hashing, or hardware layers.
-
-## Build and test
-
-Install and activate the pinned tools:
+Run Java and Gradle commands through Mise:
 
 ```bash
 mise install
 mise exec -- java -version
-gradle --version
+mise exec -- gradle --version
 ```
 
-The normal repository check is the same one used by CI:
+Choose focused checks for the owning module:
 
 ```bash
-gradle build
+mise exec -- gradle :euhedral-core:test :euhedral-core:spotlessCheck
+mise exec -- gradle :euhedral-data-structures:test :euhedral-data-structures:spotlessCheck
+mise exec -- gradle :euhedral-spring-core:test :euhedral-spring-core:spotlessCheck
 ```
 
-To run integration tests
+A module test task builds its required dependencies; it does not run all upstream module tests.
+Select upstream tests explicitly when their behavior is affected. Use `--tests` to narrow a test
+run when appropriate. Shared JUnit configuration enables parallel tests, so isolate tests that
+mutate process-wide state using the repository's existing JUnit patterns.
+
+The normal build and the CI verification command are:
 
 ```bash
-gradle build integrationTest
+mise exec -- gradle build
+mise exec -- gradle build integrationTest
 ```
 
-For a focused Java change, select the module and include its required upstream modules:
+`test` excludes the `integration` tag; `integrationTest` runs those tagged tests. Run the owning
+module's `build` and relevant integration tests for native packaging or transport lifecycle changes.
+Run the full build for cross-module changes, and include integration tests when their contracts are
+affected. Documentation-only edits normally need link, reference, and diff checks rather than Java
+compilation. Do not describe an empty or filtered test selection as successful behavioral coverage.
 
-```bash
-gradle :euhedral-core:test
-gradle :euhedral-data-structures:test
-gradle :euhedral-spring-core:test
-```
+### Native build and environment
 
-Use `build`, not only `test`, when the change affects native packaging, generated protobuf code, or
-integration-test lifecycle bindings:
-
-```bash
-gradle :euhedral-hardware-utils:build
-gradle :euhedral-spring-core:build
-```
-
-The hardware module invokes Zig during Gradle's initialization phase, even for an ordinary compile.
-It cross-builds native libraries for Linux, Windows, and macOS. A missing `zig`, JNI platform
-header, or macOS SDK can fail the build before Java compilation begins. Use
-[`.github/workflows/build.yaml`](.github/workflows/build.yaml) as the reference setup; it prepares
-the cross-target JNI headers and macOS SDK before running `gradle build`.
-
-Hardware resource tests use Testcontainers and need a working Docker daemon. Affinity tests also
-depend on the CPUs exposed by the host or container. Report those environmental limits separately
-from Java compilation failures.
-
-## Runtime invariants
-
-### Control plane ownership
-
-[
-`ControlPlaneLattice`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java)
-is a JVM-wide singleton. It owns the resource monitor, global socket distributor, and shard
-lifecycle. Tests and applications that create it must close it.
-
-Each
-[
-`ControlPlaneShard`](euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)
-owns one socket and clones one worker pipeline per active physical core. The default
-[
-`BaseCloneableObject`](euhedral-core/src/main/java/io/euhedral_execution/core/impl/BaseCloneableObject.java)
-connects a `ControlPlaneFragment` to an `AbstractExecutor`.
-
-Do not change a routing table while work is flowing. The established sequence is:
-
-1. Enter drain mode.
-2. Prepare handles or clones.
-3. Publish the complete new mapping.
-4. Drain and close removed workers.
-5. Resume ingest.
-
-Keep socket changes in the lattice and core changes in the shard. Do not make fragments discover or
-rebuild global topology themselves.
-
-### Pull graph
-
-[
-`LatticeEdge`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeEdge.java)
-links sources and receivers. Frames move downstream; `request` and `pull` travel upstream.
-[
-`LatticeVertex`](euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java)
-adds fan-out and optional remote caches.
-
-Worker-local `UpstreamQueue` objects serialize access to each upstream handle. Preserve that
-single-owner handoff when adding a new `LatticeSource`. A source must:
-
-- ignore non-positive demand;
-- stop after its requested limit;
-- honor the pull stop condition;
-- complete its downstream once;
-- avoid generating work from `pull`, which may only consume work already available.
-
-Use the existing ingest implementations and
-[
-`LatticeEdgeTest`](euhedral-core/src/test/java/io/euhedral_execution/core/flow_control/LatticeEdgeTest.java)
-as templates.
-
-### Routing and frame identity
-
-Every `AbstractFrame` has an immutable `idHash` and a mutable `routingHash`.
-
-- `idHash == routingHash` means ordered routing.
-- `randomizeHash(seed)` marks the frame for parallel placement.
-- Equal routing hashes use the same active socket and core mapping.
-- Ordering is scoped to one source and routing lane, not to the whole process.
-- Routing metadata and payload must not change after ingestion.
-
-`SOCKET_LOCAL` and `CACHE_LOCAL` depend on `frame.origin`. `FrameFactory` captures an origin for
-managed frames. A manually constructed frame has no origin unless the caller sets one.
-
-Recycled frames pass through `FrameFactory.replace()`, which first restores `routingHash` to
-`idHash`. A parallel replacement callback must make the frame unordered again. Test both the fresh
-and recycled paths when changing frame creation.
-
-### Frame lifecycle
-
-The normal terminal path in
-[
-`AbstractExecutor`](euhedral-core/src/main/java/io/euhedral_execution/core/generics/AbstractExecutor.java)
-is:
+The hardware build follows this dependency chain:
 
 ```text
-isAlive -> execute -> doFinally
-                   -> doFinallyWithError on an uncaught execution error
+compileJava (JNI declarations) -> zigBuild -> copyNativeResources -> classes
 ```
 
-`AbstractFrame.CancelSignal` is a stackless internal control signal. If frame code catches broad
-exceptions, it must not turn cancellation into an application error. `kill()` prevents future work;
-`throwCancelSignal()` exits work already running.
+Native sources and the product manifest live in
+[euhedral-hardware-utils/src/main/native](euhedral-hardware-utils/src/main/native/).
+The manifest drives platform products and the generated runtime catalog. Outputs go under
+`euhedral-hardware-utils/build/generated-resources/native`; JNI declarations go under
+`build/generated-jni`. Do not hand-edit generated headers, libraries, or catalogs.
 
-Most frame implementations recycle in `doFinally()`. `CallbackFrame` deliberately does not, because
-its response owner decides when reuse is safe. Preserve that distinction.
+The build cross-compiles Linux glibc/musl, Windows, and macOS products for x86_64 and arm64. Consult
+[.github/workflows/build.yaml](.github/workflows/build.yaml) for SDK and tool setup. Mise configures
+`SDKROOT`, `RCODESIGN`, and `ZIG`; native inspection checks also use LLVM tools. Missing native
+tools,
+SDKs, or platform capabilities must be reported separately from Java compilation failures. Hardware
+unit tests include injected providers and clocks; do not assume they all require Docker or that a
+host-only test proves every packaged native target works.
 
-### Per-core policy and caches
+## Runtime contracts
 
-`ControlPlaneFragment` is the hot per-core loop. Through its base classes it owns local cache
-draining, remote pulls, direct upstream pulls, and demand generation. Its
-`FragmentActionPicker` evaluates four actions from six normalized measurements plus a bias. That is
-four groups of seven weights, or 28 values.
+### Control plane and topology
 
-The runtime evaluates fixed weights only. Do not add neural-network training, corpus handling, or
-candidate search dependencies to `euhedral-core`.
+- `ControlPlaneLattice` owns the live JVM singleton, resource monitor, socket distributor, and
+  shards. `addUpstream()` starts it lazily. Close it at its ownership boundary; closing releases
+  the singleton for subsequent creation.
+- Each shard owns one socket and clones one pipeline per active physical core. The default
+  `BaseCloneableObject` connects a `ControlPlaneFragment` to an `AbstractExecutor`.
+- Keep socket changes in the lattice and core changes in the shard. Fragments must not discover
+  or rebuild global topology.
+- Publish routing maps only while the relevant vertex is draining. Prepare handles and publish
+  the mapping, connect new clones, drain existing workers, close removed workers, replace retained
+  workers that miss the drain deadline, then resume ingest. Preserve timeout and shutdown paths.
+- Effective CPUs come from configured, discovered, and currently available membership. The mapper
+  reserves all logical siblings of physical core 0 when another usable physical core exists.
+  Do not assume CPU IDs are dense or that logical CPU count equals worker count.
+- `ControlPlaneLattice.clear(Duration[, Runnable])` is a destructive cache reset for trial
+  isolation.
+  Pause producers first. Fragment state must reset on its owner thread and acknowledge completion;
+  the optional callback runs while ingest is frozen. It is not normal application shutdown.
 
-Local fragment caches are MPSC structures with an owner consumer. A reset that clears one must run
-on the owner thread and acknowledge completion. The `clear` path demonstrates this handoff.
+### Sources, routing, and ordering
 
-## Concurrency rules
+`LatticeEdge` provides connectivity; `LatticeVertex` adds routing and optional shared remote caches.
+Worker-local `UpstreamQueue` instances share registered interceptor handles. Handle acquisition
+serializes `request` and `pull` for that registration; it does not protect arbitrary direct calls
+to the source or duplicate registrations.
 
-Memory access modes are part of the design, not style:
+A source must ignore non-positive demand, stop at its demand limit, honor pull stop conditions,
+and complete its downstream once. `pull` consumes work already available; it must not generate new
+work. Preserve direct-pull stopping at ordered frames so they use the request-and-route path.
 
-- Plain access is for thread-confined or externally ordered state.
-- Opaque access is for weakly ordered polling where freshness is enough.
-- Acquire and release form publication boundaries.
-- Volatile access and CAS are for state transitions that need total visibility.
+`AbstractFrame.idHash` is immutable. Equality of `routingHash` and `idHash` marks ordered routing;
+`randomizeHash(seed)` enables parallel placement. Keep routing metadata, origin, and payload stable
+while a frame is in flight. Equal routing hashes share a lane under a stable routing policy and
+mapping; ordering does not extend across independent sources or restore original input order after
+parallel pipeline stages.
 
-Do not replace a VarHandle access with a stronger or weaker operation without explaining the
-happens-before argument. Stronger is not automatically harmless in a hot loop.
+`SOCKET_LOCAL` and `CACHE_LOCAL` depend on the captured frame origin. Missing or inactive origins
+fall back to hash routing. Test sparse active socket/core sets: the current locality callbacks
+return physical IDs where the vertex expects dense indexes, so those policies can misroute or fail.
+Do not assume locality is correct merely because contiguous-ID tests pass.
 
-Use normal JDK atomics for lifecycle and low-frequency coordination. Use the padded atomic types
-from
-`euhedral-data-structures` for hot shared counters where false sharing matters. The repository uses
-both intentionally.
+### Completion and recycling
 
-Choose a queue from the actual producer and consumer topology:
+`AbstractExecutor` checks liveness, executes the frame, and calls `doFinally()` on success or
+structured cancellation. An uncaught execution `Exception` selects `doFinallyWithError()` instead;
+this boundary does not catch arbitrary JVM `Error` instances.
 
-| Producers | Consumers | Queue family |
-|----------:|----------:|--------------|
-|         1 |         1 | SPSC         |
-|         1 |      many | SPMC         |
-|      many |         1 | MPSC         |
-|      many |      many | MPMC         |
+`AbstractFrame.CancelSignal` is stackless internal control flow. Broad exception handling must not
+turn it into an application error. `kill()` changes an optional shared kill switch; it neither
+interrupts a running body nor affects frames without a switch. `throwCancelSignal()` exits the
+current execution.
 
-Use bounded variants when backpressure is part of the contract, chunked variants when growth is
-allowed, and partitioned variants when contention should be spread across lanes. Prefer batch
-`drain` and `fill` operations on hot paths. Do not rely on unsupported collection behavior such as
-iteration on partitioned queues, and use `sizeLong()` when the exact type provides it.
+`FrameFactory.replace()` remembers prior parallel state, restores `routingHash` to `idHash`, runs
+the replacement callback, and randomizes again when the old frame or callback requests parallel
+routing. Creation and replacement apply factory seeds and the origin captured at factory
+construction. Test fresh and recycled routing behavior. Factory consumption has one owner;
+workers may return frames concurrently through the bounded MPSC recycler.
 
-Avoid allocations, streams, blocking I/O, string formatting, and info-level logging inside:
+Most frames recycle through completion hooks. `PipelineFrame` schedules each stage separately and
+recycles the root when the chain terminates, filters, cancels, or errors.
+`CallbackFrame.doFinally()`
+is intentionally empty: the response owner controls successful reuse; its inherited error hook
+still recycles. Do not unify these lifecycles.
 
-- `ControlPlaneFragment.cycle()`;
-- `LatticeVertex.push()` and `pull()`;
-- queue offer, poll, fill, and drain methods;
-- per-frame `execute()` and completion paths.
+Wait for terminal results before completing a `PipelineRunner`. Its stages enqueue subsequent work
+back into the same sink; `completeGracefully()` seeing an empty queue is not an end-to-end
+completion
+barrier. `EuhedralScheduler.dispose()` closes its lattice, so coordinate shared-runtime ownership.
 
-Use `SpinWait`, `Thread.onSpinWait()`, bounded `LockSupport.parkNanos()`, or Awaitility in tests
-according to the existing ownership pattern. Never add an unbounded busy wait without a shutdown or
-timeout condition.
+### Fragment policy and caches
 
-CPU affinity must go through `PinnedThreadExecutor` or `ThreadTools`. New per-core state that
-allocates arrays or queues should participate in `firstTouch()` so its pages are touched near the
-CPU that will own them.
+`ControlPlaneFragment.cycle()` drains local work, selects a path with `FragmentDecisionTree`, and
+tries remote cached work before further source participation:
 
-## Source conventions
+- `DIRECT` pulls upstream work directly and requests routed work on a miss.
+- `STAGED` requests routed work and drains caches again.
+- `CACHE` consumes cached work without initiating upstream source acquisition and parks only when
+  the cycle makes no progress.
 
-- Use four-space Java indentation and follow the surrounding file's layout.
-- Use SLF4J parameter placeholders. Pass a throwable as the final logging argument.
-- Use JSpecify annotations on public nullness contracts where the module already does so.
-- Validate record and constructor invariants at the boundary.
-- Use ordinary ASCII characters in comments and documentation; avoid uncommon Unicode symbols.
-  Represent data flows with ASCII art such as `->`, `|`, and `+--` unless the user explicitly asks
-  for another notation.
-- Keep comments focused on ownership, ordering, memory semantics, or a non-obvious performance
-  reason.
-- If a public package is added or removed, update the module's `module-info.java`.
-- Add tests in the owning module and name them after observable behavior.
+Preserve body-history guards, rank semantics, scarcity gating, and work-before-park behavior.
+Decisions occur per cycle; batch sizing updates at completed batches using measured service time.
+Local MPSC caches are growable; their soft capacity factor reduces demand targets rather than
+imposing a hard memory bound. Batch pressure caps are separate.
 
-The generated gRPC classes
-`GrpcTransportServiceGrpc.java` and `GrpcTransportServiceMd.java` come from
-[
-`GrpcTransportService.proto`](euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/transport/grpc/protos/GrpcTransportService.proto).
-Edit the proto, run the Spring module's generation phase, and review the generated diff. Do not hand
-edit generated Java.
+`FragmentDecisionWeights` holds configured thresholds. `MicroCalibrator` converts synthetic-work
+weights to worker-local nanoseconds; a weight is not a literal duration. Participation coefficients
+come from the generated `ParticipationLogisticModel`, and default CACHE timing coefficients trace
+to [cache-scarce-v1.json](python/pareto-weight-calibration/policies/cache-scarce-v1.json).
+`CacheTimingConfig.DEFAULT` includes a bounded adaptive timing function and scarcity gate; the
+fixed-timing constructor is a separate configuration. The retained `paretoWeights` field does not
+supply the live participation coefficients, and the ordinary idle-band helper has no active-loop
+caller.
 
-Native binaries under `euhedral-hardware-utils/src/main/resources/bin`, Zig caches, Gradle `build`
-directories, and benchmark output are build or run artifacts. Do not add or remove them as part of
-an unrelated source change.
+Keep fitting and candidate search in the offline tools. Regenerate learned model code through its
+exporter and preserve model/dataset provenance. When changing policy, inspect the tree tests,
+`ParticipationLogisticModelTest`, `ProductionCacheTimingConfigTest`, and `CacheScarcityGateTest`.
+Preserve Java/Python parity and frozen fixtures when the task affects exported policies. Do not
+promote a benchmark finding to a production default without that scope being requested.
 
-## Testing changes well
+## Concurrency and hardware rules
 
-- Routing changes need stable-hash, randomized-hash, inactive-target, and remap coverage.
-- Source changes need request, pull, completion, zero-demand, and concurrent-handle coverage.
-- Frame changes need success, cancellation, error, and recycling coverage.
-- Queue changes need the matching producer-consumer test and boundary cases around chunk rollover.
-- Topology changes need startup, add/remove, drain timeout, and close coverage.
-- Spring transport changes should cover unary and streaming behavior or Kafka partition and commit
-  behavior as appropriate.
-- Performance claims require JMH. Do not infer throughput from a unit test or one wall-clock run.
+Memory access modes are part of the design:
 
-Prefer deterministic synchronization to arbitrary sleeps. Close lattices, pinned executors, native
-monitors, channels, and containers in teardown so static state does not leak into the next test.
+| Mode            | Intended use                                         |
+|-----------------|------------------------------------------------------|
+| Plain           | Thread-confined or externally ordered state          |
+| Opaque          | Weakly ordered polling where freshness is sufficient |
+| Acquire/release | Publication and visibility boundaries                |
+| Volatile/CAS    | Coordinated state transitions                        |
 
-Before handing work back:
+Explain the happens-before argument when changing VarHandle access modes. Stronger operations can
+add hot-path cost; weaker operations can break publication. Use ordinary JDK atomics for lifecycle
+coordination and the data-structures module's padded types for hot shared counters.
 
-1. Search for stale names and references.
-2. Run the narrowest meaningful tests, then `gradle build` for cross-module or native changes.
-3. Inspect `git diff --check`.
-4. Inspect `git status --short` and confirm only intended files changed.
-5. Report tests that could not run and the exact environmental reason.
+Choose SPSC, SPMC, MPSC, or MPMC queues from the actual producer/consumer topology. Use bounded
+queues where backpressure is required, chunked queues where growth is allowed, and partitioned
+queues where contention should be distributed. Prefer batch `drain` and `fill`; do not assume
+partitioned queues support iteration, and use `sizeLong()` where the type provides it.
+
+Avoid allocations, streams, blocking I/O, string formatting, and info-level logging in fragment
+cycles, vertex routing, queue operations, and per-frame execution/completion. Every spin or wait
+must have a progress, shutdown, or timeout condition. Prefer deterministic synchronization to
+arbitrary sleeps in tests.
+
+Use `PinnedThreadExecutor` or `ThreadTools` for affinity. Distinguish `EXACT`, `LOCALITY_HINT`, and
+`UNSUPPORTED` capabilities; managed CPU identity is not proof of physical placement. Include new
+owner-local arrays and queues in `firstTouch()` where appropriate, preserving executor ownership.
+
+Keep OS sampling, counter-delta/freshness processing, pressure evaluation, and topology mapping in
+the hardware module. Preserve signal validity and the monitor's bounded latest-value listener
+dispatch. Use injected providers and clocks to test missing signals, membership changes, and slow
+listeners without relying solely on the host's current state.
+
+## Editing and testing conventions
+
+- Follow surrounding Java layout and the configured Spotless formatter. Scope formatting to
+  intended files; do not reformat unrelated work.
+- Use SLF4J placeholders and pass a throwable last. Preserve JSpecify contracts where present.
+- Validate constructor and record invariants at boundaries. Update active module exports when
+  public package boundaries change.
+- Use ordinary ASCII in comments and docs. Keep comments focused on ownership, ordering, memory
+  semantics, or non-obvious performance constraints.
+- Generated gRPC classes come from
+  [GrpcTransportService.proto](euhedral-spring-core/src/main/java/io/euhedral_execution/spring/core/transport/grpc/protos/GrpcTransportService.proto).
+  Edit the schema and regenerate with matching tooling; do not hand-edit generated Java. The
+  current Spring Gradle file does not configure protobuf generation, so `build` alone does not
+  regenerate these checked-in classes.
+- Preserve native outputs, Zig caches, Gradle build directories, and benchmark artifacts unless
+  their cleanup is explicitly part of the task.
+
+Match regression coverage to the changed contract:
+
+| Change           | Required behavioral coverage                                                             |
+|------------------|------------------------------------------------------------------------------------------|
+| Routing          | Stable/randomized hashes, inactive targets, sparse IDs, and remapping                    |
+| Sources          | Demand bounds, pull stopping, completion, and concurrent handles                         |
+| Frames           | Success, cancellation, exceptions, filtering where applicable, and reuse                 |
+| Queues           | Matching producer/consumer topology, capacity edges, and chunk rollover                  |
+| Topology/workers | Startup, add/remove, drain timeouts, reset acknowledgments, and close                    |
+| Hardware/native  | Sampling validity, affinity capability, packaging/catalogs, and relevant platform checks |
+| Transports       | gRPC readiness/terminal behavior or Kafka partition liveness and offset ordering         |
+
+Close lattices, pinned executors, native monitors, channels, and any containers in teardown. Kafka
+completion marks acknowledgments ready; commits must not pass unfinished earlier offsets. Reactor
+parallel execution and ordered output are different contracts and need corresponding assertions.
+Performance claims require JMH evidence; unit tests and isolated wall-clock runs do not establish
+throughput improvements.
+
+## Before handing work back
+
+1. Search changed areas for stale names, dead links, and outdated callers.
+2. Run focused validation, then the broader checks justified by the changed contracts.
+3. Inspect `git diff --check`, the full intended diff, and `git status --short`.
+4. Confirm unrelated state and user-owned outputs are preserved.
+5. Report what changed, actual tests run, and any failures or untested scope with precise reasons.
+   Keep uncommitted work, unexecuted benchmarks, and proposed default changes labeled accurately.
