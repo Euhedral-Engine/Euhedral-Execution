@@ -12,11 +12,14 @@ import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hashing.HasherApi;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.lang.invoke.VarHandle;
+import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import lombok.Getter;
@@ -45,7 +48,9 @@ public class LatticeEdge extends UpstreamHandle {
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
     protected static final AtomicLongArray ACTIVE_PARTITIONS;
-    protected static final AtomicLong THREAD_COUNT = new AtomicLong(0);
+    protected static final AtomicLong CORE_COUNT = new AtomicLong(0);
+    protected static final AtomicReference<Int2IntOpenHashMap> CORE_RANK;
+    private static final AtomicBoolean LOCK = new AtomicBoolean(false);
 
     protected static final PaddedAtomicLong UPSTREAM_COUNT = new PaddedAtomicLong(0);
 
@@ -62,6 +67,9 @@ public class LatticeEdge extends UpstreamHandle {
                     UPSTREAMS[i] = new MpscQueue<>(256);
                 }
             }
+            Int2IntOpenHashMap initialRanks = new Int2IntOpenHashMap(UPSTREAMS.length);
+            initialRanks.defaultReturnValue(-1);
+            CORE_RANK = new AtomicReference<>(initialRanks);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -92,8 +100,16 @@ public class LatticeEdge extends UpstreamHandle {
         } else {
             UpstreamQueue queue = getThreadUpstreamQueue();
             int core = queue.core;
-            ACTIVE_PARTITIONS.setRelease(core, 1);
-            LOGGER.trace("Registered thread on core {}", core);
+            if (ACTIVE_PARTITIONS.compareAndSet(core, 0L, 1L)) {
+                try {
+                    SpinWait.awaitWhile(() -> !LOCK.compareAndSet(false, true));
+                    rankCores();
+                    CORE_COUNT.incrementAndGet();
+                    LOGGER.trace("Registered thread on core {}", core);
+                } finally {
+                    LOCK.lazySet(false);
+                }
+            }
         }
     }
 
@@ -105,7 +121,7 @@ public class LatticeEdge extends UpstreamHandle {
             return parent.getThreadUpstreamQueue();
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT);
         queue.getTrueUpstreamCount();
 
         return queue;
@@ -122,17 +138,22 @@ public class LatticeEdge extends UpstreamHandle {
 
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
         if (queue != null) {
-            THREAD_COUNT.decrementAndGet();
             UpstreamQueue.UP_QUEUE.remove();
             int core = queue.core;
-            if (core >= 0 && core < UPSTREAMS.length) {
-                ACTIVE_PARTITIONS.setRelease(core, 0);
+            if (core >= 0 && core < UPSTREAMS.length && ACTIVE_PARTITIONS.compareAndSet(core, 1L, 0L)) {
+                CORE_COUNT.decrementAndGet();
                 MpscQueue<UpstreamHandle> upstreams = UPSTREAMS[core];
                 if (upstreams != null) {
                     upstreams.clear();
                 }
+                try {
+                    SpinWait.awaitWhile(() -> !LOCK.compareAndSet(false, true));
+                    rankCores();
+                } finally {
+                    LOCK.lazySet(false);
+                }
+                LOGGER.trace("Removed entry for thread on core {}", core);
             }
-            LOGGER.trace("Removed entry for thread on core {}", core);
         }
     }
 
@@ -159,7 +180,35 @@ public class LatticeEdge extends UpstreamHandle {
 
     /// Returns the number of threads registered with this LatticeEdge.
     public int getThreadCount() {
-        return THREAD_COUNT.intValue();
+        return CORE_COUNT.intValue();
+    }
+
+    /// Returns this core's current rank in the existing registered-core bitmap.
+    protected int getThreadRank(int core) {
+        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
+        if (parent != null) {
+            return parent.getThreadRank(core);
+        }
+        Int2IntOpenHashMap ranks = CORE_RANK.getAcquire();
+        return ranks.get(core);
+    }
+
+    private void rankCores() {
+        BitSet pCores = SystemInfo.getPCoreSet();
+        int rank = 1;
+        Int2IntOpenHashMap nextRanks = new Int2IntOpenHashMap(ACTIVE_PARTITIONS.length());
+        nextRanks.defaultReturnValue(-1);
+        for (int c = 0; c < ACTIVE_PARTITIONS.length(); c++) {
+            if (ACTIVE_PARTITIONS.getOpaque(c) != 0L && pCores != null && pCores.get(c)) {
+                nextRanks.put(c, rank++);
+            }
+        }
+        for (int c = 0; c < ACTIVE_PARTITIONS.length(); c++) {
+            if (ACTIVE_PARTITIONS.getOpaque(c) != 0L && (pCores == null || !pCores.get(c))) {
+                nextRanks.put(c, rank++);
+            }
+        }
+        CORE_RANK.setRelease(nextRanks);
     }
 
     /// Sets the parent LatticeEdge.
@@ -192,7 +241,7 @@ public class LatticeEdge extends UpstreamHandle {
             return;
         }
 
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT);
         queue.request(num);
     }
 
@@ -208,7 +257,7 @@ public class LatticeEdge extends UpstreamHandle {
         if (parent != null) {
             return parent.pull(consumer, stopCondition, demand);
         }
-        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT, THREAD_COUNT);
+        UpstreamQueue queue = UpstreamQueue.get(UPSTREAMS, UPSTREAM_COUNT);
         return queue.pull(consumer, stopCondition, demand);
     }
 

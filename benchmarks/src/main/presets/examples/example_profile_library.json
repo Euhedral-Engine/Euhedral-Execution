@@ -1,0 +1,37 @@
+{
+  // Optional: External profile library imports
+  "imports": [],
+  // Reusable calibration benchmark profiles
+  "calibrationProfiles": {
+    "imported-calibration": {
+      "cpuSet": [1, 2, 3, 4],
+      "parallelSources": 8,
+      "orderedSources": 1,
+      "workUnits": 50,
+      "randomizeWork": true,
+      "totalRequiredExecutions": 500000,
+      "invocationTimeoutMillis": 30000,
+      "forcedActiveParticipantCount": null,
+      "cacheParkNs": 15000,
+      "contentionHalfLifeNanos": 1000000,
+      "cacheActuatorVersion": "cache-v1",
+      // References decision weight profile within this library
+      "decisionWeightProfile": "imported-weights",
+      "rawSampleLimit": 1024,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": false,
+      "observeIdleDecision": false,
+      "observeExecDecision": false,
+      "observeContentionStaleness": false
+    }
+  },
+  // Reusable fragment decision weights profiles
+  "decisionWeightProfiles": {
+    "imported-weights": {
+      "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
+      "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
+    }
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "kind": "parameter_study",
+  "id": "cache-live25-joint5d-v2-matched",
+  "root": "../../../..",
+  "outputDirectory": "experiments/cache-live25-joint5d-v2/comparison-v2",
+  "families": [
+    {
+      "name": "park-body",
+      "fitTask": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/park-body-fit.json",
+      "ablationTask": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/park-body-4d-ablation.json",
+      "searchTask": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/park-body-search.json"
+    },
+    {
+      "name": "park-phr-body",
+      "fitTask": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/park-phr-body-fit.json",
+      "ablationTask": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/park-phr-body-4d-ablation.json",
+      "searchTask": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/park-phr-body-search.json"
+    }
+  ],
+  "selection": {
+    "count": 4,
+    "primaryTargets": [
+      "off:R7_S1_W0",
+      "off:R7_S1_W96",
+      "off:R7_S1_W576",
+      "off:R15_S1_W0",
+      "off:R15_S1_W96",
+      "off:R15_S1_W576",
+      "off:R23_S1_W0",
+      "off:R23_S1_W96",
+      "off:R23_S1_W576"
+    ],
+    "topologyTargets": [
+      "off:R7_scarce",
+      "off:R15_scarce",
+      "off:R23_scarce"
+    ],
+    "plentifulTargets": [
+      "off:R7_S7_W0",
+      "off:R7_S7_W96",
+      "off:R7_S7_W576",
+      "off:R15_S15_W0",
+      "off:R15_S15_W96",
+      "off:R15_S15_W576",
+      "off:R23_S23_W0",
+      "off:R23_S23_W96",
+      "off:R23_S23_W576"
+    ],
+    "capPercent": 25,
+    "minPositiveMarginalOutputs": 1,
+    "minNormalizedDistance": 0.15,
+    "preserveBasins": true,
+    "minimumRoles": {
+      "basin_consensus": 1,
+      "model_disagreement": 1
+    }
+  },
+  "benchmark": {
+    "workflow": "cache_timing_confirmation",
+    "stage": "topologies",
+    "templateHarness": "python/pareto-weight-calibration/tasks/live25-joint5d-v2/inputs/harness-template.json",
+    "blocks": 2,
+    "runDirectory": "experiments/cache-live25-joint5d-v2-matched-measurement",
+    "subdirectory": "benchmark",
+    "functionConfigPath": "/cacheTimingFunction",
+    "fixtureBindings": {
+      "/cpuSet": "cpuSet",
+      "/parallelSources": "parallelSources",
+      "/workUnits": "workUnits"
+    },
+    "controls": [
+      {
+        "id": "POLICY_OFF",
+        "function": null
+      },
+      {
+        "id": "anchor-7931",
+        "function": {
+          "normalizationVersion": "cache-local-bounded-v1",
+          "means": [
+            0.5,
+            2,
+            8
+          ],
+          "scales": [
+            0.5,
+            2,
+            8
+          ],
+          "supportMin": [
+            0,
+            0,
+            0
+          ],
+          "supportMax": [
+            1,
+            4,
+            16
+          ],
+          "parkReferenceNanos": 15000,
+          "halfLifeReferenceNanos": 1000000,
+          "parkMinNanos": 15000,
+          "parkMaxNanos": 814375,
+          "halfLifeMinNanos": 250000,
+          "halfLifeMaxNanos": 2000000,
+          "parkCoefficients": [
+            1.539667508421986,
+            -5.551115123125783e-16,
+            -1.1628579390224267,
+            1.457167719820518e-16,
+            -3.2959746043559335e-17,
+            -1.0787811616230769e-16,
+            -1.3530843112619095e-16
+          ],
+          "halfLifeCoefficients": [
+            -0.6064873212242595,
+            2.220446049250313e-16,
+            0.21406430608786822,
+            3.642919299551295e-17,
+            -8.239936510889834e-18,
+            -2.888721163316066e-17,
+            -4.0766001685454967e-17
+          ]
+        }
+      }
+    ]
+  },
+  "retrospectiveStrategies": [
+    "selected",
+    "single",
+    "mean",
+    "validation_weighted"
+  ]
+}

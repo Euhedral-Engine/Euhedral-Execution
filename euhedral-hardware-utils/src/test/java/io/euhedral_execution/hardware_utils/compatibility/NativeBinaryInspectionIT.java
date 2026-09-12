@@ -4,16 +4,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.hardware_utils.compatibility.helpers.NativeInspectionTools;
 import io.euhedral_execution.hardware_utils.compatibility.helpers.TestPaths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -135,8 +138,8 @@ class NativeBinaryInspectionIT {
 
     @Test
     void everyPackagedProductPassesArchitectureImportExportAndRuntimeFloorGates() throws Exception {
-        Path readobj = executableProperty("llvm.readobj");
-        Path objdump = executableProperty("llvm.objdump");
+        Path readobj = NativeInspectionTools.llvm("llvm.readobj", "llvm-readobj", "LLVM_READOBJ");
+        Path objdump = NativeInspectionTools.llvm("llvm.objdump", "llvm-objdump", "LLVM_OBJDUMP");
         Path generated = TestPaths.buildDirectory().resolve("generated-resources/native");
         Map<String, String> machines = Map.of(
                 "bin/linux/glibc/linux_jni_x64.so", "Machine: EM_X86_64",
@@ -223,7 +226,7 @@ class NativeBinaryInspectionIT {
                 "bin/osx/osx_jni_arm64.dylib",
                 "io.euhedral.execution.hardware-utils.osx-jni-arm64");
         Path extraction = Files.createTempDirectory(TestPaths.buildDirectory(), "packaged-macos-");
-        try (var archive = new java.util.jar.JarFile(jar.toFile())) {
+        try (var archive = new JarFile(jar.toFile())) {
             for (Map.Entry<String, String> product : identifiers.entrySet()) {
                 Path file = extraction.resolve(Path.of(product.getKey()).getFileName());
                 try (var input = archive.getInputStream(archive.getJarEntry(product.getKey()))) {
@@ -235,8 +238,7 @@ class NativeBinaryInspectionIT {
             }
         } finally {
             try (Stream<Path> paths = Files.walk(extraction)) {
-                for (Path path :
-                        paths.sorted(java.util.Comparator.reverseOrder()).toList()) {
+                for (Path path : paths.sorted(Comparator.reverseOrder()).toList()) {
                     Files.deleteIfExists(path);
                 }
             }

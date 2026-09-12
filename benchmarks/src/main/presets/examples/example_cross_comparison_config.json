@@ -1,0 +1,23 @@
+{
+  "strategy": "CROSS",
+  "baseline": {
+    "label": "baseline-matrix",
+    "runs": [
+      "experiments/matrix/base-config-a_repeat_0",
+      "experiments/matrix/base-config-b_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "candidate-matrix",
+    "runs": [
+      "experiments/matrix/cand-config-x_repeat_0",
+      "experiments/matrix/cand-config-y_repeat_0",
+      "experiments/matrix/cand-config-z_repeat_0"
+    ]
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": false
+  },
+  "outputDirectory": "experiments/matrix-cross/comparisons"
+}

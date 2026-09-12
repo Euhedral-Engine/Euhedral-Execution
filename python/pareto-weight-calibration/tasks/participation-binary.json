@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "id": "participation-binary",
+  "kind": "classification",
+  "dataset": {
+    "manifest": "../datasets/participation.json",
+    "adapter": "participation_binary",
+    "familyKey": "family_id",
+    "blockKey": "runtime_commit",
+    "inventory": {
+      "rows": 102,
+      "excludedRows": 33,
+      "families": 43
+    }
+  },
+  "features": [
+    {
+      "name": "K",
+      "source": "state.K"
+    },
+    {
+      "name": "pRatio",
+      "source": "state.pRatio"
+    },
+    {
+      "name": "logR",
+      "source": "state.logR"
+    },
+    {
+      "name": "body",
+      "source": "state.body"
+    },
+    {
+      "name": "contention",
+      "source": "state.contention"
+    }
+  ],
+  "targets": [
+    {
+      "name": "action",
+      "source": "observed_action"
+    }
+  ],
+  "labels": [
+    "DEFAULT",
+    "CACHE"
+  ],
+  "objective": {
+    "adapter": "supported_wrong_action_regret"
+  },
+  "validation": {
+    "outerFolds": 43,
+    "innerFolds": 4,
+    "seed": 20260830
+  },
+  "candidates": [
+    {
+      "id": "logistic-main",
+      "family": "logistic",
+      "params": {
+        "C": 1.0,
+        "penalty": "l2"
+      }
+    }
+  ],
+  "export": {
+    "kind": "linear"
+  }
+}

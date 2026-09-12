@@ -1,0 +1,22 @@
+{
+  "experiments/pareto_direct_side_training/direct_side_candidate.json": "70b3aa42c389c48d8e7805f656b77af61244305db0372666cdffa02cb95fcffa",
+  "experiments/pareto_direct_side_training/direct_side_candidate.json.sha256": "74607a0066245a500a93c40570ebc380bb8670454e6c24427fd2cbc81846119f",
+  "experiments/pareto_direct_side_training/direct_side_false_cache.json": "14257ace4441a54e40591b851d6b0cd86302930e43fee6c5205c8e640842b3f7",
+  "experiments/pareto_direct_side_training/direct_side_false_cache.json.sha256": "30a3a5b31c54a8a066b7927e02beef0adc9d009275593f391de37bcab859800a",
+  "experiments/pareto_direct_side_training/direct_side_false_default.json": "2039a65e9cd8f19a2d0d48ef110ed380c037ba691275bb616ba7acc8082d6fcb",
+  "experiments/pareto_direct_side_training/direct_side_false_default.json.sha256": "d7a23a55ca73db6b227c20173111f3a0a47fe91c7a4e4909de2bd455e2c71118",
+  "experiments/pareto_direct_side_training/direct_side_family_metrics.json": "533286726f3475c4aba80878b3771a5ddfd27ea7511245130d9ebceb019f5174",
+  "experiments/pareto_direct_side_training/direct_side_family_metrics.json.sha256": "24653fae87bbc8705ded34c9419fe01da50c0c839f04d2b0bbab31dec5f78fcc",
+  "experiments/pareto_direct_side_training/direct_side_findings.md": "1d3f4c8fd254cf850309ce58870de144b6cec6c906b23cf18fc5c5013c9141e3",
+  "experiments/pareto_direct_side_training/direct_side_findings.md.sha256": "37b2d27810fb2e796566f75f98094db0af88c35b1cdfbdfe0859850facf6f2b4",
+  "experiments/pareto_direct_side_training/direct_side_grid_results.json": "082e8b7ef0165c9e0084a32697ba070aaa0ffde4a20454f3932de493a396a964",
+  "experiments/pareto_direct_side_training/direct_side_grid_results.json.sha256": "556edbc97984773024a174ab265dee98df5c2706b368e99b4bf5857538d6f91b",
+  "experiments/pareto_direct_side_training/direct_side_outer_lofo.json": "79e4287295f46798084ff0e96226ea62c1588925121b0cc7060b4a26dcfbf4b2",
+  "experiments/pareto_direct_side_training/direct_side_outer_lofo.json.sha256": "6dcfc472379f111748ada88870aaf54362f0997b8afc2c1f48306a4a1def8e5c",
+  "experiments/pareto_direct_side_training/direct_side_summary.json": "a78287f365a0abdafdf1434ed739aa2f809f7b566547853c4e1ed9d605153ebf",
+  "experiments/pareto_direct_side_training/direct_side_summary.json.sha256": "5b7a98981b3c196b7b542786be3df28d8e9f535f8363b7211e857edfdb18e248",
+  "experiments/pareto_direct_side_training/direct_side_training_dataset.json": "bee6cdcb324fb1c2c68788bf6cbb2783723fde617521dc09621af7ea9447e4a3",
+  "experiments/pareto_direct_side_training/direct_side_training_dataset.json.sha256": "4d2a4731a32361fbd56468442306ffa1aebc3b628e2ab9c361e19025d9193dbc",
+  "experiments/productivity_participation_domain.json": "ae61243653103055099f982d2357366d4af4beea1f59a1ac9dd9ca79a0eba52e",
+  "experiments/productivity_participation_domain.json.sha256": "3092507bf4ad8f2526573b64f31b7c42be1c9eae13e2a2168c9adf6a87c59d7e"
+}

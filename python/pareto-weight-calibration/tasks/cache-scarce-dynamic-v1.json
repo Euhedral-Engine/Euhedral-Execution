@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "root": "../../..",
+  "outputDirectory": "experiments/cache-scarce-dynamic-v1",
+  "policyId": "policy-158a61afee6653cbbfde",
+  "policyArtifact": "python/pareto-weight-calibration/policies/cache-scarce-v1.json",
+  "staticTask": "python/pareto-weight-calibration/tasks/cache-scarce-loop.json",
+  "sourceDatabase": "experiments/cache-scarce-loop/forks.sqlite",
+  "topologies": [7, 15, 23],
+  "scarcityTopology": 15,
+  "lessScarceSources": 4,
+  "forksPerArm": 3,
+  "windowsPerPhase": 8,
+  "warmups": 3,
+  "warmupTime": "2s",
+  "measurementTime": "5s",
+  "steadyWindows": 4,
+  "recovery": {"tolerancePercent": 5, "consecutiveWindows": 2},
+  "trialTimeoutSeconds": 300
+}

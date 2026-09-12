@@ -25,12 +25,12 @@ val copyRuntimeDependencies = tasks.register<Sync>("copyRuntimeDependencies") {
 }
 
 val copyLauncherScript = tasks.register<Copy>("copyLauncherScript") {
-    from("src/main/scripts/euhedral-benchmarks")
+    from("src/main/scripts")
     into(layout.buildDirectory.dir("bin"))
     filePermissions {
         unix("rwxr-xr-x")
     }
-    description = "Copies the automatic launch script."
+    description = "Copies the automatic launch scripts."
 }
 
 val assembleBenchmarkDistribution = tasks.register("assembleBenchmarkDistribution") {
@@ -69,6 +69,9 @@ dependencies {
     api(libs.org.hdrhistogram.hdrhistogram)
     api(libs.org.jspecify.jspecify)
     api(libs.org.slf4j.slf4j.api)
+    implementation(libs.com.fasterxml.jackson.core.jackson.annotations)
+    implementation(libs.com.fasterxml.jackson.core.jackson.databind)
+    implementation(libs.org.apache.commons.commons.math3)
     runtimeOnly(libs.ch.qos.logback.logback.classic)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
     annotationProcessor(libs.org.openjdk.jmh.jmh.generator.annprocess)

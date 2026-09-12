@@ -18,7 +18,6 @@ Most performance and correctness constraints follow from that shape.
 4. Use the repository toolchain from [`mise.toml`](mise.toml).
 5. Do not commit, push, delete user data, or rewrite unrelated files unless the task explicitly asks
    for it.
-6. Read [AGENT_WORKFLOW.md](docs/AGENT_WORKFLOW.md)
 
 Several directories under `data` may contain expensive local runs. Treat them as user-owned even
 when they are untracked.

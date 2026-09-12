@@ -2,9 +2,9 @@ package io.euhedral_execution.hardware_utils.compatibility;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.hardware_utils.compatibility.helpers.NativeInspectionTools;
 import io.euhedral_execution.hardware_utils.compatibility.helpers.TestPaths;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -80,11 +80,7 @@ class NativeBinaryGateTest {
 
     @Test
     void windowsImportsMatchManifestAllowlist() throws Exception {
-        String inspectorProperty = System.getProperty("llvm.readobj");
-        assertNotNull(inspectorProperty, "llvm.readobj is required");
-        Path inspector = Path.of(inspectorProperty);
-        assertTrue(inspector.isAbsolute(), "llvm.readobj must be absolute");
-        assertTrue(Files.isExecutable(inspector), inspector.toString());
+        Path inspector = NativeInspectionTools.llvm("llvm.readobj", "llvm-readobj", "LLVM_READOBJ");
 
         Path generated = TestPaths.buildDirectory().resolve("generated-resources/native");
         for (String resource : List.of("bin/windows/windows_jni_x64.dll", "bin/windows/windows_jni_arm64.dll")) {

@@ -1,0 +1,224 @@
+{
+  "$defs": {
+    "BenchmarkPreparation": {
+      "additionalProperties": false,
+      "properties": {
+        "workflow": {
+          "const": "cache_timing_confirmation",
+          "default": "cache_timing_confirmation",
+          "title": "Workflow",
+          "type": "string"
+        },
+        "stage": {
+          "default": "topologies",
+          "enum": [
+            "r23",
+            "topologies",
+            "dynamic"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "templateHarness": {
+          "title": "Templateharness",
+          "type": "string"
+        },
+        "blocks": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "runDirectory": {
+          "title": "Rundirectory",
+          "type": "string"
+        },
+        "subdirectory": {
+          "default": "benchmark",
+          "title": "Subdirectory",
+          "type": "string"
+        },
+        "functionConfigPath": {
+          "default": "/cacheTimingFunction",
+          "title": "Functionconfigpath",
+          "type": "string"
+        },
+        "fixtureBindings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Fixturebindings",
+          "type": "object"
+        },
+        "controls": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Controls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "templateHarness",
+        "runDirectory",
+        "fixtureBindings",
+        "controls"
+      ],
+      "title": "BenchmarkPreparation",
+      "type": "object"
+    },
+    "StudyFamily": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "fitTask": {
+          "title": "Fittask",
+          "type": "string"
+        },
+        "ablationTask": {
+          "title": "Ablationtask",
+          "type": "string"
+        },
+        "searchTask": {
+          "title": "Searchtask",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "fitTask",
+        "ablationTask",
+        "searchTask"
+      ],
+      "title": "StudyFamily",
+      "type": "object"
+    },
+    "StudySelection": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "primaryTargets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Primarytargets",
+          "type": "array"
+        },
+        "topologyTargets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Topologytargets",
+          "type": "array"
+        },
+        "plentifulTargets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Plentifultargets",
+          "type": "array"
+        },
+        "capPercent": {
+          "default": 25,
+          "title": "Cappercent",
+          "type": "number"
+        },
+        "minPositiveMarginalOutputs": {
+          "default": 1,
+          "title": "Minpositivemarginaloutputs",
+          "type": "integer"
+        },
+        "minNormalizedDistance": {
+          "default": 0.15,
+          "title": "Minnormalizeddistance",
+          "type": "number"
+        },
+        "preserveBasins": {
+          "default": true,
+          "title": "Preservebasins",
+          "type": "boolean"
+        },
+        "minimumRoles": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Minimumroles",
+          "type": "object"
+        }
+      },
+      "required": [
+        "primaryTargets",
+        "topologyTargets",
+        "plentifulTargets"
+      ],
+      "title": "StudySelection",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "default": "parameter_study",
+      "title": "Kind",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "root": {
+      "default": ".",
+      "title": "Root",
+      "type": "string"
+    },
+    "outputDirectory": {
+      "title": "Outputdirectory",
+      "type": "string"
+    },
+    "families": {
+      "items": {
+        "$ref": "#/$defs/StudyFamily"
+      },
+      "title": "Families",
+      "type": "array"
+    },
+    "selection": {
+      "$ref": "#/$defs/StudySelection"
+    },
+    "benchmark": {
+      "$ref": "#/$defs/BenchmarkPreparation"
+    },
+    "retrospectiveStrategies": {
+      "default": [
+        "selected",
+        "single",
+        "mean",
+        "validation_weighted"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Retrospectivestrategies",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "outputDirectory",
+    "families",
+    "selection",
+    "benchmark"
+  ],
+  "title": "TournamentStudy",
+  "type": "object"
+}

@@ -1,0 +1,322 @@
+{
+  "schemaVersion": 1,
+  "id": "01-productivity-worker-scale-sweep",
+  "name": "Productivity Policy Worker Scale Sweep",
+  "description": "Measures the zero-body productivity policy from four P-core workers through the exact 7P+15E core-hc-throughput topology after Euhedral excludes core 0 and JMH reserves CPU 31. The scaled series keeps approximately one source per two workers, the fixed series holds eleven sources, and packed-versus-spread E-core sets isolate shared-L2 occupancy.",
+  "labels": {
+    "preset": "productivity-worker-scale",
+    "topology": "i9-14900k-cluster-aware"
+  },
+  "imports": [
+    {
+      "path": "../profiles/productivity-threshold.json",
+      "namespace": "threshold"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": true,
+    "randomSeed": 401128,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/01-productivity-worker-scale-sweep",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": false,
+    "retainPerIterationResults": false
+  },
+  "sweeps": [
+    {
+      "id": "policy-on-w04-s02",
+      "baseTrialId": "scaled-w04-s02",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-w07-s03",
+      "baseTrialId": "scaled-w07-s03",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-w11-s05",
+      "baseTrialId": "scaled-w11-s05",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-w15-s07",
+      "baseTrialId": "scaled-w15-s07",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-w19-s09",
+      "baseTrialId": "scaled-w19-s09",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-spread-w11-s05",
+      "baseTrialId": "spread-w11-s05",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-spread-w15-s07",
+      "baseTrialId": "spread-w15-s07",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-spread-w19-s09",
+      "baseTrialId": "spread-w19-s09",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-w22-s11",
+      "baseTrialId": "scaled-w22-s11",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-fixed11-w11",
+      "baseTrialId": "fixed11-w11-s11",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-fixed11-w15",
+      "baseTrialId": "fixed11-w15-s11",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    },
+    {
+      "id": "policy-on-fixed11-w19",
+      "baseTrialId": "fixed11-w19-s11",
+      "parameters": [{ "path": "/calibrationConfig/productivityThresholdWeight", "values": [128] }]
+    }
+  ],
+  "trials": [
+    {
+      "id": "scaled-w04-s02",
+      "name": "Scaled Workers 4 - Sources 2",
+      "group": "productivity-worker-scale",
+      "description": "Four P-core workers and two sources; reproduces the small homogeneous topology.",
+      "tags": ["worker-scale", "scaled-sources", "p-only"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "scaled-w07-s03",
+      "name": "Scaled Workers 7 - Sources 3",
+      "group": "productivity-worker-scale",
+      "description": "All seven available P-core workers and three sources.",
+      "tags": ["worker-scale", "scaled-sources", "p-only"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14], "parallelSources": 3, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "scaled-w11-s05",
+      "name": "Scaled Workers 11 - Sources 5",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus the complete E-core cluster on CPUs 16-19, with five sources.",
+      "tags": ["worker-scale", "scaled-sources", "e-clusters-1"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19], "parallelSources": 5, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "scaled-w15-s07",
+      "name": "Scaled Workers 15 - Sources 7",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus two complete E-core clusters, with seven sources.",
+      "tags": ["worker-scale", "scaled-sources", "e-clusters-2"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23], "parallelSources": 7, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "scaled-w19-s09",
+      "name": "Scaled Workers 19 - Sources 9",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus three complete E-core clusters, with nine sources.",
+      "tags": ["worker-scale", "scaled-sources", "e-clusters-3"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], "parallelSources": 9, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "scaled-w22-s11",
+      "name": "Scaled Workers 22 - Sources 11",
+      "group": "productivity-worker-scale",
+      "description": "The exact core-hc-throughput worker topology: seven P-cores plus fifteen E-cores after core 0 is excluded and CPU 31 is reserved for JMH, with eleven sources.",
+      "tags": ["worker-scale", "scaled-sources", "core-hc-throughput-topology"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], "parallelSources": 11, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "spread-w11-s05",
+      "name": "Spread Workers 11 - Sources 5",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus one E-core from each L2 cluster, with five sources.",
+      "tags": ["worker-scale", "scaled-sources", "e-clusters-spread-1"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28], "parallelSources": 5, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "spread-w15-s07",
+      "name": "Spread Workers 15 - Sources 7",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus two E-cores from each L2 cluster, with seven sources.",
+      "tags": ["worker-scale", "scaled-sources", "e-clusters-spread-2"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 20, 21, 24, 25, 28, 29], "parallelSources": 7, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "spread-w19-s09",
+      "name": "Spread Workers 19 - Sources 9",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus three E-cores from each L2 cluster, with nine sources.",
+      "tags": ["worker-scale", "scaled-sources", "e-clusters-spread-3"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 20, 21, 22, 24, 25, 26, 28, 29, 30], "parallelSources": 9, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "fixed11-w11-s11",
+      "name": "Fixed 11 Sources - Workers 11",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus one complete E-core cluster, with eleven fixed sources.",
+      "tags": ["worker-scale", "fixed-11-sources", "e-clusters-1"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19], "parallelSources": 11, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "fixed11-w15-s11",
+      "name": "Fixed 11 Sources - Workers 15",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus two complete E-core clusters, with eleven fixed sources.",
+      "tags": ["worker-scale", "fixed-11-sources", "e-clusters-2"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23], "parallelSources": 11, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    },
+    {
+      "id": "fixed11-w19-s11",
+      "name": "Fixed 11 Sources - Workers 19",
+      "group": "productivity-worker-scale",
+      "description": "Seven P-core workers plus three complete E-core clusters, with eleven fixed sources.",
+      "tags": ["worker-scale", "fixed-11-sources", "e-clusters-3"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED", "-Deuhedral.calibration.harnessCpu=31"],
+      "calibrationConfig": {
+        "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], "parallelSources": 11, "orderedSources": 0,
+        "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
+        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
+        "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
+        "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
+      }
+    }
+  ]
+}

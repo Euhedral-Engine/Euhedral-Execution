@@ -1,0 +1,215 @@
+{
+  "$defs": {
+    "BoundRecipe": {
+      "additionalProperties": false,
+      "properties": {
+        "maxUnclampedFactor": {
+          "default": 1.35,
+          "exclusiveMinimum": 1,
+          "title": "Maxunclampedfactor",
+          "type": "number"
+        },
+        "minimumUnclampedFactor": {
+          "default": 1.1,
+          "exclusiveMinimum": 1,
+          "title": "Minimumunclampedfactor",
+          "type": "number"
+        },
+        "maxSingleBoundaryFraction": {
+          "default": 0.5,
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Maxsingleboundaryfraction",
+          "type": "number"
+        },
+        "shrinkFactor": {
+          "default": 0.8,
+          "exclusiveMaximum": 1,
+          "exclusiveMinimum": 0,
+          "title": "Shrinkfactor",
+          "type": "number"
+        },
+        "maxAttempts": {
+          "default": 30,
+          "minimum": 1,
+          "title": "Maxattempts",
+          "type": "integer"
+        }
+      },
+      "title": "BoundRecipe",
+      "type": "object"
+    },
+    "Extension": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "featureIndices": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Featureindices",
+          "type": "array"
+        },
+        "outputPrefix": {
+          "title": "Outputprefix",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "path",
+        "featureIndices",
+        "outputPrefix"
+      ],
+      "title": "Extension",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "kind": {
+      "default": "parameter_screen",
+      "title": "Kind",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "root": {
+      "default": "../../..",
+      "title": "Root",
+      "type": "string"
+    },
+    "outputDirectory": {
+      "title": "Outputdirectory",
+      "type": "string"
+    },
+    "taskTemplate": {
+      "title": "Tasktemplate",
+      "type": "string"
+    },
+    "anchorArtifact": {
+      "title": "Anchorartifact",
+      "type": "string"
+    },
+    "anchorPointer": {
+      "default": "",
+      "title": "Anchorpointer",
+      "type": "string"
+    },
+    "anchorSha256": {
+      "title": "Anchorsha256",
+      "type": "string"
+    },
+    "anchorId": {
+      "title": "Anchorid",
+      "type": "string"
+    },
+    "families": {
+      "items": {
+        "$ref": "#/$defs/Extension"
+      },
+      "title": "Families",
+      "type": "array"
+    },
+    "bounds": {
+      "$ref": "#/$defs/BoundRecipe",
+      "default": {
+        "maxUnclampedFactor": 1.35,
+        "minimumUnclampedFactor": 1.1,
+        "maxSingleBoundaryFraction": 0.5,
+        "shrinkFactor": 0.8,
+        "maxAttempts": 30
+      }
+    },
+    "levels": {
+      "default": [
+        -1.0,
+        0.0,
+        1.0
+      ],
+      "items": {
+        "type": "number"
+      },
+      "title": "Levels",
+      "type": "array"
+    },
+    "fixtures": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Fixtures",
+      "type": "array"
+    },
+    "blocks": {
+      "default": 2,
+      "minimum": 2,
+      "title": "Blocks",
+      "type": "integer"
+    },
+    "supportPoints": {
+      "items": {
+        "items": {
+          "type": "number"
+        },
+        "type": "array"
+      },
+      "title": "Supportpoints",
+      "type": "array"
+    },
+    "representativePoints": {
+      "items": {
+        "items": {
+          "type": "number"
+        },
+        "type": "array"
+      },
+      "title": "Representativepoints",
+      "type": "array"
+    },
+    "bodyLabels": {
+      "default": [
+        "cheap_support",
+        "medium_support",
+        "expensive_support"
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Bodylabels",
+      "type": "array"
+    },
+    "provenance": {
+      "additionalProperties": true,
+      "title": "Provenance",
+      "type": "object"
+    }
+  },
+  "required": [
+    "id",
+    "outputDirectory",
+    "taskTemplate",
+    "anchorArtifact",
+    "anchorSha256",
+    "anchorId",
+    "families",
+    "fixtures",
+    "supportPoints",
+    "representativePoints"
+  ],
+  "title": "ScreenTask",
+  "type": "object"
+}

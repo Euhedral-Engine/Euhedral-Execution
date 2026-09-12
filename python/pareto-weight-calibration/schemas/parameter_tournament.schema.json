@@ -1,0 +1,1551 @@
+{
+  "$defs": {
+    "AbsoluteSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "maxRmseRatioToMean": {
+          "default": 0.95,
+          "exclusiveMinimum": 0,
+          "title": "Maxrmseratiotomean",
+          "type": "number"
+        },
+        "maxRmseRatioToLinear": {
+          "default": 1.2,
+          "exclusiveMinimum": 0,
+          "title": "Maxrmseratiotolinear",
+          "type": "number"
+        },
+        "maxRmseLog": {
+          "default": 0.025,
+          "exclusiveMinimum": 0,
+          "title": "Maxrmselog",
+          "type": "number"
+        },
+        "maxMaeLog": {
+          "default": 0.02,
+          "exclusiveMinimum": 0,
+          "title": "Maxmaelog",
+          "type": "number"
+        },
+        "maxAbsBiasLog": {
+          "default": 0.01,
+          "minimum": 0,
+          "title": "Maxabsbiaslog",
+          "type": "number"
+        },
+        "maxCampaignBiasLog": {
+          "default": 0.025,
+          "minimum": 0,
+          "title": "Maxcampaignbiaslog",
+          "type": "number"
+        },
+        "minTheta": {
+          "default": 12,
+          "minimum": 2,
+          "title": "Mintheta",
+          "type": "integer"
+        },
+        "minCampaigns": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Mincampaigns",
+          "type": "integer"
+        },
+        "minCoverage": {
+          "default": 1.0,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Mincoverage",
+          "type": "number"
+        }
+      },
+      "title": "AbsoluteSkill",
+      "type": "object"
+    },
+    "BenchmarkPreparation": {
+      "additionalProperties": false,
+      "properties": {
+        "workflow": {
+          "const": "cache_timing_confirmation",
+          "default": "cache_timing_confirmation",
+          "title": "Workflow",
+          "type": "string"
+        },
+        "stage": {
+          "default": "topologies",
+          "enum": [
+            "r23",
+            "topologies",
+            "dynamic"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "templateHarness": {
+          "title": "Templateharness",
+          "type": "string"
+        },
+        "blocks": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Blocks",
+          "type": "integer"
+        },
+        "runDirectory": {
+          "title": "Rundirectory",
+          "type": "string"
+        },
+        "subdirectory": {
+          "default": "benchmark",
+          "title": "Subdirectory",
+          "type": "string"
+        },
+        "functionConfigPath": {
+          "default": "/cacheTimingFunction",
+          "title": "Functionconfigpath",
+          "type": "string"
+        },
+        "fixtureBindings": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Fixturebindings",
+          "type": "object"
+        },
+        "controls": {
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Controls",
+          "type": "array"
+        }
+      },
+      "required": [
+        "templateHarness",
+        "runDirectory",
+        "fixtureBindings",
+        "controls"
+      ],
+      "title": "BenchmarkPreparation",
+      "type": "object"
+    },
+    "Counterfactual": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "values": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Values",
+          "type": "object"
+        },
+        "suffix": {
+          "default": "zero-fifth",
+          "title": "Suffix",
+          "type": "string"
+        }
+      },
+      "title": "Counterfactual",
+      "type": "object"
+    },
+    "DenseInference": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "memoryBudgetGiB": {
+          "default": 24,
+          "exclusiveMinimum": 0,
+          "title": "Memorybudgetgib",
+          "type": "number"
+        },
+        "chunkPower": {
+          "default": 16,
+          "maximum": 24,
+          "minimum": 8,
+          "title": "Chunkpower",
+          "type": "integer"
+        },
+        "checkpoints": {
+          "default": [
+            20,
+            22,
+            24
+          ],
+          "items": {
+            "type": "integer"
+          },
+          "title": "Checkpoints",
+          "type": "array"
+        },
+        "expansionPower": {
+          "anyOf": [
+            {
+              "maximum": 28,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expansionpower"
+        },
+        "expansionMaxSeconds": {
+          "default": 1800,
+          "exclusiveMinimum": 0,
+          "title": "Expansionmaxseconds",
+          "type": "number"
+        },
+        "stabilityToleranceLog": {
+          "default": 0.005,
+          "exclusiveMinimum": 0,
+          "title": "Stabilitytolerancelog",
+          "type": "number"
+        },
+        "basinDistanceTolerance": {
+          "default": 0.05,
+          "exclusiveMinimum": 0,
+          "title": "Basindistancetolerance",
+          "type": "number"
+        },
+        "predictionDtype": {
+          "const": "float64",
+          "default": "float64",
+          "title": "Predictiondtype",
+          "type": "string"
+        },
+        "maxDisagreementMembers": {
+          "default": 3,
+          "minimum": 1,
+          "title": "Maxdisagreementmembers",
+          "type": "integer"
+        }
+      },
+      "title": "DenseInference",
+      "type": "object"
+    },
+    "HistoricalSources": {
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "default": "scheduler_forks",
+          "enum": [
+            "scheduler_forks",
+            "response_rows"
+          ],
+          "title": "Adapter",
+          "type": "string"
+        },
+        "discovery": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Discovery",
+          "type": "array"
+        },
+        "archive": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Archive"
+        },
+        "rawDiscovery": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Rawdiscovery",
+          "type": "array"
+        },
+        "referenceIdentity": {
+          "default": "",
+          "title": "Referenceidentity",
+          "type": "string"
+        },
+        "centerArtifact": {
+          "default": "",
+          "title": "Centerartifact",
+          "type": "string"
+        },
+        "functionPath": {
+          "default": "/cacheTimingFunction",
+          "title": "Functionpath",
+          "type": "string"
+        },
+        "fixedControl": {
+          "additionalProperties": true,
+          "title": "Fixedcontrol",
+          "type": "object"
+        },
+        "fixtures": {
+          "default": [],
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Fixtures",
+          "type": "array"
+        },
+        "expectedConfig": {
+          "additionalProperties": true,
+          "title": "Expectedconfig",
+          "type": "object"
+        },
+        "varyingConfigKeys": {
+          "default": [
+            "cacheTimingFunction",
+            "cpuSet",
+            "parallelSources",
+            "workUnits"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Varyingconfigkeys",
+          "type": "array"
+        },
+        "schedule": {
+          "additionalProperties": true,
+          "title": "Schedule",
+          "type": "object"
+        },
+        "requiredJvmOptions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Requiredjvmoptions",
+          "type": "array"
+        },
+        "runtimeSourcePatterns": {
+          "default": [
+            "*/src/main/java/*.java"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Runtimesourcepatterns",
+          "type": "array"
+        },
+        "acceptedSourceHashes": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Acceptedsourcehashes",
+          "type": "object"
+        },
+        "sourceReview": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Sourcereview",
+          "type": "object"
+        },
+        "runtimeHeaders": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Runtimeheaders",
+          "type": "array"
+        }
+      },
+      "required": [
+        "discovery"
+      ],
+      "title": "HistoricalSources",
+      "type": "object"
+    },
+    "HistoryRisk": {
+      "additionalProperties": false,
+      "properties": {
+        "radius": {
+          "default": 0.0,
+          "minimum": 0,
+          "title": "Radius",
+          "type": "number"
+        },
+        "minBlocks": {
+          "default": 2,
+          "minimum": 2,
+          "title": "Minblocks",
+          "type": "integer"
+        },
+        "measuredFloors": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Measuredfloors",
+          "type": "object"
+        }
+      },
+      "title": "HistoryRisk",
+      "type": "object"
+    },
+    "KnownRegionCoverage": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "radius": {
+          "default": 0.3,
+          "exclusiveMinimum": 0,
+          "title": "Radius",
+          "type": "number"
+        },
+        "maxRegions": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Maxregions",
+          "type": "integer"
+        },
+        "minEligibleParetoPoints": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Mineligibleparetopoints",
+          "type": "integer"
+        },
+        "maxProposals": {
+          "default": 8,
+          "minimum": 1,
+          "title": "Maxproposals",
+          "type": "integer"
+        },
+        "usefulness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/UsefulHistory"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "rejectedRegionPolicy": {
+          "$ref": "#/$defs/RejectedRegionPolicy",
+          "default": {
+            "mode": "later_consistent_measurements",
+            "campaignOrder": [],
+            "minLaterCampaigns": 1,
+            "minBlocksPerTarget": 2,
+            "maxPositiveFraction": 0.5,
+            "maxTopologyPercent": 0.0,
+            "maxBroadPercent": 0.0
+          }
+        },
+        "selectionPriority": {
+          "default": [
+            "coverage",
+            "consensus",
+            "broad_direction",
+            "distance"
+          ],
+          "items": {
+            "enum": [
+              "coverage",
+              "consensus",
+              "broad_direction",
+              "distance"
+            ],
+            "type": "string"
+          },
+          "title": "Selectionpriority",
+          "type": "array"
+        },
+        "protectedRoles": {
+          "default": [
+            "model_disagreement"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Protectedroles",
+          "type": "array"
+        },
+        "maxSearchNodes": {
+          "default": 100000,
+          "minimum": 1,
+          "title": "Maxsearchnodes",
+          "type": "integer"
+        }
+      },
+      "title": "KnownRegionCoverage",
+      "type": "object"
+    },
+    "ModelConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "family": {
+          "title": "Family",
+          "type": "string"
+        },
+        "degree": {
+          "default": 1,
+          "maximum": 3,
+          "minimum": 1,
+          "title": "Degree",
+          "type": "integer"
+        },
+        "mode": {
+          "default": "native",
+          "enum": [
+            "native",
+            "independent"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": true,
+          "title": "Params",
+          "type": "object"
+        },
+        "grid": {
+          "additionalProperties": {
+            "items": {},
+            "type": "array"
+          },
+          "title": "Grid",
+          "type": "object"
+        },
+        "optional": {
+          "default": false,
+          "title": "Optional",
+          "type": "boolean"
+        },
+        "inputIndices": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Inputindices"
+        }
+      },
+      "required": [
+        "id",
+        "family"
+      ],
+      "title": "ModelConfig",
+      "type": "object"
+    },
+    "Parameter": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "center": {
+          "title": "Center",
+          "type": "number"
+        },
+        "offset": {
+          "default": 0.0,
+          "title": "Offset",
+          "type": "number"
+        },
+        "bounds": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bounds",
+          "type": "array"
+        },
+        "sign": {
+          "default": "any",
+          "enum": [
+            "negative",
+            "positive",
+            "any"
+          ],
+          "title": "Sign",
+          "type": "string"
+        },
+        "transform": {
+          "default": "identity",
+          "enum": [
+            "identity",
+            "log"
+          ],
+          "title": "Transform",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "center",
+        "bounds"
+      ],
+      "title": "Parameter",
+      "type": "object"
+    },
+    "ProposalSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "power": {
+          "default": 24,
+          "maximum": 28,
+          "minimum": 1,
+          "title": "Power",
+          "type": "integer"
+        },
+        "seed": {
+          "title": "Seed",
+          "type": "integer"
+        },
+        "count": {
+          "default": 6,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "minMeasuredDistance": {
+          "default": 0.1,
+          "exclusiveMinimum": 0,
+          "title": "Minmeasureddistance",
+          "type": "number"
+        },
+        "minProposalDistance": {
+          "default": 0.15,
+          "exclusiveMinimum": 0,
+          "title": "Minproposaldistance",
+          "type": "number"
+        },
+        "floorPercent": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Floorpercent",
+          "type": "object"
+        },
+        "objectives": {
+          "items": {
+            "$ref": "#/$defs/SearchRule"
+          },
+          "title": "Objectives",
+          "type": "array"
+        },
+        "roles": {
+          "items": {
+            "$ref": "#/$defs/SearchRule"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "clusters": {
+          "default": 3,
+          "minimum": 1,
+          "title": "Clusters",
+          "type": "integer"
+        },
+        "ensembleTolerance": {
+          "default": 1.5,
+          "minimum": 1,
+          "title": "Ensembletolerance",
+          "type": "number"
+        },
+        "maxDisagreementLog": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Maxdisagreementlog"
+        },
+        "disagreementPenalty": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Disagreementpenalty",
+          "type": "number"
+        },
+        "explorationCount": {
+          "default": 1,
+          "minimum": 0,
+          "title": "Explorationcount",
+          "type": "integer"
+        },
+        "support": {
+          "additionalProperties": true,
+          "title": "Support",
+          "type": "object"
+        },
+        "round": {
+          "default": 1,
+          "title": "Round",
+          "type": "integer"
+        },
+        "parentDataset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parentdataset"
+        },
+        "activeBasins": {
+          "default": [],
+          "items": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "title": "Activebasins",
+          "type": "array"
+        },
+        "convergence": {
+          "additionalProperties": true,
+          "title": "Convergence",
+          "type": "object"
+        },
+        "reliability": {
+          "$ref": "#/$defs/ReliabilityPolicy",
+          "default": {
+            "enabled": false,
+            "ranking": {
+              "maxRegretRatioToMean": 0.65,
+              "minCoverage": 0.9,
+              "minSpearman": 0.2,
+              "minTheta": 8,
+              "minTopKRecall": 0.5
+            },
+            "absolute": {
+              "maxAbsBiasLog": 0.01,
+              "maxCampaignBiasLog": 0.025,
+              "maxMaeLog": 0.02,
+              "maxRmseLog": 0.025,
+              "maxRmseRatioToLinear": 1.2,
+              "maxRmseRatioToMean": 0.95,
+              "minCampaigns": 2,
+              "minCoverage": 1.0,
+              "minTheta": 12
+            },
+            "hardSystems": [
+              "off"
+            ],
+            "directionAlternatives": {},
+            "softPenaltyScaleLog": 0.03,
+            "softPenaltyCap": 3.0,
+            "directionCapPercent": 25.0,
+            "disagreementUsefulOnly": true
+          }
+        },
+        "retrospective": {
+          "$ref": "#/$defs/RetrospectivePolicy",
+          "default": {
+            "enabled": false,
+            "seed": 20260912,
+            "randomRepeats": 1000,
+            "batchPerFold": 2,
+            "primaryTargets": [],
+            "topologyTargets": [],
+            "measuredGuardrailFloors": {},
+            "usefulFraction": 0.25,
+            "positiveCapPercent": 25.0,
+            "knownPolicyIds": [],
+            "neighborhoodRadius": 0.3
+          }
+        },
+        "historyRisk": {
+          "$ref": "#/$defs/HistoryRisk",
+          "default": {
+            "radius": 0.0,
+            "minBlocks": 2,
+            "measuredFloors": {}
+          }
+        },
+        "benchmark": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BenchmarkPreparation"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "knownRegionCoverage": {
+          "$ref": "#/$defs/KnownRegionCoverage",
+          "default": {
+            "enabled": false,
+            "radius": 0.3,
+            "maxRegions": 8,
+            "minEligibleParetoPoints": 1,
+            "maxProposals": 8,
+            "usefulness": null,
+            "rejectedRegionPolicy": {
+              "campaignOrder": [],
+              "maxBroadPercent": 0.0,
+              "maxPositiveFraction": 0.5,
+              "maxTopologyPercent": 0.0,
+              "minBlocksPerTarget": 2,
+              "minLaterCampaigns": 1,
+              "mode": "later_consistent_measurements"
+            },
+            "selectionPriority": [
+              "coverage",
+              "consensus",
+              "broad_direction",
+              "distance"
+            ],
+            "protectedRoles": [
+              "model_disagreement"
+            ],
+            "maxSearchNodes": 100000
+          }
+        },
+        "denseInference": {
+          "$ref": "#/$defs/DenseInference",
+          "default": {
+            "enabled": false,
+            "memoryBudgetGiB": 24.0,
+            "chunkPower": 16,
+            "checkpoints": [
+              20,
+              22,
+              24
+            ],
+            "expansionPower": null,
+            "expansionMaxSeconds": 1800.0,
+            "stabilityToleranceLog": 0.005,
+            "basinDistanceTolerance": 0.05,
+            "predictionDtype": "float64",
+            "maxDisagreementMembers": 3
+          }
+        },
+        "counterfactual": {
+          "$ref": "#/$defs/Counterfactual",
+          "default": {
+            "enabled": false,
+            "values": {},
+            "suffix": "zero-fifth"
+          }
+        }
+      },
+      "required": [
+        "seed",
+        "objectives",
+        "roles"
+      ],
+      "title": "ProposalSearch",
+      "type": "object"
+    },
+    "RankingSkill": {
+      "additionalProperties": false,
+      "properties": {
+        "minSpearman": {
+          "default": 0.2,
+          "maximum": 1,
+          "minimum": -1,
+          "title": "Minspearman",
+          "type": "number"
+        },
+        "maxRegretRatioToMean": {
+          "default": 0.65,
+          "minimum": 0,
+          "title": "Maxregretratiotomean",
+          "type": "number"
+        },
+        "minTopKRecall": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Mintopkrecall",
+          "type": "number"
+        },
+        "minTheta": {
+          "default": 8,
+          "minimum": 2,
+          "title": "Mintheta",
+          "type": "integer"
+        },
+        "minCoverage": {
+          "default": 0.9,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Mincoverage",
+          "type": "number"
+        }
+      },
+      "title": "RankingSkill",
+      "type": "object"
+    },
+    "RejectedRegionPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "const": "later_consistent_measurements",
+          "default": "later_consistent_measurements",
+          "title": "Mode",
+          "type": "string"
+        },
+        "campaignOrder": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Campaignorder",
+          "type": "array"
+        },
+        "minLaterCampaigns": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Minlatercampaigns",
+          "type": "integer"
+        },
+        "minBlocksPerTarget": {
+          "default": 2,
+          "minimum": 2,
+          "title": "Minblockspertarget",
+          "type": "integer"
+        },
+        "maxPositiveFraction": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Maxpositivefraction",
+          "type": "number"
+        },
+        "maxTopologyPercent": {
+          "default": 0.0,
+          "exclusiveMinimum": -100,
+          "title": "Maxtopologypercent",
+          "type": "number"
+        },
+        "maxBroadPercent": {
+          "default": 0.0,
+          "exclusiveMinimum": -100,
+          "title": "Maxbroadpercent",
+          "type": "number"
+        }
+      },
+      "title": "RejectedRegionPolicy",
+      "type": "object"
+    },
+    "ReliabilityPolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "ranking": {
+          "$ref": "#/$defs/RankingSkill",
+          "default": {
+            "minSpearman": 0.2,
+            "maxRegretRatioToMean": 0.65,
+            "minTopKRecall": 0.5,
+            "minTheta": 8,
+            "minCoverage": 0.9
+          }
+        },
+        "absolute": {
+          "$ref": "#/$defs/AbsoluteSkill",
+          "default": {
+            "maxRmseRatioToMean": 0.95,
+            "maxRmseRatioToLinear": 1.2,
+            "maxRmseLog": 0.025,
+            "maxMaeLog": 0.02,
+            "maxAbsBiasLog": 0.01,
+            "maxCampaignBiasLog": 0.025,
+            "minTheta": 12,
+            "minCampaigns": 2,
+            "minCoverage": 1.0
+          }
+        },
+        "hardSystems": {
+          "default": [
+            "off"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "title": "Hardsystems",
+          "type": "array"
+        },
+        "directionAlternatives": {
+          "additionalProperties": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Directionalternatives",
+          "type": "object"
+        },
+        "softPenaltyScaleLog": {
+          "default": 0.03,
+          "exclusiveMinimum": 0,
+          "title": "Softpenaltyscalelog",
+          "type": "number"
+        },
+        "softPenaltyCap": {
+          "default": 3.0,
+          "exclusiveMinimum": 0,
+          "title": "Softpenaltycap",
+          "type": "number"
+        },
+        "directionCapPercent": {
+          "default": 25.0,
+          "exclusiveMinimum": 0,
+          "title": "Directioncappercent",
+          "type": "number"
+        },
+        "disagreementUsefulOnly": {
+          "default": true,
+          "title": "Disagreementusefulonly",
+          "type": "boolean"
+        }
+      },
+      "title": "ReliabilityPolicy",
+      "type": "object"
+    },
+    "Response": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "workloads": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Workloads",
+          "type": "array"
+        },
+        "role": {
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "workloads",
+        "role"
+      ],
+      "title": "Response",
+      "type": "object"
+    },
+    "RetrospectivePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "seed": {
+          "default": 20260912,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "randomRepeats": {
+          "default": 1000,
+          "minimum": 1,
+          "title": "Randomrepeats",
+          "type": "integer"
+        },
+        "batchPerFold": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Batchperfold",
+          "type": "integer"
+        },
+        "primaryTargets": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Primarytargets",
+          "type": "array"
+        },
+        "topologyTargets": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Topologytargets",
+          "type": "array"
+        },
+        "measuredGuardrailFloors": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Measuredguardrailfloors",
+          "type": "object"
+        },
+        "usefulFraction": {
+          "default": 0.25,
+          "exclusiveMinimum": 0,
+          "maximum": 1,
+          "title": "Usefulfraction",
+          "type": "number"
+        },
+        "positiveCapPercent": {
+          "default": 25.0,
+          "exclusiveMinimum": 0,
+          "title": "Positivecappercent",
+          "type": "number"
+        },
+        "knownPolicyIds": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Knownpolicyids",
+          "type": "array"
+        },
+        "neighborhoodRadius": {
+          "default": 0.3,
+          "exclusiveMinimum": 0,
+          "title": "Neighborhoodradius",
+          "type": "number"
+        }
+      },
+      "title": "RetrospectivePolicy",
+      "type": "object"
+    },
+    "ReuseFit": {
+      "additionalProperties": false,
+      "properties": {
+        "directory": {
+          "title": "Directory",
+          "type": "string"
+        },
+        "lockSha256": {
+          "title": "Locksha256",
+          "type": "string"
+        },
+        "allowProposalChanges": {
+          "default": false,
+          "title": "Allowproposalchanges",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "directory",
+        "lockSha256"
+      ],
+      "title": "ReuseFit",
+      "type": "object"
+    },
+    "SearchRule": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Targets",
+          "type": "array"
+        },
+        "reduce": {
+          "default": "min",
+          "enum": [
+            "mean",
+            "min",
+            "max"
+          ],
+          "title": "Reduce",
+          "type": "string"
+        },
+        "cap": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap"
+        }
+      },
+      "required": [
+        "name",
+        "targets"
+      ],
+      "title": "SearchRule",
+      "type": "object"
+    },
+    "UsefulHistory": {
+      "additionalProperties": false,
+      "properties": {
+        "evidenceScope": {
+          "default": "campaign",
+          "enum": [
+            "campaign",
+            "pooled"
+          ],
+          "title": "Evidencescope",
+          "type": "string"
+        },
+        "primaryTargets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Primarytargets",
+          "type": "array"
+        },
+        "topologyTargets": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Topologytargets",
+          "type": "array"
+        },
+        "minPositiveFraction": {
+          "default": 0.5,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Minpositivefraction",
+          "type": "number"
+        },
+        "minTopologyPercent": {
+          "default": 0.0,
+          "exclusiveMinimum": -100,
+          "title": "Mintopologypercent",
+          "type": "number"
+        },
+        "minBroadPercent": {
+          "default": 0.0,
+          "exclusiveMinimum": -100,
+          "title": "Minbroadpercent",
+          "type": "number"
+        },
+        "positiveCapPercent": {
+          "default": 25.0,
+          "exclusiveMinimum": 0,
+          "title": "Positivecappercent",
+          "type": "number"
+        },
+        "minBlocksPerTarget": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Minblockspertarget",
+          "type": "integer"
+        },
+        "plentifulFloors": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Plentifulfloors",
+          "type": "object"
+        },
+        "selection": {
+          "default": "pareto_tradeoffs",
+          "enum": [
+            "pareto_tradeoffs",
+            "all_qualified"
+          ],
+          "title": "Selection",
+          "type": "string"
+        }
+      },
+      "required": [
+        "primaryTargets",
+        "topologyTargets"
+      ],
+      "title": "UsefulHistory",
+      "type": "object"
+    },
+    "ValidationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "outerFolds": {
+          "default": 4,
+          "minimum": 2,
+          "title": "Outerfolds",
+          "type": "integer"
+        },
+        "innerFolds": {
+          "default": 3,
+          "minimum": 2,
+          "title": "Innerfolds",
+          "type": "integer"
+        },
+        "group": {
+          "const": "thetaId",
+          "default": "thetaId",
+          "title": "Group",
+          "type": "string"
+        },
+        "campaignTransfer": {
+          "default": true,
+          "title": "Campaigntransfer",
+          "type": "boolean"
+        },
+        "selectionMetrics": {
+          "default": [
+            "regret",
+            "rmse"
+          ],
+          "items": {
+            "enum": [
+              "regret",
+              "rmse",
+              "mae",
+              "rankLoss"
+            ],
+            "type": "string"
+          },
+          "title": "Selectionmetrics",
+          "type": "array"
+        },
+        "topK": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Topk",
+          "type": "integer"
+        },
+        "ensembleSize": {
+          "default": 3,
+          "minimum": 2,
+          "title": "Ensemblesize",
+          "type": "integer"
+        },
+        "ensembleStrategies": {
+          "default": [
+            "mean",
+            "validation_weighted"
+          ],
+          "items": {
+            "enum": [
+              "mean",
+              "validation_weighted"
+            ],
+            "type": "string"
+          },
+          "title": "Ensemblestrategies",
+          "type": "array"
+        },
+        "weightMetric": {
+          "default": "rmse",
+          "enum": [
+            "rmse",
+            "mae"
+          ],
+          "title": "Weightmetric",
+          "type": "string"
+        },
+        "sampleWeight": {
+          "default": "uniform",
+          "enum": [
+            "uniform",
+            "inverse_theta_frequency"
+          ],
+          "title": "Sampleweight",
+          "type": "string"
+        }
+      },
+      "title": "ValidationConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1,
+      "default": 1,
+      "title": "Schemaversion",
+      "type": "integer"
+    },
+    "kind": {
+      "const": "parameter_tournament",
+      "default": "parameter_tournament",
+      "title": "Kind",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "root": {
+      "default": ".",
+      "title": "Root",
+      "type": "string"
+    },
+    "outputDirectory": {
+      "title": "Outputdirectory",
+      "type": "string"
+    },
+    "seed": {
+      "title": "Seed",
+      "type": "integer"
+    },
+    "jobs": {
+      "default": 1,
+      "maximum": 16,
+      "minimum": 1,
+      "title": "Jobs",
+      "type": "integer"
+    },
+    "parameters": {
+      "items": {
+        "$ref": "#/$defs/Parameter"
+      },
+      "title": "Parameters",
+      "type": "array"
+    },
+    "dataset": {
+      "$ref": "#/$defs/HistoricalSources"
+    },
+    "responses": {
+      "items": {
+        "$ref": "#/$defs/Response"
+      },
+      "title": "Responses",
+      "type": "array"
+    },
+    "systems": {
+      "default": [
+        "center",
+        "off"
+      ],
+      "items": {
+        "enum": [
+          "center",
+          "off"
+        ],
+        "type": "string"
+      },
+      "title": "Systems",
+      "type": "array"
+    },
+    "models": {
+      "items": {
+        "$ref": "#/$defs/ModelConfig"
+      },
+      "title": "Models",
+      "type": "array"
+    },
+    "validation": {
+      "$ref": "#/$defs/ValidationConfig",
+      "default": {
+        "outerFolds": 4,
+        "innerFolds": 3,
+        "group": "thetaId",
+        "campaignTransfer": true,
+        "selectionMetrics": [
+          "regret",
+          "rmse"
+        ],
+        "topK": 2,
+        "ensembleSize": 3,
+        "ensembleStrategies": [
+          "mean",
+          "validation_weighted"
+        ],
+        "weightMetric": "rmse",
+        "sampleWeight": "uniform"
+      }
+    },
+    "proposal": {
+      "$ref": "#/$defs/ProposalSearch"
+    },
+    "provenance": {
+      "additionalProperties": true,
+      "title": "Provenance",
+      "type": "object"
+    },
+    "reuseFit": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ReuseFit"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "requireVaryingParameters": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Requirevaryingparameters",
+      "type": "array"
+    }
+  },
+  "required": [
+    "id",
+    "outputDirectory",
+    "seed",
+    "parameters",
+    "dataset",
+    "responses",
+    "models",
+    "proposal"
+  ],
+  "title": "SurrogateTask",
+  "type": "object"
+}

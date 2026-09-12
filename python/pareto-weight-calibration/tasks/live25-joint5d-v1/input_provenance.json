@@ -1,0 +1,18 @@
+{
+  "archiveSha256": "42dc5cb78090553a3cb3a2cee1438e908589225257d23715b5ad06e90248b53c",
+  "sources": {
+    "anchor-7931.json": {
+      "archivePath": "benchmarks/src/main/presets/cache-timing/fifth-term-v1/anchor.json",
+      "sha256": "6cee132c9e6941ad5260ee3b489825dc8426a67d450ab25376f76dc2c7267853"
+    },
+    "harness-template.json": {
+      "archivePath": "benchmarks/src/main/presets/cache-timing/fifth-term-v1/benchmark/harness.json",
+      "sha256": "f6b09559c63a78695485065cbd01223f5b6c9d28d2585ed5c2a14bdc89832543"
+    },
+    "original-live-25.json": {
+      "archivePath": "benchmarks/src/main/presets/cache-timing/live25-auto-v2/policies/live-25-center/config.json",
+      "sha256": "1dd0529d29e3d1a332c2c49b92fa3489db0fb71ad384b1999f7c171c12082e10"
+    }
+  },
+  "coefficientSelection": "None; tasks define unchanged bounds and exact measured center only"
+}

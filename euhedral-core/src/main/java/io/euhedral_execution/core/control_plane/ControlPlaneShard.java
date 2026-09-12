@@ -436,7 +436,7 @@ public class ControlPlaneShard {
         try {
             for (CloneableObject clone : activeClones) {
                 if (clone != null) {
-                    cleared += clone.resetForNextTrial(deadlineNanos);
+                    cleared += clone.reset(deadlineNanos);
                 }
             }
             return cleared;

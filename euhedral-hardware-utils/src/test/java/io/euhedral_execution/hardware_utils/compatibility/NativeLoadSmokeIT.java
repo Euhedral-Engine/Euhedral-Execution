@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -35,10 +34,7 @@ class NativeLoadSmokeIT {
     @Test
     @EnabledOnOs(OS.LINUX)
     void packagedGlibcProductLoadsAndCallsGetCpu() throws Exception {
-        String architecture = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
-        assertTrue(
-                architecture.equals("amd64") || architecture.equals("x86_64"),
-                "Test build-host smoke requires Linux x64");
+        // Exercise the packaged product selected by the loader on this host, including ARM64.
         Path smoke = Path.of(System.getProperty("smoke.directory"));
         List<String> command = new ArrayList<>();
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());

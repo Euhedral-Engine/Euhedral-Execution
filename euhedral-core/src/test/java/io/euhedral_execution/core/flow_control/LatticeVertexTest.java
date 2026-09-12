@@ -405,6 +405,19 @@ class LatticeVertexTest {
         assertTrue(interceptor.isComplete());
     }
 
+    @Test
+    void shouldChangeWorkerLocalProductivityOnlyAfterAcquiredService() {
+        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
+        interceptor.upstream = new RecordingSource();
+
+        assertTrue(interceptor.isProductive());
+        assertTrue(interceptor.acquireLock());
+        assertEquals(0L, interceptor.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
+        interceptor.releaseLock();
+
+        assertFalse(interceptor.isProductive());
+    }
+
     private static final class RecordingSource implements LatticeSource {
 
         private LatticeReceiver downstream;
