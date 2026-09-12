@@ -289,15 +289,3 @@ def test_candidate_serialization_is_byte_stable() -> None:
   second = json.dumps(model.mapper.serialize(), sort_keys=True,
                       separators=(",", ":"))
   assert first.encode("utf-8") == second.encode("utf-8")
-
-
-def test_existing_step5_candidate_remains_readable_and_checksummed() -> None:
-  repository = Path(__file__).resolve().parents[3]
-  candidate = repository / "experiments/pareto_training_step5/step5_candidate_model.json"
-  if not candidate.exists():
-    pytest.skip("Repository Step 5 artifact is not present")
-  expected = candidate.with_name(candidate.name + ".sha256").read_text(
-    encoding="utf-8").split()[0]
-  assert hashlib.sha256(candidate.read_bytes()).hexdigest() == expected
-  payload = json.loads(candidate.read_text(encoding="utf-8"))
-  assert payload["model"]["structure"] == "M4-C"

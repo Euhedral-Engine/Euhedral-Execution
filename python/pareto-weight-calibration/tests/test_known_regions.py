@@ -158,21 +158,3 @@ def test_json_only_verified_replay_and_changed_contract_rejected(tmp_path):
   path.write_text(json.dumps(raw))
   with pytest.raises(ValueError, match='unchanged'):
     run_task(path)
-
-
-def test_round5_only_changes_coverage_and_preparation():
-  root = Path(__file__).resolve().parents[1]
-  a = SurrogateTask.model_validate(json.loads(
-    (root / 'tasks/live25-reliability-round4.json').read_text())).model_dump()
-  b = SurrogateTask.model_validate(json.loads((
-                                                    root / 'tasks/live25-region-coverage-round5.json').read_text())).model_dump()
-  for value in (a, b):
-    for key in ('id', 'outputDirectory', 'provenance', 'reuseFit'):
-      value.pop(key)
-    for key in ('knownRegionCoverage', 'round'):
-      value['proposal'].pop(key)
-    value['proposal']['benchmark'].pop('runDirectory')
-  assert a == b
-  source = (root / 'src/pareto_weight_calibration/known_regions.py').read_text()
-  assert all(word not in source for word in
-             ['live25', 'live-25', '0015', '0008', 'R7', 'R23'])

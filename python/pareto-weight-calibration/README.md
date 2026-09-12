@@ -2,8 +2,6 @@
 
 This module implements the external calibration pipeline for the eight CACHE-participation coefficients in Euhedral Execution.
 
-See [`docs/design/productivity-participation-python-training-plan.md`](../../docs/design/productivity-participation-python-training-plan.md) and [`docs/design/step-2-python-loader-plan.md`](../../docs/design/step-2-python-loader-plan.md) for full design and architecture specifications.
-
 ## Installation
 
 ```bash

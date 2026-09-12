@@ -53,10 +53,6 @@ tasks.named<ProcessResources>("processResources") {
 }
 
 tasks.withType<Test>().configureEach {
-    inputs.files(
-        rootProject.file("python/pareto-weight-calibration/tasks/cache-scarce-loop.json"),
-        rootProject.file("python/pareto-weight-calibration/policies/cache-scarce-v1-runtime.json")
-    )
     systemProperty("AllEuhedralLogs", "ERROR")
     systemProperty("logback.configurationFile", "benchmark-logback.xml")
 }

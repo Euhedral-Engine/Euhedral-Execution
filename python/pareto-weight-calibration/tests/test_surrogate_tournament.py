@@ -190,50 +190,6 @@ def test_full_json_tournament_and_deterministic_proposals(tmp_path):
   assert not second["failures"]
 
 
-def test_historical_archive_build_keeps_both_response_systems():
-  root = Path(__file__).resolve().parents[3]
-  task_path = (
-      root
-      / "python/pareto-weight-calibration/tasks/live25-historical-tournament.json"
-  )
-  task = SurrogateTask.model_validate_json(task_path.read_text())
-  if not (root / task.dataset.archive).exists():
-    pytest.skip("retained local archive unavailable")
-  if not (root / task.dataset.centerArtifact).exists():
-    task = task.model_copy(update={'dataset': task.dataset.model_copy(update={
-      'centerArtifact': task.dataset.centerArtifact.replace(
-          'src/test/resources/cache-timing',
-          'src/main/presets/cache-timing')})})
-  result = build(task, root)
-  # The archive grows between rounds; preserve the original evidence minimum and exact inventory.
-  assert len(result["forks"]) >= 792 and len(result["controls"]) >= 144
-  assert len({r["thetaId"] for r in result["rows"]}) >= 19
-  assert len(result["rows"]) >= 48 and len(result["rows"][0]["targets"]) == 48
-  assert len({r["rowId"] for r in result["forks"]}) == len(result["forks"])
-  assert sum(
-      a['forks'] for a in result['audit'] if a['status'] == 'INCLUDED') == len(
-      result['forks']) + len(result['controls'])
-  index = {r["rowId"]: r for r in result["forks"] + result["controls"]}
-  for fork in result["forks"]:
-    off = index[fork["offId"]]
-    center = index[fork["centerId"]]
-    assert fork["campaignId"] == off["campaignId"] == center["campaignId"]
-    assert fork["responses"]["off"] == pytest.approx(
-        np.log(fork["rawThroughput"] / off["rawThroughput"])
-    )
-    assert fork["responses"]["center"] == pytest.approx(
-        np.log(fork["rawThroughput"] / center["rawThroughput"])
-    )
-    assert len(fork["windows"]) == 5
-  assert any(
-      a["campaign"] == "cache-timing-live-v1" and a["status"] == "EXCLUDED"
-      for a in result["audit"]
-  )
-  assert all(
-      a["status"] == "EXCLUDED"
-      for a in result["audit"]
-      if a["campaign"] == "cache-timing-fixed-surface"
-  )
 
 
 def test_generic_cli_accepts_json_without_source_changes(tmp_path, capsys):

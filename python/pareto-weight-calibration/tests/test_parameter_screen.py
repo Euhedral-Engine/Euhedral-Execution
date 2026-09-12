@@ -133,28 +133,3 @@ def test_same_rows_four_vs_five_ablation_and_variation_gate(tmp_path):
   path = tmp_path / 'fixed.json';
   path.write_text(json.dumps(raw))
   with pytest.raises(ValueError, match='measurement required'): run_task(path)
-
-
-def test_json_screen_declares_families_not_candidate_weights():
-  p = Path(__file__).resolve().parents[
-        1] / 'tasks/live25-fifth-term-screen.json';
-  task = ScreenTask.model_validate_json(p.read_text())
-  assert len(task.families) == 4 and task.levels == (-1, 0, 1) and len(
-    task.fixtures) == 12 and task.blocks == 2
-
-
-def test_prepared_extensions_java_config_and_export_parity(tmp_path):
-  from types import SimpleNamespace
-  from tests.test_parameter_tuning import assert_java_runtime_and_export_parity
-  root = Path(__file__).resolve().parents[3]
-  task = root / 'python/pareto-weight-calibration/tasks/live25-fifth-term-screen.json'
-  definition = json.loads(task.read_text())
-  manifest_path = root / definition[
-    'outputDirectory'] / 'candidate_manifest.json'
-  if not manifest_path.exists():
-    pytest.skip('local prepared screen unavailable')
-  manifest = json.loads(manifest_path.read_text())
-  policies = manifest['policies'] + [dict(function=manifest['anchor'])]
-  runtime_spec = SimpleNamespace(
-    runtime=dict(supportPoints=definition['supportPoints']))
-  assert_java_runtime_and_export_parity(runtime_spec, policies, tmp_path)

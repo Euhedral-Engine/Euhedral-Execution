@@ -123,15 +123,6 @@ def test_increasing_k_cannot_change_cache_to_default() -> None:
   assert "DEFAULT" not in actions[actions.index("CACHE"):]
 
 
-def test_supported_loss_comes_from_frozen_evidence() -> None:
-  rows, _ = action_pipeline.build_action_rows(
-      REPO_ROOT / "experiments/pareto_training_step5/training_pairs.tsv",
-      REPO_ROOT / "experiments/pareto_peak_training/family_curves.json",
-  )
-  decisive = next(item for item in rows if item.decisive)
-  assert decisive.supported_wrong_action_loss == pytest.approx(
-      abs(decisive.basis_delta) - decisive.basis_uncertainty
-  )
 
 
 def test_high_cost_wrong_prediction_contributes_more_loss() -> None:
@@ -292,16 +283,3 @@ def test_action_model_serialization_is_deterministic() -> None:
   assert first == second
   assert hashlib.sha256(first.encode()).hexdigest() == hashlib.sha256(
     second.encode()).hexdigest()
-
-
-def test_previous_frozen_artifact_hashes_are_unchanged() -> None:
-  expected = {
-    "experiments/pareto_training_step5/step5_candidate_model.json": "f2270a6ad9de88f547a0307661af9926798b9366ab8aa045f58c1d7a3e491d0f",
-    "experiments/pareto_training_step5/training_pairs.tsv": "0bddba6fcbb6501ee2f511fde04c57349b97a6940d7e1af206c78f84c55cadaf",
-    "experiments/pareto_training_step5/identifiability_audit.json": "62ecfb96c720231ad43edfe5659ebb9ad85efaa3582c043f59ba5887ad7ca3f4",
-    "experiments/pareto_training_step5/pipeline_summary.json": "11e54f11f0f843985707ec4adef0801550ab06687030f182be704d3229d12a3f",
-  }
-  for relative, digest in expected.items():
-    path = REPO_ROOT / relative
-    ChecksumVerifier.verify_file(path, require_sidecar=True)
-    assert ChecksumVerifier.compute_sha256(path) == digest

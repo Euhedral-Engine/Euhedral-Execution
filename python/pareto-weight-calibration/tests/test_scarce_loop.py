@@ -236,29 +236,6 @@ def test_proposals_record_parent_radius_with_no_models(tmp_path):
       assert origin["normalizedEdgeFraction"] <= 1
 
 
-def test_real_task_defaults_off_bypass_and_gate():
-  root = Path(__file__).resolve().parents[3]
-  spec, _ = load_task(
-      root / "python/pareto-weight-calibration/tasks/cache-scarce-loop.json"
-  )
-  assert len(spec.fixtures) == 9 and not spec.preference.guardrailTargets
-  assert (
-      spec.benchmark.blocks == 2
-      and spec.budgets.beamWidth == 2
-      and spec.budgets.eliteSize == 5
-  )
-  arms = [dict(policyId="POLICY_OFF", function=None)] + [
-    dict(policyId=str(i), function=spec.families[0].template) for i in range(9)
-  ]
-  plan = trial_plan(spec, arms, root, 0)
-  assert len(plan) == 163
-  for trial in plan[:3]:
-    cfg = harness_for(spec, trial, root / "unused", "test")["trials"][0][
-      "calibrationConfig"
-    ]
-    assert cfg["cacheScarcityGateEnabled"] == (
-          trial["arm"]["function"] is not None)
-    assert cfg["forcedActiveParticipantCount"] is None
 
 
 def test_reference_denominator_cannot_leak_held_theta_into_training(tmp_path):

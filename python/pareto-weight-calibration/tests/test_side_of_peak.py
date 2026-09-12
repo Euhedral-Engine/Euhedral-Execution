@@ -169,29 +169,3 @@ def test_side_prediction_has_no_counterfactual_telemetry_inputs() -> None:
 def test_canonical_serialization_is_byte_identical() -> None:
   payload = {"b": [2, 1], "a": {"value": 3}}
   assert _canonical_json(payload).encode() == _canonical_json(payload).encode()
-
-
-def test_real_artifacts_repeat_byte_identically(tmp_path: Path) -> None:
-  repository = Path(__file__).resolve().parents[3]
-  peak_dir = repository / "experiments/pareto_peak_training"
-  if not peak_dir.exists():
-    pytest.skip("Peak training artifacts are not present")
-  first = tmp_path / "first"
-  second = tmp_path / "second"
-  arguments = (
-    peak_dir / "lofo_peak_results.json",
-    peak_dir / "family_curves.json",
-    peak_dir / "observed_peaks.json",
-    repository / "experiments/pareto_training_step5/training_pairs.tsv",
-    repository / "experiments/pareto_training_step5/step5_candidate_model.json",
-  )
-  run_side_of_peak_evaluation(*arguments, first)
-  run_side_of_peak_evaluation(*arguments, second)
-  first_files = sorted(path.name for path in first.iterdir())
-  second_files = sorted(path.name for path in second.iterdir())
-  assert first_files == second_files
-  for name in first_files:
-    assert hashlib.sha256(
-      (first / name).read_bytes()).digest() == hashlib.sha256(
-        (second / name).read_bytes()
-    ).digest()

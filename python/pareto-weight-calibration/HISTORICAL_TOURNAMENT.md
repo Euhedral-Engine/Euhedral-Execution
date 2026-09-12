@@ -136,12 +136,6 @@ The runtime Java controller and production defaults are untouched. No experiment
 edits are needed to rerun this tournament with compatible evidence, configure another model/grid, or
 search another declared parameter domain.
 
-Completed live-25
-results: [findings](../../benchmarks/src/main/presets/findings/cache-timing-live25-historical-tournament.md).
-
-Historical round4
-results: [findings and handoff](../../benchmarks/src/main/presets/findings/cache-timing-live25-reliability-round4.md).
-
 ## Known useful measured regions
 
 `proposal.knownRegionCoverage` adds a local coverage constraint after history exclusion,

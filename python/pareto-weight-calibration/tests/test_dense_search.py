@@ -15,7 +15,6 @@ from pareto_weight_calibration.historical_response import compatible_function
 from pareto_weight_calibration.reliable_proposals import nondominated
 from pareto_weight_calibration.cache_timing import evaluate
 
-TASKS = Path(__file__).resolve().parents[1] / 'tasks/live25-joint5d-v2'
 
 
 @pytest.mark.parametrize('family,params', [('local_linear', {'alpha': .1}),
@@ -39,44 +38,6 @@ def test_bulk_prediction_matches_fitted_pipeline(family, params):
                              atol=1e-10)
 
 
-@pytest.mark.parametrize('family', ['park-body', 'park-phr-body'])
-def test_counterfactual_and_bulk_support_are_exact(family):
-  task = SurrogateTask.model_validate_json(
-    (TASKS / (family + '-fit.json')).read_text());
-  anchor = json.loads((TASKS / 'inputs/anchor-7931.json').read_text())
-  d = task.model_dump();
-  d['proposal']['counterfactual'] = {'enabled': True,
-                                     'values': {task.parameters[-1].name: 0.0}};
-  task = SurrogateTask.model_validate(d)
-  u = qmc.Sobol(5, seed=31).random_base2(5);
-  values = map_matrix(task.parameters, u)
-  for unit, row in zip(u, values): assert row.tolist() == map_parameters(
-    task.parameters, unit)
-  bad = support_mask(task, anchor, values)
-  for row, rejected in zip(values, bad):
-    zero, cfg = counterfactual(task, anchor, row);
-    assert zero[:-1] == row[:-1].tolist() and zero[-1] == 0
-    assert cfg == construct(task.parameters, anchor, zero)
-    original = construct(task.parameters, anchor, row)
-    p = task.parameters[-1];
-    field, index = p.path.strip('/').split('/');
-    original[field][int(index)] = anchor[field][int(index)]
-    assert cfg == original
-    actual = construct(task.parameters, anchor, row)
-    outputs = np.array([evaluate(actual, c, p, np.expm1(b)) for c, p, b in
-                        task.proposal.support['points']])
-    limits = [(actual[p + 'MinNanos'], actual[p + 'MaxNanos']) for p in
-              ['park', 'halfLife']]
-    expected = any(
-        max(np.mean(outputs[:, j] == lo), np.mean(outputs[:, j] == hi)) >
-        task.proposal.support['maxSingleBoundaryFraction'] for j, (lo, hi) in
-        enumerate(limits))
-    assert rejected == expected
-  other = 'park-phr-body' if family == 'park-body' else 'park-body'
-  ot = SurrogateTask.model_validate_json(
-    (TASKS / (other + '-fit.json')).read_text())
-  assert compatible_function(actual, anchor, ot.parameters)[0] is None
-  assert compatible_function(anchor, anchor, task.parameters)[0][-1] == 0
 
 
 def test_memory_budget_uses_bulk_when_possible():
@@ -188,82 +149,10 @@ def test_study_combiner_preserves_family_basins_and_exploration():
   assert select_candidates(families, policy)[0] == chosen
 
 
-def test_schema_accepts_dense_counts_and_arbitrary_counterfactual_names():
-  from pareto_weight_calibration.tournament_study import TournamentStudy
-  for f in ['park-body', 'park-phr-body']:
-    task = SurrogateTask.model_validate_json(
-      (TASKS / (f + '-search.json')).read_text())
-    assert task.proposal.power == 24 and task.proposal.denseInference.expansionPower == 26
-    assert set(task.proposal.counterfactual.values) == {
-      task.parameters[-1].name}
-  study = TournamentStudy.model_validate_json(
-    (TASKS / 'study.json').read_text())
-  assert study.selection.count == 4 and len(study.families) == 2
-  assert [c['id'] for c in study.benchmark.controls] == ['POLICY_OFF',
-                                                         'anchor-7931']
 
 
-def test_benchmark_preparation_serializes_same_base_pair(tmp_path, monkeypatch):
-  from pareto_weight_calibration.reliable_proposals import prepare_benchmarks
-  from pareto_weight_calibration import cache_timing_policy
-  from pareto_weight_calibration.surrogate_spec import BenchmarkPreparation
-  root = Path(__file__).resolve().parents[3]
-  task = SurrogateTask.model_validate_json(
-    (TASKS / 'park-body-fit.json').read_text())
-  anchor = json.loads((TASKS / 'inputs/anchor-7931.json').read_text())
-  template = TASKS / 'inputs/harness-template.json'
-  (tmp_path / 'template.json').write_bytes(template.read_bytes())
-  d = task.model_dump();
-  d['dataset']['referenceIdentity'] = ''
-  d['proposal']['counterfactual'] = {'enabled': True,
-                                     'values': {task.parameters[-1].name: 0}}
-  d['proposal']['benchmark'] = dict(templateHarness='template.json',
-                                    runDirectory='experiments/test',
-                                    fixtureBindings={'/cpuSet': 'cpuSet',
-                                                     '/parallelSources': 'parallelSources',
-                                                     '/workUnits': 'workUnits'},
-                                    controls=[
-                                      {'id': 'POLICY_OFF', 'function': None},
-                                      {'id': 'reference', 'function': anchor}])
-  task = SurrogateTask.model_validate(d)
-  theta = map_matrix(task.parameters, qmc.Sobol(5, seed=19).random_base2(1))[
-    0].tolist()
-  zero, cfg = counterfactual(task, anchor, theta)
-  selected = [dict(id='full', theta=theta,
-                   function=construct(task.parameters, anchor, theta)),
-              dict(id='zero', theta=zero, function=cfg, pairedTo='full')]
-  monkeypatch.setattr(cache_timing_policy, 'freeze', lambda p: None)
-  output = tmp_path / 'result';
-  output.mkdir()
-  result = prepare_benchmarks(task, tmp_path, output, selected)
-  assert result['arms'] == 4 and result['jvmCount'] == 4 * 18 * 2
-  collection = json.loads((output / 'benchmark/collection.json').read_text())
-  assert collection['sameBaseComparisons'] == [
-    {'fullPolicyId': 'full', 'zeroPolicyId': 'zero'}]
-  manifest = json.loads(
-    (output / 'benchmark/candidate_manifest.json').read_text())
-  assert manifest['arms'][0]['function'] is None
-  assert manifest['arms'][-1]['function'] == cfg
 
 
-def test_support_catalog_retains_actual_runtime_rounding(tmp_path):
-  from pareto_weight_calibration.tournament_study import surface_catalog
-  from pareto_weight_calibration.cache_timing import evaluate
-  import csv, math
-  task = SurrogateTask.model_validate_json(
-    (TASKS / 'park-body-fit.json').read_text())
-  anchor = json.loads((TASKS / 'inputs/anchor-7931.json').read_text())
-  surface_catalog(task, [dict(id='reference', function=anchor)], tmp_path)
-  rows = list(
-    csv.DictReader((tmp_path / 'surface_catalog.tsv').open(), delimiter='\t'))
-  assert len(rows) == len(task.proposal.support['points'])
-  for row in rows:
-    expected = evaluate(anchor, float(row['contention']), float(row['phr']),
-                        math.expm1(float(row['logBody'])))
-    assert (int(row['parkNanos']), int(row['halfLifeNanos'])) == expected
-  summary = json.loads((tmp_path / 'surface_summary.json').read_text())[0]
-  assert 0 <= summary['parkLowerClampFraction'] <= 1
-  assert summary['halfLifeMin'] >= anchor['halfLifeMinNanos']
 
 
 def test_study_shared_history_is_not_counted_as_new_replication(tmp_path):
