@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
@@ -25,6 +26,7 @@ import io.euhedral_execution.core.ingest.ArrayIngestSink;
 import io.euhedral_execution.core.metrics.MetricsAggregator;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -33,6 +35,10 @@ import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.BitSet;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,6 +49,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.IntUnaryOperator;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -284,7 +291,34 @@ class ControlPlaneFragmentThreadTest {
     }
 
     @Test
+    void everyFragmentRemoteCachePullStopsAtDistributorInsteadOfReachingUpstream() {
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(1, false, 41L, 43L));
+        // No workers run: this checks both routing links deterministically even on a one-core host.
+        try (ControlPlaneFragment first =
+                        new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+                ControlPlaneFragment second =
+                        new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+                LatticeVertex distributor = connect(first, second)) {
+            distributor.register();
+            try {
+                distributor.ingest(source);
+                AtomicInteger delivered = new AtomicInteger();
+                assertEquals(0, first.pull(frame -> delivered.incrementAndGet(), frame -> false, 1));
+                assertEquals(0, second.pull(frame -> delivered.incrementAndGet(), frame -> false, 1));
+                assertEquals(0, delivered.get());
+                assertEquals(0, source.directFrames.get());
+            } finally {
+                source.complete();
+                distributor.removeThread();
+            }
+        } finally {
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    @Test
     void forcedCacheWorkerExecutesLocalCacheWhileActiveWorkerConsumesUpstream() {
+        requireTwoWorkerCores();
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
@@ -322,8 +356,17 @@ class ControlPlaneFragmentThreadTest {
 
             distributor.ingest(source);
 
-            // Fragment 1 (rank 1 <= 1) should pull upstream work
-            Awaitility.await().atMost(TIMEOUT).until(() -> receiver1.received.get() > 0);
+            // Only the active worker can pull upstream; CACHE must not reach it through an unlinked handle.
+            Awaitility.await()
+                    .atMost(TIMEOUT)
+                    .untilAsserted(() -> assertTrue(
+                            receiver1.received.get() == 16,
+                            () -> "active=" + receiver1.received.get() + ", cache=" + receiver2.received.get()
+                                    + ", direct=" + source.directFrames.get() + ", requests="
+                                    + source.requestCalls.get()
+                                    + ", cpus=" + workerCpus() + ", ranks=" + TestDistributor.ranks()));
+
+            assertEquals(1, receiver2.received.get(), "Forced CACHE worker must receive only its preloaded frame");
 
             assertNull(receiver1.error.get());
             assertNull(receiver2.error.get());
@@ -339,6 +382,7 @@ class ControlPlaneFragmentThreadTest {
 
     @Test
     void forcedCacheWorkerExecutesRemoteCachedFrame() {
+        requireTwoWorkerCores();
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         ControlPlaneFragment fragment1 = new ControlPlaneFragment(
@@ -399,6 +443,7 @@ class ControlPlaneFragmentThreadTest {
 
     @Test
     void forcedCacheParkDurationIsObservableAndResetSafe() {
+        requireTwoWorkerCores();
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
@@ -431,6 +476,7 @@ class ControlPlaneFragmentThreadTest {
 
     @Test
     void contentionStalenessObserverIsNotInvokedByStreamlinedControlLoop() {
+        requireTwoWorkerCores();
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         AtomicBoolean recorded = new AtomicBoolean(false);
@@ -656,42 +702,62 @@ class ControlPlaneFragmentThreadTest {
     }
 
     private static CloneConfig cloneConfigOnCoreIndex(int coreIndex) {
-        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
-        int seenCores = 0;
-        int selectedCpu = -1;
-        int lastCore = -1;
-        while (cpu >= 0) {
-            int core = SystemInfo.getCpuInfo(cpu).core();
-            if (core != lastCore) {
-                if (seenCores == coreIndex) {
-                    selectedCpu = cpu;
-                    break;
-                }
-                seenCores++;
-                lastCore = core;
-            }
-            cpu = SystemInfo.getCpuSet().nextSetBit(cpu + 1);
-        }
-        if (selectedCpu < 0) {
-            cpu = SystemInfo.getCpuSet().nextSetBit(0);
-            for (int i = 0; i < coreIndex; i++) {
-                cpu = SystemInfo.getCpuSet().nextSetBit(cpu + 1);
-            }
-            if (cpu < 0) {
-                throw new IllegalStateException("CPU index " + coreIndex + " is not available");
-            }
-            selectedCpu = cpu;
-        }
+        int selectedCpu = workerCpus().get(coreIndex);
         BitSet cpus = new BitSet();
         cpus.set(selectedCpu);
         return new CloneConfig(
                 "fragment-cycle-test", SystemInfo.getCpuInfo(selectedCpu).core(), cpus);
     }
 
+    private static void requireTwoWorkerCores() {
+        // Check before allocating fragments or changing the JVM-wide forced-participation property.
+        assumeTrue(
+                workerCpus().size() >= 2,
+                "Requires two distinct physical cores; two SMT CPUs on one core share a worker rank and upstream"
+                        + " partition");
+    }
+
+    private static List<Integer> workerCpus() {
+        BitSet available = new BitSet();
+        available.or(SystemInfo.getCpuSet());
+        available.and(ThreadTools.BASE_MASK);
+        return workerCpus(available, cpu -> SystemInfo.getCpuInfo(cpu).core(), SystemInfo.getPCoreSet());
+    }
+
+    private static List<Integer> workerCpus(BitSet cpus, IntUnaryOperator coreOfCpu, BitSet performanceCores) {
+        Map<Integer, Integer> firstCpuByCore = new TreeMap<>();
+        for (int cpu = cpus.nextSetBit(0); cpu >= 0; cpu = cpus.nextSetBit(cpu + 1)) {
+            firstCpuByCore.putIfAbsent(coreOfCpu.applyAsInt(cpu), cpu);
+        }
+        // Match LatticeEdge's ranking: performance cores first, then ascending core IDs.
+        return firstCpuByCore.keySet().stream()
+                .sorted(Comparator.<Integer>comparingInt(core -> performanceCores.get(core) ? 0 : 1)
+                        .thenComparingInt(Integer::intValue))
+                .map(firstCpuByCore::get)
+                .toList();
+    }
+
+    @Test
+    void workerSelectionDoesNotTreatSmtSiblingsAsIndependentCores() {
+        BitSet cpus = new BitSet();
+        cpus.set(0, 2);
+        assertEquals(List.of(0), workerCpus(cpus, cpu -> 0, new BitSet()));
+        assertEquals(List.of(0, 1), workerCpus(cpus, cpu -> cpu, new BitSet()));
+    }
+
+    @Test
+    void workerSelectionDeduplicatesNonAdjacentSiblingsAndMatchesCoreRanks() {
+        BitSet cpus = new BitSet();
+        cpus.set(0, 4);
+        BitSet performanceCores = new BitSet();
+        performanceCores.set(1);
+        assertEquals(List.of(1, 0), workerCpus(cpus, cpu -> cpu % 2, performanceCores));
+    }
+
     /// Connects the fragment behind the cached single-route topology used in production.
     private static LatticeVertex connect(ControlPlaneFragment... fragments) {
         TestDistributor.resetSharedRoutingState();
-        TestDistributor distributor = new TestDistributor();
+        TestDistributor distributor = new TestDistributor(fragments.length);
         BitSet active = new BitSet(fragments.length);
         LatticeEdge[] handles = new LatticeEdge[fragments.length];
         for (int i = 0; i < fragments.length; i++) {
@@ -710,8 +776,12 @@ class ControlPlaneFragmentThreadTest {
 
     private static final class TestDistributor extends LatticeVertex {
 
-        private TestDistributor() {
-            super("fragment-cycle-test", 1, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
+        private static String ranks() {
+            return CORE_RANK.getAcquire().toString();
+        }
+
+        private TestDistributor(int downstreamCount) {
+            super("fragment-cycle-test", downstreamCount, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
         }
 
         /// Restores the isolated test's JVM-wide upstream registry to an empty state.
