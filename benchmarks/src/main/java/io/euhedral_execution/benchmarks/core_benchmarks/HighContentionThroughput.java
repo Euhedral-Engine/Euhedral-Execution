@@ -39,12 +39,15 @@ import org.slf4j.LoggerFactory;
 @Fork(3)
 public class HighContentionThroughput {
 
+    static final String SOURCES_PROPERTY = "euhedral.hct.sources";
+
     private static final Logger LOGGER = LoggerFactory.getLogger(HighContentionThroughput.class);
-    private static final int PRODUCERS = SystemInfo.CPU_COUNT;
+    private static final int SOURCES = Integer.parseInt(
+            System.getProperty(SOURCES_PROPERTY, Integer.toString(Math.max(1, SystemInfo.getCoreCount() - 1))));
     private static final int TASKS = 32_000_000;
     private final PaddedLongAdder counters =
             new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
-    private final RepeatingSink[] sinks = new RepeatingSink[PRODUCERS];
+    private final RepeatingSink[] sinks = new RepeatingSink[SOURCES];
     private ControlPlaneLattice controlPlane;
 
     public HighContentionThroughput() {
@@ -139,10 +142,11 @@ public class HighContentionThroughput {
     /// Creates and starts one isolated lattice for this benchmark fork.
     @Setup(Level.Trial)
     public void setup(Blackhole blackhole) {
+
         long idHash = HasherApi.mix(HasherApi.BASE_SEED);
 
         for (int i = 0; i < sinks.length; i++) {
-            this.sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, 250_000, this.counters));
+            this.sinks[i] = new RepeatingSink(NoOpFrame.generate(idHash, 2_048, this.counters));
         }
 
         BaseCloneableObject base = new BaseCloneableObject(new NoOpExecutor(blackhole));

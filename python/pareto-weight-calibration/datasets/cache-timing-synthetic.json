@@ -1,0 +1,1302 @@
+{
+  "schemaVersion": 1,
+  "description": "Synthetic mechanical handoff only. Not benchmark evidence.",
+  "arms": [
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 1,
+          "resolvedWorkers": 2,
+          "workUnits": 0
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1000.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w0-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w0"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 1,
+          "resolvedWorkers": 2,
+          "workUnits": 0
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1001.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w0-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w0"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 1,
+          "resolvedWorkers": 2,
+          "workUnits": 0
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1015.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w0-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w0"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 1,
+          "resolvedWorkers": 2,
+          "workUnits": 0
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1016.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w0-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w0"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 1,
+          "resolvedWorkers": 2,
+          "workUnits": 0
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1015.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w0-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w0"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 1,
+          "resolvedWorkers": 2,
+          "workUnits": 0
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1016.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w0-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w0"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 2,
+          "resolvedWorkers": 3,
+          "workUnits": 10
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1100.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w1-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w1"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 2,
+          "resolvedWorkers": 3,
+          "workUnits": 10
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1101.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w1-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w1"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 2,
+          "resolvedWorkers": 3,
+          "workUnits": 10
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1115.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w1-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w1"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 2,
+          "resolvedWorkers": 3,
+          "workUnits": 10
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1116.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w1-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w1"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 2,
+          "resolvedWorkers": 3,
+          "workUnits": 10
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1115.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w1-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w1"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 2,
+          "resolvedWorkers": 3,
+          "workUnits": 10
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1116.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w1-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w1"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 3,
+          "resolvedWorkers": 4,
+          "workUnits": 20
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1200.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w2-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w2"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 3,
+          "resolvedWorkers": 4,
+          "workUnits": 20
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1201.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w2-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w2"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 3,
+          "resolvedWorkers": 4,
+          "workUnits": 20
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1215.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w2-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w2"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 3,
+          "resolvedWorkers": 4,
+          "workUnits": 20
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1216.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w2-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w2"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 3,
+          "resolvedWorkers": 4,
+          "workUnits": 20
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1215.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w2-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w2"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 3,
+          "resolvedWorkers": 4,
+          "workUnits": 20
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1216.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w2-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w2"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 4,
+          "resolvedWorkers": 5,
+          "workUnits": 30
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1300.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w3-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w3"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 4,
+          "resolvedWorkers": 5,
+          "workUnits": 30
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1301.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w3-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w3"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 4,
+          "resolvedWorkers": 5,
+          "workUnits": 30
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1315.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w3-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w3"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 4,
+          "resolvedWorkers": 5,
+          "workUnits": 30
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1316.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w3-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w3"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 4,
+          "resolvedWorkers": 5,
+          "workUnits": 30
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1315.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w3-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w3"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 4,
+          "resolvedWorkers": 5,
+          "workUnits": 30
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1316.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w3-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w3"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 5,
+          "resolvedWorkers": 6,
+          "workUnits": 40
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1400.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w4-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w4"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 5,
+          "resolvedWorkers": 6,
+          "workUnits": 40
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1401.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w4-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w4"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 5,
+          "resolvedWorkers": 6,
+          "workUnits": 40
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1415.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w4-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w4"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 5,
+          "resolvedWorkers": 6,
+          "workUnits": 40
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1416.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w4-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w4"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 5,
+          "resolvedWorkers": 6,
+          "workUnits": 40
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1415.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w4-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w4"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 5,
+          "resolvedWorkers": 6,
+          "workUnits": 40
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1416.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w4-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w4"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 6,
+          "resolvedWorkers": 7,
+          "workUnits": 50
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1500.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w5-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w5"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 0,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 6,
+          "resolvedWorkers": 7,
+          "workUnits": 50
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1501.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w5-0-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 0
+        },
+        "workloadId": "w5"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 6,
+          "resolvedWorkers": 7,
+          "workUnits": 50
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1515.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w5-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w5"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 1000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 6,
+          "resolvedWorkers": 7,
+          "workUnits": 50
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1516.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w5-15000-1000000",
+        "treatment": {
+          "halfLifeNs": 1000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w5"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 6,
+          "resolvedWorkers": 7,
+          "workUnits": 50
+        },
+        "forkId": "0",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1515.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w5-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w5"
+      }
+    },
+    {
+      "record": {
+        "config": {
+          "calibrationConfig": {
+            "cacheParkNs": 15000,
+            "contentionHalfLifeNanos": 2000000,
+            "lifecycleMode": "CONTINUOUS"
+          }
+        },
+        "fixture": {
+          "parallelSources": 6,
+          "resolvedWorkers": 7,
+          "workUnits": 50
+        },
+        "forkId": "1",
+        "identity": {
+          "model": "none",
+          "runtime": "synthetic"
+        },
+        "outcome": {
+          "executionsPerSecond": 1516.0,
+          "retainedWindows": []
+        },
+        "passId": "p0",
+        "provenance": {
+          "acquisitionBasis": "mechanical-test-only",
+          "synthetic": true
+        },
+        "runId": "w5-15000-2000000",
+        "treatment": {
+          "halfLifeNs": 2000000,
+          "parkNs": 15000
+        },
+        "workloadId": "w5"
+      }
+    }
+  ]
+}

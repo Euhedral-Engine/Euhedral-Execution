@@ -1,0 +1,114 @@
+{
+  "policyId": "policy-158a61afee6653cbbfde",
+  "family": "park-body",
+  "activeParameters": {
+    "parkIntercept": 1.8063635377779264,
+    "parkPhrSlope": -1.1782901489929007,
+    "hIntercept": -0.7202320591072836,
+    "hPhrSlope": 0.4005695409857165,
+    "parkBodyDelta": -0.08852530089729743
+  },
+  "runtimeTimingFunction": {
+    "halfLifeCoefficients": [
+      -0.7202320591072836,
+      2.220446049250313e-16,
+      0.4005695409857165,
+      3.642919299551295e-17,
+      -8.239936510889834e-18,
+      -2.888721163316066e-17,
+      -4.0766001685454967e-17
+    ],
+    "halfLifeMaxNanos": 2000000,
+    "halfLifeMinNanos": 250000,
+    "halfLifeReferenceNanos": 1000000,
+    "means": [
+      0.5,
+      2,
+      8
+    ],
+    "normalizationVersion": "cache-local-bounded-v1",
+    "parkCoefficients": [
+      1.8063635377779264,
+      -5.551115123125783e-16,
+      -1.1782901489929007,
+      -0.0885253008972973,
+      -3.2959746043559335e-17,
+      -1.0787811616230769e-16,
+      -1.3530843112619095e-16
+    ],
+    "parkMaxNanos": 814375,
+    "parkMinNanos": 15000,
+    "parkReferenceNanos": 15000,
+    "scales": [
+      0.5,
+      2,
+      8
+    ],
+    "supportMax": [
+      1,
+      4,
+      16
+    ],
+    "supportMin": [
+      0,
+      0,
+      0
+    ]
+  },
+  "staticEvidence": {
+    "method": "OFF-anchored matched-measurement network estimate",
+    "measuredForkCount": 148,
+    "campaigns": [
+      "cache-scarce-loop-871b3301a6ef-002",
+      "cache-scarce-loop-871b3301a6ef-003",
+      "cache-scarce-loop-871b3301a6ef-004",
+      "cache-scarce-loop-871b3301a6ef-005",
+      "cache-scarce-loop-871b3301a6ef-006",
+      "cache-scarce-loop-871b3301a6ef-007",
+      "cache-scarce-loop-871b3301a6ef-008",
+      "cache-scarce-loop-871b3301a6ef-009",
+      "cache-scarce-loop-871b3301a6ef-010"
+    ],
+    "topologyPercent": {
+      "R7_scarce": 7.887033682213396,
+      "R15_scarce": 9.481644068180273,
+      "R23_scarce": 15.706963755425306
+    },
+    "broadScarcePercent": 10.974539997068332,
+    "workloadPercent": {
+      "R7-S1-W0": 9.013927638732248,
+      "R7-S1-W96": 16.50081126155368,
+      "R7-S1-W576": -1.1226494588039664,
+      "R15-S1-W0": 20.198595165864614,
+      "R15-S1-W96": 9.588034350221864,
+      "R15-S1-W576": -0.37659012353325033,
+      "R23-S1-W0": 23.417423776788254,
+      "R23-S1-W96": 14.540464686486242,
+      "R23-S1-W576": 9.582972087689399
+    },
+    "independentUnit": "JVM fork; measurement windows are nested"
+  },
+  "schemaVersion": 1,
+  "version": 1,
+  "status": "STATIC_FROZEN_DYNAMIC_NEEDS_FOLLOWUP",
+  "dynamicValidation": {
+    "task": "python/pareto-weight-calibration/tasks/cache-scarce-dynamic-v1.json",
+    "outputDirectory": "experiments/cache-scarce-dynamic-v1",
+    "result": "NEEDS FOLLOW-UP",
+    "independentJvmForks": 42,
+    "nestedWindows": 1008,
+    "findings": "Dynamic validation completed 42 independent JVM forks across 7 fixtures (R7, R15, R23 gate/body returns and R15 scarcity return) with 1008 nested 5s windows. While qualifying recovery (within 5% of tail mean for 2 consecutive windows) occurred rapidly in <= 10s (window 2) for 13 of 14 transitions, substantial inter-fork variance and persistent throughput deficits vs POLICY_OFF were observed. Specifically: (1) R7-gate-return in plentiful phase showed fork 0 at -21.92% vs OFF, with mean steady delta of -5.83% and transient drops to -22.99%; (2) R23-gate-return returning to scarce exhibited severe deficits in two forks (-31.75% and -41.95% vs OFF), with return-vs-initial throughputs showing wide spread across forks; (3) R7-body-return and R15-body-return returning to low body exhibited stark fork bifurcation (e.g. R7 fork 1 at -21.86% vs fork 2 at +34.09%; R15 fork 2 at -23.97% and -23.91% return vs initial); (4) R15 scarcity return fork 1 showed a -24.96% steady deficit in less-scarce phase and -17.23% in return-to-scarce phase. Conversely, the policy demonstrated strong protection against OFF collapse under R23 plentiful gate conditions (+312.87% and +80.51%) and solid body benefits on R23 (+39.68% steady mean). Because throughput-only measurements cannot establish underlying mechanisms (such as gate exit hysteresis, owner-local productive-handle refresh, or contention half-life decay) and fork-level deficits remain significant, the policy is marked NEEDS FOLLOW-UP without altering coefficients or production defaults."
+  },
+  "sourceTuningSession": "experiments/cache-scarce-loop",
+  "canonicalStaticDatabase": "python/pareto-weight-calibration/datasets/cache-policy-history.sqlite",
+  "runtimeArtifact": "python/pareto-weight-calibration/policies/cache-scarce-v1-runtime.json",
+  "migrationVerification": {
+    "source": "/home/brandon/src/Euhedral-Execution/experiments/cache-scarce-loop/forks.sqlite",
+    "destination": "/home/brandon/src/Euhedral-Execution/python/pareto-weight-calibration/datasets/cache-policy-history.sqlite",
+    "rowCount": 4005,
+    "policyCount": 171,
+    "campaignCount": 27,
+    "integrityCheck": "ok",
+    "allStoredValuesIdentical": true
+  }
+}

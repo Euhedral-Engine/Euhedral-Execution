@@ -1,0 +1,27 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "id": "one-source-force-on",
+    "runs": [
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__19__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__19__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__21__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__21__sample_1_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "one-source-auto-weight-40",
+    "runs": [
+      "experiments/17-phase-2-productivity-body-one-source-auto-40/phase2-one-source-auto-40-base__phase2-one-source-auto-40__0__sample_0_repeat_0",
+      "experiments/17-phase-2-productivity-body-one-source-auto-40/phase2-one-source-auto-40-base__phase2-one-source-auto-40__0__sample_1_repeat_0",
+      "experiments/17-phase-2-productivity-body-one-source-auto-40/phase2-one-source-auto-40-base__phase2-one-source-auto-40__1__sample_0_repeat_0",
+      "experiments/17-phase-2-productivity-body-one-source-auto-40/phase2-one-source-auto-40-base__phase2-one-source-auto-40__1__sample_1_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": ["/calibrationConfig/parallelSources", "/calibrationConfig/workUnits", "/origin/sampleIndex"],
+    "requireCompleteMatch": true
+  },
+  "options": {"includeDiagnostics": true, "failFast": true},
+  "outputDirectory": "experiments/16-phase-2-productivity-body-source-deficit-portability/comparisons/one-source-auto-vs-on"
+}

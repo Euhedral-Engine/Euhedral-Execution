@@ -39,6 +39,7 @@ public final class SystemInfo {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(SystemInfo.class));
     private static final UnmodifiableBitSet CPU_SET;
+    private static final UnmodifiableBitSet CORE_SET;
     private static final UnmodifiableBitSet P_CORE_SET;
     private static final UnmodifiableBitSet E_CORE_SET;
     private static final UnmodifiableBitSet P_CPU_SET;
@@ -74,6 +75,11 @@ public final class SystemInfo {
         P_CPU_SET = TOPOLOGY_MODEL.pCpuSet();
         E_CPU_SET = TOPOLOGY_MODEL.eCpuSet();
         SNAPSHOTTER = TopologyBootstrap.resources(LOGGER);
+
+        BitSet cores = new BitSet();
+        cores.or(P_CORE_SET);
+        cores.or(E_CORE_SET);
+        CORE_SET = UnmodifiableBitSet.wrap(cores);
 
         String debugOut = asString();
         LOGGER.debug("\n{}", debugOut);
@@ -199,6 +205,10 @@ public final class SystemInfo {
         }
 
         return sum;
+    }
+
+    public static @NonNull UnmodifiableBitSet getCoreSet() {
+        return CORE_SET;
     }
 
     public static @NonNull UnmodifiableBitSet getPCoreSet() {

@@ -6,9 +6,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
-import io.euhedral_execution.core.config.FragmentActionPicker;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
@@ -17,16 +19,19 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.core.impl.BaseCloneableObject;
+import io.euhedral_execution.core.impl.DefaultExecutor;
 import io.euhedral_execution.core.ingest.ArrayIngestSink;
 import io.euhedral_execution.core.metrics.MetricsAggregator;
-import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization;
+import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
+import java.lang.reflect.Field;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -49,35 +54,34 @@ class ControlPlaneFragmentThreadTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
 
     @Test
-    void shouldRunWhenTheCpuExecutorWasCreatedWithRegularThreads() throws Exception {
-        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
-        int core = SystemInfo.getCpuInfo(cpu).core();
-
-        PinnedThreadExecutor previous = PinnedThreadExecutor.get(cpu);
-        if (previous != null) {
-            previous.close();
-        }
-
-        PinnedThreadExecutor executor =
-                PinnedThreadExecutor.getOrSetIfAbsent(cpu, "regular-thread-owner", Thread.NORM_PRIORITY, true);
-        assertFalse(executor.submit(() -> Thread.currentThread() instanceof FlowThread)
-                .get(1, TimeUnit.SECONDS));
-
-        BitSet cpus = new BitSet();
-        cpus.set(cpu);
-        CloneConfig cloneConfig = new CloneConfig("test", core, cpus);
-        FragmentActionPicker halted = new FragmentActionPicker(new double[28]);
-        ControlPlaneFragment fragment =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(halted).clone(cloneConfig));
-
-        try {
-            fragment.start();
-            LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
-
-            assertTrue(fragment.isStarted());
-        } finally {
-            fragment.close();
-            executor.close();
+    void latticeFactoryPropagatesIndependentTimingToStartedTrees() throws Exception {
+        for (CacheTimingConfig timing :
+                new CacheTimingConfig[] {new CacheTimingConfig(43_000L, 7_000_000L), new CacheTimingConfig(0L, 29_000L)
+                }) {
+            CloneConfig clone = cloneConfigOnCoreIndex(0);
+            LatticeConfig lattice = LatticeConfig.ofBenchmark(
+                    new UnmodifiableBitSet(clone.effectiveCpus()),
+                    createRecordingObserver(),
+                    FragmentDecisionWeights.DEFAULT,
+                    new DefaultExecutor(-1),
+                    timing);
+            BaseCloneableObject pipeline = (BaseCloneableObject) lattice.baseShard().cloneableObject;
+            Field fragmentField = BaseCloneableObject.class.getDeclaredField("fragment");
+            fragmentField.setAccessible(true);
+            ControlPlaneFragment template = (ControlPlaneFragment) fragmentField.get(pipeline);
+            try (ControlPlaneFragment fragment = template.clone(clone)) {
+                fragment.start();
+                Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+                Field policyField = ControlPlaneFragment.class.getDeclaredField("controlPolicy");
+                policyField.setAccessible(true);
+                FragmentDecisionTree tree = (FragmentDecisionTree) policyField.get(fragment);
+                assertEquals(timing.cacheParkNs(), tree.cacheParkNs());
+                assertEquals(timing.contentionHalfLifeNanos(), tree.contentionHalfLifeNanos());
+            } finally {
+                template.close();
+                lattice.baseShard().close();
+                PinnedThreadExecutor.closeAll();
+            }
         }
     }
 
@@ -125,45 +129,6 @@ class ControlPlaneFragmentThreadTest {
             assertTrue(done.await(5, TimeUnit.SECONDS));
             assertTrue(fragment.getAdaptiveBatchCap() >= 2L);
             executor.close();
-        }
-    }
-
-    @Test
-    void normalModeDoesNotConsultTheActionPicker() {
-        FailOnUseActionPicker actionPicker = new FailOnUseActionPicker();
-        FragmentConfig defaults = FragmentConfig.ofDefaults();
-        FragmentConfig config = new FragmentConfig(
-                        null,
-                        defaults.cacheConfig(),
-                        actionPicker,
-                        defaults.maxBatchSize(),
-                        false,
-                        defaults.metricPrefix(),
-                        defaults.registry())
-                .clone(cloneConfig());
-
-        BenchmarkFrame ordered = new BenchmarkFrame(1L);
-        BenchmarkFrame unordered = new BenchmarkFrame(2L);
-        unordered.randomizeHash(3L);
-        ArrayIngestSink sink = new ArrayIngestSink(new AbstractFrame[] {ordered, unordered});
-        CountingReceiver receiver = new CountingReceiver();
-        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
-        LatticeVertex distributor = connect(fragment);
-
-        try {
-            fragment.output().addDownstream(receiver);
-            fragment.start();
-            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
-
-            distributor.ingest(sink.getDelegate());
-
-            Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 2);
-            assertNull(receiver.error.get());
-        } finally {
-            sink.complete();
-            fragment.close();
-            distributor.close();
-            PinnedThreadExecutor.closeAll();
         }
     }
 
@@ -251,9 +216,9 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
-    /// Verifies sustained high service time crosses hysteresis before staged requests begin.
+    /// Verifies downstream terminal delay cannot masquerade as executor-body cost.
     @Test
-    void loopStagesHighLatencyWorkAfterEightBatches() {
+    void loopDoesNotStageForPathExternalTerminalDelay() {
         ControlPlaneFragment fragment =
                 new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
         LatticeVertex distributor = connect(fragment);
@@ -266,9 +231,9 @@ class ControlPlaneFragmentThreadTest {
             Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
             distributor.ingest(source);
 
-            Awaitility.await().atMost(TIMEOUT).until(() -> source.requestCalls.get() > 0);
-            assertTrue(source.directFramesAtFirstRequest.get() >= 16);
             Awaitility.await().atMost(TIMEOUT).until(() -> receiver.received.get() == 128);
+            assertEquals(128, source.directFrames.get());
+            assertEquals(0, source.requestCalls.get());
             assertNull(receiver.error.get());
         } finally {
             source.complete();
@@ -318,30 +283,428 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    @Test
+    void forcedCacheWorkerExecutesLocalCacheWhileActiveWorkerConsumesUpstream() {
+        System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
+
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
+                        createRecordingObserver(),
+                        FragmentDecisionWeights.DEFAULT,
+                        new CacheTimingConfig(50000L, 2_000_000L))
+                .clone(cloneConfigOnCoreIndex(0)));
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
+                        createRecordingObserver(),
+                        FragmentDecisionWeights.DEFAULT,
+                        new CacheTimingConfig(50000L, 2_000_000L))
+                .clone(cloneConfigOnCoreIndex(1)));
+        LatticeVertex distributor = connect(fragment1, fragment2);
+
+        BenchmarkFrame local = BenchmarkFrame.generate(1, false, 31L, 37L)[0];
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(16, false, 41L, 43L));
+        CountingReceiver receiver1 = new CountingReceiver();
+        CountingReceiver receiver2 = new CountingReceiver();
+
+        try {
+            fragment1.output().addDownstream(receiver1);
+            fragment2.output().addDownstream(receiver2);
+
+            // Preload a frame into fragment2's local cache
+            fragment2.push(local);
+            assertEquals(1L, fragment2.getLocalCacheCount());
+
+            fragment1.start();
+            fragment2.start();
+            Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
+
+            // Fragment 2 (forced CACHE) must execute its preloaded local cache frame
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver2.received.get() >= 1);
+            assertSame(local, receiver2.first.get());
+
+            distributor.ingest(source);
+
+            // Fragment 1 (rank 1 <= 1) should pull upstream work
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver1.received.get() > 0);
+
+            assertNull(receiver1.error.get());
+            assertNull(receiver2.error.get());
+        } finally {
+            source.complete();
+            fragment1.close();
+            fragment2.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        }
+    }
+
+    @Test
+    void forcedCacheWorkerExecutesRemoteCachedFrame() {
+        System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
+
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+                        .clone(cloneConfigOnCoreIndex(0)));
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
+                        .clone(cloneConfigOnCoreIndex(1)));
+        LatticeVertex distributor = connect(fragment1, fragment2);
+
+        BenchmarkFrame frame = BenchmarkFrame.generate(1, false, 79L, 83L)[0];
+        CountingReceiver receiver2 = new CountingReceiver();
+
+        try {
+            fragment2.output().addDownstream(receiver2);
+
+            // Push a frame into the distributor's downstream handle 1 (parent cache queue for fragment 2)
+            fragment2.input(new LatticeSource() {
+                @Override
+                public void addDownstream(LatticeReceiver receiver) {
+                    receiver.push(frame);
+                }
+
+                @Override
+                public long pull(
+                        Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+                    return 0;
+                }
+
+                @Override
+                public void request(long demand) {}
+
+                @Override
+                public void complete() {}
+
+                @Override
+                public boolean isComplete() {
+                    return false;
+                }
+            });
+
+            fragment1.start();
+            fragment2.start();
+            Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
+
+            // Fragment 2 executes work drained from its remote cache
+            Awaitility.await().atMost(TIMEOUT).until(() -> receiver2.received.get() >= 1);
+            assertSame(frame, receiver2.first.get());
+            assertNull(receiver2.error.get());
+        } finally {
+            fragment1.close();
+            fragment2.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        }
+    }
+
+    @Test
+    void forcedCacheParkDurationIsObservableAndResetSafe() {
+        System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
+
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
+                        createRecordingObserver(),
+                        FragmentDecisionWeights.DEFAULT,
+                        new CacheTimingConfig(10000L, 2_000_000L))
+                .clone(cloneConfigOnCoreIndex(0)));
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
+                        createRecordingObserver(),
+                        FragmentDecisionWeights.DEFAULT,
+                        new CacheTimingConfig(10000L, 2_000_000L))
+                .clone(cloneConfigOnCoreIndex(1)));
+
+        try (fragment1;
+                fragment2;
+                LatticeVertex ignored = connect(fragment1, fragment2)) {
+            fragment1.start();
+            fragment2.start();
+            Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
+
+            // Reset fragment2 while it is in the forced CACHE loop
+            long deadline = System.nanoTime() + 1_000_000_000L;
+            assertEquals(0L, fragment2.reset(deadline));
+            assertTrue(fragment2.ready());
+        } finally {
+            PinnedThreadExecutor.closeAll();
+            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        }
+    }
+
+    @Test
+    void contentionStalenessObserverIsNotInvokedByStreamlinedControlLoop() {
+        System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
+
+        AtomicBoolean recorded = new AtomicBoolean(false);
+        AtomicInteger observedPath = new AtomicInteger(-1);
+        AtomicInteger observedRank = new AtomicInteger(-1);
+        AtomicInteger observedWorkers = new AtomicInteger(-1);
+
+        FragmentObserver observer = new FragmentObserver() {
+            @Override
+            public boolean observesContentionStaleness() {
+                return true;
+            }
+
+            @Override
+            protected void cycleStartState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long completed,
+                    long batchSize,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double throughput) {}
+
+            @Override
+            protected void batchProgressState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime) {}
+
+            @Override
+            protected void batchCompleteState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime,
+                    double throughput) {}
+
+            @Override
+            protected void rawBodyCost(int core, int socket, long cycleEpoch, long batchEpoch, long rawBodyCost) {}
+
+            @Override
+            protected void idleBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
+
+            @Override
+            protected void execBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
+
+            @Override
+            protected void contentionStalenessState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long measuredContention,
+                    long lastRawContention,
+                    long contentionObservationCount,
+                    long lastContentionObservationNs,
+                    long cyclesSinceContentionObservation,
+                    long nanosSinceContentionObservation,
+                    long consecutiveIdleDecisions,
+                    long idleDurationSelectedNs,
+                    long successfulAcquisitionCount,
+                    long failedAcquisitionCount,
+                    long totalAcquisitionAttempts,
+                    int executionPath,
+                    long localCacheCount,
+                    long productiveHandleCount,
+                    int registeredWorkers,
+                    int workerRank,
+                    boolean productivityExcluded,
+                    long productivityExclusionCount,
+                    long productivityThresholdNs,
+                    double smoothedBodyCostNs,
+                    boolean bodyHistoryReady) {
+                if (workerRank == 2) {
+                    observedPath.set(executionPath);
+                    observedRank.set(workerRank);
+                    observedWorkers.set(registeredWorkers);
+                    recorded.set(true);
+                }
+            }
+        };
+
+        ControlPlaneFragment fragment1 =
+                new ControlPlaneFragment(FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT)
+                        .clone(cloneConfigOnCoreIndex(0)));
+        ControlPlaneFragment fragment2 =
+                new ControlPlaneFragment(FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT)
+                        .clone(cloneConfigOnCoreIndex(1)));
+        LatticeVertex distributor = connect(fragment1, fragment2);
+
+        // Preload 2 frames to complete a batch on fragment 2 and update registeredWorkers at boundary
+        BenchmarkFrame[] frames = BenchmarkFrame.generate(2, false, 11L, 13L);
+        fragment2.push(frames[0]);
+        fragment2.push(frames[1]);
+
+        try {
+            fragment1.start();
+            fragment2.start();
+            Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
+            fragment2.reset(System.nanoTime() + TIMEOUT.toNanos());
+
+            assertFalse(recorded.get());
+            assertEquals(-1, observedPath.get());
+            assertEquals(-1, observedRank.get());
+            assertEquals(-1, observedWorkers.get());
+        } finally {
+            fragment1.close();
+            fragment2.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
+        }
+    }
+
+    private static FragmentObserver createRecordingObserver() {
+        return new FragmentObserver() {
+            @Override
+            protected void cycleStartState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long completed,
+                    long batchSize,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double throughput) {}
+
+            @Override
+            protected void batchProgressState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime) {}
+
+            @Override
+            protected void batchCompleteState(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    long upstreamCount,
+                    int registeredWorkers,
+                    long productiveHandleCount,
+                    int workerRank,
+                    long contention,
+                    double avgServiceTime,
+                    double throughput) {}
+
+            @Override
+            protected void rawBodyCost(int core, int socket, long cycleEpoch, long batchEpoch, long rawBodyCost) {}
+
+            @Override
+            protected void idleBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
+
+            @Override
+            protected void execBranchDecision(
+                    int core,
+                    int socket,
+                    long cycleEpoch,
+                    long batchEpoch,
+                    int contentionPolicy,
+                    int bodyPolicy,
+                    long contention,
+                    double smoothedBodyCost) {}
+        };
+    }
+
     /// Returns a clone configuration for the first CPU available to the test process.
     private static CloneConfig cloneConfig() {
-        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
-        if (cpu < 0) {
-            throw new IllegalStateException("No CPU is available for the unit test");
-        }
+        return cloneConfigOnCoreIndex(0);
+    }
 
+    private static CloneConfig cloneConfigOnCoreIndex(int coreIndex) {
+        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
+        int seenCores = 0;
+        int selectedCpu = -1;
+        int lastCore = -1;
+        while (cpu >= 0) {
+            int core = SystemInfo.getCpuInfo(cpu).core();
+            if (core != lastCore) {
+                if (seenCores == coreIndex) {
+                    selectedCpu = cpu;
+                    break;
+                }
+                seenCores++;
+                lastCore = core;
+            }
+            cpu = SystemInfo.getCpuSet().nextSetBit(cpu + 1);
+        }
+        if (selectedCpu < 0) {
+            cpu = SystemInfo.getCpuSet().nextSetBit(0);
+            for (int i = 0; i < coreIndex; i++) {
+                cpu = SystemInfo.getCpuSet().nextSetBit(cpu + 1);
+            }
+            if (cpu < 0) {
+                throw new IllegalStateException("CPU index " + coreIndex + " is not available");
+            }
+            selectedCpu = cpu;
+        }
         BitSet cpus = new BitSet();
-        cpus.set(cpu);
-        return new CloneConfig("fragment-cycle-test", SystemInfo.getCpuInfo(cpu).core(), cpus);
+        cpus.set(selectedCpu);
+        return new CloneConfig(
+                "fragment-cycle-test", SystemInfo.getCpuInfo(selectedCpu).core(), cpus);
     }
 
     /// Connects the fragment behind the cached single-route topology used in production.
-    private static LatticeVertex connect(ControlPlaneFragment fragment) {
+    private static LatticeVertex connect(ControlPlaneFragment... fragments) {
         TestDistributor.resetSharedRoutingState();
-        LatticeVertex distributor = new TestDistributor();
-        LatticeEdge handle = new LatticeEdge(distributor.getDrainFlag());
-        BitSet active = new BitSet(1);
-        active.set(0);
+        TestDistributor distributor = new TestDistributor();
+        BitSet active = new BitSet(fragments.length);
+        LatticeEdge[] handles = new LatticeEdge[fragments.length];
+        for (int i = 0; i < fragments.length; i++) {
+            active.set(i);
+            handles[i] = new LatticeEdge(distributor.getDrainFlag());
+        }
 
         distributor.setDrain(true);
-        assertTrue(distributor.setDownstreamMapping(active, new LatticeEdge[] {handle}));
+        assertTrue(distributor.setDownstreamMapping(active, handles));
         distributor.setDrain(false);
-        fragment.input(handle);
+        for (int i = 0; i < fragments.length; i++) {
+            fragments[i].input(handles[i]);
+        }
         return distributor;
     }
 
@@ -355,41 +718,16 @@ class ControlPlaneFragmentThreadTest {
         private static void resetSharedRoutingState() {
             UpstreamQueue.UP_QUEUE.remove();
             UPSTREAM_COUNT.set(0L);
-            THREAD_COUNT.set(0L);
+            CORE_COUNT.set(0L);
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 if (UPSTREAMS[i] != null) {
                     UPSTREAMS[i].clear();
                 }
                 ACTIVE_PARTITIONS.set(i, 0L);
             }
-        }
-    }
-
-    private static final class FailOnUseActionPicker extends FragmentActionPicker {
-
-        private FailOnUseActionPicker() {
-            super(rejectingWeights());
-        }
-
-        @Override
-        public boolean halted() {
-            throw new IllegalStateException("Normal mode consulted the action picker");
-        }
-
-        @Override
-        public void normalize(double[] inputs) {
-            throw new IllegalStateException("Normal mode consulted the action picker");
-        }
-
-        @Override
-        public boolean performAction(Action action, double[] inputs) {
-            throw new IllegalStateException("Normal mode consulted the action picker");
-        }
-
-        private static double[] rejectingWeights() {
-            double[] weights = new double[28];
-            Arrays.fill(weights, -1.0);
-            return weights;
+            Int2IntOpenHashMap initialRanks = new Int2IntOpenHashMap(UPSTREAMS.length);
+            initialRanks.defaultReturnValue(-1);
+            CORE_RANK.set(initialRanks);
         }
     }
 
@@ -401,7 +739,6 @@ class ControlPlaneFragmentThreadTest {
         private final AtomicReference<LatticeReceiver> downstream = new AtomicReference<>();
         private final AtomicInteger directFrames = new AtomicInteger();
         private final AtomicInteger requestCalls = new AtomicInteger();
-        private final AtomicInteger directFramesAtFirstRequest = new AtomicInteger(-1);
 
         /// Creates a deterministic pull/request source over the supplied frame array.
         private TrackingSource(AbstractFrame[] frames) {
@@ -442,7 +779,6 @@ class ControlPlaneFragmentThreadTest {
         @Override
         public void request(long demand) {
             this.requestCalls.incrementAndGet();
-            this.directFramesAtFirstRequest.compareAndSet(-1, this.directFrames.get());
             LatticeReceiver receiver = this.downstream.get();
             long pushed = 0L;
             while (receiver != null && pushed < demand) {

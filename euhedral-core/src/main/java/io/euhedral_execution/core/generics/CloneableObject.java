@@ -57,7 +57,7 @@ public interface CloneableObject {
      *
      * @return the estimated number of buffered frames removed
      */
-    default long resetForNextTrial(long deadlineNanos) {
+    default long reset(long deadlineNanos) {
         return 0;
     }
 

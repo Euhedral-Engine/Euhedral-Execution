@@ -1,0 +1,27 @@
+{
+  "calibrationProfiles": {
+    "standard-2core-fixture": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
+      "workUnits": 0,
+      "randomizeWork": false,
+      "totalRequiredExecutions": 8000000,
+      "invocationTimeoutMillis": 30000,
+      "decisionWeightProfile": "default-weights",
+      "rawSampleLimit": 4096,
+      "observeCycleStart": false,
+      "observeBatchProgress": false,
+      "observeBatchComplete": false,
+      "observeRawBodyCost": true,
+      "observeIdleDecision": false,
+      "observeExecDecision": true
+    }
+  },
+  "decisionWeightProfiles": {
+    "default-weights": {
+      "idleBodyCostWeights": { "xs": 96, "s": 128, "m": 216, "h": 288 },
+      "idleTimeNs": { "xsPark": 1000, "sPark": 0, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
+    }
+  }
+}

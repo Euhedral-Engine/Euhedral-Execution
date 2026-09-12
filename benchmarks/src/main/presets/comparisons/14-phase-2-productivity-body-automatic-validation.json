@@ -1,0 +1,57 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "id": "retained-forced-winner",
+    "runs": [
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__3__sample_0_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__3__sample_1_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__3__sample_2_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__3__sample_3_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__5__sample_0_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__5__sample_1_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__5__sample_2_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__5__sample_3_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__6__sample_0_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__6__sample_1_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__6__sample_2_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__6__sample_3_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__8__sample_0_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__8__sample_1_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__8__sample_2_repeat_0",
+      "experiments/13-phase-2-productivity-body-refinement/phase2-productivity-refinement-base__phase2-productivity-body-refinement__8__sample_3_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "automatic-threshold-weight-48",
+    "runs": [
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__0__sample_0_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__0__sample_1_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__0__sample_2_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__0__sample_3_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__1__sample_0_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__1__sample_1_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__1__sample_2_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__1__sample_3_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__2__sample_0_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__2__sample_1_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__2__sample_2_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__2__sample_3_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__3__sample_0_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__3__sample_1_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__3__sample_2_repeat_0",
+      "experiments/14-phase-2-productivity-body-automatic-validation/phase2-productivity-automatic-base__phase2-productivity-body-automatic-validation__3__sample_3_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits",
+      "/origin/sampleIndex"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/14-phase-2-productivity-body-automatic-validation/comparisons"
+}

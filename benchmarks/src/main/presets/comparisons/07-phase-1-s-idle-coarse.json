@@ -1,0 +1,25 @@
+{
+  "strategy": "CROSS",
+  "baseline": {
+    "id": "s-0ns-control",
+    "runs": [
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__0__sample_0_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__0__sample_1_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "s-nonzero-treatments",
+    "runs": [
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__1__sample_0_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__1__sample_1_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__2__sample_0_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__2__sample_1_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__3__sample_0_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__3__sample_1_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__4__sample_0_repeat_0",
+      "experiments/07-phase-1-s-idle-coarse/phase1-s-base__s-idle-ns__4__sample_1_repeat_0"
+    ]
+  },
+  "options": { "includeDiagnostics": true, "failFast": true },
+  "outputDirectory": "experiments/07-phase-1-s-idle-coarse/comparisons"
+}

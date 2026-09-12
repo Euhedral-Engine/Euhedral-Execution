@@ -3,6 +3,7 @@ package io.euhedral_execution.core.control_plane;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -12,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -26,6 +28,14 @@ import org.mockito.Mockito;
 
 @Isolated
 class ControlPlaneFragmentTest {
+
+    @Test
+    void defaultProductivityThresholdUsesDedicatedCalibratedWeight() {
+        assertEquals(40, FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT);
+        assertNotEquals(
+                FragmentDecisionWeights.BodyCostWeights.DEFAULTS.m(),
+                FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT);
+    }
 
     private final List<ControlPlaneFragment> fragments = new ArrayList<>();
 
@@ -115,8 +125,57 @@ class ControlPlaneFragmentTest {
         try (ControlPlaneFragment fragment = create(workerConfig())) {
 
             assertTrue(fragment.isDrained());
-            assertEquals(0, fragment.resetForNextTrial(System.nanoTime()));
+            assertEquals(0, fragment.reset(System.nanoTime()));
         }
+    }
+
+    @Test
+    void productivityParkingDependsOnBodyCostAndSurplusWorkerEligibilityWithoutContention() {
+        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L));
+        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 300.0, true, 2L, 4, 3, 2L));
+        assertTrue(ControlPlaneFragment.productivityParkRequired(Long.MAX_VALUE, 1_000_000.0, true, 2L, 4, 3, 2L));
+
+        assertFalse(ControlPlaneFragment.productivityParkRequired(0L, 0.0, true, 2L, 4, 3, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, false, 2L, 4, 3, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 0L, 4, 3, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 1, 1, 0L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 0, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 2, 2L));
+        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 301.0, true, 2L, 4, 3, 2L));
+    }
+
+    @Test
+    void cachedWorkDrainsBeforeWithdrawalWithScarcityGateEnabled() throws Exception {
+        var base = workerConfig();
+        var config = new FragmentConfig(
+                base.cloneConfig(),
+                base.cacheConfig(),
+                base.decisionWeights(),
+                base.observer(),
+                base.maxBatchSize(),
+                new io.euhedral_execution.core.config.CacheTimingConfig(15000, 1000000, null, true),
+                base.benchmarkMode(),
+                base.metricPrefix(),
+                base.registry());
+        var fragment = create(config);
+        for (int i = 0; i < 7; i++) {
+            fragment.ingest(new io.euhedral_execution.core.flow_control.LatticeHotSource());
+        }
+        var received = new java.util.concurrent.CountDownLatch(1);
+        var receiver = Mockito.mock(io.euhedral_execution.core.generics.LatticeReceiver.class);
+        Mockito.doAnswer(call -> {
+                    received.countDown();
+                    return null;
+                })
+                .when(receiver)
+                .push(Mockito.any());
+        fragment.output().addDownstream(receiver);
+        fragment.push(io.euhedral_execution.core.frames.DummyFrame.INSTANCE);
+        assertEquals(1, fragment.getLocalCacheCount());
+        fragment.start();
+        assertTrue(received.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        // The exact frame already in the local cache reached the output on the owner thread.
+        Mockito.verify(receiver).push(io.euhedral_execution.core.frames.DummyFrame.INSTANCE);
     }
 
     @Test

@@ -6,6 +6,8 @@ module euhedral.core {
     requires micrometer.core;
     requires org.jspecify;
     requires org.slf4j;
+    requires com.fasterxml.jackson.databind;
+    requires it.unimi.dsi.fastutil;
 
     exports io.euhedral_execution.core.config;
     exports io.euhedral_execution.core.control_plane;

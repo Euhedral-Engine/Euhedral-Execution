@@ -1,0 +1,166 @@
+{
+  "schemaVersion": 1,
+  "id": "00-productivity-threshold-coarse-sweep-4core",
+  "name": "Productivity Threshold Coarse Sweep - 4 P-Cores",
+  "description": "Locates the coarse fixed-body-cost crossover where parking surplus workers becomes preferable to participation. Each workload has a threshold-zero control and a policy treatment with enough calibrated headroom to capture body-cost variance.",
+  "labels": {
+    "preset": "productivity-threshold-coarse-sweep",
+    "topology": "4-pcore"
+  },
+  "imports": [
+    {
+      "path": "../profiles/productivity-threshold.json",
+      "namespace": "threshold"
+    }
+  ],
+  "runOptions": {
+    "randomizeTrialOrder": true,
+    "randomSeed": 400384,
+    "failFast": true,
+    "repeatCount": 1
+  },
+  "artifacts": {
+    "outputDirectory": "experiments/00-productivity-threshold-coarse-sweep-4core",
+    "retainExpandedConfig": true,
+    "retainRawBenchmarkOutput": true,
+    "retainObserverData": true,
+    "retainPerForkResults": false,
+    "retainPerIterationResults": false
+  },
+  "trials": [
+    {
+      "id": "wu-000-policy-off",
+      "name": "Work 0 - Policy Off",
+      "group": "productivity-threshold-4core",
+      "description": "Fixed zero-work control with productivity parking disabled.",
+      "tags": ["coarse", "4core", "policy-off"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-000-off"
+    },
+    {
+      "id": "wu-000-policy-on",
+      "name": "Work 0 - Policy On at 128",
+      "group": "productivity-threshold-4core",
+      "description": "Fixed zero-work treatment with threshold 128, the prior full-capture dispatch-overhead envelope.",
+      "tags": ["coarse", "4core", "policy-on"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-000-on"
+    },
+    {
+      "id": "wu-048-policy-off",
+      "name": "Work 48 - Policy Off",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-off"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-048-off"
+    },
+    {
+      "id": "wu-048-policy-on",
+      "name": "Work 48 - Policy On at 144",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-on"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-048-on"
+    },
+    {
+      "id": "wu-096-policy-off",
+      "name": "Work 96 - Policy Off",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-off"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-096-off"
+    },
+    {
+      "id": "wu-096-policy-on",
+      "name": "Work 96 - Policy On at 192",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-on"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-096-on"
+    },
+    {
+      "id": "wu-144-policy-off",
+      "name": "Work 144 - Policy Off",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-off"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-144-off"
+    },
+    {
+      "id": "wu-144-policy-on",
+      "name": "Work 144 - Policy On at 240",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-on"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-144-on"
+    },
+    {
+      "id": "wu-216-policy-off",
+      "name": "Work 216 - Policy Off",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-off"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-216-off"
+    },
+    {
+      "id": "wu-216-policy-on",
+      "name": "Work 216 - Policy On at 320",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-on"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-216-on"
+    },
+    {
+      "id": "wu-288-policy-off",
+      "name": "Work 288 - Policy Off",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-off"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-288-off"
+    },
+    {
+      "id": "wu-288-policy-on",
+      "name": "Work 288 - Policy On at 384",
+      "group": "productivity-threshold-4core",
+      "tags": ["coarse", "4core", "policy-on"],
+      "enabled": true,
+      "forks": 5, "warmups": 2, "iterations": 7,
+      "warmupTime": "2s", "measurementTime": "2s",
+      "jvmArgs": ["-XX:+UseThreadPriorities", "--enable-native-access=ALL-UNNAMED"],
+      "calibrationProfile": "threshold.p4-wu-288-on"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "id": "forced-off",
+    "runs": [
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__0__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__0__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__2__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__2__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__4__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__4__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__6__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__6__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__8__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__8__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__10__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__10__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__12__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__12__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__14__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__14__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__16__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__16__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__18__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__18__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__20__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__20__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__22__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__22__sample_1_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "forced-on",
+    "runs": [
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__1__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__1__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__3__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__3__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__5__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__5__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__7__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__7__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__9__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__9__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__11__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__11__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__13__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__13__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__15__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__15__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__17__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__17__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__19__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__19__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__21__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__21__sample_1_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__23__sample_0_repeat_0",
+      "experiments/16-phase-2-productivity-body-source-deficit-portability/phase2-source-deficit-forced-base__phase2-source-deficit-forced-surface__23__sample_1_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/parallelSources",
+      "/calibrationConfig/workUnits",
+      "/origin/sampleIndex"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/16-phase-2-productivity-body-source-deficit-portability/comparisons/forced-on-vs-off"
+}

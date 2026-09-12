@@ -1,0 +1,46 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "policy-off",
+    "runs": [
+      "experiments/01-productivity-worker-scale-sweep/scaled-w04-s02_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w07-s03_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w11-s05_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w15-s07_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w19-s09_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/spread-w11-s05_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/spread-w15-s07_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/spread-w19-s09_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w22-s11_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/fixed11-w11-s11_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/fixed11-w15-s11_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/fixed11-w19-s11_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "policy-on",
+    "runs": [
+      "experiments/01-productivity-worker-scale-sweep/scaled-w04-s02__policy-on-w04-s02__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w07-s03__policy-on-w07-s03__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w11-s05__policy-on-w11-s05__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w15-s07__policy-on-w15-s07__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w19-s09__policy-on-w19-s09__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/spread-w11-s05__policy-on-spread-w11-s05__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/spread-w15-s07__policy-on-spread-w15-s07__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/spread-w19-s09__policy-on-spread-w19-s09__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/scaled-w22-s11__policy-on-w22-s11__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/fixed11-w11-s11__policy-on-fixed11-w11__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/fixed11-w15-s11__policy-on-fixed11-w15__0_repeat_0",
+      "experiments/01-productivity-worker-scale-sweep/fixed11-w19-s11__policy-on-fixed11-w19__0_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": ["/calibrationConfig/parallelSources", "/tags/2"],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/01-productivity-worker-scale-sweep/comparisons"
+}

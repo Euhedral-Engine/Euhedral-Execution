@@ -1,0 +1,26 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "label": "policy-off",
+    "runs": [
+      "experiments/02-productivity-lifecycle-2x2/reset-policy-off_repeat_0",
+      "experiments/02-productivity-lifecycle-2x2/continuous-policy-off_repeat_0"
+    ]
+  },
+  "candidates": {
+    "label": "policy-on",
+    "runs": [
+      "experiments/02-productivity-lifecycle-2x2/reset-policy-on_repeat_0",
+      "experiments/02-productivity-lifecycle-2x2/continuous-policy-on_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": ["/calibrationConfig/lifecycleMode"],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/02-productivity-lifecycle-2x2/comparisons"
+}

@@ -1,0 +1,86 @@
+{
+  "schemaVersion": 1,
+  "id": "cache-timing-mechanical-example",
+  "kind": "response_surface",
+  "dataset": {
+    "manifest": "../datasets/cache-timing-synthetic.json",
+    "adapter": "jmh_response_surface"
+  },
+  "features": [
+    {
+      "name": "workers",
+      "source": "fixture.resolvedWorkers",
+      "transform": "log"
+    },
+    {
+      "name": "sources",
+      "source": "fixture.parallelSources",
+      "transform": "log1p"
+    },
+    {
+      "name": "workUnits",
+      "source": "fixture.workUnits",
+      "transform": "log1p"
+    }
+  ],
+  "controls": [
+    {
+      "name": "parkNs",
+      "source": "treatment.parkNs",
+      "units": "ns",
+      "transform": "log1p",
+      "bounds": [
+        0,
+        1000000000
+      ],
+      "configPath": "/calibrationConfig/cacheParkNs"
+    },
+    {
+      "name": "halfLifeNs",
+      "source": "treatment.halfLifeNs",
+      "units": "ns",
+      "transform": "log",
+      "bounds": [
+        1,
+        1000000000
+      ],
+      "configPath": "/calibrationConfig/contentionHalfLifeNanos"
+    }
+  ],
+  "targets": [
+    {
+      "name": "throughput",
+      "source": "outcome.executionsPerSecond",
+      "transform": "log",
+      "missing": "mask"
+    }
+  ],
+  "objective": {
+    "adapter": "workload_normalized_throughput",
+    "direction": "maximize",
+    "decisionOutput": "throughput"
+  },
+  "validation": {
+    "outerFolds": 3,
+    "innerFolds": 2
+  },
+  "candidates": [
+    {
+      "id": "ridge",
+      "family": "ridge",
+      "grid": {
+        "alpha": [
+          0.1,
+          1.0
+        ]
+      }
+    }
+  ],
+  "export": {
+    "kind": "timing_table",
+    "outputNames": [
+      "parkNs",
+      "halfLifeNs"
+    ]
+  }
+}

@@ -43,3 +43,23 @@ gradlew.bat
 **/async-profiler*/
 **/.tool-versions
 **/.profileconfig.json
+benchmarks/experiments/*/
+/experiments/
+
+/.venv-cache-tuner/
+
+### Python tooling ###
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/*.egg-info/
+**/.coverage
+**/.coverage.*
+**/htmlcov/
+
+# SQLite transient sidecars; the canonical Python calibration .sqlite is tracked.
+*.sqlite-wal
+*.sqlite-shm
+
+# Generated editable-install metadata, not tuner source.
+*.egg-info/

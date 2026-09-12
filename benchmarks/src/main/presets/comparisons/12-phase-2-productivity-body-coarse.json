@@ -1,0 +1,61 @@
+{
+  "strategy": "KEYED",
+  "baseline": {
+    "id": "productivity-force-off",
+    "runs": [
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__0__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__0__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__2__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__2__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__4__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__4__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__6__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__6__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__8__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__8__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__10__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__10__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__12__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__12__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__14__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__14__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__16__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__16__sample_1_repeat_0"
+    ]
+  },
+  "candidates": {
+    "id": "productivity-force-on",
+    "runs": [
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__1__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__1__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__3__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__3__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__5__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__5__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__7__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__7__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__9__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__9__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__11__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__11__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__13__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__13__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__15__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__15__sample_1_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__17__sample_0_repeat_0",
+      "experiments/12-phase-2-productivity-body-coarse/phase2-productivity-body-base__phase2-productivity-body-coarse__17__sample_1_repeat_0"
+    ]
+  },
+  "key": {
+    "paths": [
+      "/calibrationConfig/workUnits",
+      "/origin/sampleIndex"
+    ],
+    "requireCompleteMatch": true
+  },
+  "options": {
+    "includeDiagnostics": true,
+    "failFast": true
+  },
+  "outputDirectory": "experiments/12-phase-2-productivity-body-coarse/comparisons"
+}

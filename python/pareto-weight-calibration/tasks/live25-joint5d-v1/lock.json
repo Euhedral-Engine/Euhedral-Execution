@@ -1,0 +1,14 @@
+{
+  "files": {
+    "park-phr-body-4d-ablation.json": "88db2bd0f1dcc40e382ba92ec34b0812c0e2a9faf557cace3e3fcc59ccd6ce9b",
+    "park-body.json": "d8c450ee8daee5736d207de12823a08b02bba46faf501b453592df361fd5fc0a",
+    "park-body-4d-ablation.json": "f3d147f48bd6a08ffa0af51a6f5ca0298205b15c7aedba409bc74a38093ba185",
+    "park-phr-body.json": "42d6244efc5356ce022e780d79ac09261c06a49b110d80ccd95d432f32208e8a",
+    "input_provenance.json": "ba073c5cc90be01511b4c55c72b0343fcf4e74db8156f8f05470b4a641828c47",
+    "inputs/anchor-7931.json": "6cee132c9e6941ad5260ee3b489825dc8426a67d450ab25376f76dc2c7267853",
+    "inputs/harness-template.json": "f6b09559c63a78695485065cbd01223f5b6c9d28d2585ed5c2a14bdc89832543",
+    "inputs/original-live-25.json": "1dd0529d29e3d1a332c2c49b92fa3489db0fb71ad384b1999f7c171c12082e10"
+  },
+  "archiveSha256": "42dc5cb78090553a3cb3a2cee1438e908589225257d23715b5ad06e90248b53c",
+  "coefficientSelection": "automatic seeded Sobol + fitted model/reliability-aware Pareto search only"
+}
