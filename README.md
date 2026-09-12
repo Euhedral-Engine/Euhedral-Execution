@@ -151,8 +151,11 @@ Euhedral uses Java 21 for the full repository and [mise](https://mise.jdx.dev/) 
 tools:
 
 ```bash
+mkdir -p ~/.local/share/mise/installs/macos-sdk
+curl --fail --location \
+  https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
+  | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
 mise install
-mise exec -- java -version
 gradle build
 ```
 
