@@ -98,6 +98,11 @@ zig version
 SDKROOT = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"
 RCODESIGN = "{{env.HOME}}/.local/share/mise/installs/apple-codesign/apple-codesign-0.29.0/rcodesign"
 ZIG = "{{env.HOME}}/.local/share/mise/installs/zig/0.16.0/zig"
-LLVM_READOBJ = "/usr/bin/llvm-readobj"
-LLVM_OBJDUMP = "/usr/bin/llvm-objdump"
 ```
+
+Native binary tests require LLVM inspection tools on PATH, on both x64 and ARM64
+build hosts. They accept `llvm-readobj` / `llvm-objdump` and version-suffixed names
+such as `llvm-readobj-18`. If LLVM is installed elsewhere, set `LLVM_READOBJ` and
+`LLVM_OBJDUMP` to absolute executable paths. Explicit overrides are validated and
+never silently replaced. Missing tools fail the tests with installation guidance;
+the architecture, imports, exports and runtime-floor checks are not skipped.
