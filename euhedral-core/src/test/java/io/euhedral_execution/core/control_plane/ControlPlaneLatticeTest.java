@@ -1,6 +1,7 @@
 package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -401,6 +402,62 @@ class ControlPlaneLatticeTest {
         TestFrame anywhereFrame = new TestFrame(555L);
         anywhereFrame.setRoutingPolicy(RoutingPolicy.ANYWHERE);
         controller.push(anywhereFrame);
+    }
+
+    @Test
+    void localityRoutingTracksPhysicalSocketAcrossSparseRemaps() {
+        SocketSnapshot[] snapshots =
+                new SocketSnapshot[effectiveSystemTopology.effectiveSockets().cardinality()];
+        controlPlane = createControlPlaneWithMocks(snapshots);
+        controlPlane.start();
+
+        LatticeVertex controller = controlPlane.ingestController.get();
+        LatticeEdge edge0 = mock(LatticeEdge.class);
+        LatticeEdge edge1 = mock(LatticeEdge.class);
+        controlPlane.shardHandles[0] = edge0;
+        controlPlane.shardHandles[1] = edge1;
+        BitSet activeSockets = BitSet.valueOf(new long[] {0b10});
+        controller.setDrain(true);
+        assertTrue(controller.setDownstreamMapping(activeSockets, controlPlane.shardHandles));
+        controller.setDrain(false);
+
+        for (RoutingPolicy policy : List.of(RoutingPolicy.SOCKET_LOCAL, RoutingPolicy.CACHE_LOCAL)) {
+            TestFrame localFrame = new TestFrame(100L);
+            localFrame.setRoutingPolicy(policy);
+            localFrame.setOrigin(new CpuInfo(4, 2, 1));
+            assertDoesNotThrow(() -> controller.push(localFrame));
+            verify(edge1).push(localFrame);
+
+            TestFrame inactiveOriginFrame = new TestFrame(100L);
+            inactiveOriginFrame.setRoutingPolicy(policy);
+            inactiveOriginFrame.setOrigin(new CpuInfo(0, 0, 0));
+            controller.push(inactiveOriginFrame);
+            verify(edge1).push(inactiveOriginFrame);
+
+            TestFrame unknownOriginFrame = new TestFrame(100L);
+            unknownOriginFrame.setRoutingPolicy(policy);
+            unknownOriginFrame.setOrigin(new CpuInfo(8, 4, 2));
+            controller.push(unknownOriginFrame);
+            verify(edge1).push(unknownOriginFrame);
+
+            TestFrame nullOriginFrame = new TestFrame(100L);
+            nullOriginFrame.setRoutingPolicy(policy);
+            controller.push(nullOriginFrame);
+            verify(edge1).push(nullOriginFrame);
+        }
+        verify(edge0, never()).push(any(AbstractFrame.class));
+
+        activeSockets.set(0);
+        controller.setDrain(true);
+        assertTrue(controller.setDownstreamMapping(activeSockets, controlPlane.shardHandles));
+        controller.setDrain(false);
+
+        TestFrame remappedFrame = new TestFrame(100L);
+        remappedFrame.setRoutingPolicy(RoutingPolicy.SOCKET_LOCAL);
+        remappedFrame.setOrigin(new CpuInfo(4, 2, 1));
+        controller.push(remappedFrame);
+        verify(edge1).push(remappedFrame);
+        verify(edge0, never()).push(remappedFrame);
     }
 
     @Test

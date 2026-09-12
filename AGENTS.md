@@ -148,9 +148,9 @@ mapping; ordering does not extend across independent sources or restore original
 parallel pipeline stages.
 
 `SOCKET_LOCAL` and `CACHE_LOCAL` depend on the captured frame origin. Missing or inactive origins
-fall back to hash routing. Test sparse active socket/core sets: the current locality callbacks
-return physical IDs where the vertex expects dense indexes, so those policies can misroute or fail.
-Do not assume locality is correct merely because contiguous-ID tests pass.
+fall back to hash routing. Locality callbacks translate physical IDs through the vertex's published
+reverse map before returning active routing indexes. Publish both mapping directions together
+while drained, and test sparse IDs, inactive origins, and remaps alongside normal hash routing.
 
 ### Completion and recycling
 

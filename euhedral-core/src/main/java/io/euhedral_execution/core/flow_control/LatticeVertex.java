@@ -18,6 +18,7 @@ import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.VarHandle;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -64,7 +65,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
     private final PaddedLongAdder cacheCount;
     private final ThreadLocal<CacheHead> cacheHead = new ThreadLocal<>();
 
-    protected RoutingState routingState = new RoutingState(new int[0]);
+    protected RoutingState routingState = new RoutingState(new int[0], new int[0]);
     private boolean closed = false;
     private final AtomicLong upstreamSequence = new AtomicLong();
 
@@ -144,8 +145,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         int mIdx = 0;
         int[] mappings = new int[active.cardinality()];
+        int[] activeIndexes = new int[this.downstreams.length];
+        Arrays.fill(activeIndexes, -1);
         for (int i = 0; i < this.downstreams.length; i++) {
             if (active.get(i)) {
+                activeIndexes[i] = mIdx;
                 mappings[mIdx++] = i;
                 handles[i].setParent(this);
                 this.downstreams[i] = handles[i];
@@ -159,7 +163,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
         }
 
-        ROUTING_STATE.setVolatile(this, new RoutingState(mappings));
+        // Publish both directions together; routing maps only change while this vertex is drained.
+        ROUTING_STATE.setVolatile(this, new RoutingState(mappings, activeIndexes));
 
         for (int i = 0; i < this.downstreams.length; i++) {
             if (!active.get(i) && this.downstreams[i] != null) {
@@ -168,6 +173,12 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             }
         }
         return true;
+    }
+
+    /// Returns the active routing index for a physical downstream ID, or -1 when it is inactive.
+    public final int getActiveDownstreamIndex(int downstreamId) {
+        RoutingState state = (RoutingState) ROUTING_STATE.getOpaque(this);
+        return downstreamId >= 0 && downstreamId < state.activeIndexes.length ? state.activeIndexes[downstreamId] : -1;
     }
 
     public void setDrain(boolean value) {
@@ -353,16 +364,19 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         /// @param frame   Frame to route
         /// @param mapSize Length of the map array.
+        /// @return Zero-based index in the active map, not a physical downstream ID.
         int route(AbstractFrame frame, int mapSize);
     }
 
     protected static final class RoutingState {
 
         public final int[] mappings;
+        public final int[] activeIndexes;
         public final int mask;
 
-        RoutingState(int[] mappings) {
+        RoutingState(int[] mappings, int[] activeIndexes) {
             this.mappings = mappings;
+            this.activeIndexes = activeIndexes;
             this.mask = mappings.length - 1;
         }
     }

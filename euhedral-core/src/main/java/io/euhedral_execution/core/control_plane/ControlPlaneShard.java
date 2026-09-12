@@ -123,10 +123,15 @@ public class ControlPlaneShard {
         CpuInfo location = frame.getOrigin();
         if (policy.level > RoutingPolicy.SOCKET_LOCAL.level && location != null) {
             int core = location.core();
-            LatticeEdge handle = (LatticeEdge) HANDLE.getOpaque(this.coreHandles, core);
+            LatticeEdge handle = core >= 0 && core < this.coreHandles.length
+                    ? (LatticeEdge) HANDLE.getOpaque(this.coreHandles, core)
+                    : null;
 
             if (handle != null) {
-                return core;
+                int index = this.coreDistributor.get().getActiveDownstreamIndex(core);
+                if (index >= 0) {
+                    return index;
+                }
             }
         }
 

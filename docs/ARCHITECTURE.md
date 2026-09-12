@@ -213,10 +213,10 @@ allows you to guide execution toward the hardware where the data was produced:
 | `SOCKET_LOCAL` | Confine execution to the frame origin's socket as long as that socket remains active |
 | `CACHE_LOCAL`  | Confine execution to the frame origin's core as long as that core remains active     |
 
-If an origin core or socket is missing or marked inactive, the engine gracefully falls back to hash
-routing. Note that current origin callbacks return physical hardware IDs, whereas vertices route
-across dense logical indices; in sparse core topologies, locality hints may experience boundary
-mismatches.
+If an origin core or socket is missing or marked inactive, the engine falls back to hash routing.
+Locality callbacks translate the physical origin ID into an active routing index using the vertex's
+reverse map. Forward and reverse mappings are published together while drained, so sparse physical
+IDs select the correct downstream and remaps remove inactive origins from locality selection.
 
 Frames built via `FrameFactory` automatically capture their origin at factory creation time. On
 operating systems without direct per-thread CPU query APIs, this falls back to the worker thread's

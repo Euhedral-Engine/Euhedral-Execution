@@ -243,9 +243,14 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy.level > RoutingPolicy.ANYWHERE.level && location != null) {
             int socket = location.socket();
-            LatticeEdge edge = (LatticeEdge) HANDLES.getAcquire(this.shardHandles, socket);
+            LatticeEdge edge = socket >= 0 && socket < this.shardHandles.length
+                    ? (LatticeEdge) HANDLES.getAcquire(this.shardHandles, socket)
+                    : null;
             if (edge != null) {
-                return socket;
+                int index = this.ingestController.get().getActiveDownstreamIndex(socket);
+                if (index >= 0) {
+                    return index;
+                }
             }
         }
 

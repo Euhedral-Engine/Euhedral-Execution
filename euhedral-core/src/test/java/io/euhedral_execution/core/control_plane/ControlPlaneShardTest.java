@@ -1,5 +1,6 @@
 package io.euhedral_execution.core.control_plane;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -7,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -309,6 +311,94 @@ class ControlPlaneShardTest {
         TestFrame socketLocalFrame = new TestFrame(333L);
         socketLocalFrame.setRoutingPolicy(RoutingPolicy.SOCKET_LOCAL);
         distributor.push(socketLocalFrame);
+    }
+
+    @Test
+    void cacheLocalRoutingReachesPhysicalCoreAcrossInactiveCoreGap() {
+        mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(2);
+        BitSet allCores = BitSet.valueOf(new long[] {0b111});
+        mockSysInfo.when(() -> SystemInfo.fromHexMask("7")).thenReturn(allCores);
+        mockSysInfo.when(() -> SystemInfo.getSocketInfo(0)).thenReturn(new SocketInfo("f", "7", 0));
+
+        BitSet activeCores = BitSet.valueOf(new long[] {0b101});
+        EffectiveSocketTopology topology = new EffectiveSocketTopology(
+                0,
+                0,
+                activeCores,
+                (BitSet) activeCores.clone(),
+                List.of(BitSet.valueOf(new long[] {0b001}), new BitSet(), BitSet.valueOf(new long[] {0b100})));
+        shard = new ControlPlaneShard(0, "TestShard", new RecordingClone(), Duration.ZERO);
+        shard.start(getSocketSnapshot(topology), topology, new LatticeEdge(new AtomicBoolean()));
+
+        LatticeEdge handle0 = mock(LatticeEdge.class);
+        LatticeEdge handle2 = mock(LatticeEdge.class);
+        shard.coreHandles[0] = handle0;
+        shard.coreHandles[2] = handle2;
+        assertEquals(3, shard.coreHandles.length);
+        assertNull(shard.coreHandles[1]);
+
+        LatticeVertex distributor = shard.coreDistributor.get();
+        distributor.setDrain(true);
+        assertTrue(distributor.setDownstreamMapping(activeCores, shard.coreHandles));
+        distributor.setDrain(false);
+
+        TestFrame frame = new TestFrame(200L);
+        frame.setRoutingPolicy(RoutingPolicy.CACHE_LOCAL);
+        frame.setOrigin(new CpuInfo(2, 2, 0));
+
+        assertDoesNotThrow(() -> distributor.push(frame), "Physical core 2 is active despite the gap at core 1");
+        verify(handle2).push(frame);
+        verify(handle0, never()).push(frame);
+
+        TestFrame parallelLocalFrame = new TestFrame(200L);
+        parallelLocalFrame.randomizeHash(17L);
+        parallelLocalFrame.setRoutingPolicy(RoutingPolicy.CACHE_LOCAL);
+        parallelLocalFrame.setOrigin(new CpuInfo(2, 2, 0));
+        distributor.push(parallelLocalFrame);
+        verify(handle2).push(parallelLocalFrame);
+        verify(handle0, never()).push(parallelLocalFrame);
+
+        TestFrame lowHashFrame = new TestFrame(0L);
+        TestFrame highHashFrame = new TestFrame(-1L);
+        distributor.push(lowHashFrame);
+        distributor.push(highHashFrame);
+        verify(handle0).push(lowHashFrame);
+        verify(handle2).push(highHashFrame);
+
+        // Core 1 is a valid compact index too, but must still select physical core 1, not core 2.
+        LatticeEdge handle1 = mock(LatticeEdge.class);
+        shard.coreHandles[1] = handle1;
+        activeCores.clear(0);
+        activeCores.set(1);
+        distributor.setDrain(true);
+        assertTrue(distributor.setDownstreamMapping(activeCores, shard.coreHandles));
+        distributor.setDrain(false);
+
+        TestFrame remappedFrame = new TestFrame(200L);
+        remappedFrame.setRoutingPolicy(RoutingPolicy.CACHE_LOCAL);
+        remappedFrame.setOrigin(new CpuInfo(1, 1, 0));
+        distributor.push(remappedFrame);
+        verify(handle1).push(remappedFrame);
+        verify(handle2, never()).push(remappedFrame);
+
+        // A retained handle reference must not keep an inactive origin eligible for locality.
+        activeCores.clear(1);
+        distributor.setDrain(true);
+        assertTrue(distributor.setDownstreamMapping(activeCores, shard.coreHandles));
+        distributor.setDrain(false);
+
+        TestFrame inactiveOriginFrame = new TestFrame(200L);
+        inactiveOriginFrame.setRoutingPolicy(RoutingPolicy.CACHE_LOCAL);
+        inactiveOriginFrame.setOrigin(new CpuInfo(1, 1, 0));
+        distributor.push(inactiveOriginFrame);
+        verify(handle2).push(inactiveOriginFrame);
+        verify(handle1, never()).push(inactiveOriginFrame);
+
+        TestFrame unknownOriginFrame = new TestFrame(200L);
+        unknownOriginFrame.setRoutingPolicy(RoutingPolicy.CACHE_LOCAL);
+        unknownOriginFrame.setOrigin(new CpuInfo(3, 3, 0));
+        distributor.push(unknownOriginFrame);
+        verify(handle2).push(unknownOriginFrame);
     }
 
     @Test
