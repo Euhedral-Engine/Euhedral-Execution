@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+set -efu
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+CFD_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
+
+if [ -n "${JAVA_HOME:-}" ]; then
+  JAVA_COMMAND="$JAVA_HOME/bin/java"
+else
+  JAVA_COMMAND=java
+fi
+
+exec "$JAVA_COMMAND" \
+  ${JAVA_OPTS:-} \
+  -cp "$CFD_DIR/euhedral-cfd.jar:$CFD_DIR/lib/*" \
+  io.euhedral_execution.benchmarks.cfd.CfdMain "$@"

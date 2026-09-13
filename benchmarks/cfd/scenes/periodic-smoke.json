@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 12,
+    "ny": 10,
+    "nz": 8
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1,
+      "initialVelocity": {
+        "x": 0.01,
+        "y": 0.0,
+        "z": 0.0
+      }
+    },
+    "referenceLength": 10.0
+  },
+  "execution": {
+    "steps": 20
+  },
+  "output": {
+    "directory": "../build/runs/periodic-smoke"
+  },
+  "memoryLimitBytes": 16777216
+}
