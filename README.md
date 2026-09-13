@@ -189,6 +189,6 @@ reference points and use the included JMH workloads to evaluate your own target 
 ## Project status
 
 The Core runtime is stable and benchmarked, while the public APIs and integrations are still
-evolving. Current work is focused on real-world workload coverage and integration examples.
+evolving. Current work is focused on real-world workload coverage and integration examples (CFD).
 
 Euhedral Execution is licensed under the [Apache License 2.0](./LICENSE).
