@@ -3,7 +3,7 @@ package io.euhedral_execution.benchmarks.cfd.solver;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
-import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.benchmarks.cfd.support.CfdTestRuntime;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import java.nio.file.Path;
@@ -26,7 +26,7 @@ class QueuedSimulationIntegrationTest {
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
     void queuedWorkMustFinishBeforePublicationAndCanExpireWhileWaiting(boolean expire) throws Exception {
-        var lattice = ControlPlaneLattice.getOrCreate();
+        var lattice = CfdTestRuntime.singleWorker();
         var blockers = new QueueIngestSink();
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -37,6 +37,7 @@ class QueuedSimulationIntegrationTest {
         Thread driver = null;
         try {
             lattice.addUpstream(blockers);
+            assertEquals(1, lattice.getActiveWorkers());
             assertTrue(blockers.offer(new AbstractFrame(1) {
                 @Override
                 public void execute() {

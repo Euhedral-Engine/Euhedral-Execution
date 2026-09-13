@@ -80,6 +80,16 @@ public final class BaseCloneableObject implements CloneableObject {
         return this.executor == null || this.executor.isStarted();
     }
 
+    /// Ingest must wait for owner-thread registration, which can complete after start() returns.
+    /// The fragment's volatile readiness publication makes registration visible to the lattice.
+    @Override
+    public boolean ready() {
+        if (this.fragment != null && !this.fragment.ready()) {
+            return false;
+        }
+        return this.executor == null || this.executor.ready();
+    }
+
     @Override
     public void update(CoreSnapshot snapshot) {
         if (this.fragment != null) {

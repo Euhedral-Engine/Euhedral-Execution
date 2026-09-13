@@ -3,18 +3,20 @@ package io.euhedral_execution.benchmarks.cfd.frames;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import io.euhedral_execution.benchmarks.cfd.support.CfdTestRuntime;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.LockSupport;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("integration")
 @Isolated
@@ -23,24 +25,26 @@ class CfdRoutingIntegrationTest {
     private ControlPlaneLattice lattice;
     private QueueIngestSink sink;
 
-    @BeforeEach
-    void startRuntime() {
-        lattice = ControlPlaneLattice.getOrCreate();
+    void startRuntime(boolean singleWorker) {
+        lattice = singleWorker ? CfdTestRuntime.singleWorker() : ControlPlaneLattice.getOrCreate();
         sink = new QueueIngestSink();
         lattice.addUpstream(sink);
+        if (singleWorker) assertEquals(1, lattice.getActiveWorkers());
     }
 
     @AfterEach
     void closeRuntime() {
         try {
-            sink.complete();
+            if (sink != null) sink.complete();
         } finally {
-            lattice.close();
+            if (lattice != null) lattice.close();
         }
     }
 
-    @Test
-    void identicalOrderedIdsExecuteInInsertionOrderOnOneWorker() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    void identicalOrderedIdsExecuteInInsertionOrderOnOneWorker(boolean singleWorker) {
+        startRuntime(singleWorker);
         int[] cursor = {0};
         int[] observed = new int[256];
         long[] threads = new long[256];
@@ -65,6 +69,7 @@ class CfdRoutingIntegrationTest {
 
     @Test
     void mixedHashesAllowProgressWhileAnotherFrameIsExecuting() throws Exception {
+        startRuntime(false);
         assumeTrue(lattice.getActiveWorkers() >= 2, "requires two active physical-core workers");
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
@@ -73,7 +78,9 @@ class CfdRoutingIntegrationTest {
             entered.countDown();
             awaitLatch(release);
         });
-        blocked.randomizeHash(123);
+        /// Route the blocker before executing it. A direct pull can hold the shared source handle
+        /// throughout execution, which would prevent other workers from ingesting the followers.
+        assertTrue(blocked.isOrdered());
         var followers = new RecordingFrame[64];
         try {
             assertTrue(sink.offer(blocked));

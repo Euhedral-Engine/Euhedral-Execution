@@ -92,6 +92,10 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private volatile Thread mainThread;
 
+    /// Published after owner-local initialization. A successful ready() read acquires the policy,
+    /// calibrated thresholds, and upstream queue without making their hot-path accesses volatile.
+    private volatile boolean initialized;
+
     public ControlPlaneFragment(@NonNull FragmentConfig config) {
         super(config.cacheConfig());
         this.config = config;
@@ -183,7 +187,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public boolean ready() {
-        return this.running.getAcquire() && this.mainThread != null;
+        return this.running.getAcquire() && this.initialized;
     }
 
     @Override
@@ -223,6 +227,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 try {
                     cycle();
                 } finally {
+                    this.initialized = false;
                     try {
                         super.removeThread();
                     } finally {
@@ -243,6 +248,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             if (this.observeContentionStaleness) {
                 this.upstreamQueue.setAcquireDiagnosticsEnabled(true);
             }
+            this.initialized = true;
             while (keepRunning()) {
                 this.state.cycleEpoch++;
                 serviceResetRequest();

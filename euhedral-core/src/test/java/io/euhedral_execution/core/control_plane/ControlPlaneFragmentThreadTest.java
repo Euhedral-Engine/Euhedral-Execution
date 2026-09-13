@@ -2,6 +2,7 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -53,12 +54,54 @@ import java.util.function.IntUnaryOperator;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
 @Isolated
 class ControlPlaneFragmentThreadTest {
 
     private static final Duration TIMEOUT = Duration.ofSeconds(2);
+
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void readinessWaitsForPolicyAndQueueInitialization(boolean pauseQueueInitialization) throws Exception {
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        var observer = Mockito.spy(createRecordingObserver());
+        var config = Mockito.spy(FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT)
+                .clone(cloneConfig()));
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
+        org.mockito.stubbing.Answer<Object> pauseInitialization = invocation -> {
+            entered.countDown();
+            if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("initialization gate timed out");
+            return invocation.callRealMethod();
+        };
+        if (pauseQueueInitialization) {
+            Mockito.doAnswer(pauseInitialization).when(observer).pullBucketTarget();
+        } else {
+            Mockito.doAnswer(pauseInitialization).when(config).decisionWeights();
+        }
+        try {
+            assertFalse(fragment.ready());
+            fragment.start();
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            assertTrue(fragment.isStarted());
+            assertFalse(fragment.ready(), "thread registration must not publish incomplete worker state");
+            release.countDown();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            for (String fieldName : new String[] {"controlPolicy", "upstreamQueue"}) {
+                Field field = ControlPlaneFragment.class.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                assertNotNull(field.get(fragment), fieldName + " must be visible after readiness");
+            }
+        } finally {
+            release.countDown();
+            fragment.close();
+            PinnedThreadExecutor.closeAll();
+        }
+        assertFalse(fragment.ready(), "a closed worker must withdraw readiness");
+    }
 
     @Test
     void latticeFactoryPropagatesIndependentTimingToStartedTrees() throws Exception {

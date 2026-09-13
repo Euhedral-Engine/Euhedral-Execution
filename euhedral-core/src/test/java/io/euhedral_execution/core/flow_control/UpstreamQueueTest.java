@@ -185,6 +185,104 @@ class UpstreamQueueTest {
         assertEquals(64, upstream.pulled);
     }
 
+    @Test
+    void orderedSourceMustProgressWhenDirectPullAndRequestAlternateWithAnIdleSource() {
+        QueueFixture ready = queueFixture();
+        QueueFixture idle = queueFixture();
+        TestReceiver receiver = new TestReceiver();
+        ready.vertex.downstreams[0].addDownstream(receiver);
+        handles.offer(ready.handle);
+        handles.offer(idle.handle);
+        count.setRelease(2L);
+        TestFrame frame = new TestFrame("ordered");
+        ready.sink.offer(frame);
+
+        /// A single DIRECT worker pulls first, then requests routed work when no frame was pulled.
+        for (int cycle = 0; cycle < 4 && receiver.received.isEmpty(); cycle++) {
+            assertEquals(
+                    0L,
+                    queue.pull(
+                            ignored -> {
+                                throw new AssertionError("ordered work must use the request-and-route path");
+                            },
+                            AbstractFrame::isOrdered,
+                            1L));
+            queue.request(1L);
+        }
+
+        assertEquals(java.util.List.of(frame), receiver.received);
+        assertEquals(0L, ready.sink.size());
+        assertEquals(2L, handles.sizeLong(), "prioritizing a request must not duplicate or lose handles");
+    }
+
+    @Test
+    void stoppedSourceRequestHonorsDemandAndSharedHandleAcquisition() {
+        QueueFixture ready = queueFixture();
+        TestUpstreamHandle idle = addHandle();
+        handles.offer(ready.handle);
+        count.incrementAndGet();
+        ready.sink.offer(new TestFrame("first"));
+        ready.sink.offer(new TestFrame("second"));
+        /// Skip the idle handle to stop on the ordered source.
+        queue.pull(ignored -> {}, AbstractFrame::isOrdered, 1L);
+        queue.pull(ignored -> {}, AbstractFrame::isOrdered, 1L);
+        queue.request(0L);
+        queue.request(-1L);
+        assertEquals(2L, ready.sink.size());
+
+        assertTrue(ready.handle.acquireLock());
+        try {
+            queue.request(1L);
+            assertEquals(2L, ready.sink.size(), "another owner still holds the source");
+            assertEquals(1L, idle.requested, "a contended hint must allow another source to progress");
+            assertEquals(2L, handles.sizeLong());
+        } finally {
+            ready.handle.releaseLock();
+        }
+
+        queue.pull(ignored -> {}, AbstractFrame::isOrdered, 1L);
+        queue.request(1L);
+        assertEquals(1L, ready.sink.size(), "the preferred request must obey its demand bound");
+        assertEquals(2L, handles.sizeLong());
+    }
+
+    @Test
+    void completedStoppedSourceDoesNotPreventAnotherSourceFromReceivingDemand() {
+        QueueFixture ready = queueFixture();
+        handles.offer(ready.handle);
+        count.incrementAndGet();
+        TestUpstreamHandle live = addHandle();
+        ready.sink.offer(new TestFrame("ordered"));
+        queue.pull(ignored -> {}, AbstractFrame::isOrdered, 1L);
+        ready.sink.complete();
+        count.decrementAndGet();
+
+        queue.request(1L);
+
+        assertEquals(1L, live.requested);
+        assertEquals(1L, queue.getProductiveHandleCount());
+        assertEquals(1L, handles.sizeLong());
+    }
+
+    @Test
+    void trialResetDiscardsTheStoppedSourcePreference() {
+        QueueFixture ready = queueFixture();
+        TestUpstreamHandle first = addHandle();
+        first.id = Long.MIN_VALUE;
+        handles.offer(ready.handle);
+        count.incrementAndGet();
+        ready.sink.offer(new TestFrame("ordered"));
+        queue.pull(ignored -> {}, AbstractFrame::isOrdered, 1L);
+        queue.pull(ignored -> {}, AbstractFrame::isOrdered, 1L);
+
+        queue.resetForNextTrial();
+        queue.request(1L);
+
+        assertEquals(1L, first.requested, "reset must restore registration order without a stale hint");
+        assertEquals(1L, ready.sink.size());
+        assertEquals(2L, handles.sizeLong());
+    }
+
     /// Verifies a transient acquisition failure retains the live handle for a later pull.
     @Test
     void shouldRetainLiveHandleAfterFailedAcquisition() {
@@ -644,7 +742,7 @@ class UpstreamQueueTest {
         handle.upstream = sink.getDelegate();
         sink.getDelegate().addDownstream(handle);
         PaddedAtomicLong count = new PaddedAtomicLong(1L);
-        return new QueueFixture(sink, handle, queueWith(handle, count));
+        return new QueueFixture(sink, vertex, handle, queueWith(handle, count));
     }
 
     private static CachedQueueFixture cachedQueueFixture() {
@@ -664,7 +762,11 @@ class UpstreamQueueTest {
         return new CachedQueueFixture(sink, vertex, queueWith(handle, count));
     }
 
-    private record QueueFixture(QueueIngestSink sink, LatticeVertex.UpstreamInterceptor handle, UpstreamQueue queue) {}
+    private record QueueFixture(
+            QueueIngestSink sink,
+            LatticeVertex vertex,
+            LatticeVertex.UpstreamInterceptor handle,
+            UpstreamQueue queue) {}
 
     private record CachedQueueFixture(QueueIngestSink sink, LatticeVertex vertex, UpstreamQueue queue) {}
 

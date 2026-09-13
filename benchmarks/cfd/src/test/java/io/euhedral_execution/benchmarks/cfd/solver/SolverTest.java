@@ -9,6 +9,7 @@ import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig;
 import io.euhedral_execution.benchmarks.cfd.config.Vector3;
 import io.euhedral_execution.benchmarks.cfd.frames.CfdFrame;
 import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
+import io.euhedral_execution.benchmarks.cfd.support.CfdTestRuntime;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ class SolverTest {
 
     @BeforeAll
     static void startRuntime() {
-        lattice = ControlPlaneLattice.getOrCreate();
+        lattice = CfdTestRuntime.singleWorker();
     }
 
     @AfterAll

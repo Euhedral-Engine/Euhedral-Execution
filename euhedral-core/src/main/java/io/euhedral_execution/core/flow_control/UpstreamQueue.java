@@ -89,6 +89,10 @@ public class UpstreamQueue {
     private long seed = ThreadLocalRandom.current().nextLong();
     private int bufferIndex = 0;
 
+    /// Owner-local hint only: the handle remains in the queue and still requires acquisition.
+    /// A stopped direct pull must get a routed request instead of alternating past the same source.
+    private UpstreamHandle pendingRequest;
+
     public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.core = core;
         this.upstreams = upstreams;
@@ -245,6 +249,7 @@ public class UpstreamQueue {
     /// Restores owner-local scheduler and handle order at a drained benchmark boundary.
     public void resetForNextTrial() {
         resetAcquireContention();
+        this.pendingRequest = null;
         fillQueue();
         long queued = this.upstreams.sizeLong();
         if (queued > Integer.MAX_VALUE) {
@@ -320,7 +325,14 @@ public class UpstreamQueue {
         int cycles = 0;
         // Cycle through the queue and pull round-robin style.
         while (cycles < this.cachedUpCount && limit > 0) {
-            UpstreamHandle handle = this.upstreams.poll();
+            boolean preferredRequest = consumer == null && this.pendingRequest != null;
+            UpstreamHandle handle;
+            if (preferredRequest) {
+                handle = this.pendingRequest;
+                this.pendingRequest = null;
+            } else {
+                handle = this.upstreams.poll();
+            }
 
             if (handle == null && this.bufferIndex > 0) {
                 fillQueue();
@@ -332,7 +344,9 @@ public class UpstreamQueue {
                 continue;
             }
             if (handle.isComplete()) {
-                observeRemoval(handle);
+                if (!preferredRequest) {
+                    observeRemoval(handle);
+                }
                 continue;
             }
 
@@ -341,7 +355,9 @@ public class UpstreamQueue {
             if (!handle.acquireLock()) {
                 failedAcquires++;
                 recordPullConvoy(handle, -1, demand, Math.min(limit, bucketSize), 0L, false, 0L);
-                bufferHandle(handle);
+                if (!preferredRequest) {
+                    bufferHandle(handle);
+                }
                 cycles++;
                 continue;
             }
@@ -355,6 +371,9 @@ public class UpstreamQueue {
                 limit -= request;
 
                 long drainCount = drain(handle, consumer, stopCondition, request);
+                if (consumer != null && handle.wasPullStopped()) {
+                    this.pendingRequest = handle;
+                }
                 producedFrameCount = consumer != null
                         ? drainCount
                         : context == null ? 0L : Math.max(0L, context.satisfiedRequest - requestBefore);
@@ -386,7 +405,9 @@ public class UpstreamQueue {
                 long holdDurationNs =
                         this.pullConvoyObserver == null ? 0L : Math.max(0L, System.nanoTime() - holdStartNs);
                 recordPullConvoy(handle, this.core, demand, request, producedFrameCount, true, holdDurationNs);
-                bufferHandle(handle);
+                if (!preferredRequest) {
+                    bufferHandle(handle);
+                }
             }
             cycles = 0;
         }
@@ -522,6 +543,9 @@ public class UpstreamQueue {
     }
 
     private void observeRemoval(UpstreamHandle handle) {
+        if (this.pendingRequest == handle) {
+            this.pendingRequest = null;
+        }
         if (!handle.isProductive() && this.nonproductiveCount > 0L) {
             this.nonproductiveCount--;
         }
@@ -566,6 +590,11 @@ public class UpstreamQueue {
         }
 
         public void releaseLock() {}
+
+        /// Whether this worker's last acquired pull encountered its stop condition.
+        public boolean wasPullStopped() {
+            return false;
+        }
 
         /// Returns this worker's last observation of whether the handle produced useful work.
         public boolean isProductive() {
