@@ -1,5 +1,8 @@
 # Phase 01 - Module and configuration
 
+Status: implemented. The concrete schema and defaults are documented
+in [CONFIGURATION.md](CONFIGURATION.md).
+
 Dependencies: none. Related components: [system overview](README.md), [repository integration](REPOSITORY_MAP.md), [numerical model](NUMERICS.md).
 
 ## Feature
@@ -25,6 +28,6 @@ Coverage includes overflow, Java array limits, unknown JSON fields, deterministi
 ## Build and interface
 
 ```bash
-mise exec -- gradle :benchmarks:cfd:test :benchmarks:cfd:spotlessCheck :benchmarks:cfd:installDist
-benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd inspect --config benchmarks/cfd/scenes/periodic-smoke.json
+mise exec -- gradle :benchmarks:cfd:build
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd inspect --config benchmarks/cfd/scenes/periodic-smoke.json
 ```

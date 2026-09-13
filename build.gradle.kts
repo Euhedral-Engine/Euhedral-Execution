@@ -6,7 +6,7 @@ jacoco {
     toolVersion = "0.8.12"
 }
 
-val reportSubprojects = subprojects.filter { it.name != "benchmarks" }
+val reportSubprojects = subprojects.filter { !it.path.startsWith(":benchmarks") }
 
 tasks.register<JacocoReport>("jacocoReport") {
     group = "verification"

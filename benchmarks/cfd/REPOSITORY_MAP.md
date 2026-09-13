@@ -1,18 +1,26 @@
 # Repository integration map
 
-The existing integration points below describe `Euhedral-Engine/Euhedral-Execution` at commit `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`. Paths are relative to the repository root. CFD component names describe the planned application.
+The runtime integration points below were surveyed at commit
+`3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
+Paths are relative to the repository root. Phase 01 build and configuration components are
+implemented;
+solver and runtime adapter components remain planned.
 
 ## Build and packaging
 
-| Component | Role |
-| --- | --- |
-| `settings.gradle.kts` | Project registration, including the planned `:benchmarks:cfd` subproject |
-| `build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts` | Java 21, Spotless/Palantir formatting, JUnit, and integration-test tagging |
-| `benchmarks/build.gradle.kts` | Existing examples of JMH processing, catalog aliases, logging resources, and distribution packaging |
-| `benchmarks/cfd/build.gradle.kts` | Planned standalone `euhedral-cfd` application distribution |
-| `mise.toml` | Repository Java, Gradle, and native-build toolchain |
+| Component                                                            | Role                                                                                                |
+|----------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
+| `settings.gradle.kts`                                                | Project registration, including the `:benchmarks:cfd` subproject                                    |
+| `build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts` | Java 21, Spotless/Palantir formatting, JUnit, and integration-test tagging                          |
+| `benchmarks/build.gradle.kts`                                        | Existing examples of JMH processing, catalog aliases, logging resources, and distribution packaging |
+| `benchmarks/cfd/build.gradle.kts`                                    | Standalone `euhedral-cfd` application distribution                                                  |
+| `benchmarks/cfd/src/main/scripts/euhedral-cfd`                       | Launcher automatically copied to `benchmarks/cfd/build/bin` by assemble/build                       |
+| `mise.toml`                                                          | Repository Java, Gradle, and native-build toolchain                                                 |
 
-CFD uses project dependencies on the runtime libraries and its own application entry point. Its packages separate numerical computation from execution adapters, reference-solver integration, and reporting. Publication tasks are disabled for the benchmark application.
+CFD has its own application entry point and currently depends only on Jackson for configuration.
+Runtime project dependencies are added with the execution adapters, keeping Phase 01 inspection
+independent of native packaging and worker startup. Publication tasks are disabled for the benchmark
+application, and the root coverage aggregate excludes the entire benchmarks subtree.
 
 ## Existing numerical workload
 
