@@ -1,0 +1,150 @@
+package io.euhedral_execution.benchmarks.cfd.solver;
+
+import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
+import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig.FaceCondition;
+import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.ingest.QueueIngestSink;
+import java.util.Objects;
+import java.util.concurrent.locks.LockSupport;
+import java.util.function.LongSupplier;
+
+/// Owns setup and generation boundaries; the reusable range frame owns parallelizable work.
+public final class SerialSimulation implements AutoCloseable {
+    private final CfdConfiguration configuration;
+    private final SimulationState state;
+    private final QueueIngestSink sink = new QueueIngestSink();
+    private final CfdRangeFrame rangeFrame;
+    private final LongSupplier clock;
+    private boolean failed;
+    private boolean closed;
+
+    /// The caller owns the lattice and closes it after all simulations using it have closed.
+    public SerialSimulation(CfdConfiguration configuration, ControlPlaneLattice lattice) {
+        this(configuration, lattice, System::nanoTime);
+    }
+
+    SerialSimulation(CfdConfiguration configuration, ControlPlaneLattice lattice, LongSupplier clock) {
+        requireSupported(configuration);
+        this.configuration = configuration;
+        this.clock = Objects.requireNonNull(clock);
+        state = new SimulationState(
+                new PopulationGrid(configuration), configuration.physics().densityReference());
+        initialize();
+        rangeFrame = new CfdRangeFrame(1, null);
+        Objects.requireNonNull(lattice).addUpstream(sink);
+    }
+
+    public static void requireSupported(CfdConfiguration configuration) {
+        var faces = configuration.config().geometry().faces();
+        if (faces.xMin() != FaceCondition.PERIODIC
+                || faces.xMax() != FaceCondition.PERIODIC
+                || faces.yMin() != FaceCondition.PERIODIC
+                || faces.yMax() != FaceCondition.PERIODIC
+                || faces.zMin() != FaceCondition.PERIODIC
+                || faces.zMax() != FaceCondition.PERIODIC)
+            throw new IllegalArgumentException("serial simulation currently requires all six faces to be PERIODIC");
+        var inputs = configuration.config().physics();
+        var inputAcceleration = inputs.physical() == null
+                ? inputs.lattice().acceleration()
+                : inputs.physical().acceleration();
+        if (configuration.physics().acceleration().magnitude() != 0 || inputAcceleration.magnitude() != 0)
+            throw new IllegalArgumentException("serial simulation currently requires zero acceleration");
+        if (configuration.config().output().exportEverySteps() != 0)
+            throw new IllegalArgumentException("field export is not implemented; exportEverySteps must be 0");
+    }
+
+    public SimulationState state() {
+        return state;
+    }
+
+    public SimulationState run() {
+        while (state.completedSteps() < configuration.steps()) step();
+        return state;
+    }
+
+    public void step() {
+        if (closed) throw new IllegalStateException("simulation is closed");
+        if (failed) throw new IllegalStateException("simulation has failed; last completed state remains available");
+        if (state.completedSteps() >= configuration.steps())
+            throw new IllegalStateException("configured duration completed");
+        var context = new StepContext(
+                state.shape(),
+                state.current(),
+                state.next(),
+                1 / configuration.physics().tau(),
+                Math.addExact(state.completedSteps(), 1),
+                clock.getAsLong(),
+                configuration.config().execution().stepDeadlineMillis() * 1_000_000,
+                clock);
+        try {
+            rangeFrame.replace(
+                    context,
+                    0,
+                    state.shape().nx(),
+                    0,
+                    state.shape().ny(),
+                    0,
+                    state.shape().nz());
+            /// The unchanged identity/routing hash keeps all work from this sink on one FIFO lane.
+            /// Parallel range dispatch uses randomizeHash(seed) before offering each frame.
+            context.checkProgress(0, 0, 0);
+            while (!sink.offer(rangeFrame)) {
+                context.checkProgress(0, 0, 0);
+                LockSupport.parkNanos(10_000);
+            }
+            while (!rangeFrame.isDone()) {
+                context.checkProgress(0, 0, 0);
+                LockSupport.parkNanos(10_000);
+            }
+            rangeFrame.requireSuccess();
+            var diagnostics = FieldExtractor.summarize(
+                    context.next(), state.shape(), configuration.physics().densityReference(), context.step(), context);
+            context.checkProgress(0, 0, 0);
+            state.complete(diagnostics);
+        } catch (RuntimeException e) {
+            failed = true;
+            rangeFrame.kill();
+            throw e;
+        }
+    }
+
+    /// Stops this source. The runtime owner closes the lattice to quiesce outstanding workers.
+    @Override
+    public void close() {
+        if (closed) return;
+        closed = true;
+        rangeFrame.kill();
+        sink.complete();
+    }
+
+    private void initialize() {
+        var physics = configuration.physics();
+        var shape = state.shape();
+        var shear = physics.shear();
+        double[][] populations = state.current();
+        for (int z = 0; z < shape.nz(); z++) {
+            for (int y = 0; y < shape.ny(); y++) {
+                double ux = shear == null
+                        ? physics.initialVelocity().x()
+                        : shear.amplitude()
+                                * Math.sin(2 * Math.PI * shear.modeY() * y / shape.ny())
+                                * Math.cos(2 * Math.PI * shear.modeZ() * z / shape.nz());
+                for (int x = 0; x < shape.nx(); x++) {
+                    if (x % 256 == 0 && Thread.currentThread().isInterrupted())
+                        throw new SimulationException(0, x, y, z, "interrupted during initialization");
+                    int index = x + shape.nx() * (y + shape.ny() * z);
+                    for (int i = 0; i < D3Q19.Q; i++) {
+                        populations[i][index] = D3Q19.equilibrium(
+                                i,
+                                physics.densityReference(),
+                                ux,
+                                physics.initialVelocity().y(),
+                                physics.initialVelocity().z());
+                    }
+                }
+            }
+        }
+        state.initialized(FieldExtractor.summarize(populations, shape, physics.densityReference(), 0, null));
+    }
+}

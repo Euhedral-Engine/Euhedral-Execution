@@ -517,6 +517,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             return observation().productive;
         }
 
+        @Override
+        public boolean wasPullStopped() {
+            return observation().stopped;
+        }
+
         /// Sets only the calling worker's deliberately stale observation.
         @Override
         public void setProductivity(boolean productive) {

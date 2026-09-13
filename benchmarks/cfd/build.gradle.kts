@@ -49,7 +49,9 @@ tasks.named("assemble") {
 }
 
 dependencies {
+    implementation(project(":euhedral-core"))
     implementation(libs.com.fasterxml.jackson.core.jackson.databind)
+    runtimeOnly(libs.org.slf4j.slf4j.simple)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
 }
 

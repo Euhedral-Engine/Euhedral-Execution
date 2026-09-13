@@ -33,7 +33,8 @@ public record CfdConfiguration(
             double voxelWidth,
             double timeStep,
             double densityScale,
-            boolean physicalUnits) {
+            boolean physicalUnits,
+            SimulationConfig.Shear shear) {
         public CfdPhysics {
             Checks.positive(densityReference, "resolved densityReference");
             Checks.positive(viscosity, "resolved viscosity");

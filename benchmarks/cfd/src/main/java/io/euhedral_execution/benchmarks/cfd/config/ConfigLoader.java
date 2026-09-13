@@ -123,10 +123,17 @@ public final class ConfigLoader {
         }
         double tau = Checks.finite(0.5 + 3 * viscosity, "resolved tau");
         Checks.require(tau > 0.5, "resolved tau must be greater than 0.5");
-        double mach = Checks.finite(velocity.magnitude() * Math.sqrt(3), "initial Mach");
+        SimulationConfig.Shear shear = config.shear() == null
+                ? null
+                : new SimulationConfig.Shear(
+                        config.shear().amplitude() * (dt / dx),
+                        config.shear().modeY(),
+                        config.shear().modeZ());
+        double referenceSpeed = shear == null ? velocity.magnitude() : shear.amplitude();
+        double mach = Checks.finite(referenceSpeed * Math.sqrt(3), "initial Mach");
         Double reynolds = config.referenceLength() == null
                 ? null
-                : Checks.finite(velocity.magnitude() * referenceLength / viscosity, "Reynolds number");
+                : Checks.finite(referenceSpeed * referenceLength / viscosity, "Reynolds number");
         return new CfdPhysics(
                 config.densityReference(),
                 viscosity,
@@ -138,6 +145,7 @@ public final class ConfigLoader {
                 dx,
                 dt,
                 densityScale,
-                config.physical() != null);
+                config.physical() != null,
+                shear);
     }
 }

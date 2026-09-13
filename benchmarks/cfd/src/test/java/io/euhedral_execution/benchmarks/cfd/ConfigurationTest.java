@@ -51,6 +51,38 @@ class ConfigurationTest {
     }
 
     @Test
+    void shearProfileResolvesModeUnitsAndInspectionValues() throws Exception {
+        var lattice = load(MINIMAL + ",\"physics\":{\"shear\":{\"amplitude\":0.01},\"referenceLength\":10}");
+        assertEquals(1, lattice.physics().shear().modeY());
+        assertEquals(1, lattice.physics().shear().modeZ());
+        assertEquals(0.01 * Math.sqrt(3), lattice.physics().initialMach(), 1e-16);
+        assertEquals(1, lattice.physics().reynolds());
+        var physical = load(MINIMAL + """
+            ,"physics":{"physical":{"voxelWidth":0.01,"timeStep":0.001,"densityReference":1000,"viscosity":0.01},
+            "shear":{"amplitude":0.1,"modeY":2,"modeZ":3},"referenceLength":0.1}
+            """);
+        assertEquals(0.01, physical.physics().shear().amplitude(), 1e-16);
+        assertEquals(lattice.physics().initialMach(), physical.physics().initialMach(), 1e-16);
+        assertEquals(lattice.physics().reynolds(), physical.physics().reynolds(), 1e-15);
+    }
+
+    @ParameterizedTest
+    @ValueSource(
+            strings = {
+                "\"shear\":{}",
+                "\"shear\":{\"amplitude\":0}",
+                "\"shear\":{\"amplitude\":1e999}",
+                "\"shear\":{\"amplitude\":0.01,\"modeY\":0}",
+                "\"shear\":{\"amplitude\":0.01,\"modeZ\":4}",
+                "\"shear\":{\"amplitude\":0.01,\"modeY\":5}",
+                "\"shear\":{\"amplitude\":0.01,\"modeZ\":1.5}",
+                "\"shear\":{\"amplitude\":0.01},\"lattice\":{\"initialVelocity\":{\"x\":0.01}}"
+            })
+    void invalidShearProfilesAreRejected(String fields) {
+        assertThrows(Exception.class, () -> load(MINIMAL + ",\"physics\":{" + fields + "}"));
+    }
+
+    @Test
     void relativeAndAbsoluteOutputPathsUseDeclaringFile() throws Exception {
         assertEquals(
                 directory.getParent().resolve("results"),

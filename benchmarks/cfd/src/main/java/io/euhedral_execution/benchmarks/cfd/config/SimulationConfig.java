@@ -18,6 +18,12 @@ public record SimulationConfig(
                 grid.nx() >= 3 && grid.ny() >= 3 && grid.nz() >= 3,
                 "simulation grid must have at least 3 cells on every axis");
         physics = physics == null ? new Physics(null, null, null, null) : physics;
+        if (physics.shear() != null) {
+            Checks.require(
+                    2L * physics.shear().modeY() < grid.ny()
+                            && 2L * physics.shear().modeZ() < grid.nz(),
+                    "shear modes must be below the Nyquist frequency on Y and Z");
+        }
         geometry = geometry == null ? new Geometry(null) : geometry;
         execution = execution == null ? new Execution(null, null, null, null) : execution;
         output = output == null ? new Output(null, null) : output;
@@ -27,7 +33,12 @@ public record SimulationConfig(
                 "durationSeconds requires physical parameters");
     }
 
-    public record Physics(Double densityReference, Lattice lattice, Physical physical, Double referenceLength) {
+    public record Physics(
+            Double densityReference, Lattice lattice, Physical physical, Double referenceLength, Shear shear) {
+        public Physics(Double densityReference, Lattice lattice, Physical physical, Double referenceLength) {
+            this(densityReference, lattice, physical, referenceLength, null);
+        }
+
         public Physics {
             densityReference = densityReference == null ? 1.0 : densityReference;
             Checks.positive(densityReference, "physics.densityReference");
@@ -35,6 +46,19 @@ public record SimulationConfig(
                     lattice == null || physical == null, "lattice and physical parameter modes are mutually exclusive");
             if (lattice == null && physical == null) lattice = new Lattice(null, null, null);
             if (referenceLength != null) Checks.positive(referenceLength, "physics.referenceLength");
+            if (shear != null) {
+                Vector3 velocity = physical == null ? lattice.initialVelocity() : physical.initialVelocity();
+                Checks.require(velocity.magnitude() == 0, "shear and nonzero initialVelocity are mutually exclusive");
+            }
+        }
+    }
+
+    public record Shear(double amplitude, Integer modeY, Integer modeZ) {
+        public Shear {
+            Checks.positive(amplitude, "shear.amplitude");
+            modeY = modeY == null ? 1 : modeY;
+            modeZ = modeZ == null ? 1 : modeZ;
+            Checks.require(modeY > 0 && modeZ > 0, "shear modes must be positive");
         }
     }
 
