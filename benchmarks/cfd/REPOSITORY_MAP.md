@@ -1,43 +1,49 @@
 # Repository integration map
 
-Inspected source: `Euhedral-Engine/Euhedral-Execution`, main commit `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`. Paths are relative to the repository root. The CFD names in the phase plans are new proposals; the paths below are existing integration references.
+The existing integration points below describe `Euhedral-Engine/Euhedral-Execution` at commit `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`. Paths are relative to the repository root. CFD component names describe the planned application.
 
 ## Build and packaging
 
-- `settings.gradle.kts`: explicitly includes each project. Add `include(":benchmarks:cfd")` in phase 01; the conventional directory is `benchmarks/cfd`.
-- `build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts`: Java 21, Spotless/Palantir formatting, JUnit, parallel test execution, and separate `integrationTest` tagging. It also adds Maven publishing/signing; disable publication tasks for the new benchmark application locally rather than changing shared conventions.
-- `benchmarks/build.gradle.kts`: existing JMH annotation processor, Jackson, Commons Math, dependency distribution, and logging-resource examples. Reuse version-catalog aliases, not the parent benchmark artifact or its manifest.
-- `AGENTS.md`: run through Mise, preserve local output, isolate singleton-sensitive tests, and limit changes to requested scope.
-- `benchmarks/AGENTS.md`: calibration configuration and measurement conventions. Some historical execution-policy descriptions are stale; this is not a reason to import the calibration machinery into CFD.
+| Component | Role |
+| --- | --- |
+| `settings.gradle.kts` | Project registration, including the planned `:benchmarks:cfd` subproject |
+| `build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts` | Java 21, Spotless/Palantir formatting, JUnit, and integration-test tagging |
+| `benchmarks/build.gradle.kts` | Existing examples of JMH processing, catalog aliases, logging resources, and distribution packaging |
+| `benchmarks/cfd/build.gradle.kts` | Planned standalone `euhedral-cfd` application distribution |
+| `mise.toml` | Repository Java, Gradle, and native-build toolchain |
 
-## Existing Mandelbulb workload
+CFD uses project dependencies on the runtime libraries and its own application entry point. Its packages separate numerical computation from execution adapters, reference-solver integration, and reporting. Publication tasks are disabled for the benchmark application.
 
-`benchmarks/src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/HighScaleBenchmark.java` constructs a lattice, prepares `MandelbulbFrame` arrays, groups work in the batched variant, registers `ArrayIngestSink` sources, and waits on a counter. It also contains socket-local allocation examples using `PinnedThreadExecutor`.
+## Existing numerical workload
 
-Reuse the idea of reusable work units and explicit runtime ownership. Do not copy its fixed image size, unbounded progress loop, or recreate/register sources every CFD timestep. Those are not a timestep-completion protocol.
+`benchmarks/src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/HighScaleBenchmark.java` constructs a lattice, prepares `MandelbulbFrame` arrays, groups work in its batched variant, and registers `ArrayIngestSink` sources. Its setup also demonstrates socket-local allocation through `PinnedThreadExecutor`.
 
-## Euhedral adapter integration points
+CFD extends the reusable-work-unit pattern to repeated generations. Persistent sources feed brick frames, and application-owned terminal acknowledgements establish timestep completion.
 
-All paths in this section are beneath `euhedral-core/src/main/java/io/euhedral_execution/core/`.
+## Euhedral runtime integration
 
-| File | Observed contract | CFD use |
+The following paths are beneath `euhedral-core/src/main/java/io/euhedral_execution/core/`.
+
+| File | Runtime behavior | CFD integration |
 | --- | --- | --- |
-| `control_plane/ControlPlaneLattice.java` and `docs/ARCHITECTURE.md` | One live JVM singleton; `addUpstream` starts lazily; close at the owner boundary | One lattice per Euhedral run/fork, not per step |
-| `config/LatticeConfig.java` | Record containing allowed CPUs, shutdown timeout, and base shard | Construct from current defaults with the resolved CPU mask |
-| `impl/BaseCloneableObject.java` | Default fragment and `DefaultExecutor` wiring | Keep production wiring/default policy |
-| `impl/DefaultExecutor.java` | Calls `AbstractFrame.execute()` | No custom CFD executor required |
-| `frames/AbstractFrame.java` | `execute`, `doFinally`, `doFinallyWithError`, optional shared kill switch; equal ID/routing hashes mean ordered | Reusable brick frame, explicit success/error/cancel completion |
-| `generics/AbstractExecutor.java` | Successful and structured-cancel execution reach `doFinally`; exceptions reach the error hook; arbitrary JVM Errors are not caught there | Do not equate a finally callback with successful computation; give failures a bounded escape path |
-| `ingest/QueueIngestSink.java` | Persistent `offer` API; sealed class; graceful completion observes draining | Compose sinks, never subclass them; register once and do not use drain as the timestep barrier |
+| `control_plane/ControlPlaneLattice.java` | JVM-wide singleton; lazy startup through `addUpstream`; owned shutdown | One lattice per backend lifetime |
+| `config/LatticeConfig.java` | Allowed CPUs, shutdown timeout, and base shard | Resolved worker mask with default runtime wiring |
+| `impl/BaseCloneableObject.java` | Default fragment and executor composition | Production execution pipeline |
+| `impl/DefaultExecutor.java` | Calls `AbstractFrame.execute()` | Shared brick-kernel invocation |
+| `frames/AbstractFrame.java` | Execution and terminal hooks, optional kill switch, routing metadata | Reusable brick frame with generation accounting |
+| `generics/AbstractExecutor.java` | Success and structured cancellation reach `doFinally`; exceptions reach the error hook | Separate numerical-success, cancellation, and failure states |
+| `ingest/QueueIngestSink.java` | Sealed persistent source with `offer` and draining lifecycle | Composed sources registered once |
 
-`docs/ARCHITECTURE.md` documents routing and ownership. Physical core 0 may be reserved, logical siblings do not imply separate workers, and origin-based routing has fallback behavior. Neither a stable hash nor a locality preference proves physical placement.
+`docs/ARCHITECTURE.md` describes the routing graph and ownership model. Physical core 0 can be reserved, logical siblings share physical cores, and origin-based routing includes fallback behavior. The adapter records effective workers and observed placement alongside requested settings.
 
-## Affinity
+## Affinity and completion
 
-`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ThreadTools.java` provides `getAffinityCapability()`, `getCpu()`, `getCpuInfo()`, `setAffinity(...)`, and `releaseAffinity()`.
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ThreadTools.java` exposes affinity capability, CPU identity, affinity application, and restoration. Baseline workers use these APIs at thread startup and shutdown. Reported capabilities distinguish exact placement, locality hints, and unsupported affinity.
 
-Use these existing public APIs for baseline worker affinity. Distinguish `EXACT`, `LOCALITY_HINT`, and `UNSUPPORTED`. Do not invent CPU IDs, assume contiguous topology, or close another component's registered pinned executor. Run backend comparisons sequentially in isolated processes.
+Brick completion publishes numerical writes and private diagnostic reductions. The external driver advances the generation after all successful terminal acknowledgements. Queue draining describes source state; the application barrier describes completed computation.
 
-## Change boundary
+## External reference integration
 
-Production modules are dependencies, not editing targets. An unexpected missing contract should be reported before expanding scope. Keep CFD Java, tests, scenes, scripts, and documentation inside `benchmarks/cfd`; root changes should normally be only project inclusion and a small documentation link.
+`benchmarks/cfd/validation/openlb` contains the planned OpenLB case adapter and build configuration. A separately installed, pinned OpenLB release performs reference computation in a child process. Case translation and field export connect that process to the validation runner. The Java numerical kernel and OpenLB retain separate implementations.
+
+`benchmarks/cfd/validation/suites` contains matched cases and comparison tolerances. Validation artifacts associate reference output with resolved physical settings, solver versions, comparison locations, and times. The benchmark runner consumes these reports as numerical-eligibility evidence.

@@ -1,10 +1,10 @@
-# Shared numerical contract
+# Numerical model
 
-These are design decisions for the new solver, not claims about existing repository code. Implement every backend against this contract. Symbols below are in lattice units unless explicitly marked physical.
+The shared kernel uses D3Q19 BGK lattice Boltzmann with double-precision post-collision populations. Symbols are in lattice units unless explicitly marked physical.
 
 ## D3Q19 and storage
 
-Use the rest direction, six axis directions, and twelve face diagonals. Fix one order and its opposite table:
+The stencil contains the rest direction, six axis directions, and twelve face diagonals:
 
 ```text
 0: ( 0, 0, 0)
@@ -24,11 +24,9 @@ cs2 = 1/3
 index = x + nx * (y + ny * z)
 ```
 
-Store two sets of 19 `double[]` arrays of length `N = nx*ny*nz`. They hold POST-collision populations `g`, not pre-collision populations `f`. X varies fastest. There is no object per cell and no full `19*N` neighbor-index table.
+Two sets of 19 `double[]` arrays store POST-collision populations `g`. Each array has length `N = nx*ny*nz`, with X varying fastest. Neighbor locations derive from coordinates and constant stencil offsets. Counts, memory sizes, file offsets, and update counts use checked `long` arithmetic; allocation also checks direction-array indexability.
 
-Use checked `long` arithmetic for counts, byte budgets, output offsets, and work counts. Each direction array must fit Java's supported array indexing. Resolve sizes before allocation; do not fall back to a smaller grid silently.
-
-Population storage alone is `2*19*8*N = 304*N` bytes:
+Population storage is `2*19*8*N = 304*N` bytes:
 
 | Grid | Cells | Population storage |
 | --- | ---: | ---: |
@@ -36,18 +34,18 @@ Population storage alone is `2*19*8*N = 304*N` bytes:
 | 256^3 | 16,777,216 | 4.75 GiB |
 | 512^3 | 134,217,728 | 38 GiB |
 
-Masks, obstacle IDs, descriptors, temporary exports, JVM overhead, and geometry are additional. Stream output rather than retaining every frame. Large cases require explicit memory preflight; 512^3 is not a default demo.
+Geometry, masks, obstacle IDs, descriptors, temporary exports, and JVM overhead add to this total. Memory preflight evaluates the complete configured case. Field output is streamed.
 
-## One successful timestep
+## Timestep
 
-For each destination fluid cell `x`:
+Each destination fluid cell gathers PRE-collision populations `f` from the immutable current buffer:
 
 ```text
 f_i(x) = current_g_i(x - c_i)             # ordinary/periodic neighbor
 f_i(x) = current_g_opposite(i)(x)         # stationary solid neighbor
 ```
 
-Open-face missing populations use the boundary reconstruction from phase 04. They must never be read from arbitrary out-of-domain memory. Then compute:
+Open-face reconstruction supplies missing incoming populations before collision. The local update is:
 
 ```text
 rho = sum_i f_i
@@ -60,15 +58,15 @@ S_i = w_i * ((c_i-u)/cs2 + ((c_i.u)*c_i)/(cs2*cs2)) . F
 next_g_i = f_i - omega*(f_i-feq_i) + (1-omega/2)*S_i
 ```
 
-`S_i` is the unprefactored Guo source. Apply its relaxation prefactor exactly once. With no force, `F` and `S_i` are zero. Every task writes all 19 values only for its destination cells. Reading current and writing next are disjoint operations, even across brick faces, edges, and corners.
+`S_i` is the unprefactored Guo source; its relaxation prefactor appears once in the population update. Unforced cases have zero `F` and `S_i`.
 
-After all bricks complete successfully, reduce diagnostics deterministically, reject an invalid step, swap buffers, and increment time. No swap on failure. The driver alone owns this transition. If a later boundary algorithm needs another pass, declare and synchronize that pass explicitly for every backend.
+Each brick writes all 19 populations for its destination cells. Source reads and destination writes remain disjoint across brick faces, edges, and corners. Successful terminal completion publishes these writes. The driver then reduces diagnostics in stable brick order, checks the completed step, swaps buffers, and increments time. A failed generation retains the previous current buffer.
 
 ## Initialization and field extraction
 
-Without forcing, initialize `g_i = feq_i(rho0,u0)`. With Guo forcing, use `g_i = feq_i(rho0,u0) + S_i(rho0,u0,F)/2` so the initial momentum follows the same time convention.
+Unforced initialization is `g_i = feq_i(rho0,u0)`. Forced initialization is `g_i = feq_i(rho0,u0) + S_i(rho0,u0,F)/2`.
 
-For a completed POST-collision state:
+A completed POST-collision state yields:
 
 ```text
 rho = sum_i g_i
@@ -77,11 +75,11 @@ u = (sum_i(c_i*g_i) - F/2) / rho
 p_gauge = cs2 * (rho-rho0)
 ```
 
-The minus sign for extracting velocity from `g` is intentional. The update uses a plus half-force with PRE-collision `f`; copying that formula onto stored `g` gives the wrong velocity. Test zero and nonzero forcing explicitly. Field extraction, force diagnostics, and export must all agree on the represented timestep.
+The half-force correction is positive for PRE-collision `f` and negative for stored POST-collision `g`. Initialization, diagnostics, reference-solver comparison, and export share this represented-time convention.
 
-## Physical inputs and limits
+## Physical units and operating range
 
-Accept either explicit lattice parameters or an explicit physical-unit configuration, never an ambiguous mixture. For physical voxel width `dx`, timestep `dt`, density scale `rhoScale = rhoPhysicalReference/rho0`, and kinematic viscosity `nuPhysical`:
+A configuration selects either lattice parameters or physical parameters. Physical voxel width `dx`, timestep `dt`, density scale `rhoScale = rhoPhysicalReference/rho0`, and kinematic viscosity `nuPhysical` determine:
 
 ```text
 u_lattice = u_physical * dt/dx
@@ -95,30 +93,33 @@ pressure_gauge_physical = p_gauge_lattice * rhoScale * (dx/dt)^2
 force_physical = force_lattice * rhoScale * dx^4/(dt*dt)
 ```
 
-Derive `tau` from viscosity; it must be finite and greater than 0.5. That alone does not guarantee stability. Design shipped scenes for `Ma <= 0.1`, report actual maximum Mach and density variation, and stop on non-finite fields, non-positive density, or configured stability-limit violations. This Mach threshold is a chosen operating guard, not a universal accuracy guarantee. Never hide failures by clamping populations or velocity.
+Resolved `tau` is finite and greater than 0.5. Presets target `Ma <= 0.1`; configured guards monitor actual Mach number, density variation, finite fields, and positive density. Guard violations produce a failed-run result with step and location context. This operating range describes the application's low-Mach model; accuracy is assessed through numerical comparison and refinement.
 
-Preserve the physical problem when refining a grid: resolve `dx`, `dt`, Reynolds number, and physical duration together. Matching step counts alone does not imply matching physical time.
+Resolution studies preserve reference geometry, Reynolds number, and physical duration while resolving `dx` and `dt` consistently.
 
-## Boundaries and force accounting
+## Boundaries and forces
 
-Solid walls use link-wise halfway bounce-back. The effective wall lies halfway between fluid and solid cell centers. Analytic validation must use that wall location, not the solid cell center.
+Link-wise halfway bounce-back places a stationary wall halfway between fluid and solid cell centers. Analytical and external-reference cases use the same effective wall location.
 
-Use the local D3Q19 on-site velocity/density reconstruction described by Hecht and Harting for axis-aligned open faces, mapping their direction numbering to the table above. Cover face orientations and wall intersections explicitly. An outlet with fixed density is a pressure boundary, not a perfectly nonreflecting boundary. Initially support Guo forcing in periodic/walled cases and zero body force in open-boundary cases; reject unsupported combinations rather than quietly applying an inconsistent formula.
+Axis-aligned open faces use the local D3Q19 velocity/density reconstruction of Hecht and Harting, with explicit direction-index correspondence and intersection handling. A fixed-density outlet defines a pressure boundary. Supported combinations are forced periodic/walled cases and unforced open-boundary cases.
 
-For a reflected link whose `c_i` points from solid toward fluid, the stationary-wall impulse on the solid is `-2*c_i*current_g_opposite(i)(x)` per lattice timestep. Attribute each link once to its obstacle. Sum per brick, then in brick-ID order. Report vector force and `Cd = F_parallel/(0.5*rhoReference*UReference^2*AReference)` with explicit reference area and direction. Do not invent a universal reference area for arbitrary STL objects.
+For a reflected link whose `c_i` points from solid toward fluid, the impulse on the stationary solid is `-2*c_i*current_g_opposite(i)(x)` per lattice timestep. Per-brick contributions attribute each reflected link once and reduce in brick-ID order. Drag is `Cd = F_parallel/(0.5*rhoReference*UReference^2*AReference)` with configured reference direction and area.
 
-## Validation and sources
+## Numerical checks
 
-Use an independent tiny-grid reference implementation and analytical cases, not agreement between backends alone. Required checks include stencil moments, equilibrium preservation, all 18 streaming directions, periodic shear decay, forced planar Poiseuille flow in a 3D domain, open-face velocity/density reconstruction, mass balance, obstacle-force symmetry/sign, and backend field equivalence. Include unequal grid dimensions and partial bricks.
+Stencil moments, equilibrium preservation, all streaming directions, periodic shear decay, forced Poiseuille flow, open-boundary moments, mass balance, and obstacle-force symmetry cover individual numerical features. Unequal dimensions and partial bricks exercise three-dimensional indexing and ownership.
 
-Staircase geometry is an approximation. Do not infer engineering-grade drag accuracy from an attractive visualization or assume second-order geometry accuracy for voxelized curved surfaces.
+[External-solver validation](07-external-solver-validation.md) compares the serial implementation with OpenLB. The comparison aligns physical coordinates, wall positions, force conventions, pressure reference, and sample times. Matching discrete methods support tighter field checks; different boundary discretizations use separately identified refinement-based comparisons. Curved voxel boundaries have geometry-dependent discretization error.
 
-Primary references for implementers:
+Backend equivalence compares the same Java kernel under serial, ForkJoinPool, static-worker, and Euhedral execution. External agreement supports numerical verification; physical-model validation against experiments is a separate form of evidence.
 
-- [waLBerla basic LBM tutorial](https://www.walberla.net/doxygen/tutorial_lbm01.html): established 3D LBM implementation structure.
-- [Guo, Zheng and Shi, 2002](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.65.046308): forcing treatment.
-- [Hecht and Harting, D3Q19 boundary conditions](https://arxiv.org/abs/0811.4593): local on-site velocity and density boundaries; consult the full paper and corrections when translating formulas.
-- [VTK XML file format](https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html): phase 05 export contract.
-- [JDK ForkJoinTask documentation](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ForkJoinTask.html): phase 07 completion, exception propagation, and task reuse.
+## References
 
-The storage layout, backend interface, guard values, and feature boundaries in these plans are project design choices, not requirements asserted by those references.
+- [waLBerla basic LBM tutorial](https://www.walberla.net/doxygen/tutorial_lbm01.html): 3D LBM structure.
+- [Guo, Zheng and Shi, 2002](https://journals.aps.org/pre/abstract/10.1103/PhysRevE.65.046308): force treatment.
+- [Hecht and Harting](https://arxiv.org/abs/0811.4593): D3Q19 on-site boundaries.
+- [OpenLB](https://www.openlb.net/): external reference solver.
+- [OpenLB release 1.9](https://www.openlb.net/news/openlb-release-1-9-available-for-download/): reference distribution.
+- [OpenLB user guides](https://www.openlb.net/user-guide/): versioned solver documentation.
+- [VTK XML format](https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html): field export.
+- [JDK ForkJoinTask](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ForkJoinTask.html): task lifecycle.

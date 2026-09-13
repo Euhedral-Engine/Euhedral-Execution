@@ -1,61 +1,65 @@
-# CFD implementation master plan
+# CFD system and implementation phases
 
-Status: planned. This directory contains implementation plans, not a completed solver or benchmark results.
+Status: planned.
 
-Build a real, headless 3D fluid simulator and use it to compare execution backends. Start in 3D; small test grids are the same solver, not a separate 2D implementation. The intended workflow is:
+The CFD application simulates three-dimensional flow around stationary geometry and compares the execution time of interchangeable CPU backends. Built-in scenes and CAD-exported STL files become voxelized fluid domains, and completed simulations produce velocity, pressure, and obstacle-force data for ParaView.
 
 ```text
-built-in scene or watertight STL geometry
-    -> voxelize and resolve physical parameters
-    -> advance a 3D fluid field
-    -> export velocity, pressure, and obstacle forces
-    -> inspect in ParaView
+scene or STL geometry
+    -> voxelized domain and resolved physical parameters
+    -> 3D fluid simulation
+    -> velocity, pressure, and obstacle forces
+    -> ParaView time series
 ```
 
-## Scope and architecture
+## System architecture
 
-Create the Gradle subproject `:benchmarks:cfd`, rooted here. Use package `io.euhedral_execution.benchmarks.cfd` with `config`, `geometry`, `solver`, `execution`, `io`, and `benchmark` subpackages as needed. Keep the numerical solver independent of Euhedral classes; adapters own runtime integration. Do not depend on the parent `:benchmarks` artifact or its calibration harness.
+The Gradle application `:benchmarks:cfd` resides in `benchmarks/cfd`. Its Java package is `io.euhedral_execution.benchmarks.cfd`, with configuration, geometry, solver, execution, output, validation, and benchmark components.
 
-The numerical method is D3Q19, single-relaxation-time BGK lattice Boltzmann with double-precision populations, two population buffers, and a fused pull-stream/collide update. It is an isothermal, weakly compressible method used in its low-Mach regime to approximate incompressible flow. The shared equations and population-time convention are in [NUMERICS.md](NUMERICS.md).
+The shared numerical kernel uses double-precision D3Q19 BGK lattice Boltzmann, two population buffers, and a fused pull-stream/collide update. The physical model is isothermal, single-phase, low-Mach flow through stationary geometry. [NUMERICS.md](NUMERICS.md) describes its equations, units, storage, and boundaries. [REPOSITORY_MAP.md](REPOSITORY_MAP.md) describes the build and runtime integration points.
 
-Required capabilities: stationary 3D primitive and imported geometry, no-slip walls, periodic faces, velocity inlet, pressure outlet, viscosity and unit conversion, transient flow, obstacle force/drag, VTI/PVD export, and interchangeable serial, ForkJoinPool, static-worker, and Euhedral execution.
+Serial, ForkJoinPool, persistent static workers, and Euhedral execute the same kernel over the same destination-owned bricks. The driver owns generation publication, completion, diagnostics, and buffer swaps. Preallocated population arrays, brick descriptors, and work wrappers support repeated timesteps.
 
-Not included: a CAD editor, free surfaces/splashing, multiple fluids, heat transfer, combustion, moving solids, compressible aerodynamics, adaptive meshes, GPU/MPI execution, or industrial validation. Visible vortices do not establish a validated turbulence model. Do not expand this scope while implementing a phase.
+## Numerical validation
 
-## Feature-sized phases
+OpenLB supplies independently computed reference fields for matched physical cases. The validation system compares velocity, gauge pressure, density, flow balance, and obstacle forces at aligned locations and times. Analytical solutions supplement the solver comparison for equilibrium, shear decay, and channel flow.
 
-Each phase file contains its context, changes, acceptance checks, and a paste-ready implementation prompt. Complete prerequisites before starting a dependent phase. Implementation class names below are proposed, not existing APIs.
+```text
+matched case specification
+    +-> OpenLB reference solution
+    +-> serial CFD solution
+              |
+       field and observable comparison
+              |
+       verified serial implementation
+              |
+       FJP / static / Euhedral equivalence
+              |
+       scored performance comparison
+```
 
-| Phase | Feature | Depends on |
+A validation report identifies the reference release, numerical-method correspondence, comparison metrics, tolerances, and result. Benchmark eligibility combines a passing external-reference suite, backend equivalence, and valid runtime diagnostics. [Phase 07](07-external-solver-validation.md) defines this workflow.
+
+## Phases
+
+| Phase | Feature | Dependencies |
 | --- | --- | --- |
-| [01](01-module-and-configuration.md) | Module, CLI inspection, configuration, memory budget | None |
-| [02](02-three-dimensional-solver.md) | Actual 3D periodic D3Q19 solver | 01 |
-| [03](03-walls-forcing-and-units.md) | Solid geometry, no-slip walls, forcing, physical units | 02 |
-| [04](04-open-boundaries-and-forces.md) | Inlet/outlet, obstacle forces, complete flow scenes | 03 |
-| [05](05-visualization-and-simulation-cli.md) | Runnable simulation workflow and ParaView output | 04 |
+| [01](01-module-and-configuration.md) | Module, configuration, CLI inspection, memory budget | None |
+| [02](02-three-dimensional-solver.md) | Three-dimensional periodic D3Q19 solver | 01 |
+| [03](03-walls-forcing-and-units.md) | Solid geometry, walls, forcing, physical units | 02 |
+| [04](04-open-boundaries-and-forces.md) | Inlet/outlet flow and obstacle forces | 03 |
+| [05](05-visualization-and-simulation-cli.md) | Simulation workflow and ParaView output | 04 |
 | [06](06-stl-import-and-voxelization.md) | CAD-exported STL geometry | 05 |
-| [07](07-parallel-execution-backends.md) | Tiled execution, ForkJoinPool, static-worker baseline | 04 |
-| [08](08-euhedral-execution-backend.md) | Persistent Euhedral sources and reusable brick frames | 07 |
-| [09](09-jmh-and-comparison-runner.md) | Correctness-gated JMH comparisons and reports | 05, 06, 08 |
-| [10](10-locality-and-sweep-automation.md) | Measured locality/granularity tuning and automated sweeps | 09 |
+| [07](07-external-solver-validation.md) | OpenLB reference execution and numerical comparison | 05, 06 |
+| [08](08-parallel-execution-backends.md) | Tiled serial, ForkJoinPool, and static-worker execution | 04 |
+| [09](09-euhedral-execution-backend.md) | Persistent Euhedral sources and reusable brick frames | 08 |
+| [10](10-jmh-and-comparison-runner.md) | Validation-gated JMH comparisons and reports | 07, 09 |
+| [11](11-locality-and-sweep-automation.md) | Locality, granularity, and scaling experiments | 10 |
 
-Phases 05-06 and 07-08 can progress independently after 04, but share the solver contracts. Serial flow is usable before scheduler integration; all backends are comparable before optional tuning.
+The geometry/reference and execution tracks branch after phase 04 and converge in phase 10. The serial simulation is usable before parallel integration. Scored performance results are associated with independently checked numerical behavior.
 
-## Non-negotiable contracts
+## Application interfaces
 
-- All backends call the same numerical kernel on the same cells, using the same precision, boundaries, and diagnostics. Change scheduling, not physics.
-- The driver owns buffer swaps. A timestep succeeds only after every brick has finished successfully and published its writes. Queue emptiness is not completion.
-- No worker waits for another brick on the same bounded worker pool. No next-generation reads from partially written state.
-- No per-cell objects, locks, atomics, logging, or allocation. Preallocate brick descriptors and reusable work wrappers; bounded per-step coordination is acceptable and measured.
-- Preserve the existing engine, policy, calibration tools, and benchmark outputs. Euhedral does not use DRR; do not design against old architecture descriptions.
-- Do not claim scheduler speedups in advance. A static bulk-synchronous loop is a required baseline, not just task frameworks.
-- Stop failed or unstable runs with a useful error. Never silently clamp numerical problems, swap a failed grid, or label a partial run successful.
-- No checksum registry, model tournament, policy-training integration, or elaborate provenance system. Keep the resolved configuration, source revision, timings, and correctness results.
+The planned distribution provides `inspect`, `simulate`, `validate`, and `bench` commands. Configuration and validation fixtures describe the physical problem; execution settings describe worker selection, brick shape, source count, and placement. Output includes resolved settings, reference-comparison reports, simulation fields, raw benchmark results, and per-fork summaries.
 
-## Working instructions
-
-Read [REPOSITORY_MAP.md](REPOSITORY_MAP.md), the repository's root `AGENTS.md`, and the relevant sections of `benchmarks/AGENTS.md`. Code is authoritative where those guides disagree. These plans were grounded in main commit `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`; recheck actual signatures when implementing.
-
-Commands in phase files are implementation acceptance targets. They are not available merely because these plans exist. Use `mise exec -- gradle`; the repository uses a system-managed Gradle toolchain, not an assumed wrapper. Do not run large benchmark campaigns as a side effect of implementing a phase.
-
-For each completed phase, report changed files, actual commands and results, remaining limitations, and a command that demonstrates the new feature. Keep phase results separate from performance claims.
+A failed timestep retains the last completed state. Missing reference results, incompatible cases, failed numerical checks, and execution failures appear as distinct report states. The performance report ranks comparable, numerically verified runs.

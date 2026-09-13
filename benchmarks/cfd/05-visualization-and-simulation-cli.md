@@ -1,37 +1,33 @@
 # Phase 05 - Visualization and simulation workflow
 
-Prerequisite: 04. Read the [master plan](README.md), the field-extraction section of [NUMERICS.md](NUMERICS.md), and the official VTK XML format reference linked there.
+Dependencies: [04](04-open-boundaries-and-forces.md). Field definitions: [NUMERICS.md](NUMERICS.md).
 
-## Deliverable
+## Feature
 
-One command runs a complete 3D simulation and produces a ParaView-readable time series of the actual fluid fields.
+The simulation application exports three-dimensional flow fields as a ParaView time series. The command interface selects a backend, physical duration or step count, output location, export cadence, and validated configuration overrides.
 
-## Changes
+## Field output
 
-- Complete the `simulate` CLI with explicit backend, step/time limits, output directory, export cadence, and configuration overrides. Validate overrides through the same resolver as JSON input.
-- Write uncompressed binary VTI ImageData using streamed appended raw data, explicit byte order, and UInt64 block headers/offsets. Do not build giant XML strings or hold a full time series in memory. Offer ASCII only as a tiny-fixture/debug mode.
-- Represent the solver samples as CellData. For `nx*ny*nz` cells, use point extents `0 nx 0 ny 0 nz`, matching physical origin/spacing, and X-fastest array order. Output velocity as three components, density, gauge pressure, and solid/obstacle labels. Derive values from completed post-collision populations with the correct force correction.
-- Add PVD collection output with the actual physical time, or explicitly labeled lattice time when no physical conversion exists. Write frames through temporary files and add them to the collection only after the frame is complete.
-- Export synchronously at a completed-step barrier initially. Never let the solver overwrite a population buffer while an exporter reads it. Do not add an unbounded asynchronous snapshot queue.
-- Persist a small resolved-config JSON and metrics CSV containing step/time, validity diagnostics, mass/flux, forces, simulation time, and output time. Existing output directories must not be overwritten by default. On failure, retain only completed frames and write a failed status with the cause.
-- Provide `VISUALIZATION.md` with exact ParaView steps for reading the PVD file, displaying obstacle masks, slicing velocity/pressure, and generating streamlines. Explain Cell Data to Point Data where a filter requires it. A streamline of one frame is not a particle trajectory through an unsteady time series.
-- Do not add Java native VTK bindings, an embedded renderer, a web frontend, or a ray-marching demo. ParaView is a viewer, not the numerical backend.
+Completed states produce velocity, density, gauge pressure, and solid/obstacle labels. Velocity has three components. Cell-centered samples use X-fastest ordering and physical origin/spacing. An `nx*ny*nz` domain has VTI ImageData point extents `0 nx 0 ny 0 nz` and CellData arrays.
 
-## Acceptance
+The VTI writer streams uncompressed appended data with explicit byte order and UInt64 headers and offsets. Small diagnostic fixtures also support ASCII output. A PVD collection associates completed frame files with physical time or explicitly labeled lattice time.
 
-Test a hand-constructed non-cubic field with distinct XYZ components so transposition, component order, and half-cell offsets are detectable. Verify binary header lengths, offsets, cell counts, obstacle labels, physical units, and PVD times. Include a mocked/streamed large-offset test without allocating a multi-gigabyte file.
+Export occurs synchronously at a successful timestep boundary. Stable population buffers supply the snapshot, and completed temporary files become visible before their PVD entries. Each run has a distinct output location. Interrupted runs retain completed frames and a status describing the interruption.
 
-Round-trip a small file through an available VTK/ParaView reader and document the exact command. If that external viewer is unavailable, report that check as unrun; internal byte-level tests do not prove viewer interoperability by themselves.
+## Run data and visualization
+
+Resolved configuration accompanies a metrics CSV containing step/time, numerical diagnostics, mass and flux, obstacle forces, simulation time, and export time. Field extraction follows the post-collision and half-force conventions of the numerical model. Output cost is reported separately from numerical execution cost.
+
+`VISUALIZATION.md` describes the ParaView workflow: opening a PVD collection, displaying obstacle masks, inspecting slices, and generating streamlines. It covers Cell Data to Point Data conversion and the distinction between instantaneous streamlines and time-dependent particle paths.
+
+The same coordinates and completed-state fields support the [external-solver comparison](07-external-solver-validation.md).
+
+## Verification
+
+A known non-cubic field with distinct vector components exercises array order, cell-center positions, physical units, and labels. Writer tests cover block lengths, offsets, large-offset arithmetic, PVD times, and interrupted publication. An installed VTK/ParaView reader supplies a separate interoperability check through a small-file round trip.
+
+## Interface
 
 ```bash
-mise exec -- gradle :benchmarks:cfd:test :benchmarks:cfd:spotlessCheck :benchmarks:cfd:installDist
 benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend serial --output benchmarks/cfd/build/runs/duct-demo
-```
-
-The result must be a usable 3D flow dataset. No screenshot or animation is required to validate the numerical backend, and file output must remain outside later scheduler timing comparisons.
-
-## Implementation prompt
-
-```text
-Implement benchmarks/cfd phase 05 only. Complete the simulation CLI and add streaming VTI/PVD export of real completed fluid states, metrics, and resolved configuration. Respect cell-centered coordinates, post-collision field extraction, binary offsets, and snapshot ownership. Add a practical ParaView guide and interoperability tests where the viewer is available. Keep output synchronous and outside scheduler benchmark timing; do not build a renderer or frontend. Report the produced files and actual validation performed.
 ```

@@ -1,37 +1,34 @@
 # Phase 04 - Open boundaries and obstacle forces
 
-Prerequisite: 03. Read [NUMERICS.md](NUMERICS.md) and its Hecht/Harting reference before implementing boundary equations.
+Dependencies: [03](03-walls-forcing-and-units.md). Boundary and force definitions: [NUMERICS.md](NUMERICS.md).
 
-## Deliverable
+## Feature
 
-A full 3D inlet-to-outlet simulation around stationary obstacles, with quantitative force and flow diagnostics.
+Prescribed inlet and outlet conditions drive three-dimensional flow around stationary obstacles, with quantitative flow and force diagnostics.
 
-## Changes
+## Components
 
-- Implement axis-aligned prescribed-velocity inlet and prescribed-density/pressure outlet conditions using the local D3Q19 on-site reconstruction. Translate direction indices explicitly from the reference to this solver's table. Do not paste D2Q9 formulas or replace missing populations with equilibrium as an undocumented approximation.
-- Classify missing distributions during gather, reconstruct them before computing collision, and ensure every destination population is assigned exactly once. Do not let boundary code read partially updated next-buffer cells.
-- Define supported face combinations and intersection ownership. Wall nodes at inlet/outlet perimeters remain solid; adjacent fluid links and corner/edge cases need an explicit tested rule. Reject unsupported intersecting open-face combinations. Provide orientation coverage rather than assuming flow is always along X.
-- Initially disallow body force in open-boundary cases; periodic/walled forced cases remain supported. A force-aware inlet/outlet extension is outside this phase.
-- Add optional finite-time inlet ramping as part of the physics configuration, independent of backend. Report its duration and exclude unsupported backflow-dominated cases from default scenes. A fixed-pressure outlet is not advertised as reflection-free.
-- Accumulate stationary-solid momentum-exchange force per obstacle. Use private range/brick partials, count every reflected link once, and reduce in stable ID order. No atomics per surface link.
-- Export mass, density range, actual maximum Mach, inlet/outlet flux, force vector, and drag coefficient where explicit reference velocity/area are provided. Distinguish physical mass conservation from net inflow/outflow; a through-flow domain does not have a zero mass-change requirement at every transient step.
-- Add `scenes/duct-obstacle.json` and `scenes/sphere-wake.json`, with small smoke variants. Use conservative low-Mach laminar defaults and document resolution, blockage, reference length/area, and operating limits. Do not tune a scene merely to create attractive turbulence.
+Axis-aligned velocity inlets and density/pressure outlets use local D3Q19 on-site reconstruction. The boundary tables map the published Hecht/Harting directions to the solver's stencil. Gather classifies missing incoming distributions and reconstructs them before local collision.
 
-## Acceptance
+Face configuration describes supported orientations, wall intersections, and ownership of each population. Perimeter wall cells remain solid; adjacent fluid links have explicit edge and corner treatment. Unsupported intersecting open-face combinations produce configuration errors. Open-boundary cases use zero body force; periodic and walled configurations retain forced-flow support.
 
-Verify uniform through-flow and known channel behavior, inlet velocity and outlet density reconstruction, all supported face orientations, and inlet/wall intersections. Include a case whose brick boundary will later cut through an inlet or obstacle.
+An optional finite-time inlet ramp is part of the physical case. Its duration and boundary convention appear in resolved output. A fixed-density outlet represents a prescribed pressure boundary.
 
-Check zero net force for a symmetric resting-fluid fixture, positive downstream drag under forward flow, sign reversal when flow is reversed, and consistent attribution for two obstacles. Compare the discrete mass change with the flux implied by boundary updates; label any separate macroscopic flux estimate accordingly.
+Momentum exchange accumulates obstacle forces in private range/brick slots. Each reflected link contributes once to its obstacle, and reductions follow stable brick-ID order. Reported quantities include vector force and drag coefficient with configured reference velocity, area, density, and direction.
 
-Complete a bounded simulation without non-finite state or unexplained mass growth. Quantitative curved-body drag accuracy requires resolution/domain checks; this phase must not label its approximate drag as an industrial reference result.
+Transient diagnostics cover mass, density range, maximum Mach number, inlet/outlet flux, and obstacle forces. Discrete mass change is paired with boundary-update flux; a separately estimated macroscopic flux is labeled accordingly.
+
+`scenes/duct-obstacle.json` and `scenes/sphere-wake.json` provide low-Mach laminar scenes and small smoke variants. Metadata describes resolution, blockage, reference dimensions, and operating range.
+
+## Verification
+
+Uniform through-flow and channel cases cover reconstructed velocity/density, supported face orientations, and inlet/wall intersections. Boundary and obstacle locations cross future brick partitions.
+
+Force checks cover symmetric resting fluid, downstream drag, reversed-flow sign, and two-obstacle attribution. Bounded runs exercise stability and mass balance. Resolution and domain checks quantify curved-boundary error. These observables also enter the [external-reference comparison](07-external-solver-validation.md).
+
+## Interface
 
 ```bash
 mise exec -- gradle :benchmarks:cfd:test :benchmarks:cfd:spotlessCheck :benchmarks:cfd:installDist
 benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend serial
-```
-
-## Implementation prompt
-
-```text
-Implement benchmarks/cfd phase 04 only. Add properly sourced D3Q19 velocity/pressure boundaries, complete ownership rules at their intersections with walls, obstacle momentum-exchange forces, and runnable inlet-to-outlet scenes. Keep all writes destination-owned and all reductions deterministic. Preserve the explicit restriction on forced open-boundary cases. Validate flow, boundary moments, mass balance, and force direction rather than relying on a picture. Do not modify scheduler internals or claim validated high-Reynolds turbulence.
 ```
