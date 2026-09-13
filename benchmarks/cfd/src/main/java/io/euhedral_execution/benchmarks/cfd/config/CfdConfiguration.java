@@ -34,8 +34,15 @@ public record CfdConfiguration(
             double timeStep,
             double densityScale,
             boolean physicalUnits,
-            SimulationConfig.Shear shear) {
+            SimulationConfig.Shear shear,
+            UnitConversions units) {
         public CfdPhysics {
+            Objects.requireNonNull(units);
+            Checks.require(
+                    units.lengthScale() == voxelWidth
+                            && units.timeScale() == timeStep
+                            && units.densityScale() == densityScale,
+                    "unit conversions must match resolved physical scales");
             Checks.positive(densityReference, "resolved densityReference");
             Checks.positive(viscosity, "resolved viscosity");
             Checks.finite(tau, "resolved tau");

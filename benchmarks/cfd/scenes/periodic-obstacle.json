@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 12,
+    "ny": 10,
+    "nz": 8
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1,
+      "acceleration": {
+        "x": 0.00001
+      }
+    }
+  },
+  "geometry": {
+    "spheres": [
+      {
+        "id": 1,
+        "center": {
+          "x": 6,
+          "y": 5,
+          "z": 4
+        },
+        "radius": 2
+      }
+    ]
+  },
+  "execution": {
+    "steps": 100
+  }
+}

@@ -77,15 +77,9 @@ class CfdMainTest {
     }
 
     @Test
-    void simulationRejectsUnsupportedPhysicsAndExportBeforeAllocation() throws Exception {
+    void simulationRejectsUnsupportedExportBeforeAllocation() throws Exception {
         Path path = directory.resolve("unsupported.json");
-        for (String field : new String[] {
-            "\"geometry\":{\"faces\":{\"yMin\":\"WALL\",\"yMax\":\"WALL\"}}",
-            "\"physics\":{\"lattice\":{\"acceleration\":{\"x\":1e-6}}}",
-            "\"physics\":{\"physical\":{\"voxelWidth\":1,\"timeStep\":1e-100,\"densityReference\":1000,"
-                    + "\"viscosity\":1e99,\"acceleration\":{\"x\":1e-200}}}",
-            "\"output\":{\"exportEverySteps\":1}"
-        }) {
+        for (String field : new String[] {"\"output\":{\"exportEverySteps\":1}"}) {
             /// This inspectable grid would require 304 GB if the capability check allocated first.
             Files.writeString(
                     path,
@@ -94,6 +88,16 @@ class CfdMainTest {
             var result = run("simulate", "--config", path.toString());
             assertEquals(2, result.code(), result.err());
             assertFalse(Files.exists(directory.resolve("output")));
+        }
+    }
+
+    @Test
+    void phaseThreeScenesRunThroughTheCli() {
+        for (String scene : new String[] {"forced-channel.json", "periodic-obstacle.json"}) {
+            var result = run("simulate", "--config", "scenes/" + scene, "--backend", "serial");
+            assertEquals(0, result.code(), result.err());
+            assertTrue(result.out().contains("Fluid cells:"));
+            assertTrue(result.out().contains("Finite fields and positive density: true"));
         }
     }
 

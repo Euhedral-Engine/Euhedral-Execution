@@ -1,5 +1,8 @@
 # Phase 03 - Walls, forcing, and physical units
 
+Status: implemented. Configuration: [CONFIGURATION.md](CONFIGURATION.md).
+Runtime: [SIMULATION.md](SIMULATION.md).
+
 Dependencies: [02](02-three-dimensional-solver.md). Numerical definition: [NUMERICS.md](NUMERICS.md).
 
 ## Feature

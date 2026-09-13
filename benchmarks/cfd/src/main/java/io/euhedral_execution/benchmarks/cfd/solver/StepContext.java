@@ -1,6 +1,9 @@
 package io.euhedral_execution.benchmarks.cfd.solver;
 
 import io.euhedral_execution.benchmarks.cfd.config.GridShape;
+import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig.Guards;
+import io.euhedral_execution.benchmarks.cfd.config.Vector3;
+import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import java.util.Objects;
 import java.util.function.LongSupplier;
 
@@ -13,12 +16,45 @@ public record StepContext(
         long step,
         long startedNs,
         long timeoutNs,
-        LongSupplier clock) {
+        LongSupplier clock,
+        GeometryMask geometry,
+        Vector3 acceleration,
+        double densityReference,
+        Guards guards) {
+    public StepContext(
+            GridShape shape,
+            double[][] current,
+            double[][] next,
+            double omega,
+            long step,
+            long startedNs,
+            long timeoutNs,
+            LongSupplier clock) {
+        this(
+                shape,
+                current,
+                next,
+                omega,
+                step,
+                startedNs,
+                timeoutNs,
+                clock,
+                GeometryMask.periodic(shape),
+                Vector3.ZERO,
+                1,
+                Guards.DEFAULT);
+    }
+
     public StepContext {
         Objects.requireNonNull(shape);
         Objects.requireNonNull(current);
         Objects.requireNonNull(next);
         Objects.requireNonNull(clock);
+        Objects.requireNonNull(geometry);
+        Objects.requireNonNull(acceleration);
+        Objects.requireNonNull(guards);
+        if (!shape.equals(geometry.shape()) || !Double.isFinite(densityReference) || densityReference <= 0)
+            throw new IllegalArgumentException("invalid geometry shape or reference density");
         if (!Double.isFinite(omega) || omega <= 0 || omega >= 2 || step <= 0 || timeoutNs <= 0)
             throw new IllegalArgumentException("invalid relaxation, generation, or timeout");
         if (current.length != D3Q19.Q || next.length != D3Q19.Q)
@@ -32,6 +68,21 @@ public record StepContext(
                     throw new IllegalArgumentException("population arrays must not alias");
             }
         }
+    }
+
+    /// Guards stay in the range body even when full-field diagnostic scans are disabled.
+    public void checkFields(double rho, double ux, double uy, double uz, int x, int y, int z) {
+        validateFields(guards, densityReference, step, rho, ux, uy, uz, x, y, z);
+    }
+
+    static void validateFields(
+            Guards guards, double rho0, long step, double rho, double ux, double uy, double uz, int x, int y, int z) {
+        double mach = Math.hypot(Math.hypot(ux, uy), uz) * Math.sqrt(3);
+        if (!Double.isFinite(mach) || mach > guards.maxMach())
+            throw new SimulationException(step, x, y, z, "maximum Mach exceeded: " + mach);
+        if (!Double.isFinite(rho) || rho <= 0 || Math.abs(rho / rho0 - 1) > guards.maxRelativeDensityVariation())
+            throw new SimulationException(
+                    step, x, y, z, "relative density variation exceeded or invalid density: " + rho);
     }
 
     /// Checked at bounded intervals and before publication; subtraction handles nanoTime wraparound.

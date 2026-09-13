@@ -1,18 +1,22 @@
 package io.euhedral_execution.benchmarks.cfd.solver;
 
+import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration.CfdPhysics;
 import io.euhedral_execution.benchmarks.cfd.config.GridShape;
+import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 
 /// The driver owns generation boundaries; public reads expose values without mutable buffer access.
 public final class SimulationState {
     private final PopulationGrid grid;
-    private final double densityReference;
+    private final CfdPhysics physics;
+    private final GeometryMask geometry;
     private int currentBuffer;
     private long completedSteps;
     private FieldExtractor.Diagnostics diagnostics;
 
-    SimulationState(PopulationGrid grid, double densityReference) {
+    SimulationState(PopulationGrid grid, CfdPhysics physics, GeometryMask geometry) {
         this.grid = grid;
-        this.densityReference = densityReference;
+        this.physics = physics;
+        this.geometry = geometry;
     }
 
     public GridShape shape() {
@@ -32,8 +36,26 @@ public final class SimulationState {
     }
 
     public FieldExtractor.Field field(int x, int y, int z) {
-        grid.index(x, y, z);
-        return FieldExtractor.sample(current(), shape(), densityReference, completedSteps, x, y, z);
+        if (geometry.isSolid(grid.index(x, y, z)))
+            throw new IllegalArgumentException("macroscopic fields are undefined in solid cells");
+        return FieldExtractor.sample(
+                current(), shape(), physics.densityReference(), completedSteps, x, y, z, physics.acceleration());
+    }
+
+    public GeometryMask geometry() {
+        return geometry;
+    }
+
+    public FieldExtractor.Field physicalField(int x, int y, int z) {
+        if (!physics.physicalUnits()) throw new IllegalStateException("physical fields require physical parameters");
+        var field = field(x, y, z);
+        var units = physics.units();
+        return new FieldExtractor.Field(
+                units.densityToPhysical(field.density()),
+                units.velocityToPhysical(field.ux()),
+                units.velocityToPhysical(field.uy()),
+                units.velocityToPhysical(field.uz()),
+                units.pressureToPhysical(field.gaugePressure()));
     }
 
     double[][] current() {
@@ -49,9 +71,9 @@ public final class SimulationState {
     }
 
     /// Called only after successful computation, diagnostics, and deadline checks on this thread.
-    void complete(FieldExtractor.Diagnostics completed) {
+    void complete(long step, FieldExtractor.Diagnostics completed) {
         currentBuffer = 1 - currentBuffer;
-        completedSteps = completed.step();
-        diagnostics = completed;
+        completedSteps = step;
+        if (completed != null) diagnostics = completed;
     }
 }

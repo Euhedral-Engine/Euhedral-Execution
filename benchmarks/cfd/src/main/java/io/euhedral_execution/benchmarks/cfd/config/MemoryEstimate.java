@@ -28,6 +28,12 @@ public record MemoryEstimate(
             long auxiliary = Math.addExact(
                     Math.multiplyExact(5L, cells),
                     Math.multiplyExact(256L, grid.brickCount(config.execution().brick())));
+            var geometry = config.geometry();
+            long primitives = Math.addExact(
+                    Math.addExact(
+                            (long) geometry.boxes().size(), geometry.spheres().size()),
+                    geometry.cylinders().size());
+            auxiliary = Math.addExact(auxiliary, Math.multiplyExact(256L, primitives));
             auxiliary = Math.addExact(auxiliary, 1_048_576L);
             if (config.output().exportEverySteps() > 0) auxiliary = Math.addExact(auxiliary, 65_536L);
             long budget = config.memoryLimitBytes() == null ? defaultBudgetBytes : config.memoryLimitBytes();

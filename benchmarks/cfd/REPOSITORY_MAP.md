@@ -2,8 +2,9 @@
 
 The runtime integration points below were surveyed at commit
 `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
-Paths are relative to the repository root. Phase 01 configuration and Phase 02 periodic solver
-components are implemented, including ordered lattice
+Paths are relative to the repository root. Phases 01-03 implement configuration, the periodic/walled
+solver, solid geometry, forcing, and
+physical conversions, including ordered lattice
 execution. [Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
 configurable source dispatch work.
 
@@ -29,6 +30,8 @@ The `benchmarks/cfd/src/main/java/io/euhedral_execution/benchmarks/cfd/solver` p
 D3Q19 helpers, population buffers, macroscopic fields, and the serial simulation driver. The
 `frames`
 package owns reusable range bodies; `QueueIngestSink` feeds them to the lattice with ordered hashes.
+The `geometry` package resolves immutable cell masks before population allocation. Configuration
+owns the checked unit-conversion factors and runtime guard settings.
 See [SIMULATION.md](SIMULATION.md) for ownership and failure contracts.
 
 ## Existing numerical workload

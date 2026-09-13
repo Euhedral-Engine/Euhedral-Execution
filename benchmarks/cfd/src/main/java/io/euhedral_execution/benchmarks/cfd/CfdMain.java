@@ -27,7 +27,8 @@ public final class CfdMain {
             out.println("Usage: euhedral-cfd inspect --config <file.json>");
             out.println("       euhedral-cfd simulate --config <file.json> [--backend serial]");
             out.println("       euhedral-cfd --help");
-            out.println("Inspect configuration or simulate unforced periodic D3Q19 flow.");
+            out.println("Inspect configuration or simulate periodic/walled D3Q19 flow with stationary solids and body"
+                    + " forcing.");
             return 0;
         }
         try {
@@ -72,6 +73,7 @@ public final class CfdMain {
             var state = simulation.state();
             var diagnostics = state.diagnostics();
             out.println("Simulation completed: backend=serial, grid=" + state.shape());
+            out.println("Fluid cells: " + state.geometry().fluidCells());
             out.println("Completed steps: " + state.completedSteps());
             out.println("Completed lattice time: " + state.completedSteps());
             if (configuration.physics().physicalUnits())
@@ -121,9 +123,14 @@ public final class CfdMain {
                     physics.densityScale());
             out.println("Resolved physical duration: " + resolved.physicalDurationSeconds() + " s");
         }
+        out.println("Physical units per lattice unit: " + physics.units());
+        out.println("Guards: " + resolved.config().physics().guards());
+        out.println("Diagnostics interval: " + resolved.config().execution().diagnosticsEverySteps()
+                + " (0 = initial/final only)");
         out.println("Steps: " + resolved.steps());
         out.println("Step deadline: " + resolved.config().execution().stepDeadlineMillis() + " ms");
         out.println("Faces: " + resolved.config().geometry().faces());
+        out.println("Geometry: " + resolved.config().geometry());
         out.println("Brick: " + resolved.config().execution().brick());
         out.println("Population bytes (exact payload): " + memory.populationBytes());
         out.println("Auxiliary bytes (estimated): " + memory.auxiliaryBytes());

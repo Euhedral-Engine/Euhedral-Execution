@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 4,
+    "ny": 12,
+    "nz": 4
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1,
+      "acceleration": {
+        "x": 0.0001
+      }
+    },
+    "referenceLength": 12
+  },
+  "geometry": {
+    "faces": {
+      "yMin": "WALL",
+      "yMax": "WALL"
+    }
+  },
+  "execution": {
+    "steps": 2000,
+    "diagnosticsEverySteps": 100
+  }
+}

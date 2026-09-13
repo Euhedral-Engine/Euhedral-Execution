@@ -37,4 +37,11 @@ public final class D3Q19 {
         double speedSquared = ux * ux + uy * uy + uz * uz;
         return weight(direction) * density * (1 + 3 * dot + 4.5 * dot * dot - 1.5 * speedSquared);
     }
+    /// Unprefactored Guo source with F = rho * acceleration. Its collision prefactor is applied once.
+    public static double guo(
+            int direction, double rho, double ux, double uy, double uz, double ax, double ay, double az) {
+        double cu = x(direction) * ux + y(direction) * uy + z(direction) * uz;
+        double ca = x(direction) * ax + y(direction) * ay + z(direction) * az;
+        return weight(direction) * rho * (3 * (ca - ux * ax - uy * ay - uz * az) + 9 * cu * ca);
+    }
 }

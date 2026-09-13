@@ -400,7 +400,21 @@ class SolverTest {
         for (int q = 0; q < 19; q++) Arrays.fill(current[q], D3Q19.weight(q));
         Arrays.fill(current[1], 1e200);
         Arrays.fill(current[2], -1e200);
-        var error = assertThrows(SimulationException.class, () -> update(context(shape, current, next, 1.25, 3)));
+        /// Widen physical guards here to isolate overflow in the collision arithmetic itself.
+        var overflowContext = new StepContext(
+                shape,
+                current,
+                next,
+                1.25,
+                3,
+                0,
+                Long.MAX_VALUE,
+                () -> 0,
+                io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask.periodic(shape),
+                Vector3.ZERO,
+                1,
+                new SimulationConfig.Guards(Double.MAX_VALUE, Double.MAX_VALUE));
+        var error = assertThrows(SimulationException.class, () -> update(overflowContext));
         assertTrue(error.getMessage().contains("collision population"));
         assertEquals(3, error.step());
         double[][] invalidStored = buffers(shape);
