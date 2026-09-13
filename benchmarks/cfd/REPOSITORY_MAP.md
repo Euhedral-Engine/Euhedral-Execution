@@ -2,9 +2,10 @@
 
 The runtime integration points below were surveyed at commit
 `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
-Paths are relative to the repository root. Phase 01 build and configuration components are
-implemented;
-solver and runtime adapter components remain planned.
+Paths are relative to the repository root. Phase 01 configuration and Phase 02 periodic solver
+components are implemented, including ordered lattice
+execution. [Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
+configurable source dispatch work.
 
 ## Build and packaging
 
@@ -17,16 +18,28 @@ solver and runtime adapter components remain planned.
 | `benchmarks/cfd/src/main/scripts/euhedral-cfd`                       | Launcher automatically copied to `benchmarks/cfd/build/bin` by assemble/build                       |
 | `mise.toml`                                                          | Repository Java, Gradle, and native-build toolchain                                                 |
 
-CFD has its own application entry point and currently depends only on Jackson for configuration.
-Runtime project dependencies are added with the execution adapters, keeping Phase 01 inspection
-independent of native packaging and worker startup. Publication tasks are disabled for the benchmark
-application, and the root coverage aggregate excludes the entire benchmarks subtree.
+CFD has its own application entry point, uses Jackson for configuration, and depends on
+`euhedral-core` for its `AbstractFrame` work units, queue ingest, and lattice execution. Runtime
+libraries are bundled with the launcher. Inspection allocates no populations and starts no workers.
+Building the module now includes core and its native-packaging dependencies. Publication tasks are
+disabled for the benchmark application, and the root coverage aggregate excludes the entire
+benchmarks subtree.
+
+The `benchmarks/cfd/src/main/java/io/euhedral_execution/benchmarks/cfd/solver` package owns the
+D3Q19 helpers, population buffers, macroscopic fields, and the serial simulation driver. The
+`frames`
+package owns reusable range bodies; `QueueIngestSink` feeds them to the lattice with ordered hashes.
+See [SIMULATION.md](SIMULATION.md) for ownership and failure contracts.
 
 ## Existing numerical workload
 
 `benchmarks/src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/HighScaleBenchmark.java` constructs a lattice, prepares `MandelbulbFrame` arrays, groups work in its batched variant, and registers `ArrayIngestSink` sources. Its setup also demonstrates socket-local allocation through `PinnedThreadExecutor`.
 
-CFD extends the reusable-work-unit pattern to repeated generations. Persistent sources feed brick frames, and application-owned terminal acknowledgements establish timestep completion.
+CFD extends the reusable-work-unit pattern to repeated generations. Persistent sources feed
+independent range frames, and application-owned terminal acknowledgements establish timestep
+completion. Phase 08 adds configurable source counts, including one source for the FJP comparison
+and one per effective worker, with plain round-robin submission. Euhedral handles concurrent source
+acquisition and worker distribution; sources are not assigned to particular workers.
 
 ## Euhedral runtime integration
 

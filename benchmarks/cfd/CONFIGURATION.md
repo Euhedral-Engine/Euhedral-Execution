@@ -1,7 +1,7 @@
 # CFD configuration (schema version 1)
 
-The `euhedral-cfd` application currently provides configuration inspection. Build and run it with
-Java 21 through the repository's Mise toolchain:
+The `euhedral-cfd` application provides configuration inspection and serial periodic simulation.
+Build and run it with Java 21 through the repository's Mise toolchain:
 
 ```bash
 mise exec -- gradle :benchmarks:cfd:build
@@ -64,9 +64,19 @@ to zero. `physics.densityReference` remains the lattice reference density in bot
 
 Face conditions currently accept `PERIODIC` and stationary `WALL`. Periodic faces must occur in
 opposite pairs on each axis. Open-face conditions, obstacle geometry, STL imports, and backend
-selection are introduced in their respective phases and are currently rejected. Walls and forcing
-can be inspected; their numerical execution belongs to Phase 03. No simulation command is provided
-in Phase 01.
+selection beyond `serial` are introduced in their respective phases and are currently rejected.
+Walls and forcing can be inspected; their numerical execution belongs to Phase 03.
+[Serial simulation](SIMULATION.md) requires all faces periodic, zero acceleration, and disabled
+field export. It honors the configured duration and per-step deadline.
+
+An optional `physics.shear` section selects the periodic profile
+`u_x = amplitude*sin(2*pi*modeY*y/ny)*cos(2*pi*modeZ*z/nz)`, with `u_y = u_z = 0`.
+Here `y` and `z` are zero-based cell indexes. `amplitude` must be positive and finite, in lattice
+velocity units or m/s according to the selected parameter mode. `modeY` and `modeZ` are positive
+integers (both default to 1) strictly below the corresponding Nyquist frequencies; `2*modeY < ny`
+and `2*modeZ < nz`. A shear profile cannot be combined with nonzero `initialVelocity`.
+Omitting `shear` preserves the uniform initialization default. Inspection uses the shear amplitude
+for reference speed in Mach/Reynolds estimates; the sampled grid maximum can be smaller.
 
 `steps` and `durationSeconds` cannot both be specified. Physical duration resolves to
 `ceil(durationSeconds/timeStep)` whole steps; the report gives the resulting duration, which can

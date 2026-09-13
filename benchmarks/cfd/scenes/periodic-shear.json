@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 12,
+    "ny": 24,
+    "nz": 20
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    },
+    "shear": {
+      "amplitude": 0.01,
+      "modeY": 1,
+      "modeZ": 1
+    },
+    "referenceLength": 20.0
+  },
+  "execution": {
+    "steps": 100
+  },
+  "memoryLimitBytes": 16777216
+}

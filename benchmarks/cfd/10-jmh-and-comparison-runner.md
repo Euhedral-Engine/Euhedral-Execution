@@ -1,6 +1,6 @@
 # Phase 10 - JMH and comparison runner
 
-Dependencies: [07](07-external-solver-validation.md), [09](09-euhedral-execution-backend.md).
+Dependencies: [07](07-external-solver-validation.md), [08](08-parallel-execution-backends.md).
 
 ## Feature
 
@@ -26,7 +26,20 @@ Each invocation starts from the same deterministic state and configured physical
 
 The measured interval includes dispatch, numerical work, boundary handling, configured diagnostics, terminal waits, reductions, and buffer swaps. Separate setup and end-to-end measurements describe the remaining application costs.
 
-Parallel backends share the same effective physical-worker CPU set, accounting for reserved cores and logical siblings. Reports include requested/effective IDs, affinity capability, JVM options, precision, grid, active-fluid cells, brick shape, source count, and source revision.
+Parallel backends share the same effective physical-worker CPU set, accounting for reserved cores
+and logical siblings. Reports include requested/effective IDs, affinity capability, JVM options,
+precision, grid, active-fluid cells, range shape, requested/resolved source count, submission
+policy, and source revision.
+
+The FJP comparison preset explicitly selects Euhedral source count `1`. A separate Euhedral variant
+selects `workers`, resolving to one source per effective physical worker; additional positive counts
+may be compared explicitly. Every variant uses the same numerical ranges, worker budget, single
+external driver, diagnostic settings, and measurement boundaries. Results retain source count as a
+comparison dimension rather than combining the variants into one Euhedral result.
+
+Multiple sources receive plain round-robin submissions as defined in Phase 08. Source selection and
+submission are included in the measured dispatch interval; source creation and registration occur
+during setup. Euhedral manages worker source order and internal distribution.
 
 ## Results
 
@@ -42,7 +55,11 @@ Derived metrics use matching physical cases and measurement boundaries. Fork var
 
 ## Verification
 
-Coverage includes metric conversion, configuration compatibility, missing/stale validation evidence, changed viscosity/boundaries/duration, zero work, incomplete runs, and raw fork retention. Small real JMH runs exercise every available backend with completed field checks and isolated numerical timing.
+Coverage includes metric conversion, configuration compatibility, missing/stale validation evidence,
+changed viscosity/boundaries/duration, zero work, incomplete runs, explicit single-source FJP
+comparison settings, resolved worker-count sources, separation of source-count variants, and raw
+fork retention. Small real JMH runs exercise every available backend with completed field checks and
+isolated numerical timing.
 
 ## Interface
 
