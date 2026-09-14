@@ -1,0 +1,41 @@
+{
+  "grid": {
+    "nx": 12,
+    "ny": 8,
+    "nz": 8
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1,
+      "acceleration": {
+        "x": 1e-05
+      }
+    },
+    "forceReference": {
+      "velocity": 0.003,
+      "area": 4,
+      "density": 1,
+      "direction": {
+        "x": 1
+      }
+    }
+  },
+  "geometry": {
+    "spheres": [
+      {
+        "id": 1,
+        "center": {
+          "x": 6,
+          "y": 4,
+          "z": 4
+        },
+        "radius": 1.6
+      }
+    ]
+  },
+  "schemaVersion": 1,
+  "execution": {
+    "steps": 100,
+    "diagnosticsEverySteps": 10
+  }
+}

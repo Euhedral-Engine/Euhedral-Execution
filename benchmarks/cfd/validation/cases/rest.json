@@ -1,0 +1,34 @@
+{
+  "grid": {
+    "nx": 8,
+    "ny": 8,
+    "nz": 8
+  },
+  "geometry": {
+    "boxes": [
+      {
+        "id": 1,
+        "min": {
+          "x": 3,
+          "y": 3,
+          "z": 3
+        },
+        "max": {
+          "x": 5,
+          "y": 5,
+          "z": 5
+        }
+      }
+    ]
+  },
+  "schemaVersion": 1,
+  "execution": {
+    "steps": 100,
+    "diagnosticsEverySteps": 10
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    }
+  }
+}

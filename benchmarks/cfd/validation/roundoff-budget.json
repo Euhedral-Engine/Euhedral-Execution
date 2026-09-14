@@ -1,0 +1,183 @@
+{
+  "mode": "MATCHED_DISCRETIZATION",
+  "basis": "A priori floating-point equivalence budget, not a continuum discretization-error allowance. D3Q19 BGK/Guo, identical post-collision initialization, integer times and q=0.5 walls. For these bounded double-precision grids, <=400 updates and densities near one, 1e-10 field limits allow conservative rounding accumulation; total mass and link-force reductions have separately dimensioned budgets. Each new reference must repeat exactly in a second process. Rest, shear and channel analytical setup checks and refinement cases are required alongside this operator correspondence. No open-boundary or interpolated-grid qualification.",
+  "tolerances": {
+    "velocity": {
+      "absolute": 1e-10,
+      "relative": 0.0,
+      "scale": 0.01
+    },
+    "density": {
+      "absolute": 1e-10,
+      "relative": 0.0,
+      "scale": 1.0
+    },
+    "pressure": {
+      "absolute": 1e-10,
+      "relative": 0.0,
+      "scale": 0.0001
+    },
+    "mass": {
+      "absolute": 1e-07,
+      "relative": 0.0,
+      "scale": 1000.0
+    },
+    "force": {
+      "absolute": 1e-09,
+      "relative": 0.0,
+      "scale": 0.001
+    },
+    "drag": {
+      "absolute": 0.0001,
+      "relative": 0.0,
+      "scale": 1.0
+    },
+    "inletFlux": {
+      "absolute": 1e-09,
+      "relative": 0.0,
+      "scale": 0.01
+    },
+    "outletFlux": {
+      "absolute": 1e-09,
+      "relative": 0.0,
+      "scale": 0.01
+    },
+    "pressureDrop": {
+      "absolute": 1e-10,
+      "relative": 0.0,
+      "scale": 0.0001
+    }
+  },
+  "cases": {
+    "rest": {
+      "configurationSha256": "805d90e75efde47307c633b846a02a0f7ea5f70f130225ff0a2c2077385fe388",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "features": [
+        "equilibrium",
+        "stationary-walls"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": []
+    },
+    "shear": {
+      "configurationSha256": "990379ebd6e9add822e684ba6c7fd470d331f5ef6f87da6665f04c98c35fbf2d",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "features": [
+        "periodic-streaming",
+        "viscosity",
+        "transient"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": []
+    },
+    "channel": {
+      "configurationSha256": "8d6df913725c6e3ceea134e2866bc97d52ae37a47a8c54850009541851cd613f",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "features": [
+        "guo-force",
+        "halfway-walls"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": []
+    },
+    "obstacle": {
+      "configurationSha256": "17657bcff56fb8c6bb130679fca6810d544f939c76b0192d8b3c42278c87957c",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "features": [
+        "primitive-obstacles",
+        "momentum-exchange"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": []
+    },
+    "stl": {
+      "configurationSha256": "9b031f4e4904681df7d2b56078b53bd9fb761a4433d9d50f10fb358c5178f0fb",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "features": [
+        "stl-mask",
+        "obstacle-identity"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": [
+        "03e035bf0a5d8675a6d955d59eb45f514fa0a0cc5b7aa479b2a592ca16850f8d"
+      ]
+    },
+    "shear-fine": {
+      "configurationSha256": "79cea260c4a52a2b9ae4f8470bf34a6a26437ba444230f3e51624138553f5a36",
+      "sampleSteps": [
+        0,
+        40,
+        200,
+        400
+      ],
+      "features": [
+        "periodic-streaming",
+        "viscosity",
+        "transient"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": []
+    },
+    "channel-fine": {
+      "configurationSha256": "556db6a534f66721476d9ba62809af7942408fb0316c701086398ec7e57bc581",
+      "sampleSteps": [
+        0,
+        40,
+        200,
+        400
+      ],
+      "features": [
+        "guo-force",
+        "halfway-walls"
+      ],
+      "pressureGauge": "FLUID_MEAN",
+      "sampling": "DIRECT",
+      "minimumCoverage": 1.0,
+      "referenceConfigurationSha256": "same",
+      "meshSha256": []
+    }
+  }
+}

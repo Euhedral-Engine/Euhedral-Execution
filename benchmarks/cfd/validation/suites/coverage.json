@@ -1,0 +1,415 @@
+{
+  "schemaVersion": 1,
+  "outputDirectory": "../../build/validation",
+  "processDeadlineMillis": 60000,
+  "cases": [
+    {
+      "id": "rest",
+      "config": "../cases/rest.json",
+      "features": [
+        "equilibrium",
+        "stationary-walls"
+      ],
+      "mode": "MATCHED_DISCRETIZATION",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": {
+        "file": "../roundoff-budget.json",
+        "sha256": "7fbe887bfe926b743bab910b0c605f9e57e69b23567beef6edd5dc85d19ef1a6"
+      },
+      "correspondence": "D3Q19 second-order BGK; Guo; g(t) post-collision, u=sum(c*g)/rho-a/2; halfway-link bounce-back; identical candidate mask. Open faces are incompatible until qualified."
+    },
+    {
+      "id": "shear",
+      "config": "../cases/shear.json",
+      "features": [
+        "periodic-streaming",
+        "viscosity",
+        "transient"
+      ],
+      "mode": "MATCHED_DISCRETIZATION",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": {
+        "file": "../roundoff-budget.json",
+        "sha256": "7fbe887bfe926b743bab910b0c605f9e57e69b23567beef6edd5dc85d19ef1a6"
+      },
+      "correspondence": "D3Q19 second-order BGK; Guo; g(t) post-collision, u=sum(c*g)/rho-a/2; halfway-link bounce-back; identical candidate mask. Open faces are incompatible until qualified."
+    },
+    {
+      "id": "channel",
+      "config": "../cases/channel.json",
+      "features": [
+        "guo-force",
+        "halfway-walls"
+      ],
+      "mode": "MATCHED_DISCRETIZATION",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": {
+        "file": "../roundoff-budget.json",
+        "sha256": "7fbe887bfe926b743bab910b0c605f9e57e69b23567beef6edd5dc85d19ef1a6"
+      },
+      "correspondence": "D3Q19 second-order BGK; Guo; g(t) post-collision, u=sum(c*g)/rho-a/2; halfway-link bounce-back; identical candidate mask. Open faces are incompatible until qualified."
+    },
+    {
+      "id": "obstacle",
+      "config": "../cases/obstacle.json",
+      "features": [
+        "primitive-obstacles",
+        "momentum-exchange"
+      ],
+      "mode": "MATCHED_DISCRETIZATION",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": {
+        "file": "../roundoff-budget.json",
+        "sha256": "7fbe887bfe926b743bab910b0c605f9e57e69b23567beef6edd5dc85d19ef1a6"
+      },
+      "correspondence": "D3Q19 second-order BGK; Guo; g(t) post-collision, u=sum(c*g)/rho-a/2; halfway-link bounce-back; identical candidate mask. Open faces are incompatible until qualified."
+    },
+    {
+      "id": "stl",
+      "config": "../cases/stl.json",
+      "features": [
+        "stl-mask",
+        "obstacle-identity"
+      ],
+      "mode": "MATCHED_DISCRETIZATION",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": {
+        "file": "../roundoff-budget.json",
+        "sha256": "7fbe887bfe926b743bab910b0c605f9e57e69b23567beef6edd5dc85d19ef1a6"
+      },
+      "correspondence": "D3Q19 second-order BGK; Guo; g(t) post-collision, u=sum(c*g)/rho-a/2; halfway-link bounce-back; identical candidate mask. Open faces are incompatible until qualified."
+    },
+    {
+      "id": "duct",
+      "config": "../cases/duct.json",
+      "features": [
+        "velocity-inlet",
+        "density-outlet",
+        "ramp",
+        "boundary-mass-balance"
+      ],
+      "mode": "MATCHED_DISCRETIZATION",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": null,
+      "correspondence": "D3Q19 second-order BGK; Guo; g(t) post-collision, u=sum(c*g)/rho-a/2; halfway-link bounce-back; identical candidate mask. Open faces are incompatible until qualified."
+    }
+  ]
+}

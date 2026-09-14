@@ -2,9 +2,9 @@
 
 The runtime integration points below were surveyed at commit
 `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
-Paths are relative to the repository root. Phases 01-06 implement configuration, the periodic/walled
+Paths are relative to the repository root. Phases 01-07 implement configuration, the periodic/walled
 solver, solid geometry, forcing, open boundaries, obstacle forces, physical conversions, ordered
-lattice execution, ParaView time-series output, and STL import/voxelization.
+lattice execution, ParaView time-series output, STL import/voxelization, and external OpenLB validation.
 [Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
 configurable source dispatch work.
 
@@ -75,6 +75,6 @@ Brick completion publishes numerical writes and private diagnostic reductions. T
 
 ## External reference integration
 
-`benchmarks/cfd/validation/openlb` contains the planned OpenLB case adapter and build configuration. A separately installed, pinned OpenLB release performs reference computation in a child process. Case translation and field export connect that process to the validation runner. The Java numerical kernel and OpenLB retain separate implementations.
+`benchmarks/cfd/validation/openlb` contains the OpenLB case adapter and pinned build script. A separately installed, pinned OpenLB release performs reference computation in a child process. Case translation and field export connect that process to the validation runner. The Java numerical kernel and OpenLB retain separate implementations.
 
-`benchmarks/cfd/validation/suites` contains matched cases and comparison tolerances. Validation artifacts associate reference output with resolved physical settings, solver versions, comparison locations, and times. The benchmark runner consumes these reports as numerical-eligibility evidence.
+`benchmarks/cfd/validation/suites` contains matched cases and comparison tolerances. Validation artifacts associate reference output with resolved physical settings, solver versions, comparison locations, and times. The planned benchmark runner consumes these reports as numerical-eligibility evidence. [VALIDATION.md](VALIDATION.md) describes the implemented runner and qualification boundaries.

@@ -17,6 +17,9 @@ tasks.named<Jar>("jar") {
     manifest {
         attributes(
             "Main-Class" to application.mainClass.get(),
+            "Cfd-Source-Revision" to providers.exec {
+                commandLine("git", "rev-parse", "HEAD")
+            }.standardOutput.asText.get().trim(),
             "Class-Path" to configurations.runtimeClasspath.get().files.joinToString(" ") { "lib/${it.name}" }
         )
     }
@@ -62,3 +65,22 @@ tasks.withType<GenerateMavenPom>().configureEach { enabled = false }
 tasks.withType<GenerateModuleMetadata>().configureEach { enabled = false }
 tasks.withType<Sign>().configureEach { enabled = false }
 tasks.withType<JacocoReport>().configureEach { enabled = false }
+
+/// Bundle the exact adapter used to qualify external reference installations.
+tasks.processResources {
+    from("validation") { into("validation") }
+}
+distributions.main {
+    contents {
+        from("validation") { into("validation") }
+        from("scenes") { into("scenes") }
+    }
+}
+
+/// Reference installation selection affects whether external integration executes or skips.
+tasks.named<Test>("integrationTest") {
+    inputs.property("openlbHome", providers.environmentVariable("OPENLB_HOME").orElse(""))
+    providers.environmentVariable("OPENLB_HOME").orNull?.let {
+        inputs.files(file("$it/identity.json"), file("$it/cfd-openlb")).optional()
+    }
+}

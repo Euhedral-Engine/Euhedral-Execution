@@ -7,6 +7,7 @@ import io.euhedral_execution.benchmarks.cfd.output.RunOutput;
 import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import io.euhedral_execution.benchmarks.cfd.solver.SerialSimulation;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
+import io.euhedral_execution.benchmarks.cfd.validation.ValidationRunner;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import java.io.IOException;
 import java.io.InterruptedIOException;
@@ -28,18 +29,20 @@ public final class CfdMain {
         if (args.length == 0
                 || (args.length == 1 && (args[0].equals("--help") || args[0].equals("-h")))
                 || (args.length == 2
-                        && (args[0].equals("inspect") || args[0].equals("simulate"))
+                        && (args[0].equals("inspect") || args[0].equals("simulate") || args[0].equals("validate"))
                         && args[1].equals("--help"))) {
             out.println("Usage: euhedral-cfd inspect --config <file.json> [--voxelize]");
             out.println("       euhedral-cfd simulate --config <file.json> [--backend serial]");
             out.println("       [--steps N | --duration SECONDS] [--output DIRECTORY] [--export-every N]");
             out.println("       [--format appended|ascii] [--set path=JSON-value ...]");
+            out.println("       euhedral-cfd validate --suite <suite.json> [--openlb-home DIRECTORY]");
             out.println("       euhedral-cfd --help");
             out.println("Inspect configuration or simulate D3Q19 flow with stationary solids, open boundaries and body"
                     + " forcing.");
             return 0;
         }
         try {
+            if (args[0].equals("validate")) return ValidationRunner.command(args, out);
             boolean simulate = args[0].equals("simulate");
             if (!simulate && !args[0].equals("inspect"))
                 throw new IllegalArgumentException("unknown command: " + args[0]);
