@@ -2,6 +2,7 @@ package io.euhedral_execution.benchmarks.cfd;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import io.euhedral_execution.benchmarks.cfd.support.CfdTestRuntime;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -24,8 +25,15 @@ class CfdMainTest {
     private Result run(String... args) {
         var out = new ByteArrayOutputStream();
         var err = new ByteArrayOutputStream();
-        int code = CfdMain.run(args, new PrintStream(out), new PrintStream(err));
-        return new Result(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
+        /// The CLI adopts the existing lattice. These serial cases need one worker, even on large hosts.
+        /// Each invocation owns its fixture because a successful simulate command closes the lattice.
+        var runtime = args.length > 0 && args[0].equals("simulate") ? CfdTestRuntime.singleWorker() : null;
+        try {
+            int code = CfdMain.run(args, new PrintStream(out), new PrintStream(err));
+            return new Result(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
+        } finally {
+            if (runtime != null) runtime.close();
+        }
     }
 
     @Test
@@ -77,15 +85,9 @@ class CfdMainTest {
     }
 
     @Test
-    void simulationRejectsUnsupportedPhysicsAndExportBeforeAllocation() throws Exception {
+    void simulationRejectsUnsupportedExportBeforeAllocation() throws Exception {
         Path path = directory.resolve("unsupported.json");
-        for (String field : new String[] {
-            "\"geometry\":{\"faces\":{\"yMin\":\"WALL\",\"yMax\":\"WALL\"}}",
-            "\"physics\":{\"lattice\":{\"acceleration\":{\"x\":1e-6}}}",
-            "\"physics\":{\"physical\":{\"voxelWidth\":1,\"timeStep\":1e-100,\"densityReference\":1000,"
-                    + "\"viscosity\":1e99,\"acceleration\":{\"x\":1e-200}}}",
-            "\"output\":{\"exportEverySteps\":1}"
-        }) {
+        for (String field : new String[] {"\"output\":{\"exportEverySteps\":1}"}) {
             /// This inspectable grid would require 304 GB if the capability check allocated first.
             Files.writeString(
                     path,
@@ -94,6 +96,16 @@ class CfdMainTest {
             var result = run("simulate", "--config", path.toString());
             assertEquals(2, result.code(), result.err());
             assertFalse(Files.exists(directory.resolve("output")));
+        }
+    }
+
+    @Test
+    void phaseThreeScenesRunThroughTheCli() {
+        for (String scene : new String[] {"forced-channel.json", "periodic-obstacle.json"}) {
+            var result = run("simulate", "--config", "scenes/" + scene, "--backend", "serial");
+            assertEquals(0, result.code(), result.err());
+            assertTrue(result.out().contains("Fluid cells:"));
+            assertTrue(result.out().contains("Finite fields and positive density: true"));
         }
     }
 

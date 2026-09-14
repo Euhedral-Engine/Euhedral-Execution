@@ -45,6 +45,10 @@ public final class CfdRangeFrame extends CfdFrame {
                 ny = context.shape().ny(),
                 nz = context.shape().nz();
         double[][] current = context.current(), next = context.next();
+        var geometry = context.geometry();
+        var acceleration = context.acceleration();
+        double ax = acceleration.x(), ay = acceleration.y(), az = acceleration.z();
+        boolean forced = ax != 0 || ay != 0 || az != 0;
         for (int z = zFrom; z < zTo; z++) {
             for (int y = yFrom; y < yTo; y++) {
                 for (int x = xFrom; x < xTo; x++) {
@@ -52,12 +56,16 @@ public final class CfdRangeFrame extends CfdFrame {
                         if (!isAlive()) throwCancelSignal();
                         context.checkProgress(x, y, z);
                     }
+                    int destination = x + nx * (y + ny * z);
+                    if (geometry.isSolid(destination)) continue;
                     double rho = 0, mx = 0, my = 0, mz = 0;
                     for (int i = 0; i < D3Q19.Q; i++) {
-                        int sx = wrap(x - D3Q19.x(i), nx);
-                        int sy = wrap(y - D3Q19.y(i), ny);
-                        int sz = wrap(z - D3Q19.z(i), nz);
-                        double f = current[i][sx + nx * (sy + ny * sz)];
+                        int sx = x - D3Q19.x(i), sy = y - D3Q19.y(i), sz = z - D3Q19.z(i);
+                        boolean wall = geometry.wallId(sx, sy, sz) != 0;
+                        int source = wrap(sx, nx) + nx * (wrap(sy, ny) + ny * wrap(sz, nz));
+                        double f = wall || geometry.isSolid(source)
+                                ? current[D3Q19.opposite(i)][destination]
+                                : current[i][source];
                         if (!Double.isFinite(f))
                             throw new SimulationException(
                                     context.step(), x, y, z, "non-finite incoming population direction=" + i);
@@ -69,13 +77,14 @@ public final class CfdRangeFrame extends CfdFrame {
                     }
                     if (!Double.isFinite(rho) || rho <= 0)
                         throw new SimulationException(context.step(), x, y, z, "density must be finite and positive");
-                    double ux = mx / rho, uy = my / rho, uz = mz / rho;
+                    double ux = mx / rho + ax / 2, uy = my / rho + ay / 2, uz = mz / rho + az / 2;
                     if (!Double.isFinite(ux) || !Double.isFinite(uy) || !Double.isFinite(uz))
                         throw new SimulationException(context.step(), x, y, z, "non-finite velocity");
-                    int destination = x + nx * (y + ny * z);
+                    context.checkFields(rho, ux, uy, uz, x, y, z);
                     for (int i = 0; i < D3Q19.Q; i++) {
                         double value =
                                 incoming[i] - context.omega() * (incoming[i] - D3Q19.equilibrium(i, rho, ux, uy, uz));
+                        if (forced) value += (1 - context.omega() / 2) * D3Q19.guo(i, rho, ux, uy, uz, ax, ay, az);
                         if (!Double.isFinite(value))
                             throw new SimulationException(
                                     context.step(), x, y, z, "non-finite collision population direction=" + i);

@@ -73,6 +73,9 @@ public final class ConfigLoader {
 
     public static CfdConfiguration resolve(Path path, SimulationConfig config, long defaultBudgetBytes) {
         CfdPhysics physics = resolvePhysics(config.physics());
+        for (int size :
+                new int[] {config.grid().nx(), config.grid().ny(), config.grid().nz()})
+            physics.units().lengthToPhysical(size);
         long steps;
         if (config.execution().durationSeconds() == null) {
             steps = config.execution().steps();
@@ -99,6 +102,7 @@ public final class ConfigLoader {
 
     private static CfdPhysics resolvePhysics(SimulationConfig.Physics config) {
         double dx = 1, dt = 1, densityScale = 1;
+        UnitConversions units = UnitConversions.of(1, 1, 1);
         double viscosity;
         Vector3 velocity;
         Vector3 acceleration;
@@ -107,15 +111,14 @@ public final class ConfigLoader {
             var physical = config.physical();
             dx = physical.voxelWidth();
             dt = physical.timeStep();
-            double velocityScale = Checks.positive(dt / dx, "velocity conversion");
-            viscosity = Checks.positive(physical.viscosity() * velocityScale / dx, "converted viscosity");
-            velocity = physical.initialVelocity().scale(velocityScale);
-            acceleration =
-                    physical.acceleration().scale(Checks.positive(velocityScale * dt, "acceleration conversion"));
             densityScale =
                     Checks.positive(physical.densityReference() / config.densityReference(), "density conversion");
+            units = UnitConversions.of(dx, dt, densityScale);
+            viscosity = Checks.positive(units.viscosityToLattice(physical.viscosity()), "converted viscosity");
+            velocity = units.velocityToLattice(physical.initialVelocity());
+            acceleration = units.accelerationToLattice(physical.acceleration());
             if (config.referenceLength() != null)
-                referenceLength = Checks.positive(referenceLength / dx, "converted referenceLength");
+                referenceLength = Checks.positive(units.lengthToLattice(referenceLength), "converted referenceLength");
         } else {
             viscosity = config.lattice().viscosity();
             velocity = config.lattice().initialVelocity();
@@ -126,7 +129,7 @@ public final class ConfigLoader {
         SimulationConfig.Shear shear = config.shear() == null
                 ? null
                 : new SimulationConfig.Shear(
-                        config.shear().amplitude() * (dt / dx),
+                        units.velocityToLattice(config.shear().amplitude()),
                         config.shear().modeY(),
                         config.shear().modeZ());
         double referenceSpeed = shear == null ? velocity.magnitude() : shear.amplitude();
@@ -146,6 +149,7 @@ public final class ConfigLoader {
                 dt,
                 densityScale,
                 config.physical() != null,
-                shear);
+                shear,
+                units);
     }
 }

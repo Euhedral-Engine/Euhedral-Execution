@@ -1,4 +1,4 @@
-# Serial periodic simulation
+# Serial CFD simulation
 
 Build and run the bundled launcher from the repository root:
 
@@ -6,36 +6,54 @@ Build and run the bundled launcher from the repository root:
 mise exec -- gradle :benchmarks:cfd:build
 mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-smoke.json --backend serial
 mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-shear.json --backend serial
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/forced-channel.json --backend serial
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-obstacle.json --backend serial
 ```
 
 `serial` is the default backend; `--config` and `--backend` may appear in either order. The smoke
 case advances a uniform velocity on a `12x10x8` grid for 20 timesteps. The shear case uses a
-`12x24x20` grid and evolves for 100 timesteps, with spatial variation in both Y and Z. Neither
-command creates output files. The final report includes completed steps/time, total mass, density
+`12x24x20` grid and evolves for 100 timesteps, with spatial variation in both Y and Z. These
+commands create no output files. The final report includes completed steps/time, fluid-cell count,
+fluid mass, density
 range, maximum lattice speed and Mach number, and finite/positive-density validity.
 
-Only unforced periodic flow is executable. Walls, nonzero acceleration, field export, and nonserial
-backends are rejected before population allocation. Phase 01 inspection continues to accept its
-broader configuration schema. Physical inputs use the existing unit resolver; reported fields are
-in lattice units, and completed physical time is labeled separately. See
-[CONFIGURATION.md](CONFIGURATION.md) for defaults, duration, memory limits, and shear settings.
+Periodic/walled flow supports stationary boxes, spheres, finite cylinders, and uniform acceleration.
+`forced-channel.json` has a `4x12x4` periodic X/Z channel between Y wall planes, with viscosity 0.1
+and X acceleration 0.0001, evolved for 2000 steps. Its analytical peak speed is 0.018; cell centers
+sample the parabola between the wall planes. `periodic-obstacle.json` places a sphere in a periodic
+`12x10x8` grid and applies X acceleration for 100 steps. Open boundaries, obstacle forces, export,
+and nonserial backends remain later work.
+
+Physical inputs use checked unit conversions; CLI diagnostics are in lattice units, with completed
+physical time labeled separately. `SimulationState.physicalField()` converts density, velocity, and
+gauge pressure to SI for physical configurations. Fields at solid cells are undefined and rejected.
+See [CONFIGURATION.md](CONFIGURATION.md) for geometry coordinates, guards, and diagnostics cadence.
 
 ## Numerical state and ownership
 
 The implementation follows [NUMERICS.md](NUMERICS.md). `PopulationGrid` owns two disjoint sets of
 19 `double[]` arrays of length `nx*ny*nz`. Checked memory preflight precedes allocation. X varies
 fastest. Stored values are post-collision populations; initialization uses local equilibrium at the
-configured density and uniform or shear velocity.
+configured density and uniform or shear velocity, plus half the unprefactored Guo source when
+forced.
 
-`StepContext` supplies the current/next buffers, relaxation frequency, generation, and deadline.
-The `CfdRangeFrame` body gathers from the current buffer with periodic wraparound, then performs
-BGK collision within its six primitive, half-open destination bounds. Every destination writes its
-own 19 populations. Range boundaries never restrict source reads. Directional scratch is allocated
+`StepContext` supplies buffers, relaxation frequency, geometry, acceleration, guards, generation,
+and deadline. The `CfdRangeFrame` body gathers with periodic wraparound or halfway bounce-back,
+then performs BGK collision with the Guo source inside its six primitive, half-open bounds. A solid
+source or exterior wall reflects `current[opposite(i)][destination]`. Every fluid destination writes
+its own 19 populations; solid destinations are skipped. Range boundaries never restrict source
+reads. Directional scratch is allocated
 once by each reusable frame; replacing work inputs and normal body execution allocate no range or
 scratch objects. Direction tables are exposed through immutable accessors.
 
-Initialization is ordinary setup in `SerialSimulation`: allocate the two population buffers,
-fill the initial equilibrium, and compute initial diagnostics once per simulation.
+Initialization is ordinary setup in `SerialSimulation`: resolve the immutable geometry mask,
+reject empty fluid domains, allocate the two population buffers, initialize force-aware populations,
+and compute initial diagnostics once per simulation. Geometry/configuration objects are shared by
+all generations. Static stencil, equilibrium, force, and validation helpers create no per-cell
+objects. Each frame retains one 19-value scratch array; the driver retains its diagnostic scratch.
+One immutable context is created per generation, shared by that generation's ranges, and one
+summary record is created per diagnostic scan. Frame replacement/body execution allocates neither
+range descriptors nor numerical scratch.
 
 `CfdRangeFrame` extends `AbstractFrame` through `CfdFrame` and represents the repeating,
 parallelizable work. It carries replaceable primitive destination bounds, private directional
@@ -51,7 +69,7 @@ one reusable whole-volume range frame per timestep. The frame retains the same `
 routing topology. Lattice workers execute it through the standard terminal, which checks liveness,
 invokes the body, and selects `doFinally()` or `doFinallyWithError()`. The driver waits for
 successful
-terminal completion, computes and validates diagnostics, checks the deadline, and swaps buffers.
+terminal completion, computes diagnostics when scheduled, checks the deadline, and swaps buffers.
 An empty ingest queue is not a timestep completion signal.
 
 The serial backend uses normal lattice workers; serial execution comes from ordered routing. To
@@ -132,16 +150,19 @@ The field extractor reduces mass/density/speed diagnostics in X-fastest order, u
 summation for mass. Public simulation-state access returns values and completed diagnostics, not
 mutable arrays; callers must follow the frame ownership boundary when execution is asynchronous.
 
-For the unforced stored state, density is the population sum, velocity is momentum/density, and
-gauge pressure is `(density-referenceDensity)/3`. These values refer to the completed timestep.
-The next phase adds the half-force convention when forcing is supported.
+Density is the stored population sum, velocity is `momentum/density - acceleration/2`, and gauge
+pressure is `(density-referenceDensity)/3`. The gather/collision body uses the positive half-force
+correction on incoming populations. Initialization uses `equilibrium + GuoSource/2`, so field
+extraction returns the configured velocity at time zero. Solid cells are excluded from diagnostics.
+These conventions refer to the completed timestep and follow [NUMERICS.md](NUMERICS.md).
 
 ## Failure behavior
 
 Non-finite incoming/stored/collided populations, non-positive or non-finite density, and non-finite
 macroscopic fields fail the simulation with a timestep and cell location. Initialization is step 0;
-a failed update identifies the attempted step. Runtime Mach and density-deviation thresholds are
-not yet implemented; a finite-state pass does not certify accuracy or low-Mach suitability.
+a failed update identifies the attempted step. Configurable Mach and relative-density guards run
+in the kernel on every step and during initial field analysis. Optional intermediate diagnostic
+scans cannot disable them. A guarded finite-state pass does not certify numerical accuracy.
 
 The per-step deadline covers queue submission, waiting for terminal completion, the frame body,
 and completed-field validation. The driver checks deadline and interruption while waiting. The
@@ -172,7 +193,21 @@ The solver tests cover:
 
 - D3Q19 direction uniqueness, opposite symmetry, isotropic moments through fourth order, and
   equilibrium density/momentum.
-- Uniform-flow preservation at several viscosities on non-cubic grids.
+- Uniform-flow preservation at several viscosities on non-cubic grids, including exact zero-force
+  equivalence.
+- Cell-center masks for boxes, spheres, axial and oblique finite cylinders; overlap IDs, empty-fluid
+  rejection, wall/periodic intersections, and physical geometry coordinates.
+- All 18 moving directions reflect from solid neighbors and exterior walls, including diagonal
+  links;
+  solid populations are never gathered or collided.
+- Force-aware initialization/extraction, Guo mass/first/second moments, reversed acceleration,
+  stationary preservation, and closed/periodic fluid-mass conservation.
+- Planar Poiseuille profiles at viscosities 0.05, 0.1, and 0.2 and heights 8 and 16. Relative L2
+  errors must remain below 3% and 0.8%, respectively, and refinement must reduce error by a factor
+  greater than 2.5. Each run lasts at least `12*H^2/(pi^2*nu)` steps to bound the initial transient.
+  Diffusive refinement halves lattice speed, divides acceleration by eight, and preserves viscosity.
+- Physical/lattice round trips, SI field extraction, preserved Reynolds number and duration under
+  refinement, invalid/overflowing conversions, and guards with diagnostic scans disabled.
 - All 18 moving directions across periodic faces, edges, and corners.
 - One and multiple timesteps against an independent cell-major push-stream/collide implementation,
   including irregular destination ranges and untouched source buffers.

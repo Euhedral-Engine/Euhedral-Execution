@@ -1,6 +1,7 @@
 # CFD configuration (schema version 1)
 
-The `euhedral-cfd` application provides configuration inspection and serial periodic simulation.
+The `euhedral-cfd` application provides configuration inspection and serial periodic/walled
+simulation with solids and forcing.
 Build and run it with Java 21 through the repository's Mise toolchain:
 
 ```bash
@@ -34,22 +35,28 @@ non-finite numbers, fractional integers, and scalar type coercions are rejected.
 fields
 to select defaults. No configuration imports or environment-variable expansion are performed.
 
-| Field                          | Meaning and default                                                                                      |
-|--------------------------------|----------------------------------------------------------------------------------------------------------|
-| `schemaVersion`                | Required integer `1`                                                                                     |
-| `grid`                         | Required `nx`, `ny`, `nz` integers, each at least 3                                                      |
-| `physics.densityReference`     | Positive lattice reference density `rho0`; default `1`                                                   |
-| `physics.lattice`              | Lattice parameters; defaults to an empty lattice section when neither mode is supplied                   |
-| `physics.physical`             | Alternative SI parameters; mutually exclusive with `lattice`                                             |
-| `physics.referenceLength`      | Optional positive reference length in the selected mode's units                                          |
-| `geometry.faces`               | `xMin`, `xMax`, `yMin`, `yMax`, `zMin`, `zMax`; each defaults to `PERIODIC`                              |
-| `execution.steps`              | Positive integer timestep count; default `100` when no duration is supplied                              |
-| `execution.durationSeconds`    | Alternative positive physical duration, requiring physical parameters                                    |
-| `execution.stepDeadlineMillis` | Positive per-step deadline, default `30000`; must fit a signed long in nanoseconds                       |
-| `execution.brick`              | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                       |
-| `output.directory`             | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute |
-| `output.exportEverySteps`      | Non-negative integer cadence; default `0` disables field export                                          |
-| `memoryLimitBytes`             | Optional positive integer budget; overrides the heap-based default                                       |
+| Field                                        | Meaning and default                                                                                      |
+|----------------------------------------------|----------------------------------------------------------------------------------------------------------|
+| `schemaVersion`                              | Required integer `1`                                                                                     |
+| `grid`                                       | Required `nx`, `ny`, `nz` integers, each at least 3                                                      |
+| `physics.densityReference`                   | Positive lattice reference density `rho0`; default `1`                                                   |
+| `physics.lattice`                            | Lattice parameters; defaults to an empty lattice section when neither mode is supplied                   |
+| `physics.physical`                           | Alternative SI parameters; mutually exclusive with `lattice`                                             |
+| `physics.referenceLength`                    | Optional positive reference length in the selected mode's units                                          |
+| `geometry.faces`                             | `xMin`, `xMax`, `yMin`, `yMax`, `zMin`, `zMax`; each defaults to `PERIODIC`                              |
+| `geometry.boxes`                             | Optional list of `{id, min, max}` solid boxes; default empty                                             |
+| `geometry.spheres`                           | Optional list of `{id, center, radius}` solid spheres; default empty                                     |
+| `geometry.cylinders`                         | Optional list of `{id, start, end, radius}` finite solid cylinders; default empty                        |
+| `physics.guards.maxMach`                     | Positive maximum actual Mach number; default `0.1`                                                       |
+| `physics.guards.maxRelativeDensityVariation` | Positive maximum `abs(rho/rho0 - 1)`; default `0.1`                                                      |
+| `execution.diagnosticsEverySteps`            | Full-field diagnostic cadence; default `1`, `0` means initial/final only                                 |
+| `execution.steps`                            | Positive integer timestep count; default `100` when no duration is supplied                              |
+| `execution.durationSeconds`                  | Alternative positive physical duration, requiring physical parameters                                    |
+| `execution.stepDeadlineMillis`               | Positive per-step deadline, default `30000`; must fit a signed long in nanoseconds                       |
+| `execution.brick`                            | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                       |
+| `output.directory`                           | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute |
+| `output.exportEverySteps`                    | Non-negative integer cadence; default `0` disables field export                                          |
+| `memoryLimitBytes`                           | Optional positive integer budget; overrides the heap-based default                                       |
 
 The `lattice` section accepts positive `viscosity` (default `0.1`), `initialVelocity` (default
 zero),
@@ -62,12 +69,46 @@ The `physical` section requires positive `voxelWidth` (m), `timeStep` (s), `dens
 default
 to zero. `physics.densityReference` remains the lattice reference density in both modes.
 
-Face conditions currently accept `PERIODIC` and stationary `WALL`. Periodic faces must occur in
-opposite pairs on each axis. Open-face conditions, obstacle geometry, STL imports, and backend
-selection beyond `serial` are introduced in their respective phases and are currently rejected.
-Walls and forcing can be inspected; their numerical execution belongs to Phase 03.
-[Serial simulation](SIMULATION.md) requires all faces periodic, zero acceleration, and disabled
-field export. It honors the configured duration and per-step deadline.
+Face conditions accept `PERIODIC` and stationary `WALL`. Periodic faces must occur in opposite
+pairs on each axis; a periodic/wall pair is rejected. Open boundaries, STL imports, field export,
+and backend selection beyond `serial` remain unsupported.
+
+Solid geometry uses cell centers at `(x+0.5, y+0.5, z+0.5)` in lattice mode and these coordinates
+multiplied by `voxelWidth` in physical mode. Primitive coordinates/radii therefore use lattice
+lengths or meters, respectively. Boxes include their min/max surfaces, spheres include their
+surface, and cylinders include the side surface and flat caps at their start/end points. Cylinders
+can have arbitrary orientation. Primitives are clipped to the grid and are not periodically copied;
+the resolved cell mask repeats across periodic faces.
+
+Obstacle IDs must be positive and unique across all three primitive lists. Overlapping solids
+assign the lowest ID at each cell, independently of declaration order. Zero denotes fluid. Domain
+walls occupy exterior neighbor cells, leaving all interior grid centers available to fluid or
+obstacles; their wall planes are at `0` and the full axis extent. Exterior IDs are `-1/-2` for X,
+`-3/-4` for Y, and `-5/-6` for Z. At intersecting walls, X takes precedence over Y, then Z.
+Simulation setup rejects a mask with no fluid cells before allocating populations. Inspection
+validates primitive definitions but does not allocate a mask or establish the resolved fluid count.
+
+For example, an obstacle in lattice units can be declared as:
+
+```json
+"geometry": {
+  "faces": {
+    "yMin": "WALL",
+    "yMax": "WALL"
+  },
+  "spheres": [
+    {
+      "id": 1,
+      "center": {
+        "x": 6,
+        "y": 5,
+        "z": 4
+      },
+      "radius": 2
+    }
+  ]
+}
+```
 
 An optional `physics.shear` section selects the periodic profile
 `u_x = amplitude*sin(2*pi*modeY*y/ny)*cos(2*pi*modeZ*z/nz)`, with `u_y = u_z = 0`.
@@ -99,6 +140,19 @@ initial Reynolds = norm(u_lattice) * referenceLength_lattice / nu_lattice
 Reynolds is reported only when `referenceLength` is supplied. These are initial-state values;
 forcing or future boundaries can change the speed. The low-Mach target is `Ma <= 0.1`; inspection
 reports the initial value but does not substitute for runtime guards or numerical validation.
+The configured `timeStep` is retained explicitly; the resolver does not automatically select it.
+`CfdPhysics.units()` records physical units per lattice unit for length, time, density, velocity,
+acceleration, viscosity, gauge pressure, and force. Scalar conversions work in both directions and
+reject overflow, non-finite inputs, and nonzero values that underflow to zero. The gauge-pressure
+factor is `rhoScale*(dx/dt)^2`; the force factor is `rhoScale*dx^4/dt^2`. Force conversion is
+available
+for later obstacle-force analysis; link-force accumulation belongs to Phase 04.
+
+Guards apply during initialization and every range update, even if full-field diagnostic scans are
+skipped. The density threshold is relative to the configured lattice reference density. Exceeding
+either guard fails the generation with step and cell context. Initial and final diagnostics are
+always computed; intermediate scans follow `diagnosticsEverySteps`. `SimulationState.diagnostics()`
+identifies the last sampled step, which may precede `completedSteps()` when scans are disabled.
 
 For example, this physical case resolves to `nu=0.1`, `tau=0.8`, initial speed `0.01`, `Re=2`,
 and 100 timesteps:
@@ -128,11 +182,12 @@ Every direction uses its own `double[N]`; the conservative indexability limit is
 `N <= Integer.MAX_VALUE - 8`. Count, update, brick, and memory arithmetic is checked before any
 population allocation.
 
-Estimated auxiliary storage includes `5*N` bytes for a byte mask and integer obstacle labels,
-`256*brickCount` bytes for descriptors, scratch, and reductions, and 1 MiB for array/JVM overhead.
-Enabled field export adds a 64 KiB streaming buffer. These allowances are estimates for the current
-domain-face configuration and must evolve with later geometry and execution features. They are
-not measurements of a running solver's retained heap.
+Estimated auxiliary storage reserves `5*N` bytes for cell classification and obstacle labels (the
+current mask combines these in one `int[N]` array, omitted for domains without primitives),
+`256*brickCount` bytes for descriptors/scratch/reductions, 256 bytes per primitive, and 1 MiB for
+array/JVM overhead. Enabled field export adds a 64 KiB streaming buffer. These allowances are
+estimates and must evolve with later geometry and execution features. They are not measurements
+of a running solver's retained heap.
 
 The default budget is half of currently available JVM heap:
 `(maxHeap - usedHeap)/2` from a consistent JVM heap snapshot, with a minimum of one byte. Only this

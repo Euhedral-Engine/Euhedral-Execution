@@ -1,5 +1,7 @@
 package io.euhedral_execution.benchmarks.cfd.config;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 
 /// Schema version 1. Optional omitted sections have deterministic defaults.
@@ -34,12 +36,23 @@ public record SimulationConfig(
     }
 
     public record Physics(
-            Double densityReference, Lattice lattice, Physical physical, Double referenceLength, Shear shear) {
+            Double densityReference,
+            Lattice lattice,
+            Physical physical,
+            Double referenceLength,
+            Shear shear,
+            Guards guards) {
+        public Physics(
+                Double densityReference, Lattice lattice, Physical physical, Double referenceLength, Shear shear) {
+            this(densityReference, lattice, physical, referenceLength, shear, null);
+        }
+
         public Physics(Double densityReference, Lattice lattice, Physical physical, Double referenceLength) {
             this(densityReference, lattice, physical, referenceLength, null);
         }
 
         public Physics {
+            guards = guards == null ? Guards.DEFAULT : guards;
             densityReference = densityReference == null ? 1.0 : densityReference;
             Checks.positive(densityReference, "physics.densityReference");
             Checks.require(
@@ -119,15 +132,78 @@ public record SimulationConfig(
         }
     }
 
-    /// Domain faces only; obstacle definitions are added with the geometry implementation.
-    public record Geometry(Faces faces) {
+    /// Coordinates and radii use the selected parameter mode: lattice lengths or meters.
+    /// Positive IDs are unique across primitives; the lowest ID wins at overlapping cell centers.
+    public record Geometry(Faces faces, List<Box> boxes, List<Sphere> spheres, List<Cylinder> cylinders) {
+        public Geometry(Faces faces) {
+            this(faces, null, null, null);
+        }
+
         public Geometry {
             faces = faces == null ? new Faces(null, null, null, null, null, null) : faces;
+            boxes = boxes == null ? List.of() : List.copyOf(boxes);
+            spheres = spheres == null ? List.of() : List.copyOf(spheres);
+            cylinders = cylinders == null ? List.of() : List.copyOf(cylinders);
+            var ids = new HashSet<Integer>();
+            for (Box box : boxes) Checks.require(ids.add(box.id()), "duplicate obstacle ID " + box.id());
+            for (Sphere sphere : spheres) Checks.require(ids.add(sphere.id()), "duplicate obstacle ID " + sphere.id());
+            for (Cylinder cylinder : cylinders)
+                Checks.require(ids.add(cylinder.id()), "duplicate obstacle ID " + cylinder.id());
         }
     }
 
-    public record Execution(Long steps, Double durationSeconds, Long stepDeadlineMillis, GridShape brick) {
+    public record Box(int id, Vector3 min, Vector3 max) {
+        public Box {
+            Checks.require(id > 0, "obstacle ID must be positive");
+            Objects.requireNonNull(min);
+            Objects.requireNonNull(max);
+            Checks.positive(max.x() - min.x(), "box x extent");
+            Checks.positive(max.y() - min.y(), "box y extent");
+            Checks.positive(max.z() - min.z(), "box z extent");
+        }
+    }
+
+    public record Sphere(int id, Vector3 center, double radius) {
+        public Sphere {
+            Checks.require(id > 0, "obstacle ID must be positive");
+            Objects.requireNonNull(center);
+            Checks.positive(radius, "sphere radius");
+        }
+    }
+
+    /// A closed finite cylinder with flat end caps, oriented from start to end.
+    public record Cylinder(int id, Vector3 start, Vector3 end, double radius) {
+        public Cylinder {
+            Checks.require(id > 0, "obstacle ID must be positive");
+            Objects.requireNonNull(start);
+            Objects.requireNonNull(end);
+            Checks.positive(radius, "cylinder radius");
+            Checks.positive(
+                    Math.hypot(Math.hypot(end.x() - start.x(), end.y() - start.y()), end.z() - start.z()),
+                    "cylinder length");
+        }
+    }
+
+    public record Guards(Double maxMach, Double maxRelativeDensityVariation) {
+        public static final Guards DEFAULT = new Guards(0.1, 0.1);
+
+        public Guards {
+            maxMach = maxMach == null ? 0.1 : maxMach;
+            maxRelativeDensityVariation = maxRelativeDensityVariation == null ? 0.1 : maxRelativeDensityVariation;
+            Checks.positive(maxMach, "guards.maxMach");
+            Checks.positive(maxRelativeDensityVariation, "guards.maxRelativeDensityVariation");
+        }
+    }
+
+    public record Execution(
+            Long steps, Double durationSeconds, Long stepDeadlineMillis, GridShape brick, Long diagnosticsEverySteps) {
+        public Execution(Long steps, Double durationSeconds, Long stepDeadlineMillis, GridShape brick) {
+            this(steps, durationSeconds, stepDeadlineMillis, brick, null);
+        }
+
         public Execution {
+            diagnosticsEverySteps = diagnosticsEverySteps == null ? 1L : diagnosticsEverySteps;
+            Checks.require(diagnosticsEverySteps >= 0, "execution.diagnosticsEverySteps must be non-negative");
             Checks.require(
                     steps == null || durationSeconds == null, "steps and durationSeconds are mutually exclusive");
             if (durationSeconds != null) Checks.positive(durationSeconds, "execution.durationSeconds");

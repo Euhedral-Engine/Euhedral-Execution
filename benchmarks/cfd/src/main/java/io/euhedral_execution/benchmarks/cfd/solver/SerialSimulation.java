@@ -1,8 +1,8 @@
 package io.euhedral_execution.benchmarks.cfd.solver;
 
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
-import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig.FaceCondition;
 import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
+import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import java.util.Objects;
@@ -16,6 +16,7 @@ public final class SerialSimulation implements AutoCloseable {
     private final QueueIngestSink sink = new QueueIngestSink();
     private final CfdRangeFrame rangeFrame;
     private final LongSupplier clock;
+    private final double[] diagnosticScratch = new double[5];
     private boolean failed;
     private boolean closed;
 
@@ -28,28 +29,14 @@ public final class SerialSimulation implements AutoCloseable {
         requireSupported(configuration);
         this.configuration = configuration;
         this.clock = Objects.requireNonNull(clock);
-        state = new SimulationState(
-                new PopulationGrid(configuration), configuration.physics().densityReference());
+        var geometry = GeometryMask.resolve(configuration);
+        state = new SimulationState(new PopulationGrid(configuration), configuration.physics(), geometry);
         initialize();
         rangeFrame = new CfdRangeFrame(1, null);
         Objects.requireNonNull(lattice).addUpstream(sink);
     }
 
     public static void requireSupported(CfdConfiguration configuration) {
-        var faces = configuration.config().geometry().faces();
-        if (faces.xMin() != FaceCondition.PERIODIC
-                || faces.xMax() != FaceCondition.PERIODIC
-                || faces.yMin() != FaceCondition.PERIODIC
-                || faces.yMax() != FaceCondition.PERIODIC
-                || faces.zMin() != FaceCondition.PERIODIC
-                || faces.zMax() != FaceCondition.PERIODIC)
-            throw new IllegalArgumentException("serial simulation currently requires all six faces to be PERIODIC");
-        var inputs = configuration.config().physics();
-        var inputAcceleration = inputs.physical() == null
-                ? inputs.lattice().acceleration()
-                : inputs.physical().acceleration();
-        if (configuration.physics().acceleration().magnitude() != 0 || inputAcceleration.magnitude() != 0)
-            throw new IllegalArgumentException("serial simulation currently requires zero acceleration");
         if (configuration.config().output().exportEverySteps() != 0)
             throw new IllegalArgumentException("field export is not implemented; exportEverySteps must be 0");
     }
@@ -76,7 +63,11 @@ public final class SerialSimulation implements AutoCloseable {
                 Math.addExact(state.completedSteps(), 1),
                 clock.getAsLong(),
                 configuration.config().execution().stepDeadlineMillis() * 1_000_000,
-                clock);
+                clock,
+                state.geometry(),
+                configuration.physics().acceleration(),
+                configuration.physics().densityReference(),
+                configuration.config().physics().guards());
         try {
             rangeFrame.replace(
                     context,
@@ -98,10 +89,22 @@ public final class SerialSimulation implements AutoCloseable {
                 LockSupport.parkNanos(10_000);
             }
             rangeFrame.requireSuccess();
-            var diagnostics = FieldExtractor.summarize(
-                    context.next(), state.shape(), configuration.physics().densityReference(), context.step(), context);
+            long interval = configuration.config().execution().diagnosticsEverySteps();
+            var diagnostics =
+                    context.step() == configuration.steps() || (interval > 0 && context.step() % interval == 0)
+                            ? FieldExtractor.summarize(
+                                    context.next(),
+                                    state.shape(),
+                                    configuration.physics().densityReference(),
+                                    context.step(),
+                                    context,
+                                    state.geometry(),
+                                    configuration.physics().acceleration(),
+                                    configuration.config().physics().guards(),
+                                    diagnosticScratch)
+                            : null;
             context.checkProgress(0, 0, 0);
-            state.complete(diagnostics);
+            state.complete(context.step(), diagnostics);
         } catch (RuntimeException e) {
             failed = true;
             rangeFrame.kill();
@@ -134,6 +137,7 @@ public final class SerialSimulation implements AutoCloseable {
                     if (x % 256 == 0 && Thread.currentThread().isInterrupted())
                         throw new SimulationException(0, x, y, z, "interrupted during initialization");
                     int index = x + shape.nx() * (y + shape.ny() * z);
+                    if (state.geometry().isSolid(index)) continue;
                     for (int i = 0; i < D3Q19.Q; i++) {
                         populations[i][index] = D3Q19.equilibrium(
                                 i,
@@ -141,10 +145,31 @@ public final class SerialSimulation implements AutoCloseable {
                                 ux,
                                 physics.initialVelocity().y(),
                                 physics.initialVelocity().z());
+                        var a = physics.acceleration();
+                        if (a.x() != 0 || a.y() != 0 || a.z() != 0)
+                            populations[i][index] += D3Q19.guo(
+                                            i,
+                                            physics.densityReference(),
+                                            ux,
+                                            physics.initialVelocity().y(),
+                                            physics.initialVelocity().z(),
+                                            a.x(),
+                                            a.y(),
+                                            a.z())
+                                    / 2;
                     }
                 }
             }
         }
-        state.initialized(FieldExtractor.summarize(populations, shape, physics.densityReference(), 0, null));
+        state.initialized(FieldExtractor.summarize(
+                populations,
+                shape,
+                physics.densityReference(),
+                0,
+                null,
+                state.geometry(),
+                physics.acceleration(),
+                configuration.config().physics().guards(),
+                diagnosticScratch));
     }
 }
