@@ -3,6 +3,7 @@ package io.euhedral_execution.benchmarks.cfd.execution;
 import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
 import io.euhedral_execution.benchmarks.cfd.solver.StepContext;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import java.util.Objects;
@@ -41,19 +42,40 @@ public final class EuhedralBackend extends RangeBackend {
         if (sources <= 0 || (!parallel && sources != 1)) {
             throw new IllegalArgumentException("sources must be positive; serial requires one source");
         }
-        var sinks = new QueueIngestSink[sources];
-        /// One partition preserves insertion order within each source and bounds setup storage.
-        for (int i = 0; i < sources; i++) {
-            sinks[i] = new QueueIngestSink(new PartitionedMpscQueue<>(1, 64));
+        return new QueueIngestSink[sources];
+    }
+
+    /// A 1,024-slot chunk reserves one slot for its link. Retain a whole source backlog plus
+    /// one spare chunk so repeated generations reuse storage even at a chunk boundary.
+    static PartitionedMpscQueue<AbstractFrame> sourceQueue(int maximumFrames) {
+        return new PartitionedMpscQueue<>(1, 1024, pooledChunks(maximumFrames));
+    }
+
+    private static int pooledChunks(long maximumFrames) {
+        return Math.toIntExact((maximumFrames + 1022) / 1023 + 1);
+    }
+
+    public static long sourceStorageBytes(long maximumRanges, int sources) {
+        if (maximumRanges < 0 || sources < 0) {
+            throw new IllegalArgumentException("invalid source storage dimensions");
         }
-        return sinks;
+        if (sources == 0) {
+            return 0;
+        }
+        long perSource = (maximumRanges + sources - 1) / sources;
+        /// Conservative eight-byte references, queue/pool arrays and one active chunk per source.
+        return Math.multiplyExact(sources, 4096L + 10_240L * (pooledChunks(perSource) + 1));
     }
 
     @Override
     public void prepare(CfdRangeFrame[] ranges) {
         super.prepare(ranges);
-        for (var sink : sinks) {
-            lattice.addUpstream(sink);
+        int maximumFrames = (int) (((long) ranges.length + sinks.length - 1) / sinks.length);
+        for (int i = 0; i < sinks.length; i++) {
+            if (sinks[i] == null) {
+                sinks[i] = new QueueIngestSink(sourceQueue(maximumFrames));
+            }
+            lattice.addUpstream(sinks[i]);
         }
     }
 
@@ -105,7 +127,9 @@ public final class EuhedralBackend extends RangeBackend {
             }
         } finally {
             for (var sink : sinks) {
-                sink.complete();
+                if (sink != null) {
+                    sink.complete();
+                }
             }
             if (ownsLattice) {
                 lattice.close();

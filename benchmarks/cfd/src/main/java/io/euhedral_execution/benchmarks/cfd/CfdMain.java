@@ -1,5 +1,6 @@
 package io.euhedral_execution.benchmarks.cfd;
 
+import io.euhedral_execution.benchmarks.cfd.benchmark.BenchmarkRunner;
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
 import io.euhedral_execution.benchmarks.cfd.execution.EuhedralBackend;
@@ -37,7 +38,10 @@ public final class CfdMain {
         if (args.length == 0
                 || (args.length == 1 && (args[0].equals("--help") || args[0].equals("-h")))
                 || (args.length == 2
-                        && (args[0].equals("inspect") || args[0].equals("simulate") || args[0].equals("validate"))
+                        && (args[0].equals("inspect")
+                                || args[0].equals("simulate")
+                                || args[0].equals("validate")
+                                || args[0].equals("bench"))
                         && args[1].equals("--help"))) {
             out.println("Usage: euhedral-cfd inspect --config <file.json> [--voxelize]");
             out.println("       euhedral-cfd simulate --config <file.json> [--backend serial|euhedral|fjp|static]");
@@ -45,12 +49,16 @@ public final class CfdMain {
             out.println("       [--steps N | --duration SECONDS] [--output DIRECTORY] [--export-every N]");
             out.println("       [--format appended|ascii] [--set path=JSON-value ...]");
             out.println("       euhedral-cfd validate --suite <suite.json> [--openlb-home DIRECTORY]");
+            out.println("       euhedral-cfd bench --config <suite.json>");
             out.println("       euhedral-cfd --help");
             out.println("Inspect configuration or simulate D3Q19 flow with stationary solids, open boundaries and body"
                     + " forcing.");
             return 0;
         }
         try {
+            if (args[0].equals("bench")) {
+                return BenchmarkRunner.command(args, out);
+            }
             if (args[0].equals("validate")) {
                 return ValidationRunner.command(args, out);
             }
@@ -147,7 +155,16 @@ public final class CfdMain {
         var options = configuration.config().execution().backendOptions();
         var budget = WorkerBudget.resolve(options);
         int sources = options.sourceCount(budget.workerCount());
-        if (configuration.memory().totalBytes() + 4096L * sources
+        if (configuration.memory().totalBytes()
+                        + EuhedralBackend.sourceStorageBytes(
+                                configuration
+                                        .config()
+                                        .grid()
+                                        .brickCount(configuration
+                                                .config()
+                                                .execution()
+                                                .brick()),
+                                sources)
                 > configuration.memory().budgetBytes()) {
             throw new IllegalArgumentException("ingest sources exceed the configured memory budget");
         }

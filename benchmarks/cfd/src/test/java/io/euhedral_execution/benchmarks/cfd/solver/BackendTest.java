@@ -37,7 +37,7 @@ class BackendTest {
                         "grid.nx=17",
                         "grid.ny=9",
                         "grid.nz=7",
-                        "execution.diagnosticsEverySteps=1",
+                        "execution.diagnosticsEverySteps=0",
                         "execution.brick.nx=" + bx,
                         "execution.brick.ny=" + by,
                         "execution.brick.nz=" + bz));
@@ -46,7 +46,19 @@ class BackendTest {
             var geometry = GeometryMask.resolve(config, lattice);
             for (int workers : new int[] {1, 2}) {
                 for (int variant = 0; variant < 5; variant++) {
-                    try (var serial = new SerialSimulation(config, lattice);
+                    try (var serial = new SerialSimulation(
+                                    ConfigLoader.load(
+                                            Path.of("scenes/" + scene + ".json"),
+                                            List.of(
+                                                    "execution.steps=4",
+                                                    "grid.nx=17",
+                                                    "grid.ny=9",
+                                                    "grid.nz=7",
+                                                    "execution.diagnosticsEverySteps=1",
+                                                    "execution.brick.nx=" + bx,
+                                                    "execution.brick.ny=" + by,
+                                                    "execution.brick.nz=" + bz)),
+                                    lattice);
                             ExecutionBackend backend =
                                     switch (variant) {
                                         case 0 -> new ForkJoinBackend(new int[workers], false, 2000);
@@ -86,7 +98,12 @@ class BackendTest {
                                     }
                                 }
                             }
-                            assertEquals(a.diagnostics(), b.diagnostics());
+                            if (step == 4) {
+                                assertEquals(a.diagnostics(), b.diagnostics());
+                            } else {
+                                assertEquals(0, b.diagnostics().step());
+                                assertEquals(step, a.diagnostics().step());
+                            }
                             var af = a.flowDiagnostics();
                             var bf = b.flowDiagnostics();
                             assertEquals(af.massChange(), bf.massChange());

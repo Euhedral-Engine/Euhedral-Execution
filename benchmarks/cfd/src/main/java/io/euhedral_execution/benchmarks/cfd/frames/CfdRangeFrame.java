@@ -166,12 +166,16 @@ public final class CfdRangeFrame extends CfdFrame {
         var acceleration = context.acceleration();
         double ax = acceleration.x(), ay = acceleration.y(), az = acceleration.z();
         boolean forced = ax != 0 || ay != 0 || az != 0;
+        int untilProgressCheck = 0;
         for (int z = zFrom; z < zTo; z++) {
             for (int y = yFrom; y < yTo; y++) {
                 for (int x = xFrom; x < xTo; x++) {
-                    if ((x - xFrom) % 256 == 0) {
-                        if (!isAlive()) throwCancelSignal();
+                    if (untilProgressCheck-- == 0) {
+                        if (!isAlive()) {
+                            throwCancelSignal();
+                        }
                         context.checkProgress(x, y, z);
+                        untilProgressCheck = 255;
                     }
                     int destination = x + nx * (y + ny * z);
                     if (geometry.isSolid(destination)) continue;
@@ -259,6 +263,9 @@ public final class CfdRangeFrame extends CfdFrame {
             if (!Double.isFinite(forces[slot]))
                 throw new SimulationException(
                         context.step(), xTo - 1, yTo - 1, zTo - 1, "non-finite obstacle force total");
+        if (!isAlive()) {
+            throwCancelSignal();
+        }
         context.checkProgress(xTo - 1, yTo - 1, zTo - 1);
     }
 

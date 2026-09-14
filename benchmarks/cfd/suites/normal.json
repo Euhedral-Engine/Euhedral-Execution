@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "outputDirectory": "../build/benchmarks",
+  "validationSuite": "../validation/suites/smoke.json",
+  "affinity": true,
+  "brick": {
+    "nx": 32,
+    "ny": 32,
+    "nz": 32
+  },
+  "preSteps": 0,
+  "stepsPerInvocation": 1000,
+  "forks": 2,
+  "warmupIterations": 1,
+  "measurementIterations": 2,
+  "iterationMillis": 1000,
+  "processDeadlineMillis": 604800000,
+  "maxForkCv": 0.15,
+  "jvmArgs": [
+    "-Xms1g",
+    "-Xmx12g"
+  ],
+  "baselineVariant": "fjp",
+  "variants": [
+    {
+      "id": "euhedral-workers",
+      "backend": "euhedral",
+      "sources": "workers"
+    },
+    {
+      "id": "fjp",
+      "backend": "fjp"
+    },
+    {
+      "id": "static",
+      "backend": "static"
+    }
+  ],
+  "cases": [
+    {
+      "id": "periodic-256",
+      "config": "cases/periodic-256.json",
+      "validationCase": "shear",
+      "validationScope": "PERIODIC_SHEAR_FAMILY"
+    }
+  ],
+  "referenceBackend": "fjp"
+}

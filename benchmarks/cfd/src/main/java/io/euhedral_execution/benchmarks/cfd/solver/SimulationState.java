@@ -101,6 +101,17 @@ public final class SimulationState {
         return grid.buffer(1 - currentBuffer);
     }
 
+    void reset() {
+        for (int buffer = 0; buffer < 2; buffer++) {
+            for (double[] direction : grid.buffer(buffer)) {
+                java.util.Arrays.fill(direction, 0);
+            }
+        }
+        currentBuffer = 0;
+        completedSteps = 0;
+        flowDiagnostics.reset();
+    }
+
     void initialized(FieldExtractor.Diagnostics initial) {
         diagnostics = initial;
     }

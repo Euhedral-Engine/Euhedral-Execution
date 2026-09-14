@@ -148,3 +148,18 @@ Reference sources: [OpenLB release archive](https://zenodo.org/records/17899765)
 [OpenLB user guides](https://www.openlb.net/user-guide/), and the pinned installation's
 `src/dynamics/forcing.h`, `src/boundary/setBouzidiBoundary.h`, `src/boundary/zouHeDynamics.h`,
 `src/core/superLattice.hh`, and `src/functors/lattice/latticePhysBoundaryForce3D.hh`.
+
+## Benchmark handoff
+
+[The comparison runner](BENCHMARKING.md) requires the report's numerical class identity and each
+selected case's physical identity. Newly generated reports also carry a narrowly scoped periodic-shear
+family identity for representative coverage when scaling grid size and duration. This does not
+claim an exact OpenLB comparison at the larger size; full Java equivalence remains mandatory. Reports created before
+this identity contract must be regenerated; scheduling variants still renew full backend equivalence
+in every fork. The duct and unverified convergence cases remain ineligible. No change to the frozen
+OpenLB tolerance budgets is introduced by the benchmark runner.
+
+Diagnostic scan cadence is execution metadata, excluded from physical identity. Benchmark cases
+request final-only summaries while keeping per-cell guards and final full-field comparisons.
+Simulation/debug runs can still request intermediate summaries; the same completed populations
+and range reductions must result at either cadence.

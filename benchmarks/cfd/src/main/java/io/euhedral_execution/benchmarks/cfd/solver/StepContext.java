@@ -80,9 +80,23 @@ public record StepContext(
 
     static void validateFields(
             Guards guards, double rho0, long step, double rho, double ux, double uy, double uz, int x, int y, int z) {
-        double mach = Math.hypot(Math.hypot(ux, uy), uz) * Math.sqrt(3);
-        if (!Double.isFinite(mach) || mach > guards.maxMach())
+        double speedSquared = ux * ux + uy * uy + uz * uz;
+        double limit = guards.maxMach();
+        double speedLimit = limit / Math.sqrt(3);
+        double limitSquared = speedLimit * speedLimit;
+        boolean exceeded;
+        if (limitSquared >= Double.MIN_NORMAL && Double.isFinite(limitSquared) && Double.isFinite(speedSquared)) {
+            exceeded = speedSquared > limitSquared;
+        } else {
+            /// Extreme finite guards/velocities can overflow or underflow when squared directly.
+            /// Normalize only this uncommon path; NaN and infinity still fail the comparison.
+            double xScaled = ux / limit, yScaled = uy / limit, zScaled = uz / limit;
+            exceeded = !(3 * (xScaled * xScaled + yScaled * yScaled + zScaled * zScaled) <= 1);
+        }
+        if (exceeded) {
+            double mach = Math.hypot(Math.hypot(ux, uy), uz) * Math.sqrt(3);
             throw new SimulationException(step, x, y, z, "maximum Mach exceeded: " + mach);
+        }
         if (!Double.isFinite(rho) || rho <= 0 || Math.abs(rho / rho0 - 1) > guards.maxRelativeDensityVariation())
             throw new SimulationException(
                     step, x, y, z, "relative density variation exceeded or invalid density: " + rho);

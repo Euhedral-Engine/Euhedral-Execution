@@ -129,8 +129,10 @@ class CfdFrameTest {
         replaceWhole(frame, context(state, current, next, 1));
         assertThrows(IllegalStateException.class, () -> replaceWhole(frame, context(state, current, next, 1)));
         frame.execute();
-        assertEquals(CfdFrame.Status.BODY_COMPLETE, frame.status());
+        assertEquals(CfdFrame.Status.EXECUTING, frame.status());
         assertFalse(frame.isDone());
+        assertThrows(IllegalStateException.class, frame::execute);
+        assertThrows(IllegalStateException.class, () -> replaceWhole(frame, context(state, current, next, 2)));
         assertThrows(IllegalStateException.class, frame::requireSuccess);
         frame.doFinally();
         frame.requireSuccess();

@@ -1,6 +1,6 @@
 # CFD system and implementation phases
 
-Status: Phases 01-08 implemented; Phases 10-11 planned. Phase 09 is incorporated into
+Status: Phases 01-08 and 10 implemented; Phase 11 planned. Phase 09 is incorporated into
 Phase 08.
 
 The current application provides `inspect --config` for configuration resolution and memory
@@ -84,6 +84,6 @@ The geometry/reference and execution tracks branch after phase 04 and converge i
 
 ## Application interfaces
 
-The distribution provides `inspect`, `simulate`, and `validate`; `bench` is planned. Configuration and validation fixtures describe the physical problem; execution settings describe worker selection, brick shape, source count, and placement. Output includes resolved settings, reference-comparison reports, simulation fields, raw benchmark results, and per-fork summaries.
+The distribution provides `inspect`, `simulate`, `validate`, and `bench`. [BENCHMARKING.md](BENCHMARKING.md) describes validation-gated JMH comparisons. The stock `suites/normal.json` workload advances a 256-cubed periodic-shear domain for 1,000 timed steps per invocation; `smoke.json` is for harness checks. Configuration and validation fixtures describe the physical problem; execution settings describe worker selection, brick shape, source count, and placement. Output includes resolved settings, reference-comparison reports, simulation fields, raw benchmark results, and per-fork summaries.
 
 A failed timestep retains the last completed state. Missing reference results, incompatible cases, failed numerical checks, and execution failures appear as distinct report states. The performance report ranks comparable, numerically verified runs.
