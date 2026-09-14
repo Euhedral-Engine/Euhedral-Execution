@@ -1,5 +1,6 @@
 package io.euhedral_execution.benchmarks.cfd.config;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -7,6 +8,7 @@ import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.cfg.CoercionAction;
 import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
 import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.type.LogicalType;
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration.CfdPhysics;
 import io.euhedral_execution.benchmarks.cfd.solver.FlowDiagnostics;
@@ -14,6 +16,8 @@ import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 
 /// Parses and resolves small configuration objects without creating workers or population arrays.
@@ -37,7 +41,11 @@ public final class ConfigLoader {
     private ConfigLoader() {}
 
     public static CfdConfiguration load(Path path) throws IOException {
-        SimulationConfig config = read(path);
+        return load(path, List.of());
+    }
+
+    public static CfdConfiguration load(Path path, List<String> overrides) throws IOException {
+        SimulationConfig config = read(path, overrides);
         long budget;
         if (config.memoryLimitBytes() != null) {
             budget = config.memoryLimitBytes();
@@ -51,15 +59,52 @@ public final class ConfigLoader {
     }
 
     public static CfdConfiguration load(Path path, long defaultBudgetBytes) throws IOException {
-        return resolve(path, read(path), defaultBudgetBytes);
+        return resolve(path, read(path, List.of()), defaultBudgetBytes);
     }
 
-    private static SimulationConfig read(Path path) throws IOException {
+    private static SimulationConfig read(Path path, List<String> overrides) throws IOException {
         Path absolute = path.toAbsolutePath().normalize();
         JsonNode tree = MAPPER.readTree(absolute.toFile());
         Checks.require(tree != null && tree.isObject(), "configuration must be a JSON object");
         rejectNulls(tree, "");
+        /// Override paths use schema property names; the strict record parser validates the result.
+        var paths = new HashSet<String>();
+        for (String override : overrides) {
+            int equals = override.indexOf('=');
+            Checks.require(equals > 0, "override must be path=JSON-value");
+            String pathKey = override.substring(0, equals);
+            Checks.require(paths.add(pathKey), "duplicate override: " + pathKey);
+            Checks.require(
+                    !(paths.contains("execution.steps") && paths.contains("execution.durationSeconds")),
+                    "steps and durationSeconds overrides are mutually exclusive");
+            String[] parts = pathKey.split("\\.", -1);
+            ObjectNode parent = (ObjectNode) tree;
+            for (int i = 0; i < parts.length - 1; i++) {
+                Checks.require(parts[i].matches("[A-Za-z][A-Za-z0-9]*"), "invalid override path");
+                JsonNode child = parent.get(parts[i]);
+                if (child == null) child = parent.putObject(parts[i]);
+                Checks.require(child.isObject(), "override parent must be an object: " + parts[i]);
+                parent = (ObjectNode) child;
+            }
+            String field = parts[parts.length - 1];
+            Checks.require(field.matches("[A-Za-z][A-Za-z0-9]*"), "invalid override path");
+            JsonNode value = MAPPER.readTree(override.substring(equals + 1));
+            Checks.require(value != null, "override needs a JSON value");
+            rejectNulls(value, override.substring(0, equals));
+            if (parts.length == 2 && parts[0].equals("execution")) {
+                if (field.equals("steps")) parent.remove("durationSeconds");
+                if (field.equals("durationSeconds")) parent.remove("steps");
+            }
+            parent.set(field, value);
+        }
         return MAPPER.treeToValue(tree, SimulationConfig.class);
+    }
+
+    public static String json(Object value) throws IOException {
+        return MAPPER.copy()
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                .writerWithDefaultPrettyPrinter()
+                .writeValueAsString(value);
     }
 
     private static void rejectNulls(JsonNode node, String path) {

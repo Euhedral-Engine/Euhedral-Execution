@@ -110,7 +110,7 @@ public final class FieldExtractor {
         return new Diagnostics(step, mass, min, max, speed, speed * Math.sqrt(3));
     }
 
-    private static void read(
+    static void read(
             double[][] populations,
             GridShape shape,
             double rho0,

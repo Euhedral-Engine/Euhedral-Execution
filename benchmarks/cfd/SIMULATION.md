@@ -15,7 +15,9 @@ mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/
 `serial` is the default backend; `--config` and `--backend` may appear in either order. The smoke
 case advances a uniform velocity on a `12x10x8` grid for 20 timesteps. The shear case uses a
 `12x24x20` grid and evolves for 100 timesteps, with spatial variation in both Y and Z. These
-commands create no output files. The final report includes completed steps/time, fluid-cell count,
+commands create a distinct run directory containing configuration, metrics, and status. Field export
+is enabled with `--export-every N`; see [VISUALIZATION.md](VISUALIZATION.md) for CLI overrides and
+ParaView usage. The final report includes completed steps/time, fluid-cell count,
 fluid mass, density
 range, maximum lattice speed and Mach number, and finite/positive-density validity.
 
@@ -25,7 +27,7 @@ and X acceleration 0.0001, evolved for 2000 steps. Its analytical peak speed is 
 sample the parabola between the wall planes. `periodic-obstacle.json` places a sphere in a periodic
 `12x10x8` grid and applies X acceleration for 100 steps. Unforced open boundaries and obstacle
 forces are also supported; [scene metadata](scenes/README.md) records inlet/outlet cases and smoke
-variants. Export and nonserial backends remain later work.
+variants. Nonserial backends remain later work.
 
 Physical inputs use checked unit conversions; CLI diagnostics are in lattice units, with completed
 physical time labeled separately. `SimulationState.physicalField()` converts density, velocity, and
@@ -83,7 +85,8 @@ in flight. Independent range dispatch and a multi-range generation barrier are p
 [Phase 08](08-parallel-execution-backends.md), together with configurable source count and plain
 round-robin submission. Source acquisition and distribution remain runtime responsibilities.
 
-The CLI owns the lattice and closes it on success or failure. Library callers supply the lattice:
+The CLI owns synchronous output and closes the lattice on success or failure. The solver library
+does not write files when `run()` or `step()` is called. Library callers supply the lattice:
 
 ```java
 var lattice = ControlPlaneLattice.getOrCreate();
@@ -184,8 +187,9 @@ A killed or structurally cancelled frame never acknowledges a successful range, 
 Euhedral invokes `doFinally()` for structured cancellation. Execution exceptions are retained by
 `doFinallyWithError()`. JVM `Error` instances remain outside the runtime's ordinary exception
 boundary; they must not be treated as successful frame completion.
-The CLI returns 3 for numerical, deadline, or interruption failures, with the last completed step
-when initialization succeeded. Usage/configuration failures return 2; successful runs return 0.
+The CLI records failure status with the last completed/exported steps. It returns 3 for numerical
+and deadline failures, 130 for interruption, 4 for output errors, 2 for usage/configuration errors,
+and 0 for success. Completed field files remain available after a failed or interrupted run.
 
 ## Verification
 

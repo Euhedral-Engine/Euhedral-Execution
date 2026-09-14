@@ -2,10 +2,10 @@
 
 The runtime integration points below were surveyed at commit
 `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
-Paths are relative to the repository root. Phases 01-04 implement configuration, the periodic/walled
-solver, solid geometry, forcing, open boundaries, obstacle forces, and
-physical conversions, including ordered lattice
-execution. [Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
+Paths are relative to the repository root. Phases 01-05 implement configuration, the periodic/walled
+solver, solid geometry, forcing, open boundaries, obstacle forces, physical conversions, ordered
+lattice execution, and ParaView time-series output.
+[Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
 configurable source dispatch work.
 
 ## Build and packaging
@@ -33,7 +33,10 @@ reductions, and the serial simulation driver. The
 package owns reusable range bodies; `QueueIngestSink` feeds them to the lattice with ordered hashes.
 The `geometry` package resolves immutable cell masks before population allocation. Configuration
 owns the checked unit-conversion factors and runtime guard settings.
-See [SIMULATION.md](SIMULATION.md) for ownership and failure contracts.
+The `output` package streams completed fields to VTI, publishes PVD collections atomically, and
+records configuration, CSV metrics, and run status. Output stays on the simulation driver; no
+export work is added to numerical frames. See [SIMULATION.md](SIMULATION.md) for ownership and
+failure contracts and [VISUALIZATION.md](VISUALIZATION.md) for artifacts and reader verification.
 
 ## Existing numerical workload
 

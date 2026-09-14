@@ -25,6 +25,10 @@ public final class SimulationState {
         return flowDiagnostics;
     }
 
+    public CfdPhysics physics() {
+        return physics;
+    }
+
     public GridShape shape() {
         return grid.shape();
     }
@@ -46,6 +50,31 @@ public final class SimulationState {
             throw new IllegalArgumentException("macroscopic fields are undefined in solid cells");
         return FieldExtractor.sample(
                 current(), shape(), physics.densityReference(), completedSteps, x, y, z, physics.acceleration());
+    }
+
+    /// Copies a completed fluid sample into caller-owned scratch: rho, ux, uy, uz, gauge pressure.
+    /// The caller owns the timestep boundary and must not advance while exporting this state.
+    public void readField(int x, int y, int z, double[] values, boolean physicalUnits) {
+        if (values.length != 5) throw new IllegalArgumentException("field scratch requires exactly five values");
+        if (geometry.isSolid(grid.index(x, y, z))) throw new IllegalArgumentException("solid field is undefined");
+        FieldExtractor.read(
+                current(),
+                shape(),
+                physics.densityReference(),
+                completedSteps,
+                x,
+                y,
+                z,
+                values,
+                physics.acceleration());
+        if (physicalUnits) {
+            var units = physics.units();
+            values[0] = units.densityToPhysical(values[0]);
+            values[1] = units.velocityToPhysical(values[1]);
+            values[2] = units.velocityToPhysical(values[2]);
+            values[3] = units.velocityToPhysical(values[3]);
+            values[4] = units.pressureToPhysical(values[4]);
+        }
     }
 
     public GeometryMask geometry() {

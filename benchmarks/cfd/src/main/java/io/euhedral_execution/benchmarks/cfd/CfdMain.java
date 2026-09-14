@@ -2,13 +2,17 @@ package io.euhedral_execution.benchmarks.cfd;
 
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
+import io.euhedral_execution.benchmarks.cfd.output.RunOutput;
 import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import io.euhedral_execution.benchmarks.cfd.solver.SerialSimulation;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Locale;
 
 public final class CfdMain {
@@ -27,6 +31,8 @@ public final class CfdMain {
                         && args[1].equals("--help"))) {
             out.println("Usage: euhedral-cfd inspect --config <file.json>");
             out.println("       euhedral-cfd simulate --config <file.json> [--backend serial]");
+            out.println("       [--steps N | --duration SECONDS] [--output DIRECTORY] [--export-every N]");
+            out.println("       [--format appended|ascii] [--set path=JSON-value ...]");
             out.println("       euhedral-cfd --help");
             out.println("Inspect configuration or simulate D3Q19 flow with stationary solids, open boundaries and body"
                     + " forcing.");
@@ -37,17 +43,41 @@ public final class CfdMain {
             if (!simulate && !args[0].equals("inspect"))
                 throw new IllegalArgumentException("unknown command: " + args[0]);
             String config = null, backend = null;
+            var overrides = new ArrayList<String>();
+            var options = new HashSet<String>();
             for (int i = 1; i < args.length; i += 2) {
                 if (i + 1 >= args.length || args[i + 1].isBlank())
                     throw new IllegalArgumentException("missing value for " + args[i]);
-                if (args[i].equals("--config") && config == null) config = args[i + 1];
-                else if (simulate && args[i].equals("--backend") && backend == null) backend = args[i + 1];
-                else throw new IllegalArgumentException("unknown or duplicate option: " + args[i]);
+                String option = args[i], value = args[i + 1];
+                if (!option.equals("--set") && !options.add(option))
+                    throw new IllegalArgumentException("duplicate option: " + option);
+                if (option.equals("--config")) config = value;
+                else if (simulate && option.equals("--backend")) backend = value;
+                else if (option.equals("--set")) overrides.add(value);
+                else if (simulate) {
+                    switch (option) {
+                        case "--steps" -> overrides.add("execution.steps=" + value);
+                        case "--duration" -> overrides.add("execution.durationSeconds=" + value);
+                        case "--output" ->
+                            overrides.add("output.directory="
+                                    + ConfigLoader.json(Path.of(value)
+                                            .toAbsolutePath()
+                                            .normalize()
+                                            .toString()));
+                        case "--export-every" -> overrides.add("output.exportEverySteps=" + value);
+                        case "--format" -> {
+                            if (!value.equals("ascii") && !value.equals("appended"))
+                                throw new IllegalArgumentException("format must be ascii or appended");
+                            overrides.add("output.format=" + ConfigLoader.json(value.toUpperCase(Locale.ROOT)));
+                        }
+                        default -> throw new IllegalArgumentException("unknown option: " + option);
+                    }
+                } else throw new IllegalArgumentException("unknown option: " + option);
             }
             if (config == null) throw new IllegalArgumentException("--config is required");
             if (backend != null && !backend.equals("serial"))
                 throw new IllegalArgumentException("only --backend serial is supported");
-            CfdConfiguration configuration = ConfigLoader.load(Path.of(config));
+            CfdConfiguration configuration = ConfigLoader.load(Path.of(config), overrides);
             if (simulate) return simulate(configuration, out, err);
             print(configuration, out);
             return 0;
@@ -61,75 +91,115 @@ public final class CfdMain {
     }
 
     private static int simulate(CfdConfiguration configuration, PrintStream out, PrintStream err) {
-        SerialSimulation.requireSupported(configuration);
-        var lattice = ControlPlaneLattice.getOrCreate();
-        try (var simulation = new SerialSimulation(configuration, lattice)) {
+        try (var artifacts = new RunOutput(configuration)) {
+            out.println("Run directory: " + artifacts.directory());
+            Thread owner = Thread.currentThread();
+            Thread shutdown = new Thread(
+                    () -> {
+                        owner.interrupt();
+                        try {
+                            owner.join(5000);
+                            artifacts.finish(RunOutput.Status.INTERRUPTED, null);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        } catch (IOException e) {
+                            err.println("Could not persist interruption status: " + e.getMessage());
+                        }
+                    },
+                    "cfd-run-shutdown");
+            Runtime.getRuntime().addShutdownHook(shutdown);
+            ControlPlaneLattice lattice = null;
+            long started = System.nanoTime();
             try {
-                simulation.run();
-            } catch (SimulationException e) {
-                err.println("Simulation failed: " + e.getMessage());
-                err.println("Last completed step: " + simulation.state().completedSteps());
-                return 3;
-            }
-            var state = simulation.state();
-            var diagnostics = state.diagnostics();
-            out.println("Simulation completed: backend=serial, grid=" + state.shape());
-            out.println("Fluid cells: " + state.geometry().fluidCells());
-            out.println("Completed steps: " + state.completedSteps());
-            out.println("Completed lattice time: " + state.completedSteps());
-            if (configuration.physics().physicalUnits())
-                out.println("Completed physical time: "
-                        + state.completedSteps() * configuration.physics().timeStep() + " s");
-            out.printf(
-                    Locale.ROOT,
-                    "Mass: %.12g%nDensity range: [%.12g, %.12g]%nMaximum speed (lattice): %.12g%nMaximum Mach: %.12g%n",
-                    diagnostics.mass(),
-                    diagnostics.minDensity(),
-                    diagnostics.maxDensity(),
-                    diagnostics.maxSpeed(),
-                    diagnostics.maxMach());
-            printBoundaries(configuration, out);
-            var flow = state.flowDiagnostics();
-            out.printf(
-                    Locale.ROOT,
-                    "Flow diagnostics step: %d%nMass change (lattice): %.12g%n"
-                            + "Boundary-update inlet flux (lattice mass/step): %.12g%n"
-                            + "Boundary-update outlet flux (lattice mass/step): %.12g%nMass balance residual: %.12g%n"
-                            + "Estimated macroscopic inlet flux (lattice mass/step): %.12g%n"
-                            + "Estimated macroscopic outlet flux (lattice mass/step): %.12g%n",
-                    flow.step(),
-                    flow.massChange(),
-                    flow.inletFlux(),
-                    flow.outletFlux(),
-                    flow.massBalanceResidual(),
-                    flow.macroscopicInletFlux(),
-                    flow.macroscopicOutletFlux());
-            for (int slot = 0; slot < flow.obstacleCount(); slot++) {
-                int id = flow.obstacleId(slot);
-                out.printf(
-                        Locale.ROOT,
-                        "Obstacle %d force (lattice): [%.12g, %.12g, %.12g]%n",
-                        id,
-                        flow.force(id, 0),
-                        flow.force(id, 1),
-                        flow.force(id, 2));
-                if (configuration.physics().physicalUnits()) {
-                    var units = configuration.physics().units();
+                lattice = ControlPlaneLattice.getOrCreate();
+                try (var simulation = new SerialSimulation(configuration, lattice)) {
+                    artifacts.record(simulation.state(), System.nanoTime() - started);
+                    while (simulation.state().completedSteps() < configuration.steps()) {
+                        started = System.nanoTime();
+                        simulation.step();
+                        artifacts.record(simulation.state(), System.nanoTime() - started);
+                    }
+                    artifacts.finish(RunOutput.Status.COMPLETED, null);
+                    var state = simulation.state();
+                    var diagnostics = state.diagnostics();
+                    out.println("Simulation completed: backend=serial, grid=" + state.shape());
+                    out.println("Fluid cells: " + state.geometry().fluidCells());
+                    out.println("Completed steps: " + state.completedSteps());
+                    out.println("Completed lattice time: " + state.completedSteps());
+                    if (configuration.physics().physicalUnits())
+                        out.println("Completed physical time: "
+                                + state.completedSteps()
+                                        * configuration.physics().timeStep() + " s");
                     out.printf(
                             Locale.ROOT,
-                            "Obstacle %d force (N): [%.12g, %.12g, %.12g]%n",
-                            id,
-                            units.forceToPhysical(flow.force(id, 0)),
-                            units.forceToPhysical(flow.force(id, 1)),
-                            units.forceToPhysical(flow.force(id, 2)));
+                            "Mass: %.12g%nDensity range: [%.12g, %.12g]%nMaximum speed (lattice): %.12g%nMaximum Mach: %.12g%n",
+                            diagnostics.mass(),
+                            diagnostics.minDensity(),
+                            diagnostics.maxDensity(),
+                            diagnostics.maxSpeed(),
+                            diagnostics.maxMach());
+                    printBoundaries(configuration, out);
+                    var flow = state.flowDiagnostics();
+                    out.printf(
+                            Locale.ROOT,
+                            "Flow diagnostics step: %d%nMass change (lattice): %.12g%n"
+                                    + "Boundary-update inlet flux (lattice mass/step): %.12g%n"
+                                    + "Boundary-update outlet flux (lattice mass/step): %.12g%nMass balance residual: %.12g%n"
+                                    + "Estimated macroscopic inlet flux (lattice mass/step): %.12g%n"
+                                    + "Estimated macroscopic outlet flux (lattice mass/step): %.12g%n",
+                            flow.step(),
+                            flow.massChange(),
+                            flow.inletFlux(),
+                            flow.outletFlux(),
+                            flow.massBalanceResidual(),
+                            flow.macroscopicInletFlux(),
+                            flow.macroscopicOutletFlux());
+                    for (int slot = 0; slot < flow.obstacleCount(); slot++) {
+                        int id = flow.obstacleId(slot);
+                        out.printf(
+                                Locale.ROOT,
+                                "Obstacle %d force (lattice): [%.12g, %.12g, %.12g]%n",
+                                id,
+                                flow.force(id, 0),
+                                flow.force(id, 1),
+                                flow.force(id, 2));
+                        if (configuration.physics().physicalUnits()) {
+                            var units = configuration.physics().units();
+                            out.printf(
+                                    Locale.ROOT,
+                                    "Obstacle %d force (N): [%.12g, %.12g, %.12g]%n",
+                                    id,
+                                    units.forceToPhysical(flow.force(id, 0)),
+                                    units.forceToPhysical(flow.force(id, 1)),
+                                    units.forceToPhysical(flow.force(id, 2)));
+                        }
+                        if (flow.hasDragReference())
+                            out.printf(Locale.ROOT, "Obstacle %d Cd: %.12g%n", id, flow.dragCoefficient(id));
+                    }
+                    out.println("Finite fields and positive density: true");
+                    return 0;
                 }
-                if (flow.hasDragReference())
-                    out.printf(Locale.ROOT, "Obstacle %d Cd: %.12g%n", id, flow.dragCoefficient(id));
+            } catch (IOException | RuntimeException error) {
+                boolean interrupted = owner.isInterrupted() || error instanceof InterruptedIOException;
+                artifacts.finish(interrupted ? RunOutput.Status.INTERRUPTED : RunOutput.Status.FAILED, error);
+                err.println((interrupted ? "Simulation interrupted: " : "Simulation failed: ") + error.getMessage());
+                return interrupted
+                        ? 130
+                        : error instanceof IOException ? 4 : error instanceof IllegalArgumentException ? 2 : 3;
+            } finally {
+                try {
+                    if (lattice != null) lattice.close();
+                } finally {
+                    try {
+                        Runtime.getRuntime().removeShutdownHook(shutdown);
+                    } catch (IllegalStateException ignored) {
+                        /// Shutdown is already in progress.
+                    }
+                }
             }
-            out.println("Finite fields and positive density: true");
-            return 0;
-        } finally {
-            lattice.close();
+        } catch (IOException error) {
+            err.println("Output error: " + error.getMessage());
+            return 4;
         }
     }
 
@@ -215,6 +285,7 @@ public final class CfdMain {
                 + (resolved.config().memoryLimitBytes() == null ? "half available JVM heap" : "explicit limit") + ")");
         out.println("Direction arrays indexable: " + memory.arrayIndexable());
         out.println("Output directory: " + resolved.outputDirectory());
+        out.println("Field format: " + resolved.config().output().format());
         out.println("Export every steps: " + resolved.config().output().exportEverySteps() + " (0 disables export)");
         out.println("Inspection passed; no populations allocated or workers started.");
     }

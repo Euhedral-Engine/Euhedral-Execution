@@ -28,7 +28,6 @@ public final class SerialSimulation implements AutoCloseable {
     }
 
     SerialSimulation(CfdConfiguration configuration, ControlPlaneLattice lattice, LongSupplier clock) {
-        requireSupported(configuration);
         this.configuration = configuration;
         this.clock = Objects.requireNonNull(clock);
         var geometry = GeometryMask.resolve(configuration);
@@ -44,11 +43,6 @@ public final class SerialSimulation implements AutoCloseable {
         rangeFrame = new CfdRangeFrame(1, null);
         ranges = new CfdRangeFrame[] {rangeFrame};
         Objects.requireNonNull(lattice).addUpstream(sink);
-    }
-
-    public static void requireSupported(CfdConfiguration configuration) {
-        if (configuration.config().output().exportEverySteps() != 0)
-            throw new IllegalArgumentException("field export is not implemented; exportEverySteps must be 0");
     }
 
     public SimulationState state() {
