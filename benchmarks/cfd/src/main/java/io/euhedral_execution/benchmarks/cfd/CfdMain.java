@@ -155,7 +155,16 @@ public final class CfdMain {
         var options = configuration.config().execution().backendOptions();
         var budget = WorkerBudget.resolve(options);
         int sources = options.sourceCount(budget.workerCount());
-        if (configuration.memory().totalBytes() + 4096L * sources
+        if (configuration.memory().totalBytes()
+                        + EuhedralBackend.sourceStorageBytes(
+                                configuration
+                                        .config()
+                                        .grid()
+                                        .brickCount(configuration
+                                                .config()
+                                                .execution()
+                                                .brick()),
+                                sources)
                 > configuration.memory().budgetBytes()) {
             throw new IllegalArgumentException("ingest sources exceed the configured memory budget");
         }

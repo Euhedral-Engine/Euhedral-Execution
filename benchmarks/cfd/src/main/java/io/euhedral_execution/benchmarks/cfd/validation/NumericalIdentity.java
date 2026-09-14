@@ -67,7 +67,7 @@ public final class NumericalIdentity {
     }
 
     /// Representative coverage only: unforced lattice-unit shear in a fully periodic, empty domain.
-    /// Grid and duration may scale; all other physics, modes, guards and diagnostics must still match.
+    /// Grid and duration may scale; all other physics, modes and guards must still match.
     public static String periodicShearIdentity(CfdConfiguration configuration) throws IOException {
         var config = configuration.config();
         var geometry = config.geometry();
@@ -102,7 +102,8 @@ public final class NumericalIdentity {
                 "stepDeadlineMillis",
                 "geometrySources",
                 "geometryDeadlineMillis",
-                "durationSeconds"));
+                "durationSeconds",
+                "diagnosticsEverySteps"));
         execution.put("steps", configuration.steps());
         var meshes = value.path("geometry").path("meshes");
         for (int i = 0; i < meshes.size(); i++) {

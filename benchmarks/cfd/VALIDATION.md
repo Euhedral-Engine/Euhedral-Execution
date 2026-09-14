@@ -158,3 +158,8 @@ claim an exact OpenLB comparison at the larger size; full Java equivalence remai
 this identity contract must be regenerated; scheduling variants still renew full backend equivalence
 in every fork. The duct and unverified convergence cases remain ineligible. No change to the frozen
 OpenLB tolerance budgets is introduced by the benchmark runner.
+
+Diagnostic scan cadence is execution metadata, excluded from physical identity. Benchmark cases
+request final-only summaries while keeping per-cell guards and final full-field comparisons.
+Simulation/debug runs can still request intermediate summaries; the same completed populations
+and range reductions must result at either cadence.

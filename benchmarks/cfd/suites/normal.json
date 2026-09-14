@@ -23,11 +23,6 @@
   "baselineVariant": "fjp",
   "variants": [
     {
-      "id": "euhedral-one",
-      "backend": "euhedral",
-      "sources": 1
-    },
-    {
       "id": "euhedral-workers",
       "backend": "euhedral",
       "sources": "workers"

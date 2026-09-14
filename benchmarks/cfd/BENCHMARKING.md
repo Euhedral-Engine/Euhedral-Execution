@@ -24,12 +24,13 @@ Read the report rather than treating a nonzero suite exit as a failure of every 
 
 ## Stock workload and resources
 
-The stock suite measures all 1,000 steps; `preSteps` is zero. Each of the four parallel variants uses
+The stock suite measures all 1,000 steps; `preSteps` is zero. Each of the three parallel variants
+uses
 two independent forks, one warmup iteration and two measured iterations. JMH's one-second
 iteration setting is a minimum duration, not a limit on a simulation: an invocation always
 finishes its 1,000 steps. The first checked warmup qualifies each fork; there is no extra preflight simulation.
-With one invocation per iteration, the suite runs the large simulation 25 times:
-one parallel FJP reference plus 24 warmup/measurement runs across the four variants.
+With one invocation per iteration, the suite runs the large simulation 19 times:
+one parallel FJP reference plus 18 warmup/measurement runs across the three variants.
 This is a sustained application comparison, and the complete suite can be a long campaign;
 its wall time depends on the machine. The seven-day deadline bounds each child process tree,
 not the whole suite. The replacement preset has been checked on bounded domains; its full-size
@@ -39,12 +40,13 @@ The configuration estimates roughly 4.83 GiB for population arrays, geometry and
 the two population buffers alone use 4.75 GiB. Forks use `-Xms1g -Xmx12g`, and the simulation's
 allocation budget is 8 GiB. Use a machine with at least 16 GiB of available RAM and additional
 headroom for other processes. The streamed reference is approximately 3.125 GiB, retained once
-and reused by all variants; allow at least 7 GiB of free output space for the reference and four final Euhedral snapshots,
+and reused by all variants; allow at least 5 GiB of free output space for the reference and two
+final Euhedral snapshots,
 in addition to validation artifacts and logs. Config inspection computes these sizes without allocating the population arrays.
 
 Parallel variants use all available physical worker cores after reserving the driver core;
 `workers`/`cpus` can cap this explicitly. Affinity requests are enabled. Every variant retains the
-same 32-cubed range shape, 10-step diagnostic cadence, reset policy and timed work. Small heap
+same 32-cubed range shape, final-only diagnostic scans, reset policy and timed work. Small heap
 settings from smoke runs are unsuitable for the stock domain.
 
 ## Qualification and identity
@@ -61,15 +63,16 @@ The full loaded CFD artifact identity is checked again in each child to detect c
 Old reports without these identity fields must be regenerated.
 
 Physical identity includes grid, geometry and mesh contents, numerical/physical parameters,
-boundaries, initial state, duration, precision convention, guards, and diagnostic cadence.
-Backend settings, brick shape, deadlines, output paths, and memory budgets are excluded from
+boundaries, initial state, duration, precision convention and guards.
+Backend settings, brick shape, deadlines, diagnostic cadence, output paths and memory budgets are
+excluded from
 physical identity. They remain explicit execution dimensions. `validationScope` defaults to `EXACT`:
-changing viscosity, a boundary, the duration, or diagnostics then requires the exact case's evidence.
+changing viscosity, a boundary or the duration then requires the exact case's evidence.
 
 The normal preset explicitly selects `PERIODIC_SHEAR_FAMILY`. This uses the bounded OpenLB shear
 case as representative numerical coverage and permits only grid size and step count to change.
 It requires lattice units, unforced shear, fully periodic faces, no obstacles or meshes, matching
-viscosity, density, shear amplitude/modes, initial state, guards and diagnostics, plus verified
+viscosity, density, shear amplitude/modes, initial state and guards, plus verified
 periodic-streaming/viscosity/transient coverage. A content identity enforces those requirements;
 feature labels alone cannot qualify a case. The report's scope and retained external configuration
 make clear that OpenLB did not validate the 256-cubed, 1,000-step trajectory itself. Complete Java
@@ -92,7 +95,8 @@ The full reference remains outside timing, with no second population grid retain
 JVM. Same-kernel equivalence alone does not establish external accuracy at a new size or duration.
 
 The stock order is bounded OpenLB validation, the full parallel FJP reference, then two forks each
-of Euhedral with one source, Euhedral with worker-count sources, FJP and static workers. Static workers are persistent Java threads with fixed contiguous range
+of Euhedral with worker-count sources, FJP and static workers. Static workers are persistent Java
+threads with fixed contiguous range
 assignments and a barrier each timestep; there is no task queue or work stealing. Progress output
 announces reference preparation, each fork, worker/source counts, completion and process-log paths.
 A serial timing variant is optional. Without it, single-worker parallel efficiency stays blank;
@@ -111,7 +115,8 @@ Before each invocation, on the driver:
 3. Check the assigned worker budget.
 
 The configured simulation duration must equal `preSteps + stepsPerInvocation`. The measured
-interval includes dispatch/source selection, numerical work, boundaries, configured diagnostics,
+interval includes dispatch/source selection, numerical work, boundaries, final completed-state
+diagnostics,
 terminal waits, deterministic reductions, and population swaps. It excludes process/worker startup,
 geometry preprocessing, frame/task allocation, reset, pre-steps, and full-field comparison.
 JMH invocation fixtures bracket those operations outside the average-time interval.
@@ -121,6 +126,13 @@ Every warmup and measured invocation receives a complete reference comparison in
 Measurement requires a successfully checked warmup; there is no separate per-fork preflight pass.
 A mismatch, incomplete invocation, changed artifact, worker-budget change, or process deadline
 invalidates the fork. No sampling or checksum-only shortcut replaces a complete field comparison.
+
+The benchmark runner resolves `execution.diagnosticsEverySteps=0` for every case, reference and
+backend. Per-cell physical guards and the final `FieldExtractor.summarize()` scan remain enabled;
+intermediate full-grid summaries are omitted. Ordinary `simulate` runs keep their configured
+cadence. Cadence is recorded in resolved configuration and is excluded from physical identity,
+since observing intermediate fields does not change them. Numerical class identity still requires
+fresh external evidence after implementation changes.
 
 Reset and initial first-touch are driver-owned. Arrays, frame scratch, FJP tasks, and static workers
 are retained. Euhedral policy/cache history remains continuous within a fork; resetting populations
@@ -142,7 +154,7 @@ obstacle IDs at the final simulation time. It is a single final state, not an an
 
 Export uses the existing streaming VTI writer and the completed simulation buffers; it does not
 rerun the solver or copy a full field into memory. There is no snapshot I/O inside timed invocations.
-The normal preset writes four binary snapshots (two Euhedral variants times two forks), about
+The normal preset writes two binary snapshots (one Euhedral variant times two forks), about
 720 MiB each. `trial.json` records `visualizationFile` and `visualizationExportNs` separately from
 JMH timings. Only completed, verified simulation states are exported.
 
@@ -194,10 +206,12 @@ retain requested and effective CPU IDs, affinity capability, worker counts, JVM 
 fluid cells, range shape, source revision, and requested/resolved sources. Capability labels describe
 the platform's placement support, not proof of exact placement.
 
-The `euhedral-one` preset explicitly uses one source for the FJP comparison. `euhedral-workers`
-uses one per effective worker. Additional positive source counts can be added as separate variants.
+The supplied presets use only `euhedral-workers`, with one source per effective worker.
+Custom suites may still select other positive source counts as separate variants.
 The driver submits round-robin without shuffling or assigning sources to workers. Source creation
-occurs during setup; selection and submission occur inside timed dispatch. Source variants are never
+occurs during setup; selection and submission occur inside timed dispatch. Each source has one
+partition with 1,024-slot chunks and a bounded recycler sized for its maximum range backlog. Source
+variants are never
 pooled into a single Euhedral score.
 
 ## Artifacts and interpretation
@@ -224,3 +238,6 @@ campaign duration. A single-fork run is `INSUFFICIENT_FORKS`, and a
 run exceeding `maxForkCv` is `UNSTABLE`. These statuses, failures, timeouts, and numerical ineligibility
 remain outside derived performance comparisons. Completed raw measurements remain available for
 inspection. Short integration runs verify the harness and do not establish a throughput winner.
+
+See [RUNTIME_OVERHEAD.md](RUNTIME_OVERHEAD.md) for the removed bookkeeping, frame publication
+argument and correctness checks. These changes have no before/after throughput claim.

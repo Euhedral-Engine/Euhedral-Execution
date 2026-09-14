@@ -18,7 +18,14 @@ final class BenchmarkRuntime implements AutoCloseable {
         affinity = options.affinity();
         try {
             BenchmarkSuite.require(
-                    config.memory().totalBytes() + 4096L * options.sourceCount(budget.workerCount())
+                    config.memory().totalBytes()
+                                    + EuhedralBackend.sourceStorageBytes(
+                                            config.config()
+                                                    .grid()
+                                                    .brickCount(config.config()
+                                                            .execution()
+                                                            .brick()),
+                                            options.sourceCount(budget.workerCount()))
                             <= config.memory().budgetBytes(),
                     "ingest sources exceed the configured memory budget");
             for (int cpu : budget.effectiveCpus()) {

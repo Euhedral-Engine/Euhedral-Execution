@@ -29,6 +29,8 @@ class BenchmarkIntegrationTest {
                 "validationSuite",
                 Path.of("validation/suites/coverage.json").toAbsolutePath().toString());
         suite.put("outputDirectory", directory.resolve("results").toString());
+        /// Keep correctness-test JMH locks separate from a user's running benchmark.
+        ((com.fasterxml.jackson.databind.node.ArrayNode) suite.get("jvmArgs")).add("-Djava.io.tmpdir=" + directory);
         suite.put("forks", 2)
                 .put("workers", 2)
                 .put("warmupIterations", 1)
@@ -74,7 +76,7 @@ class BenchmarkIntegrationTest {
         var periodicResult = report.cases().getFirst();
         assertEquals("ELIGIBLE", periodicResult.externalStatus(), periodicResult.reason());
         assertEquals(
-                java.util.List.of("euhedral-one", "euhedral-workers", "fjp", "static"),
+                java.util.List.of("euhedral-workers", "fjp", "static"),
                 periodicResult.variants().stream()
                         .map(BenchmarkResults.Summary::id)
                         .toList());
@@ -102,6 +104,9 @@ class BenchmarkIntegrationTest {
                 assertTrue(trial.path("backendEquivalenceVerified").asBoolean());
                 assertTrue(trial.path("checkedInvocations").asLong() >= 2);
                 assertTrue(trial.path("checkedWarmupInvocations").asLong() > 0);
+                var configuration = io.euhedral_execution.benchmarks.cfd.config.ConfigLoader.load(
+                        Path.of(trial.path("job").path("configuration").asText()));
+                assertEquals(0, configuration.config().execution().diagnosticsEverySteps());
                 assertEquals(
                         "CHECKED_WARMUP",
                         trial.path("backendQualificationPolicy").asText());

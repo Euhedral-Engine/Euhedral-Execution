@@ -92,7 +92,7 @@ do not establish production defaults or a throughput winner.
 Both supplied suites omit serial timing and generate their reference with FJP, without a separate
 serial qualification replay. `referenceBackend` is independent of the speedup baseline and defaults
 to serial for custom suites. Parallel efficiency is absent when no serial timing variant is selected.
-The measurement order is Euhedral with one source, Euhedral with worker-count sources, FJP, then
-static workers. The runner announces reference preparation and every backend/fork before starting.
+The measurement order is Euhedral with worker-count sources, FJP, then static workers. The runner
+announces reference preparation and every backend/fork before starting.
 Successful Euhedral forks export their final state to `simulation-final.vti` outside JMH timing,
 using the existing streaming writer. See [BENCHMARKING.md](BENCHMARKING.md) for viewing instructions.

@@ -75,6 +75,23 @@ class ForkEvidenceTest {
         assertThrows(java.io.IOException.class, () -> BenchmarkResults.read(directory, job, 10));
     }
 
+    @Test
+    void processAndVisualizationDurationCannotChangeJmhScores() throws Exception {
+        var job = job();
+        var trial = trial(job);
+        trial.put("visualizationExportNs", 9_000_000_000_000L);
+        trial.put("invocationEndToEndNs", 12_000_000_000_000L);
+        save(raw(), trial);
+        var shortProcess = BenchmarkResults.read(directory, job, 1);
+        var longProcess = BenchmarkResults.read(directory, job, 60_000_000_000_000L);
+        assertEquals(.375, longProcess.secondsPerInvocation());
+        assertEquals(shortProcess.secondsPerInvocation(), longProcess.secondsPerInvocation());
+        var variant = new BenchmarkSuite.Variant("fjp", "fjp", null);
+        var result = BenchmarkResults.summarize(variant, 1, 0, java.util.List.of(shortProcess, longProcess), 2, 10, 1);
+        assertEquals(.375, result.meanSeconds());
+        assertEquals(500 * 10 / (.375 * 1e6), result.mlups());
+    }
+
     private void save(ObjectNode raw, ObjectNode trial) throws Exception {
         Files.writeString(
                 directory.resolve("jmh.json"),

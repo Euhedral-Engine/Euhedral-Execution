@@ -19,17 +19,10 @@ class BenchmarkContractTest {
     Path directory;
 
     @Test
-    void presetsKeepSourceVariantsAndExplicitMeasurementDimensions() throws Exception {
+    void presetsUseWorkerCountSourcesAndExplicitMeasurementDimensions() throws Exception {
         for (String name : List.of("smoke", "normal")) {
             var suite = BenchmarkSuite.load(Path.of("suites/" + name + ".json"));
             assertEquals("fjp", suite.baselineVariant());
-            assertEquals(
-                    1,
-                    suite.variants().stream()
-                            .filter(v -> v.id().equals("euhedral-one"))
-                            .findFirst()
-                            .orElseThrow()
-                            .sources());
             assertEquals(
                     "workers",
                     suite.variants().stream()
@@ -41,7 +34,7 @@ class BenchmarkContractTest {
             assertEquals(2, suite.forks());
             assertEquals("fjp", suite.referenceBackend());
             assertEquals(
-                    List.of("euhedral-one", "euhedral-workers", "fjp", "static"),
+                    List.of("euhedral-workers", "fjp", "static"),
                     suite.variants().stream().map(BenchmarkSuite.Variant::id).toList());
             assertEquals(name.equals("smoke") ? 100 : 1000, suite.preSteps() + suite.stepsPerInvocation());
         }
@@ -60,19 +53,29 @@ class BenchmarkContractTest {
         assertEquals(1_000, suite.stepsPerInvocation());
         assertEquals(16_777_216_000L, config.config().grid().cellCount() * suite.stepsPerInvocation());
         assertEquals(suite.stepsPerInvocation(), config.steps());
+        assertEquals(0, config.config().execution().diagnosticsEverySteps());
         assertEquals(suite.brick(), config.config().execution().brick());
         assertTrue(config.memory().populationBytes() > 5_000_000_000L);
         assertTrue(config.memory().totalBytes() < config.memory().budgetBytes());
         assertTrue(suite.jvmArgs().contains("-Xmx12g"));
         assertEquals("fjp", suite.referenceBackend());
         assertEquals(
-                List.of("euhedral-one", "euhedral-workers", "fjp", "static"),
+                List.of("euhedral-workers", "fjp", "static"),
                 suite.variants().stream().map(BenchmarkSuite.Variant::id).toList());
         assertNull(suite.workers());
         assertTrue(suite.processDeadlineMillis() > 86_400_000);
         assertEquals(
                 BenchmarkSuite.ValidationScope.PERIODIC_SHEAR_FAMILY,
                 suite.cases().getFirst().validationScope());
+    }
+
+    @Test
+    void diagnosticCadenceIsExecutionMetadataAndDoesNotChangePhysicalEvidence() throws Exception {
+        var file = Path.of("validation/cases/obstacle.json");
+        var observed = ConfigLoader.load(file);
+        var finalOnly = ConfigLoader.load(file, List.of("execution.diagnosticsEverySteps=0"));
+        assertEquals(NumericalIdentity.caseIdentity(observed), NumericalIdentity.caseIdentity(finalOnly));
+        assertNull(ValidationGate.rejection(evidence(observed), "obstacle", finalOnly, "numerical"));
     }
 
     @Test
@@ -93,7 +96,6 @@ class BenchmarkContractTest {
                 "physics.lattice.viscosity=0.12",
                 "physics.shear.amplitude=0.02",
                 "physics.shear.modeY=2",
-                "execution.diagnosticsEverySteps=100",
                 "physics.lattice.acceleration.x=0.000001",
                 "geometry.boxes=[{\"id\":1,\"min\":{\"x\":1,\"y\":1,\"z\":1},\"max\":{\"x\":2,\"y\":2,\"z\":2}}]")) {
             var changed = ConfigLoader.load(Path.of("suites/cases/periodic-256.json"), List.of(override));
@@ -175,7 +177,6 @@ class BenchmarkContractTest {
             strings = {
                 "physics.lattice.viscosity=0.12",
                 "execution.steps=101",
-                "execution.diagnosticsEverySteps=1",
                 "geometry.faces.yMin=\"WALL\"",
                 "grid.nx=16",
                 "physics.lattice.initialVelocity.x=0.01"

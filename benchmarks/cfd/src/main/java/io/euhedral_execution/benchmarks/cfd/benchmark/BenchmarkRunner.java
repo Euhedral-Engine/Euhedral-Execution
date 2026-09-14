@@ -98,7 +98,8 @@ public final class BenchmarkRunner {
                                 "execution.brick.nx=" + suite.brick().nx(),
                                 "execution.brick.ny=" + suite.brick().ny(),
                                 "execution.brick.nz=" + suite.brick().nz(),
-                                "output.exportEverySteps=0"));
+                                "output.exportEverySteps=0",
+                                "execution.diagnosticsEverySteps=0"));
                 String identity = NumericalIdentity.caseIdentity(config);
                 String rejection = ValidationGate.rejection(
                         validation, fixture.validationCase(), config, numerical, fixture.validationScope());
