@@ -2,6 +2,7 @@ package io.euhedral_execution.benchmarks.cfd.output;
 
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
+import io.euhedral_execution.benchmarks.cfd.execution.WorkerBudget;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationState;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -33,13 +34,25 @@ public final class RunOutput implements AutoCloseable {
     private long recordedStep = -1;
 
     public RunOutput(CfdConfiguration configuration) throws IOException {
+        this(configuration, null);
+    }
+
+    public RunOutput(CfdConfiguration configuration, WorkerBudget budget) throws IOException {
         this.configuration = configuration;
         Files.createDirectories(configuration.outputDirectory());
         directory = Files.createTempDirectory(configuration.outputDirectory(), "run-");
         var metadata = new LinkedHashMap<String, Object>();
         metadata.put("source", configuration.configFile().toString());
         metadata.put("runDirectory", directory.toString());
-        metadata.put("backend", "serial");
+        var options = configuration.config().execution().backendOptions();
+        metadata.put("backend", options.backend());
+        if (budget != null) {
+            metadata.put("workerBudget", budget);
+            metadata.put("physicalWorkerCount", budget.workerCount());
+            metadata.put("requestedSources", options.sources());
+            metadata.put("resolvedSources", options.sourceCount(budget.workerCount()));
+            metadata.put("affinityRequested", options.affinity());
+        }
         metadata.put("timeUnit", configuration.physics().physicalUnits() ? "seconds" : "lattice_steps");
         metadata.put("fieldUnits", configuration.physics().physicalUnits() ? "SI" : "lattice");
         metadata.put("physics", configuration.physics());

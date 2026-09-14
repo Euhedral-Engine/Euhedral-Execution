@@ -34,19 +34,70 @@ class CfdMainTest {
         }
         var out = new ByteArrayOutputStream();
         var err = new ByteArrayOutputStream();
-        /// The CLI adopts the existing lattice. These serial cases need one worker, even on large hosts.
-        /// Each invocation owns its fixture because a successful simulate command closes the lattice.
-        var runtime = args.length > 0
-                        && (args[0].equals("simulate")
-                                || java.util.Arrays.asList(args).contains("--voxelize"))
-                ? CfdTestRuntime.singleWorker()
-                : null;
+        /// Simulations resolve their own worker budget; bound the separate voxel-inspection path here.
+        var runtime = java.util.Arrays.asList(args).contains("--voxelize") ? CfdTestRuntime.singleWorker() : null;
         try {
             int code = CfdMain.run(args, new PrintStream(out), new PrintStream(err));
             return new Result(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
         } finally {
             if (runtime != null) runtime.close();
         }
+    }
+
+    @Test
+    void parallelCliReportsResolvedBudgetsAndReplayableSettings() throws Exception {
+        for (String backend : new String[] {"euhedral", "fjp", "static"}) {
+            Path output = directory.resolve(backend);
+            var result = run(
+                    "simulate",
+                    "--config",
+                    "scenes/periodic-smoke.json",
+                    "--backend",
+                    backend,
+                    "--workers",
+                    "1",
+                    "--steps",
+                    "2",
+                    "--output",
+                    output.toString());
+            assertEquals(0, result.code(), result.err());
+            assertTrue(result.out().contains("backend=" + backend));
+            Path folder;
+            try (var paths = Files.list(output)) {
+                folder = paths.findFirst().orElseThrow();
+            }
+            String resolved = Files.readString(folder.resolve("resolved.json"));
+            assertTrue(resolved.contains("\"backend\" : \"" + backend + "\""));
+            assertTrue(resolved.contains("\"physicalWorkerCount\" : 1"));
+            assertTrue(resolved.contains("\"effectiveCpus\""));
+            assertTrue(resolved.contains("\"affinityCapability\""));
+            assertTrue(resolved.contains("\"resolvedSources\" : " + (backend.equals("euhedral") ? 1 : 0)));
+            var replay =
+                    io.euhedral_execution.benchmarks.cfd.config.ConfigLoader.load(folder.resolve("configuration.json"));
+            assertEquals(backend, replay.config().execution().backendOptions().backend());
+            assertEquals(1, replay.config().execution().backendOptions().workers());
+            assertEquals(
+                    0,
+                    run(
+                                    "simulate",
+                                    "--config",
+                                    folder.resolve("configuration.json").toString())
+                            .code());
+        }
+        var result = run(
+                "simulate",
+                "--config",
+                "scenes/periodic-smoke.json",
+                "--backend",
+                "euhedral",
+                "--workers",
+                "1",
+                "--sources",
+                "3",
+                "--steps",
+                "2");
+        assertEquals(0, result.code(), result.err());
+        assertTrue(result.out().contains("requested=3, resolved=3"));
     }
 
     @Test
@@ -223,7 +274,7 @@ class CfdMainTest {
                 run("inspect", "--config", "scenes/periodic-shear.json").out().contains("Lattice shear profile"));
         assertEquals(
                 2,
-                run("simulate", "--config", "scenes/periodic-smoke.json", "--backend", "fjp")
+                run("simulate", "--config", "scenes/periodic-smoke.json", "--backend", "unknown")
                         .code());
         assertEquals(
                 2,

@@ -2,13 +2,19 @@ package io.euhedral_execution.benchmarks.cfd;
 
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
+import io.euhedral_execution.benchmarks.cfd.execution.EuhedralBackend;
+import io.euhedral_execution.benchmarks.cfd.execution.ExecutionBackend;
+import io.euhedral_execution.benchmarks.cfd.execution.ForkJoinBackend;
+import io.euhedral_execution.benchmarks.cfd.execution.StaticBackend;
+import io.euhedral_execution.benchmarks.cfd.execution.WorkerBudget;
 import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import io.euhedral_execution.benchmarks.cfd.output.RunOutput;
 import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
-import io.euhedral_execution.benchmarks.cfd.solver.SerialSimulation;
+import io.euhedral_execution.benchmarks.cfd.solver.Simulation;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
 import io.euhedral_execution.benchmarks.cfd.validation.ValidationRunner;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
+import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.PrintStream;
@@ -22,7 +28,9 @@ public final class CfdMain {
 
     public static void main(String[] args) {
         int code = run(args, System.out, System.err);
-        if (code != 0) System.exit(code);
+        if (code != 0) {
+            System.exit(code);
+        }
     }
 
     public static int run(String[] args, PrintStream out, PrintStream err) {
@@ -32,7 +40,8 @@ public final class CfdMain {
                         && (args[0].equals("inspect") || args[0].equals("simulate") || args[0].equals("validate"))
                         && args[1].equals("--help"))) {
             out.println("Usage: euhedral-cfd inspect --config <file.json> [--voxelize]");
-            out.println("       euhedral-cfd simulate --config <file.json> [--backend serial]");
+            out.println("       euhedral-cfd simulate --config <file.json> [--backend serial|euhedral|fjp|static]");
+            out.println("       [--workers N] [--sources N|workers] [--cpus 1,2,3] [--affinity true|false]");
             out.println("       [--steps N | --duration SECONDS] [--output DIRECTORY] [--export-every N]");
             out.println("       [--format appended|ascii] [--set path=JSON-value ...]");
             out.println("       euhedral-cfd validate --suite <suite.json> [--openlb-home DIRECTORY]");
@@ -42,31 +51,47 @@ public final class CfdMain {
             return 0;
         }
         try {
-            if (args[0].equals("validate")) return ValidationRunner.command(args, out);
+            if (args[0].equals("validate")) {
+                return ValidationRunner.command(args, out);
+            }
             boolean simulate = args[0].equals("simulate");
-            if (!simulate && !args[0].equals("inspect"))
+            if (!simulate && !args[0].equals("inspect")) {
                 throw new IllegalArgumentException("unknown command: " + args[0]);
-            String config = null, backend = null;
+            }
+            String config = null;
             boolean voxelize = false;
             var overrides = new ArrayList<String>();
             var options = new HashSet<String>();
             for (int i = 1; i < args.length; i += 2) {
                 if (!simulate && args[i].equals("--voxelize")) {
-                    if (voxelize) throw new IllegalArgumentException("duplicate option: --voxelize");
+                    if (voxelize) {
+                        throw new IllegalArgumentException("duplicate option: --voxelize");
+                    }
                     voxelize = true;
                     i--;
                     continue;
                 }
-                if (i + 1 >= args.length || args[i + 1].isBlank())
+                if (i + 1 >= args.length || args[i + 1].isBlank()) {
                     throw new IllegalArgumentException("missing value for " + args[i]);
+                }
                 String option = args[i], value = args[i + 1];
-                if (!option.equals("--set") && !options.add(option))
+                if (!option.equals("--set") && !options.add(option)) {
                     throw new IllegalArgumentException("duplicate option: " + option);
-                if (option.equals("--config")) config = value;
-                else if (simulate && option.equals("--backend")) backend = value;
-                else if (option.equals("--set")) overrides.add(value);
-                else if (simulate) {
+                }
+                if (option.equals("--config")) {
+                    config = value;
+                } else if (simulate && option.equals("--backend")) {
+                    overrides.add("execution.backendOptions.backend=" + ConfigLoader.json(value));
+                } else if (option.equals("--set")) {
+                    overrides.add(value);
+                } else if (simulate) {
                     switch (option) {
+                        case "--workers" -> overrides.add("execution.backendOptions.workers=" + value);
+                        case "--sources" ->
+                            overrides.add("execution.backendOptions.sources="
+                                    + (value.equals("workers") ? ConfigLoader.json(value) : value));
+                        case "--cpus" -> overrides.add("execution.backendOptions.cpus=" + ConfigLoader.json(value));
+                        case "--affinity" -> overrides.add("execution.backendOptions.affinity=" + value);
                         case "--steps" -> overrides.add("execution.steps=" + value);
                         case "--duration" -> overrides.add("execution.durationSeconds=" + value);
                         case "--output" ->
@@ -77,19 +102,24 @@ public final class CfdMain {
                                             .toString()));
                         case "--export-every" -> overrides.add("output.exportEverySteps=" + value);
                         case "--format" -> {
-                            if (!value.equals("ascii") && !value.equals("appended"))
+                            if (!value.equals("ascii") && !value.equals("appended")) {
                                 throw new IllegalArgumentException("format must be ascii or appended");
+                            }
                             overrides.add("output.format=" + ConfigLoader.json(value.toUpperCase(Locale.ROOT)));
                         }
                         default -> throw new IllegalArgumentException("unknown option: " + option);
                     }
-                } else throw new IllegalArgumentException("unknown option: " + option);
+                } else {
+                    throw new IllegalArgumentException("unknown option: " + option);
+                }
             }
-            if (config == null) throw new IllegalArgumentException("--config is required");
-            if (backend != null && !backend.equals("serial"))
-                throw new IllegalArgumentException("only --backend serial is supported");
+            if (config == null) {
+                throw new IllegalArgumentException("--config is required");
+            }
             CfdConfiguration configuration = ConfigLoader.load(Path.of(config), overrides);
-            if (simulate) return simulate(configuration, out, err);
+            if (simulate) {
+                return simulate(configuration, out, err);
+            }
             print(configuration, out);
             if (voxelize) {
                 var lattice = ControlPlaneLattice.getOrCreate();
@@ -114,7 +144,14 @@ public final class CfdMain {
     }
 
     private static int simulate(CfdConfiguration configuration, PrintStream out, PrintStream err) {
-        try (var artifacts = new RunOutput(configuration)) {
+        var options = configuration.config().execution().backendOptions();
+        var budget = WorkerBudget.resolve(options);
+        int sources = options.sourceCount(budget.workerCount());
+        if (configuration.memory().totalBytes() + 4096L * sources
+                > configuration.memory().budgetBytes()) {
+            throw new IllegalArgumentException("ingest sources exceed the configured memory budget");
+        }
+        try (var artifacts = new RunOutput(configuration, budget)) {
             out.println("Run directory: " + artifacts.directory());
             Thread owner = Thread.currentThread();
             Thread shutdown = new Thread(
@@ -134,25 +171,67 @@ public final class CfdMain {
             ControlPlaneLattice lattice = null;
             long started = System.nanoTime();
             try {
-                lattice = ControlPlaneLattice.getOrCreate();
-                try (var simulation = new SerialSimulation(configuration, lattice)) {
+                lattice = budget.lattice(options.shutdownTimeoutMillis());
+                var geometry = GeometryMask.resolve(configuration, lattice);
+                if (options.backend().equals("fjp") || options.backend().equals("static")) {
+                    /// Geometry setup workers must leave before the comparison backend starts.
+                    lattice.close();
+                    lattice = null;
+                }
+                if (options.affinity()) {
+                    ThreadTools.setAffinity(budget.driverCpu());
+                }
+                try (ExecutionBackend execution =
+                                switch (options.backend()) {
+                                    case "fjp" ->
+                                        new ForkJoinBackend(
+                                                budget.effectiveCpus(),
+                                                options.affinity(),
+                                                options.shutdownTimeoutMillis());
+                                    case "static" ->
+                                        new StaticBackend(
+                                                budget.effectiveCpus(),
+                                                options.affinity(),
+                                                options.shutdownTimeoutMillis());
+                                    default ->
+                                        new EuhedralBackend(
+                                                lattice,
+                                                options.backend().equals("euhedral"),
+                                                sources,
+                                                false,
+                                                options.shutdownTimeoutMillis());
+                                };
+                        var simulation = new Simulation(configuration, geometry, execution)) {
+                    if (lattice != null && lattice.getActiveWorkers() != budget.workerCount()) {
+                        throw new IllegalStateException(
+                                "effective lattice workers differ from the requested comparison budget");
+                    }
+                    out.println("Execution: " + ConfigLoader.json(budget));
+                    out.println("Ingest sources: requested=" + options.sources() + ", resolved=" + sources);
                     artifacts.record(simulation.state(), System.nanoTime() - started);
                     while (simulation.state().completedSteps() < configuration.steps()) {
                         started = System.nanoTime();
                         simulation.step();
                         artifacts.record(simulation.state(), System.nanoTime() - started);
                     }
+                    /// Shutdown failures must be recorded before the run acquires terminal COMPLETED status.
+                    simulation.close();
+                    if (lattice != null) {
+                        lattice.close();
+                        lattice = null;
+                    }
                     artifacts.finish(RunOutput.Status.COMPLETED, null);
                     var state = simulation.state();
                     var diagnostics = state.diagnostics();
-                    out.println("Simulation completed: backend=serial, grid=" + state.shape());
+                    out.println("Simulation completed: backend=" + options.backend() + ", grid=" + state.shape());
                     out.println("Fluid cells: " + state.geometry().fluidCells());
                     out.println("Completed steps: " + state.completedSteps());
                     out.println("Completed lattice time: " + state.completedSteps());
-                    if (configuration.physics().physicalUnits())
+                    if (configuration.physics().physicalUnits()) {
                         out.println("Completed physical time: "
                                 + state.completedSteps()
                                         * configuration.physics().timeStep() + " s");
+                    }
                     out.printf(
                             Locale.ROOT,
                             "Mass: %.12g%nDensity range: [%.12g, %.12g]%nMaximum speed (lattice): %.12g%nMaximum Mach: %.12g%n",
@@ -196,8 +275,9 @@ public final class CfdMain {
                                     units.forceToPhysical(flow.force(id, 1)),
                                     units.forceToPhysical(flow.force(id, 2)));
                         }
-                        if (flow.hasDragReference())
+                        if (flow.hasDragReference()) {
                             out.printf(Locale.ROOT, "Obstacle %d Cd: %.12g%n", id, flow.dragCoefficient(id));
+                        }
                     }
                     out.println("Finite fields and positive density: true");
                     return 0;
@@ -211,7 +291,15 @@ public final class CfdMain {
                         : error instanceof IOException ? 4 : error instanceof IllegalArgumentException ? 2 : 3;
             } finally {
                 try {
-                    if (lattice != null) lattice.close();
+                    try {
+                        if (lattice != null) {
+                            lattice.close();
+                        }
+                    } finally {
+                        if (options.affinity()) {
+                            ThreadTools.releaseAffinity();
+                        }
+                    }
                 } finally {
                     try {
                         Runtime.getRuntime().removeShutdownHook(shutdown);
@@ -242,9 +330,10 @@ public final class CfdMain {
                     boundaries.outletDensity(),
                     (boundaries.outletDensity() - configuration.physics().densityReference()) / 3,
                     boundaries.rampSteps());
-            if (configuration.physics().physicalUnits())
+            if (configuration.physics().physicalUnits()) {
                 out.println("Inlet ramp duration (s): "
                         + configuration.config().geometry().openBoundary().rampTime());
+            }
         }
         var reference = configuration.config().physics().forceReference();
         if (reference != null) {
@@ -278,7 +367,9 @@ public final class CfdMain {
                 physics.tau());
         out.println("Lattice initial velocity: " + physics.initialVelocity());
         out.println("Lattice acceleration: " + physics.acceleration());
-        if (physics.shear() != null) out.println("Lattice shear profile: " + physics.shear());
+        if (physics.shear() != null) {
+            out.println("Lattice shear profile: " + physics.shear());
+        }
         out.printf(Locale.ROOT, "Initial Mach: %.12g (low-Mach target <= 0.1)%n", physics.initialMach());
         out.println("Initial Reynolds: "
                 + (physics.reynolds() == null ? "n/a (referenceLength omitted)" : physics.reynolds()));
@@ -301,6 +392,7 @@ public final class CfdMain {
         printBoundaries(resolved, out);
         out.println("Geometry: " + resolved.config().geometry());
         out.println("Brick: " + resolved.config().execution().brick());
+        out.println("Execution settings: " + resolved.config().execution().backendOptions());
         out.println("Geometry ingest sources: "
                 + (resolved.config().execution().geometrySources() == null
                         ? "auto (one per active worker, at most 64)"
@@ -315,7 +407,9 @@ public final class CfdMain {
         out.println("Output directory: " + resolved.outputDirectory());
         out.println("Field format: " + resolved.config().output().format());
         out.println("Export every steps: " + resolved.config().output().exportEverySteps() + " (0 disables export)");
-        for (var mesh : resolved.meshes()) out.println("Mesh inspection: " + mesh);
+        for (var mesh : resolved.meshes()) {
+            out.println("Mesh inspection: " + mesh);
+        }
         out.println("Inspection passed; no populations allocated or workers started.");
     }
 }
