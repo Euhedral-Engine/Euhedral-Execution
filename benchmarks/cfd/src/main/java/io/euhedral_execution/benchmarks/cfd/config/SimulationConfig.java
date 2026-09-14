@@ -292,8 +292,18 @@ public record SimulationConfig(
         }
     }
 
-    public record Output(String directory, Long exportEverySteps) {
+    public enum FieldFormat {
+        APPENDED,
+        ASCII
+    }
+
+    public record Output(String directory, Long exportEverySteps, FieldFormat format) {
+        public Output(String directory, Long exportEverySteps) {
+            this(directory, exportEverySteps, null);
+        }
+
         public Output {
+            format = format == null ? FieldFormat.APPENDED : format;
             directory = directory == null ? "output" : directory;
             Checks.require(!directory.isBlank(), "output.directory must not be blank");
             exportEverySteps = exportEverySteps == null ? 0L : exportEverySteps;

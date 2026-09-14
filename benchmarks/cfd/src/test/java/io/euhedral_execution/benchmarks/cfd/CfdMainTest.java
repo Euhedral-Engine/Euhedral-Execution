@@ -23,6 +23,15 @@ class CfdMainTest {
     private record Result(int code, String out, String err) {}
 
     private Result run(String... args) {
+        if (args.length > 0
+                && args[0].equals("simulate")
+                && !(args.length == 2 && args[1].equals("--help"))
+                && !java.util.Arrays.asList(args).contains("--output")) {
+            var expanded = new java.util.ArrayList<>(java.util.List.of(args));
+            expanded.add("--output");
+            expanded.add(directory.resolve("runs").toString());
+            args = expanded.toArray(String[]::new);
+        }
         var out = new ByteArrayOutputStream();
         var err = new ByteArrayOutputStream();
         /// The CLI adopts the existing lattice. These serial cases need one worker, even on large hosts.
@@ -50,6 +59,96 @@ class CfdMainTest {
             assertTrue(result.out().contains("Estimated macroscopic outlet flux"));
             assertTrue(result.out().contains("Obstacle 1 Cd:"));
         }
+    }
+
+    @Test
+    void exportsTimeSeriesAndMetricsIntoDistinctRunDirectories() throws Exception {
+        for (int run = 0; run < 2; run++) {
+            var result = run(
+                    "simulate",
+                    "--config",
+                    "scenes/periodic-smoke.json",
+                    "--steps",
+                    "3",
+                    "--export-every",
+                    "2",
+                    "--format",
+                    "ascii",
+                    "--set",
+                    "execution.diagnosticsEverySteps=2");
+            assertEquals(0, result.code(), result.err());
+        }
+        java.util.List<Path> runs;
+        try (var entries = Files.list(directory.resolve("runs"))) {
+            runs = entries.toList();
+        }
+        assertEquals(2, runs.size());
+        for (var run : runs) {
+            String pvd = Files.readString(run.resolve("flow.pvd"));
+            assertTrue(pvd.contains("time_unit=lattice_steps"));
+            for (long step : new long[] {0, 2, 3})
+                assertTrue(Files.isRegularFile(run.resolve(String.format("frame-%012d.vti", step))));
+            assertFalse(Files.exists(run.resolve("frame-000000000001.vti")));
+            var metrics = Files.readAllLines(run.resolve("metrics.csv"));
+            assertEquals(5, metrics.size());
+            assertEquals(metrics.get(0).split(",", -1).length, metrics.get(2).split(",", -1).length);
+            assertEquals("", metrics.get(2).split(",", -1)[4], "stale diagnostics must not be labeled as current");
+            var json = new com.fasterxml.jackson.databind.ObjectMapper();
+            assertEquals(
+                    "COMPLETED",
+                    json.readTree(run.resolve("status.json").toFile())
+                            .get("status")
+                            .asText());
+            var replay =
+                    io.euhedral_execution.benchmarks.cfd.config.ConfigLoader.load(run.resolve("configuration.json"));
+            assertEquals(3, replay.steps());
+            assertEquals(2, replay.config().output().exportEverySteps());
+        }
+    }
+
+    @Test
+    void overridesRejectInvalidOrConflictingValuesBeforeCreatingOutput() {
+        for (String override : new String[] {
+            "grid.typo=5",
+            "physics.lattice.viscosity=-1",
+            "grid.nx=2.5",
+            "grid.nx=null",
+            "output.format=42",
+            "output.format=\"bad\""
+        })
+            assertEquals(
+                    2,
+                    run("simulate", "--config", "scenes/periodic-smoke.json", "--set", override)
+                            .code(),
+                    override);
+        assertEquals(
+                2,
+                run("simulate", "--config", "scenes/periodic-smoke.json", "--steps", "1", "--duration", "1")
+                        .code());
+        assertEquals(
+                2,
+                run("simulate", "--config", "scenes/periodic-smoke.json", "--steps", "1", "--set", "execution.steps=2")
+                        .code());
+        assertFalse(Files.exists(directory.resolve("runs")));
+    }
+
+    @Test
+    void physicalDurationOverrideReplacesConfiguredStepsAndLabelsPvdTime() throws Exception {
+        Path file = directory.resolve("physical.json");
+        Files.writeString(file, """
+                {"schemaVersion":1,"grid":{"nx":3,"ny":4,"nz":5},"physics":{"physical":{
+                "voxelWidth":0.02,"timeStep":0.004,"densityReference":1000,"viscosity":0.01}},"execution":{"steps":99}}
+                """);
+        var result = run("simulate", "--config", file.toString(), "--duration", "0.012", "--export-every", "2");
+        assertEquals(0, result.code(), result.err());
+        assertTrue(result.out().contains("Completed steps: 3"));
+        Path run;
+        try (var files = Files.list(directory.resolve("runs"))) {
+            run = files.findFirst().orElseThrow();
+        }
+        String pvd = Files.readString(run.resolve("flow.pvd"));
+        assertTrue(pvd.contains("time_unit=seconds"));
+        assertTrue(pvd.contains("timestep=\"0.012\""));
     }
 
     @Test
@@ -101,7 +200,7 @@ class CfdMainTest {
     }
 
     @Test
-    void simulationRejectsUnsupportedExportBeforeAllocation() throws Exception {
+    void simulationRejectsUnsupportedFormatBeforeAllocation() throws Exception {
         Path path = directory.resolve("unsupported.json");
         for (String field : new String[] {"\"output\":{\"exportEverySteps\":1}"}) {
             /// This inspectable grid would require 304 GB if the capability check allocated first.
@@ -109,7 +208,7 @@ class CfdMainTest {
                     path,
                     "{\"schemaVersion\":1,\"grid\":{\"nx\":1000,\"ny\":1000,\"nz\":1000},"
                             + "\"memoryLimitBytes\":400000000000," + field + "}");
-            var result = run("simulate", "--config", path.toString());
+            var result = run("simulate", "--config", path.toString(), "--format", "compressed");
             assertEquals(2, result.code(), result.err());
             assertFalse(Files.exists(directory.resolve("output")));
         }

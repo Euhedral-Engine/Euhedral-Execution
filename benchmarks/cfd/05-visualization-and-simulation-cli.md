@@ -1,5 +1,7 @@
 # Phase 05 - Visualization and simulation workflow
 
+Status: Implemented. See [VISUALIZATION.md](VISUALIZATION.md) for usage and verification.
+
 Dependencies: [04](04-open-boundaries-and-forces.md). Field definitions: [NUMERICS.md](NUMERICS.md).
 
 ## Feature
@@ -29,5 +31,5 @@ A known non-cubic field with distinct vector components exercises array order, c
 ## Interface
 
 ```bash
-benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend serial --output benchmarks/cfd/build/runs/duct-demo
+benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend serial --export-every 10 --output benchmarks/cfd/build/runs/duct-demo
 ```

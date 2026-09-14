@@ -41,7 +41,7 @@ public record MemoryEstimate(
                             Math.multiplyExact(24L, primitives),
                             Math.addExact(grid.brickCount(config.execution().brick()), 2)));
             auxiliary = Math.addExact(auxiliary, 1_048_576L);
-            if (config.output().exportEverySteps() > 0) auxiliary = Math.addExact(auxiliary, 65_536L);
+            if (config.output().exportEverySteps() > 0) auxiliary = Math.addExact(auxiliary, 131_072L);
             long budget = config.memoryLimitBytes() == null ? defaultBudgetBytes : config.memoryLimitBytes();
             return new MemoryEstimate(
                     populations, auxiliary, Math.addExact(populations, auxiliary), budget, cells <= MAX_ARRAY_LENGTH);

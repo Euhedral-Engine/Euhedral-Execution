@@ -1,7 +1,8 @@
 # CFD configuration (schema version 1)
 
 The `euhedral-cfd` application provides configuration inspection and serial periodic/walled
-forced flow or unforced inlet/outlet flow with stationary solids and obstacle forces.
+forced flow or unforced inlet/outlet flow with stationary solids, obstacle forces, and ParaView
+field export. See [VISUALIZATION.md](VISUALIZATION.md) for output artifacts and CLI overrides.
 Build and run it with Java 21 through the repository's Mise toolchain:
 
 ```bash
@@ -58,6 +59,7 @@ to select defaults. No configuration imports or environment-variable expansion a
 | `execution.brick`                            | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                       |
 | `output.directory`                           | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute |
 | `output.exportEverySteps`                    | Non-negative integer cadence; default `0` disables field export                                          |
+| `output.format`                             | `APPENDED` (default) for uncompressed binary VTI or `ASCII` for diagnostic fixtures                         |
 | `memoryLimitBytes`                           | Optional positive integer budget; overrides the heap-based default                                       |
 
 The `lattice` section accepts positive `viscosity` (default `0.1`), `initialVelocity` (default
@@ -75,8 +77,8 @@ Face conditions accept `PERIODIC`, stationary `WALL`, `VELOCITY_INLET`, and `DEN
 Periodic faces must occur in opposite pairs. Open flow requires exactly one opposing inlet/outlet
 pair, on X, Y, or Z in either direction. Each transverse pair must be both periodic or both walls.
 Intersecting open faces, an open face opposite a wall, missing/extraneous `geometry.openBoundary`,
-nonzero acceleration, and shear initialization with open boundaries are rejected. STL imports,
-field export, and backend selection beyond `serial` remain unsupported.
+nonzero acceleration, and shear initialization with open boundaries are rejected. STL imports
+and backend selection beyond `serial` remain unsupported.
 
 `geometry.openBoundary.velocity` is a prescribed velocity vector in lattice units or m/s; its
 normal component must point inward. Its full magnitude must satisfy the configured Mach guard.
@@ -220,7 +222,7 @@ Estimated auxiliary storage reserves `5*N` bytes for cell classification and obs
 current mask combines these in one `int[N]` array, omitted for domains without primitives or open faces),
 `256*brickCount` bytes for descriptors/scratch/reductions, 256 bytes per primitive,
 `24*primitiveCount*(brickCount+2)` for private, pending, and completed force vectors, and 1 MiB for
-array/JVM overhead. Enabled field export adds a 64 KiB streaming buffer. These allowances are
+array/JVM overhead. Enabled field export reserves 128 KiB for streaming VTI output and PVD copying. These allowances are
 estimates and must evolve with later geometry and execution features. They are not measurements
 of a running solver's retained heap.
 
@@ -239,4 +241,4 @@ actual discrete mass change, boundary-update inlet/outlet fluxes, their balance 
 labeled macroscopic flux estimates, per-obstacle vector forces, and optional Cd. Forces represent
 the momentum exchanged during that completed update. Failed or cancelled work does not publish
 new flow totals. Full-field mass, density range, and maximum Mach remain in `diagnostics()` at the
-configured scan cadence. Time-series export belongs to Phase 05.
+configured scan cadence. The CLI writes these values to `metrics.csv`; see [VISUALIZATION.md](VISUALIZATION.md).
