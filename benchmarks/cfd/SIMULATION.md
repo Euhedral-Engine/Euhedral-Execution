@@ -240,7 +240,7 @@ The solver tests cover:
   occupied.
   The parallel-progress check requires at least two active physical-core workers.
 
-These are local numerical and lifecycle checks. Independent OpenLB validation belongs to Phase 07;
+These are local numerical and lifecycle checks. Independent OpenLB validation is available through [validate](VALIDATION.md);
 backend equivalence and scored performance comparisons belong to later phases. No performance
 claim follows from these tests or the small simulation fixtures.
 

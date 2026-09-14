@@ -1,0 +1,22 @@
+{
+  "grid": {
+    "nx": 4,
+    "ny": 12,
+    "nz": 8
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    },
+    "shear": {
+      "amplitude": 0.01,
+      "modeY": 1,
+      "modeZ": 1
+    }
+  },
+  "schemaVersion": 1,
+  "execution": {
+    "steps": 100,
+    "diagnosticsEverySteps": 10
+  }
+}

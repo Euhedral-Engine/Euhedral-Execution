@@ -1,0 +1,29 @@
+{
+  "grid": {
+    "nx": 8,
+    "ny": 24,
+    "nz": 8
+  },
+  "physics": {
+    "physical": {
+      "viscosity": 0.1,
+      "acceleration": {
+        "x": 1e-05
+      },
+      "voxelWidth": 0.5,
+      "timeStep": 0.25,
+      "densityReference": 1
+    }
+  },
+  "geometry": {
+    "faces": {
+      "yMin": "WALL",
+      "yMax": "WALL"
+    }
+  },
+  "schemaVersion": 1,
+  "execution": {
+    "steps": 400,
+    "diagnosticsEverySteps": 10
+  }
+}

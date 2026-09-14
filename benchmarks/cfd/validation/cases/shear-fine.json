@@ -1,0 +1,25 @@
+{
+  "grid": {
+    "nx": 8,
+    "ny": 24,
+    "nz": 16
+  },
+  "physics": {
+    "shear": {
+      "amplitude": 0.01,
+      "modeY": 1,
+      "modeZ": 1
+    },
+    "physical": {
+      "viscosity": 0.1,
+      "voxelWidth": 0.5,
+      "timeStep": 0.25,
+      "densityReference": 1
+    }
+  },
+  "schemaVersion": 1,
+  "execution": {
+    "steps": 400,
+    "diagnosticsEverySteps": 10
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "outputDirectory": "../../build/validation",
+  "processDeadlineMillis": 60000,
+  "cases": [
+    {
+      "id": "channel-convergence",
+      "config": "../cases/channel.json",
+      "features": [
+        "guo-force",
+        "halfway-walls"
+      ],
+      "mode": "PHYSICAL_CASE_CONVERGENCE",
+      "pressureGauge": "FLUID_MEAN",
+      "sampleSteps": [
+        0,
+        10,
+        50,
+        100
+      ],
+      "tolerances": {
+        "velocity": {
+          "absolute": 2e-06,
+          "relative": 0.02,
+          "scale": 0.0018
+        },
+        "density": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "pressure": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        },
+        "mass": {
+          "absolute": 1e-07,
+          "relative": 0.0,
+          "scale": 1000.0
+        },
+        "force": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.001
+        },
+        "drag": {
+          "absolute": 0.0001,
+          "relative": 0.0,
+          "scale": 1.0
+        },
+        "inletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "outletFlux": {
+          "absolute": 1e-09,
+          "relative": 0.0,
+          "scale": 0.01
+        },
+        "pressureDrop": {
+          "absolute": 1e-10,
+          "relative": 0.0,
+          "scale": 0.0001
+        }
+      },
+      "evidence": null,
+      "correspondence": "Same 4x12x4 physical channel, acceleration 1e-5 and viscosity .1; Java dx=1,dt=1 and OpenLB dx=.5,dt=.25. Sample reference at candidate cell centers using trilinear interpolation. Continuum interpolation/mesh error is separate from the matched-grid roundoff budget. Tolerances remain unverified until a frozen refinement study qualifies them.",
+      "referenceConfig": "../cases/channel-fine.json",
+      "sampling": "TRILINEAR",
+      "minimumCoverage": 1,
+      "refinementEvidence": []
+    }
+  ]
+}
