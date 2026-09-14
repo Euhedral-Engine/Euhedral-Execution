@@ -1,5 +1,7 @@
 # Phase 06 - STL import and voxelization
 
+Status: Implemented. See [STL.md](STL.md) for configuration, geometry semantics, and validation.
+
 Dependencies: [05](05-visualization-and-simulation-cli.md). Geometry and storage model: [NUMERICS.md](NUMERICS.md).
 
 ## Feature

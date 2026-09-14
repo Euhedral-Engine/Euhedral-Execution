@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 16,
+    "ny": 8,
+    "nz": 8
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    },
+    "referenceLength": 2,
+    "forceReference": {
+      "velocity": 0.003,
+      "area": 4,
+      "density": 1,
+      "direction": {
+        "x": 1
+      }
+    }
+  },
+  "geometry": {
+    "faces": {
+      "xMin": "VELOCITY_INLET",
+      "xMax": "DENSITY_OUTLET",
+      "yMin": "WALL",
+      "yMax": "WALL",
+      "zMin": "WALL",
+      "zMax": "WALL"
+    },
+    "openBoundary": {
+      "velocity": {
+        "x": 0.003
+      },
+      "outletDensity": 1,
+      "rampTime": 20.0
+    },
+    "meshes": [
+      {
+        "id": 1,
+        "name": "cad-box",
+        "file": "meshes/unit-box.stl",
+        "units": "LATTICE",
+        "scale": {
+          "x": 2,
+          "y": 2,
+          "z": 2
+        },
+        "translation": {
+          "x": 4,
+          "y": 3,
+          "z": 3
+        }
+      }
+    ]
+  },
+  "execution": {
+    "steps": 100,
+    "diagnosticsEverySteps": 10
+  },
+  "output": {
+    "exportEverySteps": 10
+  }
+}

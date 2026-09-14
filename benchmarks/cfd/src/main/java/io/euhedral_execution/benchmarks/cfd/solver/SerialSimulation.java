@@ -30,7 +30,7 @@ public final class SerialSimulation implements AutoCloseable {
     SerialSimulation(CfdConfiguration configuration, ControlPlaneLattice lattice, LongSupplier clock) {
         this.configuration = configuration;
         this.clock = Objects.requireNonNull(clock);
-        var geometry = GeometryMask.resolve(configuration);
+        var geometry = GeometryMask.resolve(configuration, Objects.requireNonNull(lattice));
         state = new SimulationState(
                 new PopulationGrid(configuration),
                 configuration.physics(),

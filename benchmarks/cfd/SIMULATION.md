@@ -21,7 +21,8 @@ ParaView usage. The final report includes completed steps/time, fluid-cell count
 fluid mass, density
 range, maximum lattice speed and Mach number, and finite/positive-density validity.
 
-Periodic/walled flow supports stationary boxes, spheres, finite cylinders, and uniform acceleration.
+Periodic/walled flow supports stationary boxes, spheres, finite cylinders, imported STL solids,
+and uniform acceleration. [STL.md](STL.md) explains mesh preprocessing and conservative cell marking.
 `forced-channel.json` has a `4x12x4` periodic X/Z channel between Y wall planes, with viscosity 0.1
 and X acceleration 0.0001, evolved for 2000 steps. Its analytical peak speed is 0.018; cell centers
 sample the parabola between the wall planes. `periodic-obstacle.json` places a sphere in a periodic
@@ -52,7 +53,11 @@ reads. Directional scratch is allocated
 once by each reusable frame; replacing work inputs and normal body execution allocate no range or
 scratch objects. Direction tables are exposed through immutable accessors.
 
-Initialization is ordinary setup in `SerialSimulation`: resolve the immutable geometry mask,
+STL geometry preprocessing dispatches reusable intersection/voxel frames to the supplied lattice
+and waits for terminal completion before publishing its immutable mask. Parsing, welding, spatial
+index construction, and connectivity remain setup; [STL.md](STL.md) details stage ownership.
+
+Initialization in `SerialSimulation` then uses the immutable geometry mask to
 reject empty fluid domains, allocate the two population buffers, initialize force-aware populations,
 and compute initial diagnostics once per simulation. Geometry/configuration objects are shared by
 all generations. Static stencil, equilibrium, force, and validation helpers create no per-cell

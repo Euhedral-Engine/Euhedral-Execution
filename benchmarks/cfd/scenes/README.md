@@ -43,3 +43,11 @@ A separate centered-sphere volume check measures voxelization error relative to 
 radius 2 has 32 solid voxels (4.51% error), and radius 8 has 2176 (1.46% error). This quantifies
 curved-mask resolution error independently of flow. Force agreement with an external solver
 belongs to [Phase 07](../07-external-solver-validation.md).
+
+## Imported STL smoke scene
+
+`stl-obstacle.json` uses the self-authored, watertight `meshes/unit-box.stl` in the small open
+duct. Its transform makes a two-unit box, while conservative surface marking produces a thicker
+voxel mask than the analytic primitive. The scene exports every ten steps and uses obstacle ID 1
+for force attribution. It is an execution/geometry fixture, not an independently validated flow
+reference. See [STL.md](../STL.md) for detailed inspection and resolution checks.

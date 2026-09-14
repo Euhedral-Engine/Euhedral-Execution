@@ -11,11 +11,13 @@ import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.type.LogicalType;
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration.CfdPhysics;
+import io.euhedral_execution.benchmarks.cfd.geometry.StlReader;
 import io.euhedral_execution.benchmarks.cfd.solver.FlowDiagnostics;
 import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -107,6 +109,18 @@ public final class ConfigLoader {
                 .writeValueAsString(value);
     }
 
+    /// Persist absolute asset/output paths so a saved run configuration can be replayed elsewhere.
+    public static String replayJson(CfdConfiguration configuration) throws IOException {
+        ObjectNode tree = (ObjectNode) MAPPER.readTree(json(configuration.config()));
+        ((ObjectNode) tree.get("output"))
+                .put("directory", configuration.outputDirectory().toString());
+        var meshes = tree.get("geometry").get("meshes");
+        for (int i = 0; i < configuration.meshes().size(); i++)
+            ((ObjectNode) meshes.get(i))
+                    .put("file", configuration.meshes().get(i).path());
+        return json(tree);
+    }
+
     private static void rejectNulls(JsonNode node, String path) {
         Checks.require(!node.isNull(), path + " must not be null; omit optional fields to use defaults");
         if (node.isObject()) {
@@ -146,7 +160,29 @@ public final class ConfigLoader {
         Path absolute = path.toAbsolutePath().normalize();
         Path output = absolute.getParent().resolve(config.output().directory()).normalize();
         MemoryEstimate memory = MemoryEstimate.estimate(config, defaultBudgetBytes);
-        return new CfdConfiguration(absolute, config, physics, steps, duration, output, memory);
+        memory.requireAllocatable(config.grid());
+        var meshes = new ArrayList<StlReader.Info>();
+        long preprocessing = 0;
+        for (var mesh : config.geometry().meshes()) {
+            var info = StlReader.inspect(absolute, mesh, physics, memory.budgetBytes() - memory.totalBytes());
+            meshes.add(info);
+            preprocessing = Math.max(preprocessing, info.preprocessingBytes());
+        }
+        if (!meshes.isEmpty()) {
+            /// Meshes are processed one at a time; connectivity needs one label array and one BFS queue.
+            long extra = Math.addExact(
+                    Math.addExact(
+                            Math.addExact(preprocessing, 1_048_576L),
+                            Math.multiplyExact(8L, config.grid().cellCount())),
+                    Math.multiplyExact(1024L, meshes.size()));
+            memory = new MemoryEstimate(
+                    memory.populationBytes(),
+                    Math.addExact(memory.auxiliaryBytes(), extra),
+                    Math.addExact(memory.totalBytes(), extra),
+                    memory.budgetBytes(),
+                    memory.arrayIndexable());
+        }
+        return new CfdConfiguration(absolute, config, physics, steps, duration, output, memory, meshes);
     }
 
     private static CfdPhysics resolvePhysics(SimulationConfig.Physics config) {

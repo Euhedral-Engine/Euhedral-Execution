@@ -167,7 +167,21 @@ public record SimulationConfig(
     /// Coordinates and radii use the selected parameter mode: lattice lengths or meters.
     /// Positive IDs are unique across primitives; the lowest ID wins at overlapping cell centers.
     public record Geometry(
-            Faces faces, List<Box> boxes, List<Sphere> spheres, List<Cylinder> cylinders, OpenBoundary openBoundary) {
+            Faces faces,
+            List<Box> boxes,
+            List<Sphere> spheres,
+            List<Cylinder> cylinders,
+            OpenBoundary openBoundary,
+            List<Mesh> meshes) {
+        public Geometry(
+                Faces faces,
+                List<Box> boxes,
+                List<Sphere> spheres,
+                List<Cylinder> cylinders,
+                OpenBoundary openBoundary) {
+            this(faces, boxes, spheres, cylinders, openBoundary, null);
+        }
+
         public Geometry(Faces faces, List<Box> boxes, List<Sphere> spheres, List<Cylinder> cylinders) {
             this(faces, boxes, spheres, cylinders, null);
         }
@@ -181,6 +195,7 @@ public record SimulationConfig(
             boxes = boxes == null ? List.of() : List.copyOf(boxes);
             spheres = spheres == null ? List.of() : List.copyOf(spheres);
             cylinders = cylinders == null ? List.of() : List.copyOf(cylinders);
+            meshes = meshes == null ? List.of() : List.copyOf(meshes);
             int axis = faces.openAxis();
             Checks.require(
                     (axis >= 0) == (openBoundary != null), "open faces require geometry.openBoundary and vice versa");
@@ -202,6 +217,46 @@ public record SimulationConfig(
             for (Sphere sphere : spheres) Checks.require(ids.add(sphere.id()), "duplicate obstacle ID " + sphere.id());
             for (Cylinder cylinder : cylinders)
                 Checks.require(ids.add(cylinder.id()), "duplicate obstacle ID " + cylinder.id());
+            var names = new HashSet<String>();
+            for (Mesh mesh : meshes) {
+                Checks.require(ids.add(mesh.id()), "duplicate obstacle ID " + mesh.id());
+                Checks.require(names.add(mesh.name()), "duplicate mesh name " + mesh.name());
+            }
+        }
+    }
+
+    public enum MeshUnits {
+        LATTICE,
+        METERS,
+        MILLIMETERS,
+        CENTIMETERS,
+        INCHES
+    }
+
+    /// Apply unit conversion and positive component scale, then X/Y/Z rotations in degrees,
+    /// then translation in the simulation's coordinate units. Welding also uses those units.
+    public record Mesh(
+            int id,
+            String name,
+            String file,
+            MeshUnits units,
+            Vector3 scale,
+            Vector3 rotationDegrees,
+            Vector3 translation,
+            Double weldTolerance) {
+        public Mesh {
+            Checks.require(id > 0, "obstacle ID must be positive");
+            Checks.require(file != null && !file.isBlank(), "mesh.file is required");
+            name = name == null ? "mesh-" + id : name;
+            Checks.require(!name.isBlank(), "mesh.name must not be blank");
+            Objects.requireNonNull(units, "mesh.units is required");
+            scale = scale == null ? new Vector3(1, 1, 1) : scale;
+            Checks.positive(scale.x(), "mesh scale.x");
+            Checks.positive(scale.y(), "mesh scale.y");
+            Checks.positive(scale.z(), "mesh scale.z");
+            rotationDegrees = rotationDegrees == null ? Vector3.ZERO : rotationDegrees;
+            translation = translation == null ? Vector3.ZERO : translation;
+            if (weldTolerance != null) Checks.positive(weldTolerance, "mesh.weldTolerance");
         }
     }
 
@@ -271,12 +326,34 @@ public record SimulationConfig(
     }
 
     public record Execution(
-            Long steps, Double durationSeconds, Long stepDeadlineMillis, GridShape brick, Long diagnosticsEverySteps) {
+            Long steps,
+            Double durationSeconds,
+            Long stepDeadlineMillis,
+            GridShape brick,
+            Long diagnosticsEverySteps,
+            Integer geometrySources,
+            Long geometryDeadlineMillis) {
+        public Execution(
+                Long steps,
+                Double durationSeconds,
+                Long stepDeadlineMillis,
+                GridShape brick,
+                Long diagnosticsEverySteps) {
+            this(steps, durationSeconds, stepDeadlineMillis, brick, diagnosticsEverySteps, null, null);
+        }
+
         public Execution(Long steps, Double durationSeconds, Long stepDeadlineMillis, GridShape brick) {
             this(steps, durationSeconds, stepDeadlineMillis, brick, null);
         }
 
         public Execution {
+            if (geometrySources != null)
+                Checks.require(
+                        geometrySources > 0 && geometrySources <= 64, "geometrySources must be between 1 and 64");
+            geometryDeadlineMillis = geometryDeadlineMillis == null ? 300_000L : geometryDeadlineMillis;
+            Checks.require(
+                    geometryDeadlineMillis > 0 && geometryDeadlineMillis <= Long.MAX_VALUE / 1_000_000,
+                    "geometryDeadlineMillis must be positive and fit nanoseconds");
             diagnosticsEverySteps = diagnosticsEverySteps == null ? 1L : diagnosticsEverySteps;
             Checks.require(diagnosticsEverySteps >= 0, "execution.diagnosticsEverySteps must be non-negative");
             Checks.require(

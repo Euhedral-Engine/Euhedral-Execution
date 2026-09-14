@@ -52,8 +52,9 @@ file. The dedicated `--output` option is relative to the shell's current directo
 | `frame-NNNNNNNNNNNN.vti` | Completed cell-centered fields at the step encoded in the filename |
 | `flow.pvd` | Ordered collection of published VTI files and their times |
 
-The saved configuration can be supplied to `--config` for replay. Supply `--output` to select the
-replay destination explicitly; relative paths in the saved JSON resolve from its new location.
+The saved configuration can be supplied to `--config` for replay. Its mesh and output paths are
+absolute; supply `--output` to select a different replay destination. Imported STL runs also include
+`geometry.json` with mesh and fluid-connectivity metadata; see [STL.md](STL.md).
 Physical runs use seconds for collection and CSV time. Lattice runs use completed lattice steps,
 labeled `lattice_steps` in the PVD comment, CSV, and resolved metadata. VTI FieldData contains
 `TimeValue` and either `time_seconds` or `time_lattice_steps`.
