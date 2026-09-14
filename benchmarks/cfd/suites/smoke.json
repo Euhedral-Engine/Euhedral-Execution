@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "outputDirectory": "../build/benchmarks",
+  "validationSuite": "../validation/suites/coverage.json",
+  "workers": 2,
+  "affinity": false,
+  "brick": {
+    "nx": 4,
+    "ny": 4,
+    "nz": 4
+  },
+  "preSteps": 90,
+  "stepsPerInvocation": 10,
+  "forks": 2,
+  "warmupIterations": 1,
+  "measurementIterations": 2,
+  "iterationMillis": 100,
+  "processDeadlineMillis": 60000,
+  "maxForkCv": 0.5,
+  "jvmArgs": [
+    "-Xms128m",
+    "-Xmx256m"
+  ],
+  "baselineVariant": "fjp",
+  "variants": [
+    {
+      "id": "euhedral-one",
+      "backend": "euhedral",
+      "sources": 1
+    },
+    {
+      "id": "euhedral-workers",
+      "backend": "euhedral",
+      "sources": "workers"
+    },
+    {
+      "id": "fjp",
+      "backend": "fjp"
+    },
+    {
+      "id": "static",
+      "backend": "static"
+    }
+  ],
+  "cases": [
+    {
+      "id": "periodic",
+      "config": "../validation/cases/shear.json",
+      "validationCase": "shear"
+    },
+    {
+      "id": "obstacle",
+      "config": "../validation/cases/obstacle.json",
+      "validationCase": "obstacle"
+    },
+    {
+      "id": "duct",
+      "config": "../validation/cases/duct.json",
+      "validationCase": "duct"
+    },
+    {
+      "id": "stl",
+      "config": "../validation/cases/stl.json",
+      "validationCase": "stl"
+    }
+  ],
+  "referenceBackend": "fjp"
+}

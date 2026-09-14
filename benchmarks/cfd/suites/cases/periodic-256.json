@@ -1,0 +1,29 @@
+{
+  "grid": {
+    "nx": 256,
+    "ny": 256,
+    "nz": 256
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    },
+    "shear": {
+      "amplitude": 0.01,
+      "modeY": 1,
+      "modeZ": 1
+    }
+  },
+  "schemaVersion": 1,
+  "execution": {
+    "steps": 1000,
+    "diagnosticsEverySteps": 10,
+    "brick": {
+      "nx": 32,
+      "ny": 32,
+      "nz": 32
+    },
+    "stepDeadlineMillis": 120000
+  },
+  "memoryLimitBytes": 8589934592
+}

@@ -47,6 +47,21 @@ public class Simulation implements AutoCloseable {
         return state;
     }
 
+    /// Driver-only invocation reset after successful completion. Buffers, frames and workers are retained.
+    public void reset() {
+        if (closed || failed) {
+            throw new IllegalStateException("cannot reset a closed or failed simulation");
+        }
+        if (state.completedSteps() > 0) {
+            for (var range : ranges) {
+                range.requireSuccess();
+            }
+        }
+        state.reset();
+        pendingFlow.reset();
+        initialize();
+    }
+
     public SimulationState run() {
         while (state.completedSteps() < configuration.steps()) {
             step();

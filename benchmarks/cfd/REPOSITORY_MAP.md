@@ -79,4 +79,18 @@ Brick completion publishes numerical writes and private diagnostic reductions. T
 
 `benchmarks/cfd/validation/openlb` contains the OpenLB case adapter and pinned build script. A separately installed, pinned OpenLB release performs reference computation in a child process. Case translation and field export connect that process to the validation runner. The Java numerical kernel and OpenLB retain separate implementations.
 
-`benchmarks/cfd/validation/suites` contains matched cases and comparison tolerances. Validation artifacts associate reference output with resolved physical settings, solver versions, comparison locations, and times. The planned benchmark runner consumes these reports as numerical-eligibility evidence. [VALIDATION.md](VALIDATION.md) describes the implemented runner and qualification boundaries.
+`benchmarks/cfd/validation/suites` contains matched cases and comparison tolerances. Validation artifacts associate reference output with resolved physical settings, solver versions, comparison locations, and times. The benchmark runner consumes these reports as numerical-eligibility evidence, verifies complete Java fields outside timing, and runs isolated JMH forks. [VALIDATION.md](VALIDATION.md) describes the implemented runner and qualification boundaries.
+
+## Execution comparison
+
+The `benchmark` package implements [Phase 10](10-jmh-and-comparison-runner.md). JMH core and its
+annotation processor use the repository catalog aliases. The application build bundles generated
+JMH metadata and runtime libraries; application distributions also include `suites`.
+`BenchmarkRunner` starts reference/JMH processes sequentially, and `ValidationProcess` bounds their
+process trees. `CfdBenchmark` retains one backend per fork, resets through `Simulation.reset()` in
+invocation setup, and checks complete populations/fields in invocation teardown. Raw JMH scores,
+per-fork validity, external evidence, and comparisons are separate artifacts.
+
+`ReferenceWorker` can qualify a parallel backend against bounded serial fields before generating
+the full-size reference. The stock suite uses FJP for that reference and omits serial timing.
+Reference metadata and fork checks keep this correctness role separate from the speedup baseline.

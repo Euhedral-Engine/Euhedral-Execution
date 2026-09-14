@@ -36,6 +36,7 @@ public final class ValidationRunner {
             int schemaVersion,
             String candidateIdentity,
             String candidateRevision,
+            String numericalIdentity,
             JsonNode referenceIdentity,
             boolean externalNumericsEligible,
             boolean backendEquivalenceVerified,
@@ -120,6 +121,7 @@ public final class ValidationRunner {
                 1,
                 candidateIdentity,
                 candidateRevision(),
+                NumericalIdentity.current(),
                 identity,
                 passed,
                 false,
@@ -143,6 +145,12 @@ public final class ValidationRunner {
             throws IOException {
         var config = ConfigLoader.load(base.resolve(fixture.config()));
         details.put("configuration", config);
+        details.put("replayConfiguration", ValidationSuite.JSON.readTree(ConfigLoader.replayJson(config)));
+        details.put("caseIdentity", NumericalIdentity.caseIdentity(config));
+        String periodicShear = NumericalIdentity.periodicShearIdentity(config);
+        if (periodicShear != null) {
+            details.put("periodicShearIdentity", periodicShear);
+        }
         details.put("candidateMethod", ValidationWorker.method(config));
         details.put(
                 "physicalSampleTimes",
@@ -750,7 +758,7 @@ public final class ValidationRunner {
                 .collect(java.util.stream.Collectors.joining(java.io.File.pathSeparator));
     }
 
-    private static String candidateRevision() throws IOException {
+    public static String candidateRevision() throws IOException {
         try {
             Path location = Path.of(ValidationWorker.class
                     .getProtectionDomain()
@@ -769,7 +777,7 @@ public final class ValidationRunner {
         return "development classes; loaded class hashes include uncommitted changes";
     }
 
-    private static String candidateIdentity() throws IOException {
+    public static String candidateIdentity() throws IOException {
         /// Hash loaded CFD classes so dirty/uncommitted numerical changes invalidate eligibility too.
         Path location;
         try {

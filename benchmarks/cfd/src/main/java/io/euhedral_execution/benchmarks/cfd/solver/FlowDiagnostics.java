@@ -38,6 +38,12 @@ public final class FlowDiagnostics {
         return denominator;
     }
 
+    void reset() {
+        Arrays.fill(forces, 0);
+        step = 0;
+        massChange = inletFlux = outletFlux = macroscopicInletFlux = macroscopicOutletFlux = 0;
+    }
+
     public void reduce(long step, CfdRangeFrame[] ranges) {
         if (step <= 0 || ranges.length == 0) throw new IllegalArgumentException("a completed generation needs ranges");
         int previous = -1;
