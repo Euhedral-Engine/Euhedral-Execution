@@ -2,11 +2,11 @@
 
 The runtime integration points below were surveyed at commit
 `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
-Paths are relative to the repository root. Phases 01-07 implement configuration, the periodic/walled
+Paths are relative to the repository root. Phases 01-08 implement configuration, the periodic/walled
 solver, solid geometry, forcing, open boundaries, obstacle forces, physical conversions, ordered
 lattice execution, ParaView time-series output, STL import/voxelization, and external OpenLB validation.
-[Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
-configurable source dispatch work.
+[Phase 08](08-parallel-execution-backends.md) adds the shared simulation driver, parallel Euhedral,
+FJP/static backends, and configurable source dispatch.
 
 ## Build and packaging
 
@@ -28,9 +28,11 @@ benchmarks subtree.
 
 The `benchmarks/cfd/src/main/java/io/euhedral_execution/benchmarks/cfd/solver` package owns the
 D3Q19 and open-boundary helpers, population buffers, macroscopic fields, reusable flow/force
-reductions, and the serial simulation driver. The
+reductions, and the shared simulation driver. The
 `frames`
-package owns reusable range bodies; `QueueIngestSink` feeds them to the lattice with ordered hashes.
+package owns reusable range bodies. The `execution` package owns range preparation, worker budgets,
+backend options, and dispatch. `QueueIngestSink` feeds serial/parallel frames to the default lattice
+with ordered/mixed hashes.
 The `geometry` package resolves immutable cell masks before population allocation. `StlReader`
 streams mesh metadata and checked coordinates; `TriangleMesh` validates welded surfaces and indexes
 triangles; `GeometryRangeFrame` executes intersection checks and voxel ranges on the lattice through

@@ -1,6 +1,6 @@
 # Phase 08 - Parallel execution backends
 
-Status: planned. Includes the remaining Euhedral execution work formerly assigned to Phase 09.
+Status: implemented. Includes the remaining Euhedral execution work formerly assigned to Phase 09.
 
 Dependencies: [04](04-open-boundaries-and-forces.md). Related components: [numerical model](NUMERICS.md), [runtime integration](REPOSITORY_MAP.md).
 
@@ -111,9 +111,9 @@ complete fields. Coordination tests use deterministic synchronization. External 
 comes from [phase 07](07-external-solver-validation.md); backend checks establish execution
 equivalence.
 
-## Planned interface
+## Interface
 
-These options and parallel backends are introduced by this phase:
+The bundled launcher accepts:
 
 ```bash
 benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend fjp --workers 4
@@ -121,3 +121,34 @@ benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config ben
 benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend euhedral --workers 4 --sources 1
 benchmarks/cfd/build/install/euhedral-cfd/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle.json --backend euhedral --workers 4 --sources workers
 ```
+
+## Implementation and validation
+
+`Simulation` owns initialization, shared generation contexts, ordered reductions, and population
+publication. `SerialSimulation` remains a compatibility entry point for a caller-owned lattice.
+`RangePlan` creates fixed frames once and reserves their incoming/force scratch during setup.
+`EuhedralBackend`, `ForkJoinBackend`, and `StaticBackend` implement `ExecutionBackend`; the latter
+two reuse a task tree and persistent contiguous-range workers respectively. No Euhedral executor
+or producer threads are added. The driver retains frames directly, without recycler handoffs.
+
+Settings live in `execution.backendOptions` and are retained in replay configuration. CPU budgets
+select one available logical CPU per physical core and reserve a separate driver core when
+possible. On a single-core host the driver necessarily shares that core. Requested workers are
+capped to available eligible cores. Euhedral uses its ordinary managed affinity; `--affinity true`
+also requests driver and comparison-worker affinity through `ThreadTools`. Capability labels do
+not assert exact physical placement. `resolved.json` records requested/effective CPUs, worker
+count, affinity capability, and requested/resolved sources. Geometry workers close before a FJP
+or static run starts.
+
+Focused coverage compares every population and derived fluid field exactly over multiple steps
+for periodic shear, forced walls, and an open duct with an obstacle. It varies worker counts,
+source counts, non-cubic partial bricks, and a single brick with more workers/sources than ranges.
+Additional checks cover solid-brick exclusion, frame identity reuse, terminal errors, fatal body
+errors, interruption, and deterministic rejected-offer retries. Existing routing/recycler and
+external OpenLB integration checks remain part of the CFD suite. These tests establish execution
+correctness; throughput measurement belongs to Phase 10.
+
+Deadlines identify outstanding range ordinals. Failure cancels the generation and waits up to the
+configured shutdown timeout for terminal acknowledgments. If a worker cannot quiesce, the run
+fails with that condition reported; its buffers and frames are never reused. Backend close stops
+its owned workers, while callers close borrowed Euhedral lattices at their ownership boundary.

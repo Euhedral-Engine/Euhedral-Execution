@@ -68,8 +68,14 @@ public abstract class CfdFrame extends AbstractFrame {
         if (!status.compareAndSet(Status.READY, Status.EXECUTING))
             throw new IllegalStateException("frame must be prepared and dispatched exactly once");
         if (!isAlive()) throwCancelSignal();
-        executeBody();
-        status.set(Status.BODY_COMPLETE);
+        try {
+            executeBody();
+            status.set(Status.BODY_COMPLETE);
+        } catch (Error error) {
+            /// The ordinary executor catches Exception only. Publish failure before losing its worker.
+            doFinallyWithError(error);
+            throw error;
+        }
     }
 
     protected abstract void executeBody();
@@ -89,9 +95,12 @@ public abstract class CfdFrame extends AbstractFrame {
         }
         try {
             publishSuccess();
-        } catch (RuntimeException e) {
-            failure = e;
+        } catch (RuntimeException | Error error) {
+            failure = executionFailure(error);
             publishTerminal(Status.FAILED);
+            if (error instanceof Error fatal) {
+                throw fatal;
+            }
             return;
         }
         publishTerminal(Status.SUCCEEDED);
@@ -104,13 +113,18 @@ public abstract class CfdFrame extends AbstractFrame {
             failure = new SimulationException(generation(), 0, 0, 0, "frame cancelled");
             publishTerminal(Status.CANCELLED);
         } else {
-            if (error instanceof RuntimeException runtime) failure = runtime;
-            else {
-                failure = new SimulationException(generation(), 0, 0, 0, "frame execution failed");
-                failure.initCause(error);
-            }
+            failure = executionFailure(error);
             publishTerminal(Status.FAILED);
         }
+    }
+
+    private RuntimeException executionFailure(Throwable error) {
+        if (error instanceof RuntimeException runtime) {
+            return runtime;
+        }
+        var failure = new SimulationException(generation(), 0, 0, 0, "frame execution failed");
+        failure.initCause(error);
+        return failure;
     }
 
     private void publishTerminal(Status terminal) {

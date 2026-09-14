@@ -1,6 +1,6 @@
 package io.euhedral_execution.benchmarks.cfd.config;
 
-/// Payload bytes are exact; JVM overhead and future brick/mask storage are conservative estimates.
+/// Payload bytes are exact; JVM overhead and retained frame/mask storage are conservative estimates.
 public record MemoryEstimate(
         long populationBytes, long auxiliaryBytes, long totalBytes, long budgetBytes, boolean arrayIndexable) {
     /// HotSpot commonly reserves a few elements below the language's signed-int length limit.
@@ -27,7 +27,7 @@ public record MemoryEstimate(
             /// fixed JVM/array overhead, and a bounded streaming export buffer when enabled.
             long auxiliary = Math.addExact(
                     Math.multiplyExact(5L, cells),
-                    Math.multiplyExact(256L, grid.brickCount(config.execution().brick())));
+                    Math.multiplyExact(768L, grid.brickCount(config.execution().brick())));
             var geometry = config.geometry();
             long primitives = Math.addExact(
                     Math.addExact(

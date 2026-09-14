@@ -28,7 +28,8 @@ and X acceleration 0.0001, evolved for 2000 steps. Its analytical peak speed is 
 sample the parabola between the wall planes. `periodic-obstacle.json` places a sphere in a periodic
 `12x10x8` grid and applies X acceleration for 100 steps. Unforced open boundaries and obstacle
 forces are also supported; [scene metadata](scenes/README.md) records inlet/outlet cases and smoke
-variants. Nonserial backends remain later work.
+variants. Select `euhedral`, `fjp`, or `static` with `--backend` for parallel range execution; see
+[execution settings](CONFIGURATION.md#execution-selection).
 
 Physical inputs use checked unit conversions; CLI diagnostics are in lattice units, with completed
 physical time labeled separately. `SimulationState.physicalField()` converts density, velocity, and
@@ -74,21 +75,22 @@ Its body
 performs pull/collide for that range; its terminal hook acknowledges the range result. It does not
 initialize the simulation, reduce full-field diagnostics, or swap buffers.
 
-`SerialSimulation` registers a `QueueIngestSink` with the caller's `ControlPlaneLattice` and offers
-one reusable whole-volume range frame per timestep. The frame retains the same `idHash` and
-`routingHash`, so work from that sink follows one ordered lane in insertion order under a stable
-routing topology. Lattice workers execute it through the standard terminal, which checks liveness,
-invokes the body, and selects `doFinally()` or `doFinallyWithError()`. The driver waits for
-successful
-terminal completion, computes diagnostics when scheduled, checks the deadline, and swaps buffers.
+`Simulation` retains a stable Z/Y/X brick plan across timesteps. Bounds and reduction ordinals live
+in the reusable frames; solid-only bricks are omitted. All backends execute the same frame body
+and wait for successful terminal completion of every range before diagnostics and buffer swaps.
 An empty ingest queue is not a timestep completion signal.
 
-The serial backend uses normal lattice workers; serial execution comes from ordered routing. To
-dispatch independent ranges in parallel, call `randomizeHash(seed)` with a changing seed on each
-frame before offering it to the same sink. The range inputs and routing metadata stay fixed while
-in flight. Independent range dispatch and a multi-range generation barrier are planned in
-[Phase 08](08-parallel-execution-backends.md), together with configurable source count and plain
-round-robin submission. Source acquisition and distribution remain runtime responsibilities.
+`SerialSimulation` selects one persistent `QueueIngestSink` on a caller-owned lattice. Frames have
+equal unchanged identity/routing hashes, so that source follows one ordered lane. `EuhedralBackend`
+selects parallel placement by mixing each frame's routing hash and submits round-robin through
+persistent sources. `ForkJoinBackend` retains a bulk task tree in a dedicated pool; `StaticBackend`
+retains workers with fixed contiguous range sequences. Preparation allocates scratch and tasks;
+normal generation dispatch creates no per-range objects.
+
+The driver acquires each frame's terminal status before reading results. FJP additionally joins
+the root before task reinitialization; static workers acknowledge the generation after completing
+their assigned sequence. The shared `StepContext` is replaced once per timestep and remains stable
+while work is in flight. Source acquisition and placement remain Euhedral responsibilities.
 
 The CLI owns synchronous output and closes the lattice on success or failure. The solver library
 does not write files when `run()` or `step()` is called. Library callers supply the lattice:
@@ -107,15 +109,14 @@ close();
 }
 ```
 
-Closing a simulation cancels its frame and completes its sink. The runtime owner closes the lattice
+Closing a simulation cancels its ranges and closes its backend. The runtime owner closes the lattice
 after its simulations to quiesce workers before releasing their buffers. A simulation cannot be
 advanced after close; its last completed state remains readable.
 
 Disjoint range frames can share the same generation context and execute concurrently. The driver
 owns the partition and must ensure complete, non-overlapping destination coverage. It must observe
 successful terminal completion of every range before diagnostics or buffer swaps, and all dispatched
-frames must be quiescent before failed-generation buffers are reused. The current serial driver
-uses one range and one sink; configurable ranges and source counts remain Phase 08 work.
+frames must be quiescent before failed-generation buffers are reused. All backends use the same configurable ranges and increasing ordinal reductions.
 
 Replace frame inputs only out of flight and submit each frame once per replacement. Status
 distinguishes
@@ -129,8 +130,7 @@ An optional `FrameManager` receives the frame after success, cancellation, or fa
 manager owner must consume all prior results before reacquiring frames and replacing their context
 and bounds. Never replace a pooled frame through an old reference while it remains in the recycler.
 Replacement clears the previous failure and resets the frame's own kill switch. Reusing a frame does
-not recover a failed simulation or make partially written populations valid. The serial driver uses
-one frame without a manager and stops permanently on a failed generation.
+not recover a failed simulation or make partially written populations valid. The simulation driver retains its frames without a manager and stops permanently on a failed generation.
 
 The factory pattern follows the [quick start](../../QUICK_START.md#recycle-custom-frames). A
 whole-volume factory can use the already shared generation context as its input without a per-frame
@@ -253,14 +253,14 @@ An obstacle-free frame shares an immutable empty force array. Open-boundary help
 existing 19-value incoming scratch; the body and terminal hooks create no numerical objects.
 
 Range IDs are replaceable primitives alongside the six bounds. The overload without an ID uses
-zero for the serial whole-volume frame. Multi-range owners assign increasing stable IDs and call
+zero for standalone whole-volume callers. The shared range plan assigns increasing stable IDs and calls
 `FlowDiagnostics.reduce(step, ranges)` in that order, after every range has succeeded. It validates
 terminal status, generation, ID order, and obstacle slot correspondence before changing its totals.
 It does not establish complete/non-overlapping domain coverage; partition ownership remains with
 the driver. No shared force counter or per-link object is used. Reduction copies values into
 reusable driver storage before the manager owner may reacquire and replace any frame.
 
-The serial driver reduces into pending storage, checks the deadline, then publishes flow totals
+The shared driver reduces into pending storage, checks the deadline, then publishes flow totals
 and swaps populations together. Two reusable driver slots preserve the preceding totals when
 reduction fails or the final deadline check expires.
 `SimulationState.flowDiagnostics()` is a borrowed, driver-owned view of the last completed update;

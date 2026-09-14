@@ -1,17 +1,17 @@
 # CFD system and implementation phases
 
-Status: Phases 01-07 implemented; Phases 08 and 10-11 planned. Phase 09 is incorporated into
+Status: Phases 01-08 implemented; Phases 10-11 planned. Phase 09 is incorporated into
 Phase 08.
 
 The current application provides `inspect --config` for configuration resolution and memory
-preflight, and `simulate --config --backend serial` for periodic/walled forced flow or unforced
+preflight, and `simulate --config --backend serial|euhedral|fjp|static` for periodic/walled forced flow or unforced
 inlet/outlet flow, with stationary solids and obstacle-force diagnostics. See
 [CONFIGURATION.md](CONFIGURATION.md) for settings and [SIMULATION.md](SIMULATION.md) for the solver,
 commands, numerical checks, and current limits. [Scene metadata](scenes/README.md) records the
 open-boundary cases and smoke variants. [VISUALIZATION.md](VISUALIZATION.md) covers CLI overrides,
 run artifacts, and ParaView field export. [STL.md](STL.md) covers CAD mesh import, conservative
 voxelization, and detailed inspection. Mesh intersection checks and voxel ranges run in parallel
-on Euhedral using reusable specialized frames. Other numerical execution backends remain later phases.
+on Euhedral using reusable specialized frames. Numerical updates use the same reusable range frames across all four backends.
 
 The CFD application simulates three-dimensional flow around stationary geometry and compares the execution time of interchangeable CPU backends. Built-in scenes and CAD-exported STL files become voxelized fluid domains, and completed simulations produce velocity, pressure, and obstacle-force data for ParaView.
 

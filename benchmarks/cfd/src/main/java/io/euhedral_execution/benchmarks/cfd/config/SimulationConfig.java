@@ -1,5 +1,6 @@
 package io.euhedral_execution.benchmarks.cfd.config;
 
+import io.euhedral_execution.benchmarks.cfd.execution.BackendOptions;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -332,7 +333,27 @@ public record SimulationConfig(
             GridShape brick,
             Long diagnosticsEverySteps,
             Integer geometrySources,
-            Long geometryDeadlineMillis) {
+            Long geometryDeadlineMillis,
+            BackendOptions backendOptions) {
+        public Execution(
+                Long steps,
+                Double durationSeconds,
+                Long stepDeadlineMillis,
+                GridShape brick,
+                Long diagnosticsEverySteps,
+                Integer geometrySources,
+                Long geometryDeadlineMillis) {
+            this(
+                    steps,
+                    durationSeconds,
+                    stepDeadlineMillis,
+                    brick,
+                    diagnosticsEverySteps,
+                    geometrySources,
+                    geometryDeadlineMillis,
+                    null);
+        }
+
         public Execution(
                 Long steps,
                 Double durationSeconds,
@@ -347,6 +368,7 @@ public record SimulationConfig(
         }
 
         public Execution {
+            backendOptions = backendOptions == null ? BackendOptions.DEFAULT : backendOptions;
             if (geometrySources != null)
                 Checks.require(
                         geometrySources > 0 && geometrySources <= 64, "geometrySources must be between 1 and 64");

@@ -1,6 +1,6 @@
 # CFD configuration (schema version 1)
 
-The `euhedral-cfd` application provides configuration inspection and serial periodic/walled
+The `euhedral-cfd` application provides configuration inspection and periodic/walled
 forced flow or unforced inlet/outlet flow with stationary solids, obstacle forces, and ParaView
 field export. See [VISUALIZATION.md](VISUALIZATION.md) for output artifacts and CLI overrides.
 Build and run it with Java 21 through the repository's Mise toolchain:
@@ -63,6 +63,12 @@ to select defaults. No configuration imports or environment-variable expansion a
 | `execution.geometrySources`                 | STL preprocessing ingest sources, 1-64; default one per active worker, capped at 64                       |
 | `execution.geometryDeadlineMillis`          | Positive deadline per parallel geometry stage, including queue waits; default `300000` ms                |
 | `execution.brick`                            | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                       |
+| `execution.backendOptions.backend` | `serial` (default), `euhedral`, `fjp`, or `static` |
+| `execution.backendOptions.workers` | Positive physical-worker budget; serial uses 1, parallel defaults to eligible physical cores |
+| `execution.backendOptions.sources` | Positive JSON integer or `"workers"` (default); Euhedral only; serial resolves to 1 |
+| `execution.backendOptions.cpus` | Optional comma-separated available logical CPU IDs; worker selection excludes reserved/driver cores |
+| `execution.backendOptions.affinity` | Boolean, default false; request driver and FJP/static worker affinity; Euhedral retains normal managed affinity |
+| `execution.backendOptions.shutdownTimeoutMillis` | Positive shutdown/quiescence timeout, default 5000 ms |
 | `output.directory`                           | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute |
 | `output.exportEverySteps`                    | Non-negative integer cadence; default `0` disables field export                                          |
 | `output.format`                             | `APPENDED` (default) for uncompressed binary VTI or `ASCII` for diagnostic fixtures                         |
@@ -83,7 +89,7 @@ Face conditions accept `PERIODIC`, stationary `WALL`, `VELOCITY_INLET`, and `DEN
 Periodic faces must occur in opposite pairs. Open flow requires exactly one opposing inlet/outlet
 pair, on X, Y, or Z in either direction. Each transverse pair must be both periodic or both walls.
 Intersecting open faces, an open face opposite a wall, missing/extraneous `geometry.openBoundary`,
-nonzero acceleration, and shear initialization with open boundaries are rejected. Backend selection beyond `serial` remains unsupported.
+nonzero acceleration, and shear initialization with open boundaries are rejected. All four execution backends support these boundaries.
 
 `geometry.openBoundary.velocity` is a prescribed velocity vector in lattice units or m/s; its
 normal component must point inward. Its full magnitude must satisfy the configured Mach guard.
@@ -247,3 +253,21 @@ labeled macroscopic flux estimates, per-obstacle vector forces, and optional Cd.
 the momentum exchanged during that completed update. Failed or cancelled work does not publish
 new flow totals. Full-field mass, density range, and maximum Mach remain in `diagnostics()` at the
 configured scan cadence. The CLI writes these values to `metrics.csv`; see [VISUALIZATION.md](VISUALIZATION.md).
+
+## Execution selection
+
+CLI options `--backend`, `--workers`, `--sources`, `--cpus`, and `--affinity` override the corresponding
+`execution.backendOptions` fields. For example:
+
+```bash
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-smoke.json --backend euhedral --workers 2 --sources 1
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-smoke.json --backend fjp --workers 2
+```
+
+Use `--sources workers` for one persistent Euhedral ingest sink per effective physical worker, or
+an explicit positive count. One driver submits ranges round-robin, restarting at source zero each
+timestep. Source count does not assign sources to workers. Zero/negative counts and non-integer
+counts are rejected. Serial requires one worker/source; FJP and static do not accept explicit source
+counts. `inspect` validates settings without starting workers; the simulation resolves topology
+and records the effective budget in `resolved.json`. On a one-core host, the driver and worker
+necessarily share that core. Additional source storage is checked against the run's memory budget.

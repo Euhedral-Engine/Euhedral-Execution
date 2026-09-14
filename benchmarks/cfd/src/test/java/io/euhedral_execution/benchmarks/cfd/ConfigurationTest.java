@@ -234,7 +234,7 @@ class ConfigurationTest {
                 27,
                 result.config().grid().brickCount(result.config().execution().brick()));
         assertEquals(304L * 960, result.memory().populationBytes());
-        assertEquals(5L * 960 + 256L * 27 + 1_048_576 + 131_072, result.memory().auxiliaryBytes());
+        assertEquals(5L * 960 + 768L * 27 + 1_048_576 + 131_072, result.memory().auxiliaryBytes());
         assertEquals(
                 result.memory().populationBytes() + result.memory().auxiliaryBytes(),
                 result.memory().totalBytes());

@@ -73,6 +73,56 @@ public final class CfdRangeFrame extends CfdFrame {
         super(idHash, recycler);
     }
 
+    /// Fixed range storage is allocated once; each generation replaces only the shared context.
+    public CfdRangeFrame(long idHash, int rangeId, int xFrom, int xTo, int yFrom, int yTo, int zFrom, int zTo) {
+        this(idHash, null);
+        if (rangeId < 0 || xFrom < 0 || yFrom < 0 || zFrom < 0 || xTo <= xFrom || yTo <= yFrom || zTo <= zFrom) {
+            throw new IllegalArgumentException("invalid range ordinal or bounds");
+        }
+        this.rangeId = rangeId;
+        this.xFrom = xFrom;
+        this.xTo = xTo;
+        this.yFrom = yFrom;
+        this.yTo = yTo;
+        this.zFrom = zFrom;
+        this.zTo = zTo;
+    }
+
+    public int xFrom() {
+        return xFrom;
+    }
+
+    public int xTo() {
+        return xTo;
+    }
+
+    public int yFrom() {
+        return yFrom;
+    }
+
+    public int yTo() {
+        return yTo;
+    }
+
+    public int zFrom() {
+        return zFrom;
+    }
+
+    public int zTo() {
+        return zTo;
+    }
+
+    public void reserveForceStorage(int forceCount) {
+        if (status() != Status.NEW || forceCount < 0) {
+            throw new IllegalStateException("reserve force storage during setup only");
+        }
+        forces = forceCount == 0 ? NO_FORCES : new double[Math.multiplyExact(3, forceCount)];
+    }
+
+    public void replace(StepContext context) {
+        replace(context, rangeId, xFrom, xTo, yFrom, yTo, zFrom, zTo);
+    }
+
     /// Replaces all work inputs outside execution, including when called by a `FrameFactory`.
     /// Bounds restrict destination writes only; pull reads may cross range boundaries.
     public void replace(StepContext context, int xFrom, int xTo, int yFrom, int yTo, int zFrom, int zTo) {
