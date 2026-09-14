@@ -37,6 +37,22 @@ class CfdMainTest {
     }
 
     @Test
+    void openSceneSmokeReportsResolvedBoundariesFluxAndDrag() {
+        for (String scene : new String[] {"duct-obstacle-smoke", "sphere-wake-smoke"}) {
+            var inspection = run("inspect", "--config", "scenes/" + scene + ".json");
+            assertEquals(0, inspection.code(), inspection.err());
+            assertTrue(inspection.out().contains("Inlet linear ramp duration (lattice steps): 20"));
+            assertTrue(inspection.out().contains("Drag reference"));
+            var result = run("simulate", "--config", "scenes/" + scene + ".json");
+            assertEquals(0, result.code(), result.err());
+            assertTrue(result.out().contains("Flow diagnostics step: 100"));
+            assertTrue(result.out().contains("Boundary-update inlet flux"));
+            assertTrue(result.out().contains("Estimated macroscopic outlet flux"));
+            assertTrue(result.out().contains("Obstacle 1 Cd:"));
+        }
+    }
+
+    @Test
     void helpAndArgumentErrors() {
         assertEquals(0, run().code());
         assertTrue(run("--help").out().contains("inspect --config"));

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 64,
+    "ny": 24,
+    "nz": 24
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    },
+    "referenceLength": 6,
+    "forceReference": {
+      "velocity": 0.02,
+      "area": 28.274333882308138,
+      "density": 1,
+      "direction": {
+        "x": 1
+      }
+    }
+  },
+  "geometry": {
+    "faces": {
+      "xMin": "VELOCITY_INLET",
+      "xMax": "DENSITY_OUTLET"
+    },
+    "openBoundary": {
+      "velocity": {
+        "x": 0.02
+      },
+      "outletDensity": 1,
+      "rampTime": 200.0
+    },
+    "spheres": [
+      {
+        "id": 1,
+        "center": {
+          "x": 21.333333333333332,
+          "y": 12.0,
+          "z": 12.0
+        },
+        "radius": 3
+      }
+    ]
+  },
+  "execution": {
+    "steps": 1000,
+    "diagnosticsEverySteps": 10
+  }
+}

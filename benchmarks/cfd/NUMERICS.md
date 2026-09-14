@@ -123,3 +123,51 @@ Backend equivalence compares the same Java kernel under serial, ForkJoinPool, st
 - [OpenLB user guides](https://www.openlb.net/user-guide/): versioned solver documentation.
 - [VTK XML format](https://docs.vtk.org/en/latest/vtk_file_formats/vtkxml_file_format.html): field export.
 - [JDK ForkJoinTask](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ForkJoinTask.html): task lifecycle.
+
+## Implemented open-face reconstruction
+
+The mapping from the published one-based Hecht/Harting directions (Eq. 3) to this solver's
+zero-based directions is:
+
+```text
+paper:   1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19
+solver:  1  2  3  4  5  6  7  9 11 13 10  8 14 12 15 17 18 16  0
+```
+
+`OpenBoundaries` stores the five incoming directions for each face:
+
+| Face | Incoming solver directions |
+| --- | --- |
+| X min | 1, 7, 9, 11, 13 |
+| X max | 2, 8, 10, 12, 14 |
+| Y min | 3, 7, 10, 15, 17 |
+| Y max | 4, 8, 9, 16, 18 |
+| Z min | 5, 11, 14, 15, 18 |
+| Z max | 6, 12, 13, 16, 17 |
+
+For axis `a` and inward sign `s`, let `K = sum(c_a=0, f) + 2*sum(s*c_a=-1, f)`.
+A velocity boundary determines `rho = K/(1-s*u_a)`; a density boundary determines
+`u_a = s*(1-K/rho)`. For each tangent `t`, compute `N_t = sum(c_a=0, c_t*f)/2 - rho*u_t/3`.
+Reconstruct an incoming population as `f_i = f_opp + 6*w_i*rho*(c_i.u) - sum_t(c_it*N_t)`.
+This implements the axis and diagonal relations in [Hecht/Harting, Eqs. 16 and 21-26 and
+Appendix](https://arxiv.org/pdf/0811.4593). The outlet sets tangential velocity to zero.
+
+## Discrete flow and force accounting
+
+A missing open-face link contributes `reconstructed_f_i - current_g_opp(i)` to net inward
+boundary-update flux. Summing these links on the inlet gives `inletFlux`; negating the outlet
+sum gives `outletFlux`. Closed solid links exchange no mass. Destination-owned differences
+`sum_i(next_g_i-current_g_i)` give actual mass change, with compensated range accumulation.
+The diagnostic residual is `massChange - (inletFlux-outletFlux)`, allowing collision/summation
+roundoff. This accounting includes diagonal links at the fluid cells next to wall perimeters.
+
+Macroscopic flux is separately estimated as the sum of `rho*u_normal` over fluid boundary nodes,
+with unit lattice face area per node. In transient flow it need not equal boundary-update flux.
+Both use positive inlet-inward/outlet-outward signs; negative outlet values indicate backflow.
+The implemented pressure outlet is not a non-reflecting or stabilized backflow boundary.
+
+Only reflected links incident on positive obstacle IDs contribute obstacle force. Solid wall
+layers and exterior walls have negative IDs and are excluded. Private range sums use the impulse
+specified above, then reduce in ascending range ID order. Force is the momentum transfer during
+the completed update, not a post-step surface-stress estimate. Cd uses a fixed configured reference
+throughout ramps. Array slots are compact and independent of the magnitude of the obstacle ID.

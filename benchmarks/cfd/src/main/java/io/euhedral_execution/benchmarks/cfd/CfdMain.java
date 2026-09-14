@@ -2,6 +2,7 @@ package io.euhedral_execution.benchmarks.cfd;
 
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
+import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import io.euhedral_execution.benchmarks.cfd.solver.SerialSimulation;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
@@ -27,7 +28,7 @@ public final class CfdMain {
             out.println("Usage: euhedral-cfd inspect --config <file.json>");
             out.println("       euhedral-cfd simulate --config <file.json> [--backend serial]");
             out.println("       euhedral-cfd --help");
-            out.println("Inspect configuration or simulate periodic/walled D3Q19 flow with stationary solids and body"
+            out.println("Inspect configuration or simulate D3Q19 flow with stationary solids, open boundaries and body"
                     + " forcing.");
             return 0;
         }
@@ -87,10 +88,84 @@ public final class CfdMain {
                     diagnostics.maxDensity(),
                     diagnostics.maxSpeed(),
                     diagnostics.maxMach());
+            printBoundaries(configuration, out);
+            var flow = state.flowDiagnostics();
+            out.printf(
+                    Locale.ROOT,
+                    "Flow diagnostics step: %d%nMass change (lattice): %.12g%n"
+                            + "Boundary-update inlet flux (lattice mass/step): %.12g%n"
+                            + "Boundary-update outlet flux (lattice mass/step): %.12g%nMass balance residual: %.12g%n"
+                            + "Estimated macroscopic inlet flux (lattice mass/step): %.12g%n"
+                            + "Estimated macroscopic outlet flux (lattice mass/step): %.12g%n",
+                    flow.step(),
+                    flow.massChange(),
+                    flow.inletFlux(),
+                    flow.outletFlux(),
+                    flow.massBalanceResidual(),
+                    flow.macroscopicInletFlux(),
+                    flow.macroscopicOutletFlux());
+            for (int slot = 0; slot < flow.obstacleCount(); slot++) {
+                int id = flow.obstacleId(slot);
+                out.printf(
+                        Locale.ROOT,
+                        "Obstacle %d force (lattice): [%.12g, %.12g, %.12g]%n",
+                        id,
+                        flow.force(id, 0),
+                        flow.force(id, 1),
+                        flow.force(id, 2));
+                if (configuration.physics().physicalUnits()) {
+                    var units = configuration.physics().units();
+                    out.printf(
+                            Locale.ROOT,
+                            "Obstacle %d force (N): [%.12g, %.12g, %.12g]%n",
+                            id,
+                            units.forceToPhysical(flow.force(id, 0)),
+                            units.forceToPhysical(flow.force(id, 1)),
+                            units.forceToPhysical(flow.force(id, 2)));
+                }
+                if (flow.hasDragReference())
+                    out.printf(Locale.ROOT, "Obstacle %d Cd: %.12g%n", id, flow.dragCoefficient(id));
+            }
             out.println("Finite fields and positive density: true");
             return 0;
         } finally {
             lattice.close();
+        }
+    }
+
+    private static void printBoundaries(CfdConfiguration configuration, PrintStream out) {
+        var boundaries = OpenBoundaries.resolve(configuration);
+        if (boundaries != null) {
+            out.println("Open boundary convention: on-site Hecht/Harting; transverse wall perimeter cells are solid");
+            out.println("Inlet face index (X-/X+/Y-/Y+/Z-/Z+): " + boundaries.inletFace());
+            out.printf(
+                    Locale.ROOT,
+                    "Lattice inlet velocity: [%.12g, %.12g, %.12g]%n"
+                            + "Outlet lattice density: %.12g%nOutlet lattice gauge pressure: %.12g%n"
+                            + "Inlet linear ramp duration (lattice steps): %.12g%n",
+                    boundaries.velocity(0),
+                    boundaries.velocity(1),
+                    boundaries.velocity(2),
+                    boundaries.outletDensity(),
+                    (boundaries.outletDensity() - configuration.physics().densityReference()) / 3,
+                    boundaries.rampSteps());
+            if (configuration.physics().physicalUnits())
+                out.println("Inlet ramp duration (s): "
+                        + configuration.config().geometry().openBoundary().rampTime());
+        }
+        var reference = configuration.config().physics().forceReference();
+        if (reference != null) {
+            double magnitude = reference.direction().magnitude();
+            out.printf(
+                    Locale.ROOT,
+                    "Drag reference (%s): speed=%.12g, area=%.12g, density=%.12g, unit direction=[%.12g, %.12g, %.12g]%n",
+                    configuration.physics().physicalUnits() ? "m/s, m^2, kg/m^3" : "lattice units",
+                    reference.velocity(),
+                    reference.area(),
+                    reference.density(),
+                    reference.direction().x() / magnitude,
+                    reference.direction().y() / magnitude,
+                    reference.direction().z() / magnitude);
         }
     }
 
@@ -130,6 +205,7 @@ public final class CfdMain {
         out.println("Steps: " + resolved.steps());
         out.println("Step deadline: " + resolved.config().execution().stepDeadlineMillis() + " ms");
         out.println("Faces: " + resolved.config().geometry().faces());
+        printBoundaries(resolved, out);
         out.println("Geometry: " + resolved.config().geometry());
         out.println("Brick: " + resolved.config().execution().brick());
         out.println("Population bytes (exact payload): " + memory.populationBytes());

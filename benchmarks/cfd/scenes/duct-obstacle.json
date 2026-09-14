@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "grid": {
+    "nx": 48,
+    "ny": 16,
+    "nz": 16
+  },
+  "physics": {
+    "lattice": {
+      "viscosity": 0.1
+    },
+    "referenceLength": 4,
+    "forceReference": {
+      "velocity": 0.01,
+      "area": 16,
+      "density": 1,
+      "direction": {
+        "x": 1
+      }
+    }
+  },
+  "geometry": {
+    "faces": {
+      "xMin": "VELOCITY_INLET",
+      "xMax": "DENSITY_OUTLET",
+      "yMin": "WALL",
+      "yMax": "WALL",
+      "zMin": "WALL",
+      "zMax": "WALL"
+    },
+    "openBoundary": {
+      "velocity": {
+        "x": 0.01
+      },
+      "outletDensity": 1,
+      "rampTime": 200.0
+    },
+    "boxes": [
+      {
+        "id": 1,
+        "min": {
+          "x": 14.0,
+          "y": 6.0,
+          "z": 6.0
+        },
+        "max": {
+          "x": 18.0,
+          "y": 10.0,
+          "z": 10.0
+        }
+      }
+    ]
+  },
+  "execution": {
+    "steps": 1000,
+    "diagnosticsEverySteps": 10
+  }
+}
