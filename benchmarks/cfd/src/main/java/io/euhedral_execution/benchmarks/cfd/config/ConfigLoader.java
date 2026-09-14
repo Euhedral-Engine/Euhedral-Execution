@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.cfg.CoercionInputShape;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.databind.type.LogicalType;
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration.CfdPhysics;
+import io.euhedral_execution.benchmarks.cfd.solver.FlowDiagnostics;
+import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.nio.file.Path;
@@ -76,6 +78,8 @@ public final class ConfigLoader {
         for (int size :
                 new int[] {config.grid().nx(), config.grid().ny(), config.grid().nz()})
             physics.units().lengthToPhysical(size);
+        OpenBoundaries.resolve(config, physics);
+        FlowDiagnostics.validateReference(config.physics().forceReference(), physics);
         long steps;
         if (config.execution().durationSeconds() == null) {
             steps = config.execution().steps();

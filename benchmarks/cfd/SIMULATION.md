@@ -8,6 +8,8 @@ mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/
 mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-shear.json --backend serial
 mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/forced-channel.json --backend serial
 mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/periodic-obstacle.json --backend serial
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/duct-obstacle-smoke.json --backend serial
+mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/cfd/scenes/sphere-wake-smoke.json --backend serial
 ```
 
 `serial` is the default backend; `--config` and `--backend` may appear in either order. The smoke
@@ -21,8 +23,9 @@ Periodic/walled flow supports stationary boxes, spheres, finite cylinders, and u
 `forced-channel.json` has a `4x12x4` periodic X/Z channel between Y wall planes, with viscosity 0.1
 and X acceleration 0.0001, evolved for 2000 steps. Its analytical peak speed is 0.018; cell centers
 sample the parabola between the wall planes. `periodic-obstacle.json` places a sphere in a periodic
-`12x10x8` grid and applies X acceleration for 100 steps. Open boundaries, obstacle forces, export,
-and nonserial backends remain later work.
+`12x10x8` grid and applies X acceleration for 100 steps. Unforced open boundaries and obstacle
+forces are also supported; [scene metadata](scenes/README.md) records inlet/outlet cases and smoke
+variants. Export and nonserial backends remain later work.
 
 Physical inputs use checked unit conversions; CLI diagnostics are in lattice units, with completed
 physical time labeled separately. `SimulationState.physicalField()` converts density, velocity, and
@@ -39,7 +42,8 @@ forced.
 
 `StepContext` supplies buffers, relaxation frequency, geometry, acceleration, guards, generation,
 and deadline. The `CfdRangeFrame` body gathers with periodic wraparound or halfway bounce-back,
-then performs BGK collision with the Guo source inside its six primitive, half-open bounds. A solid
+reconstructs missing open-face populations when present, then performs BGK collision with the Guo
+source inside its six primitive, half-open bounds. A solid
 source or exterior wall reflects `current[opposite(i)][destination]`. Every fluid destination writes
 its own 19 populations; solid destinations are skipped. Range boundaries never restrict source
 reads. Directional scratch is allocated
@@ -230,3 +234,38 @@ The solver tests cover:
 These are local numerical and lifecycle checks. Independent OpenLB validation belongs to Phase 07;
 backend equivalence and scored performance comparisons belong to later phases. No performance
 claim follows from these tests or the small simulation fixtures.
+
+## Open boundaries and force ownership
+
+`GeometryMask` resolves the open-face plan and sorted, compact obstacle-ID slots once. Each
+`CfdRangeFrame` retains its own force array (three doubles per declared obstacle) and primitive
+mass/flux totals. Replacement resets these values; only a larger obstacle set grows the array.
+An obstacle-free frame shares an immutable empty force array. Open-boundary helpers use the
+existing 19-value incoming scratch; the body and terminal hooks create no numerical objects.
+
+Range IDs are replaceable primitives alongside the six bounds. The overload without an ID uses
+zero for the serial whole-volume frame. Multi-range owners assign increasing stable IDs and call
+`FlowDiagnostics.reduce(step, ranges)` in that order, after every range has succeeded. It validates
+terminal status, generation, ID order, and obstacle slot correspondence before changing its totals.
+It does not establish complete/non-overlapping domain coverage; partition ownership remains with
+the driver. No shared force counter or per-link object is used. Reduction copies values into
+reusable driver storage before the manager owner may reacquire and replace any frame.
+
+The serial driver reduces into pending storage, checks the deadline, then publishes flow totals
+and swaps populations together. Two reusable driver slots preserve the preceding totals when
+reduction fails or the final deadline check expires.
+`SimulationState.flowDiagnostics()` is a borrowed, driver-owned view of the last completed update;
+read values before the next `step()`. The initial view is step zero with zero exchanged force and
+flux. It updates every timestep even when full-field diagnostic scans are disabled. The CLI prints
+the final view. [NUMERICS.md](NUMERICS.md) specifies the distinction between discrete boundary
+flux and estimated macroscopic flux.
+
+Coverage includes all six inlet orientations with reconstructed density/velocity moments,
+uniform through-flow, ramped ducts with solid wall perimeters, per-step mass balance, physical
+unit equivalence, geometry/configuration rejection, force symmetry and reversal, two-obstacle
+attribution, fluid momentum balance, reusable force slots, and split ranges crossing obstacles and
+open-face edges/corners. Failed generations retain their preceding flow diagnostics.
+
+The curved-geometry checks measure voxel-volume error and force resolution/domain sensitivity.
+See [scene metadata](scenes/README.md) for the observed values and limits. These checks do not
+replace Phase 07 external-reference validation or establish performance results.

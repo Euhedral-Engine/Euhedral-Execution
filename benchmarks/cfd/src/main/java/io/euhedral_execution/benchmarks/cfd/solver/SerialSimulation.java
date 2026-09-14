@@ -15,6 +15,8 @@ public final class SerialSimulation implements AutoCloseable {
     private final SimulationState state;
     private final QueueIngestSink sink = new QueueIngestSink();
     private final CfdRangeFrame rangeFrame;
+    private final CfdRangeFrame[] ranges;
+    private FlowDiagnostics pendingFlow;
     private final LongSupplier clock;
     private final double[] diagnosticScratch = new double[5];
     private boolean failed;
@@ -30,9 +32,17 @@ public final class SerialSimulation implements AutoCloseable {
         this.configuration = configuration;
         this.clock = Objects.requireNonNull(clock);
         var geometry = GeometryMask.resolve(configuration);
-        state = new SimulationState(new PopulationGrid(configuration), configuration.physics(), geometry);
+        state = new SimulationState(
+                new PopulationGrid(configuration),
+                configuration.physics(),
+                geometry,
+                new FlowDiagnostics(
+                        geometry, configuration.config().physics().forceReference(), configuration.physics()));
+        pendingFlow = new FlowDiagnostics(
+                geometry, configuration.config().physics().forceReference(), configuration.physics());
         initialize();
         rangeFrame = new CfdRangeFrame(1, null);
+        ranges = new CfdRangeFrame[] {rangeFrame};
         Objects.requireNonNull(lattice).addUpstream(sink);
     }
 
@@ -103,8 +113,11 @@ public final class SerialSimulation implements AutoCloseable {
                                     configuration.config().physics().guards(),
                                     diagnosticScratch)
                             : null;
+            pendingFlow.reduce(context.step(), ranges);
             context.checkProgress(0, 0, 0);
-            state.complete(context.step(), diagnostics);
+            var previousFlow = state.flowDiagnostics();
+            state.complete(context.step(), diagnostics, pendingFlow);
+            pendingFlow = previousFlow;
         } catch (RuntimeException e) {
             failed = true;
             rangeFrame.kill();

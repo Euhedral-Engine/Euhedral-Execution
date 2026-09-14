@@ -5,11 +5,14 @@ import io.euhedral_execution.benchmarks.cfd.config.GridShape;
 import io.euhedral_execution.benchmarks.cfd.config.MemoryEstimate;
 import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig;
 import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig.FaceCondition;
+import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
+import java.util.Arrays;
 import java.util.Objects;
 
-/// Immutable cell-center classification. Zero denotes fluid, positive IDs denote obstacles.
-/// Domain walls lie at 0 and the axis extent, halfway beyond the outermost fluid centers.
+/// Immutable cell-center classification: zero is fluid, positive IDs are obstacles, negative IDs are walls.
+/// Without open faces, wall planes lie at 0 and the axis extent. Open cases use transverse solid
+/// perimeter layers, with halfway wall planes at 1 and N-1 in lattice lengths.
 /// Exterior wall IDs are -1/-2 (X), -3/-4 (Y), -5/-6 (Z); intersections prefer X, then Y, then Z.
 public final class GeometryMask {
     private final GridShape shape;
@@ -17,9 +20,19 @@ public final class GeometryMask {
     private final boolean wallX, wallY, wallZ;
     private final long fluidCells;
     private final long cells;
+    private final OpenBoundaries openBoundaries;
+    private final int[] forceIds;
 
-    private GeometryMask(GridShape shape, int[] obstacleIds, SimulationConfig.Faces faces, long fluidCells) {
+    private GeometryMask(
+            GridShape shape,
+            int[] obstacleIds,
+            SimulationConfig.Faces faces,
+            long fluidCells,
+            OpenBoundaries openBoundaries,
+            int[] forceIds) {
         this.shape = shape;
+        this.openBoundaries = openBoundaries;
+        this.forceIds = forceIds;
         this.cells = shape.cellCount();
         this.obstacleIds = obstacleIds;
         wallX = faces.xMin() == FaceCondition.WALL;
@@ -31,21 +44,37 @@ public final class GeometryMask {
     public static GeometryMask periodic(GridShape shape) {
         Objects.requireNonNull(shape);
         return new GeometryMask(
-                shape, null, new SimulationConfig.Faces(null, null, null, null, null, null), shape.cellCount());
+                shape,
+                null,
+                new SimulationConfig.Faces(null, null, null, null, null, null),
+                shape.cellCount(),
+                null,
+                new int[0]);
     }
 
     public static GeometryMask resolve(CfdConfiguration configuration) {
         var shape = configuration.config().grid();
         configuration.memory().requireAllocatable(shape);
         var geometry = configuration.config().geometry();
+        var boundaries = OpenBoundaries.resolve(configuration);
+        int[] forceIds = new int
+                [geometry.boxes().size()
+                        + geometry.spheres().size()
+                        + geometry.cylinders().size()];
+        int count = 0;
+        for (var box : geometry.boxes()) forceIds[count++] = box.id();
+        for (var sphere : geometry.spheres()) forceIds[count++] = sphere.id();
+        for (var cylinder : geometry.cylinders()) forceIds[count++] = cylinder.id();
+        Arrays.sort(forceIds);
         double dx = configuration.physics().voxelWidth();
         for (int size : new int[] {shape.nx(), shape.ny(), shape.nz()}) {
             if (!Double.isFinite(size * dx)) throw new IllegalArgumentException("physical domain extent overflows");
         }
         if (geometry.boxes().isEmpty()
                 && geometry.spheres().isEmpty()
-                && geometry.cylinders().isEmpty())
-            return new GeometryMask(shape, null, geometry.faces(), shape.cellCount());
+                && geometry.cylinders().isEmpty()
+                && boundaries == null)
+            return new GeometryMask(shape, null, geometry.faces(), shape.cellCount(), boundaries, forceIds);
         if (shape.cellCount() > MemoryEstimate.MAX_ARRAY_LENGTH)
             throw new IllegalArgumentException("geometry array exceeds Java array limit");
         int[] ids = new int[(int) shape.cellCount()];
@@ -90,13 +119,40 @@ public final class GeometryMask {
                                 && Math.hypot(Math.hypot(rx - along * ax, ry - along * ay), rz - along * az)
                                         <= cylinder.radius()) id = choose(id, cylinder.id());
                     }
+                    if (boundaries != null) {
+                        if (id > 0 && boundaries.face(x, y, z, shape) >= 0)
+                            throw new IllegalArgumentException("obstacles must not touch open boundary planes");
+                        /// Whole transverse wall layers keep every open-face edge/corner solid.
+                        if (geometry.faces().xMin() == FaceCondition.WALL && (x == 0 || x == shape.nx() - 1))
+                            id = x == 0 ? -1 : -2;
+                        else if (geometry.faces().yMin() == FaceCondition.WALL && (y == 0 || y == shape.ny() - 1))
+                            id = y == 0 ? -3 : -4;
+                        else if (geometry.faces().zMin() == FaceCondition.WALL && (z == 0 || z == shape.nz() - 1))
+                            id = z == 0 ? -5 : -6;
+                    }
                     ids[x + shape.nx() * (y + shape.ny() * z)] = id;
                     if (id == 0) fluid++;
                 }
             }
         }
         if (fluid == 0) throw new IllegalArgumentException("geometry leaves no fluid cells");
-        return new GeometryMask(shape, ids, geometry.faces(), fluid);
+        return new GeometryMask(shape, ids, geometry.faces(), fluid, boundaries, forceIds);
+    }
+
+    public OpenBoundaries openBoundaries() {
+        return openBoundaries;
+    }
+
+    public int forceCount() {
+        return forceIds.length;
+    }
+
+    public int forceId(int slot) {
+        return forceIds[slot];
+    }
+
+    public int forceSlot(int id) {
+        return Arrays.binarySearch(forceIds, id);
     }
 
     private static int choose(int current, int candidate) {

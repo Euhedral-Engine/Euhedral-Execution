@@ -1,7 +1,7 @@
 # CFD configuration (schema version 1)
 
 The `euhedral-cfd` application provides configuration inspection and serial periodic/walled
-simulation with solids and forcing.
+forced flow or unforced inlet/outlet flow with stationary solids and obstacle forces.
 Build and run it with Java 21 through the repository's Mise toolchain:
 
 ```bash
@@ -42,6 +42,8 @@ to select defaults. No configuration imports or environment-variable expansion a
 | `physics.densityReference`                   | Positive lattice reference density `rho0`; default `1`                                                   |
 | `physics.lattice`                            | Lattice parameters; defaults to an empty lattice section when neither mode is supplied                   |
 | `physics.physical`                           | Alternative SI parameters; mutually exclusive with `lattice`                                             |
+| `geometry.openBoundary`                     | Required with open faces; inlet `velocity`, optional `outletDensity` and `rampTime`                      |
+| `physics.forceReference`                     | Optional drag reference: positive `velocity`, `area`, `density`, and nonzero `direction`                |
 | `physics.referenceLength`                    | Optional positive reference length in the selected mode's units                                          |
 | `geometry.faces`                             | `xMin`, `xMax`, `yMin`, `yMax`, `zMin`, `zMax`; each defaults to `PERIODIC`                              |
 | `geometry.boxes`                             | Optional list of `{id, min, max}` solid boxes; default empty                                             |
@@ -69,9 +71,41 @@ The `physical` section requires positive `voxelWidth` (m), `timeStep` (s), `dens
 default
 to zero. `physics.densityReference` remains the lattice reference density in both modes.
 
-Face conditions accept `PERIODIC` and stationary `WALL`. Periodic faces must occur in opposite
-pairs on each axis; a periodic/wall pair is rejected. Open boundaries, STL imports, field export,
-and backend selection beyond `serial` remain unsupported.
+Face conditions accept `PERIODIC`, stationary `WALL`, `VELOCITY_INLET`, and `DENSITY_OUTLET`.
+Periodic faces must occur in opposite pairs. Open flow requires exactly one opposing inlet/outlet
+pair, on X, Y, or Z in either direction. Each transverse pair must be both periodic or both walls.
+Intersecting open faces, an open face opposite a wall, missing/extraneous `geometry.openBoundary`,
+nonzero acceleration, and shear initialization with open boundaries are rejected. STL imports,
+field export, and backend selection beyond `serial` remain unsupported.
+
+`geometry.openBoundary.velocity` is a prescribed velocity vector in lattice units or m/s; its
+normal component must point inward. Its full magnitude must satisfy the configured Mach guard.
+Tangential inlet velocity is supported; the outlet prescribes zero tangential velocity. The
+positive `outletDensity` defaults to the reference density; an explicit value uses lattice density
+or kg/m^3 according to the input mode. It is checked against the density guard. Outlet gauge
+pressure is `(outletDensity_lattice - rho0)/3`.
+
+`rampTime` defaults to zero (immediate inlet velocity). A positive value is a duration in lattice
+timesteps or physical seconds; fractional durations are supported. At completed step `n`, inlet
+velocity is multiplied by `min(1, n/rampSteps)`, with `rampSteps = rampTime/timeStep`. Initialization
+retains `initialVelocity`; use zero initialization for a startup ramp. Inspection and simulation
+reports identify the convention, resolved velocity, outlet density/pressure, and ramp duration.
+
+Open faces are on the outermost fluid-center planes (coordinate `0.5*dx` or `(N-0.5)*dx`). For an
+open case with transverse walls, the entire outermost transverse cell layers are solid. Their
+halfway wall planes are at `dx` and `(N-1)*dx`, giving fluid width `(N-2)*dx`. This keeps all inlet
+and outlet perimeter edge/corner cells solid. Configuration setup rejects an obstacle occupying
+an open-face plane. The open-face reconstruction owns each of its five missing distributions,
+including adjacent-fluid diagonal links beyond the perimeter. Other solid links use bounce-back.
+See [NUMERICS.md](NUMERICS.md) for direction mapping and flux accounting.
+
+`physics.forceReference` supplies a fixed reference speed, area, density, and direction for drag.
+Values use the selected mode (lattice units or m/s, m^2, kg/m^3). Direction is normalized during
+setup. The reference stays fixed throughout an inlet ramp; it need not equal the initial velocity.
+Forces are reported for all declared obstacle IDs, in ascending ID order, including zero for
+obstacles with no exposed fluid links. Domain walls are excluded. The CLI reports lattice force,
+force in newtons for physical cases, and Cd when a reference is supplied. Without a reference,
+vector forces remain available and requesting Cd through the library raises an error.
 
 Solid geometry uses cell centers at `(x+0.5, y+0.5, z+0.5)` in lattice mode and these coordinates
 multiplied by `voxelWidth` in physical mode. Primitive coordinates/radii therefore use lattice
@@ -82,8 +116,9 @@ the resolved cell mask repeats across periodic faces.
 
 Obstacle IDs must be positive and unique across all three primitive lists. Overlapping solids
 assign the lowest ID at each cell, independently of declaration order. Zero denotes fluid. Domain
-walls occupy exterior neighbor cells, leaving all interior grid centers available to fluid or
-obstacles; their wall planes are at `0` and the full axis extent. Exterior IDs are `-1/-2` for X,
+walls in cases without open faces occupy exterior neighbor cells, leaving all interior grid
+centers available to fluid or obstacles; their wall planes are at `0` and the full axis extent.
+Exterior IDs are `-1/-2` for X,
 `-3/-4` for Y, and `-5/-6` for Z. At intersecting walls, X takes precedence over Y, then Z.
 Simulation setup rejects a mask with no fluid cells before allocating populations. Inspection
 validates primitive definitions but does not allocate a mask or establish the resolved fluid count.
@@ -138,15 +173,14 @@ initial Reynolds = norm(u_lattice) * referenceLength_lattice / nu_lattice
 ```
 
 Reynolds is reported only when `referenceLength` is supplied. These are initial-state values;
-forcing or future boundaries can change the speed. The low-Mach target is `Ma <= 0.1`; inspection
+forcing or boundaries can change the speed. The low-Mach target is `Ma <= 0.1`; inspection
 reports the initial value but does not substitute for runtime guards or numerical validation.
 The configured `timeStep` is retained explicitly; the resolver does not automatically select it.
 `CfdPhysics.units()` records physical units per lattice unit for length, time, density, velocity,
 acceleration, viscosity, gauge pressure, and force. Scalar conversions work in both directions and
 reject overflow, non-finite inputs, and nonzero values that underflow to zero. The gauge-pressure
-factor is `rhoScale*(dx/dt)^2`; the force factor is `rhoScale*dx^4/dt^2`. Force conversion is
-available
-for later obstacle-force analysis; link-force accumulation belongs to Phase 04.
+factor is `rhoScale*(dx/dt)^2`; the force factor is `rhoScale*dx^4/dt^2`. The CLI uses this
+conversion for completed obstacle forces.
 
 Guards apply during initialization and every range update, even if full-field diagnostic scans are
 skipped. The density threshold is relative to the configured lattice reference density. Exceeding
@@ -183,8 +217,9 @@ Every direction uses its own `double[N]`; the conservative indexability limit is
 population allocation.
 
 Estimated auxiliary storage reserves `5*N` bytes for cell classification and obstacle labels (the
-current mask combines these in one `int[N]` array, omitted for domains without primitives),
-`256*brickCount` bytes for descriptors/scratch/reductions, 256 bytes per primitive, and 1 MiB for
+current mask combines these in one `int[N]` array, omitted for domains without primitives or open faces),
+`256*brickCount` bytes for descriptors/scratch/reductions, 256 bytes per primitive,
+`24*primitiveCount*(brickCount+2)` for private, pending, and completed force vectors, and 1 MiB for
 array/JVM overhead. Enabled field export adds a 64 KiB streaming buffer. These allowances are
 estimates and must evolve with later geometry and execution features. They are not measurements
 of a running solver's retained heap.
@@ -197,3 +232,11 @@ with the inspecting process; schema defaults and memory requirements are determi
 not guarantee that the inspecting JVM or host can allocate that amount. Array-limit and over-budget
 errors include the grid dimensions, estimated requirement, and budget. Arithmetic overflow is
 reported separately because an exact requirement cannot then be represented.
+
+`SimulationState.flowDiagnostics()` returns borrowed storage published after every successful
+step, independently of the full-field scan cadence. Read its scalar values before advancing again. It reports the step,
+actual discrete mass change, boundary-update inlet/outlet fluxes, their balance residual, separately
+labeled macroscopic flux estimates, per-obstacle vector forces, and optional Cd. Forces represent
+the momentum exchanged during that completed update. Failed or cancelled work does not publish
+new flow totals. Full-field mass, density range, and maximum Mach remain in `diagnostics()` at the
+configured scan cadence. Time-series export belongs to Phase 05.

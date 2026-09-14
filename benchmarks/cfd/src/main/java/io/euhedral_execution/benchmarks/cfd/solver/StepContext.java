@@ -53,6 +53,9 @@ public record StepContext(
         Objects.requireNonNull(geometry);
         Objects.requireNonNull(acceleration);
         Objects.requireNonNull(guards);
+        if (geometry.openBoundaries() != null
+                && (acceleration.x() != 0 || acceleration.y() != 0 || acceleration.z() != 0))
+            throw new IllegalArgumentException("open boundaries require zero body acceleration");
         if (!shape.equals(geometry.shape()) || !Double.isFinite(densityReference) || densityReference <= 0)
             throw new IllegalArgumentException("invalid geometry shape or reference density");
         if (!Double.isFinite(omega) || omega <= 0 || omega >= 2 || step <= 0 || timeoutNs <= 0)

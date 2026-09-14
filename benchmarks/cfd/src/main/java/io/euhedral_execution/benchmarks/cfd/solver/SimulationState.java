@@ -9,14 +9,20 @@ public final class SimulationState {
     private final PopulationGrid grid;
     private final CfdPhysics physics;
     private final GeometryMask geometry;
+    private FlowDiagnostics flowDiagnostics;
     private int currentBuffer;
     private long completedSteps;
     private FieldExtractor.Diagnostics diagnostics;
 
-    SimulationState(PopulationGrid grid, CfdPhysics physics, GeometryMask geometry) {
+    SimulationState(PopulationGrid grid, CfdPhysics physics, GeometryMask geometry, FlowDiagnostics flowDiagnostics) {
         this.grid = grid;
         this.physics = physics;
         this.geometry = geometry;
+        this.flowDiagnostics = flowDiagnostics;
+    }
+
+    public FlowDiagnostics flowDiagnostics() {
+        return flowDiagnostics;
     }
 
     public GridShape shape() {
@@ -71,7 +77,8 @@ public final class SimulationState {
     }
 
     /// Called only after successful computation, diagnostics, and deadline checks on this thread.
-    void complete(long step, FieldExtractor.Diagnostics completed) {
+    void complete(long step, FieldExtractor.Diagnostics completed, FlowDiagnostics flow) {
+        flowDiagnostics = flow;
         currentBuffer = 1 - currentBuffer;
         completedSteps = step;
         if (completed != null) diagnostics = completed;

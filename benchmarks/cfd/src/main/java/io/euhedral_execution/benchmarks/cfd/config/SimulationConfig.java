@@ -41,7 +41,18 @@ public record SimulationConfig(
             Physical physical,
             Double referenceLength,
             Shear shear,
-            Guards guards) {
+            Guards guards,
+            ForceReference forceReference) {
+        public Physics(
+                Double densityReference,
+                Lattice lattice,
+                Physical physical,
+                Double referenceLength,
+                Shear shear,
+                Guards guards) {
+            this(densityReference, lattice, physical, referenceLength, shear, guards, null);
+        }
+
         public Physics(
                 Double densityReference, Lattice lattice, Physical physical, Double referenceLength, Shear shear) {
             this(densityReference, lattice, physical, referenceLength, shear, null);
@@ -103,7 +114,9 @@ public record SimulationConfig(
 
     public enum FaceCondition {
         PERIODIC,
-        WALL
+        WALL,
+        VELOCITY_INLET,
+        DENSITY_OUTLET
     }
 
     public record Faces(
@@ -113,6 +126,25 @@ public record SimulationConfig(
             FaceCondition yMax,
             FaceCondition zMin,
             FaceCondition zMax) {
+        public FaceCondition at(int face) {
+            return switch (face) {
+                case 0 -> xMin;
+                case 1 -> xMax;
+                case 2 -> yMin;
+                case 3 -> yMax;
+                case 4 -> zMin;
+                case 5 -> zMax;
+                default -> throw new IndexOutOfBoundsException(face);
+            };
+        }
+
+        public int openAxis() {
+            for (int face = 0; face < 6; face++)
+                if (at(face) == FaceCondition.VELOCITY_INLET || at(face) == FaceCondition.DENSITY_OUTLET)
+                    return face / 2;
+            return -1;
+        }
+
         public Faces {
             xMin = xMin == null ? FaceCondition.PERIODIC : xMin;
             xMax = xMax == null ? FaceCondition.PERIODIC : xMax;
@@ -134,7 +166,12 @@ public record SimulationConfig(
 
     /// Coordinates and radii use the selected parameter mode: lattice lengths or meters.
     /// Positive IDs are unique across primitives; the lowest ID wins at overlapping cell centers.
-    public record Geometry(Faces faces, List<Box> boxes, List<Sphere> spheres, List<Cylinder> cylinders) {
+    public record Geometry(
+            Faces faces, List<Box> boxes, List<Sphere> spheres, List<Cylinder> cylinders, OpenBoundary openBoundary) {
+        public Geometry(Faces faces, List<Box> boxes, List<Sphere> spheres, List<Cylinder> cylinders) {
+            this(faces, boxes, spheres, cylinders, null);
+        }
+
         public Geometry(Faces faces) {
             this(faces, null, null, null);
         }
@@ -144,11 +181,49 @@ public record SimulationConfig(
             boxes = boxes == null ? List.of() : List.copyOf(boxes);
             spheres = spheres == null ? List.of() : List.copyOf(spheres);
             cylinders = cylinders == null ? List.of() : List.copyOf(cylinders);
+            int axis = faces.openAxis();
+            Checks.require(
+                    (axis >= 0) == (openBoundary != null), "open faces require geometry.openBoundary and vice versa");
+            if (axis >= 0) {
+                for (int a = 0; a < 3; a++) {
+                    var min = faces.at(2 * a);
+                    var max = faces.at(2 * a + 1);
+                    Checks.require(
+                            a == axis
+                                    ? (min == FaceCondition.VELOCITY_INLET && max == FaceCondition.DENSITY_OUTLET)
+                                            || (max == FaceCondition.VELOCITY_INLET
+                                                    && min == FaceCondition.DENSITY_OUTLET)
+                                    : min == max && (min == FaceCondition.WALL || min == FaceCondition.PERIODIC),
+                            "supported open faces are one opposing velocity inlet/density outlet pair; transverse faces must be paired walls or periodic");
+                }
+            }
             var ids = new HashSet<Integer>();
             for (Box box : boxes) Checks.require(ids.add(box.id()), "duplicate obstacle ID " + box.id());
             for (Sphere sphere : spheres) Checks.require(ids.add(sphere.id()), "duplicate obstacle ID " + sphere.id());
             for (Cylinder cylinder : cylinders)
                 Checks.require(ids.add(cylinder.id()), "duplicate obstacle ID " + cylinder.id());
+        }
+    }
+
+    /// Velocity, density and ramp time use the selected lattice or physical unit mode.
+    public record OpenBoundary(Vector3 velocity, Double outletDensity, Double rampTime) {
+        public OpenBoundary {
+            Objects.requireNonNull(velocity, "openBoundary.velocity is required");
+            if (outletDensity != null) Checks.positive(outletDensity, "openBoundary.outletDensity");
+            rampTime = rampTime == null ? 0 : rampTime;
+            Checks.finite(rampTime, "openBoundary.rampTime");
+            Checks.require(rampTime >= 0, "openBoundary.rampTime must be non-negative");
+        }
+    }
+
+    /// Drag references are independent of the initial state and inlet ramp.
+    public record ForceReference(double velocity, double area, double density, Vector3 direction) {
+        public ForceReference {
+            Checks.positive(velocity, "forceReference.velocity");
+            Checks.positive(area, "forceReference.area");
+            Checks.positive(density, "forceReference.density");
+            Objects.requireNonNull(direction, "forceReference.direction is required");
+            Checks.positive(direction.magnitude(), "forceReference.direction magnitude");
         }
     }
 
