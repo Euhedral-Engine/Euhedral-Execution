@@ -53,6 +53,8 @@ tasks.named("assemble") {
 
 dependencies {
     implementation(project(":euhedral-core"))
+    implementation(libs.org.openjdk.jmh.jmh.core)
+    annotationProcessor(libs.org.openjdk.jmh.jmh.generator.annprocess)
     implementation(libs.com.fasterxml.jackson.core.jackson.databind)
     runtimeOnly(libs.org.slf4j.slf4j.simple)
     testImplementation(libs.org.junit.jupiter.junit.jupiter)
@@ -74,6 +76,7 @@ distributions.main {
     contents {
         from("validation") { into("validation") }
         from("scenes") { into("scenes") }
+        from("suites") { into("suites") }
     }
 }
 

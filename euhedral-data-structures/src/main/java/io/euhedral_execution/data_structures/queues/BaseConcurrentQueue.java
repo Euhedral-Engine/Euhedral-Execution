@@ -220,12 +220,13 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
             int cIdx = QueueUtils.chunkIndex(head, this.chunkMask);
             Object obj = queue[cIdx];
 
-            if (obj == null || stopCondition.apply(obj)) {
+            if (obj == null) {
                 break;
             }
 
-            queue[cIdx] = null;
+            /// Chunk links are internal metadata; typed stop predicates may inspect only payloads.
             if (obj == QueueUtils.SENTINEL) {
+                queue[cIdx] = null;
                 Object[] retired = queue;
                 queue = (Object[]) queue[this.linkIndex];
                 retired[this.linkIndex] = null;
@@ -236,6 +237,10 @@ public abstract class BaseConcurrentQueue<T> extends AbstractConcurrentQueue<T> 
                 continue;
             }
 
+            if (stopCondition.apply(obj)) {
+                break;
+            }
+            queue[cIdx] = null;
             consumer.accept(obj);
             head += INCREMENT;
             total++;
