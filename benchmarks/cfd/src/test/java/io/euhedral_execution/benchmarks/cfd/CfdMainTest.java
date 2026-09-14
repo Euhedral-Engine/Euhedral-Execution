@@ -2,6 +2,7 @@ package io.euhedral_execution.benchmarks.cfd;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import io.euhedral_execution.benchmarks.cfd.support.CfdTestRuntime;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -24,8 +25,15 @@ class CfdMainTest {
     private Result run(String... args) {
         var out = new ByteArrayOutputStream();
         var err = new ByteArrayOutputStream();
-        int code = CfdMain.run(args, new PrintStream(out), new PrintStream(err));
-        return new Result(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
+        /// The CLI adopts the existing lattice. These serial cases need one worker, even on large hosts.
+        /// Each invocation owns its fixture because a successful simulate command closes the lattice.
+        var runtime = args.length > 0 && args[0].equals("simulate") ? CfdTestRuntime.singleWorker() : null;
+        try {
+            int code = CfdMain.run(args, new PrintStream(out), new PrintStream(err));
+            return new Result(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
+        } finally {
+            if (runtime != null) runtime.close();
+        }
     }
 
     @Test

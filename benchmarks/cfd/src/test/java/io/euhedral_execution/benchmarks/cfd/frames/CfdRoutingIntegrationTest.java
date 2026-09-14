@@ -26,7 +26,7 @@ class CfdRoutingIntegrationTest {
     private QueueIngestSink sink;
 
     void startRuntime(boolean singleWorker) {
-        lattice = singleWorker ? CfdTestRuntime.singleWorker() : ControlPlaneLattice.getOrCreate();
+        lattice = singleWorker ? CfdTestRuntime.singleWorker() : CfdTestRuntime.upToTwoWorkers();
         sink = new QueueIngestSink();
         lattice.addUpstream(sink);
         if (singleWorker) assertEquals(1, lattice.getActiveWorkers());

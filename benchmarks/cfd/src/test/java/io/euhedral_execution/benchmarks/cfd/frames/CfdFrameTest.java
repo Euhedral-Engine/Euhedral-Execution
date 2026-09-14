@@ -8,6 +8,7 @@ import io.euhedral_execution.benchmarks.cfd.config.GridShape;
 import io.euhedral_execution.benchmarks.cfd.solver.D3Q19;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
 import io.euhedral_execution.benchmarks.cfd.solver.StepContext;
+import io.euhedral_execution.benchmarks.cfd.support.CfdTestRuntime;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import io.euhedral_execution.core.impl.FrameFactory;
 import io.euhedral_execution.core.impl.FrameManager;
@@ -35,7 +36,7 @@ class CfdFrameTest {
 
     @BeforeAll
     static void startRuntime() {
-        lattice = ControlPlaneLattice.getOrCreate();
+        lattice = CfdTestRuntime.singleWorker();
     }
 
     @AfterAll
