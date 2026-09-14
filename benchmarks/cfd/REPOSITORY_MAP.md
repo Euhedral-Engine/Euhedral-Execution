@@ -2,9 +2,9 @@
 
 The runtime integration points below were surveyed at commit
 `3a4f5e8e46709b193b36cca61c021d313e4ccf2c`.
-Paths are relative to the repository root. Phases 01-05 implement configuration, the periodic/walled
+Paths are relative to the repository root. Phases 01-06 implement configuration, the periodic/walled
 solver, solid geometry, forcing, open boundaries, obstacle forces, physical conversions, ordered
-lattice execution, and ParaView time-series output.
+lattice execution, ParaView time-series output, and STL import/voxelization.
 [Phase 08](08-parallel-execution-backends.md) owns the remaining parallel execution and
 configurable source dispatch work.
 
@@ -31,7 +31,10 @@ D3Q19 and open-boundary helpers, population buffers, macroscopic fields, reusabl
 reductions, and the serial simulation driver. The
 `frames`
 package owns reusable range bodies; `QueueIngestSink` feeds them to the lattice with ordered hashes.
-The `geometry` package resolves immutable cell masks before population allocation. Configuration
+The `geometry` package resolves immutable cell masks before population allocation. `StlReader`
+streams mesh metadata and checked coordinates; `TriangleMesh` validates welded surfaces and indexes
+triangles; `GeometryRangeFrame` executes intersection checks and voxel ranges on the lattice through
+`GeometryWork` queue sources. `Voxelization` reduces completed ranges and analyzes fluid connectivity. Configuration
 owns the checked unit-conversion factors and runtime guard settings.
 The `output` package streams completed fields to VTI, publishes PVD collections atomically, and
 records configuration, CSV metrics, and run status. Output stays on the simulation driver; no

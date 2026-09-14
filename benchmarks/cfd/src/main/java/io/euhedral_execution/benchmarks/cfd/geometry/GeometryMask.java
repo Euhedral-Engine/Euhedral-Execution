@@ -7,6 +7,7 @@ import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig;
 import io.euhedral_execution.benchmarks.cfd.config.SimulationConfig.FaceCondition;
 import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
+import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
 import java.util.Arrays;
 import java.util.Objects;
 
@@ -22,6 +23,7 @@ public final class GeometryMask {
     private final long cells;
     private final OpenBoundaries openBoundaries;
     private final int[] forceIds;
+    private final Voxelization.Report voxelization;
 
     private GeometryMask(
             GridShape shape,
@@ -29,7 +31,9 @@ public final class GeometryMask {
             SimulationConfig.Faces faces,
             long fluidCells,
             OpenBoundaries openBoundaries,
-            int[] forceIds) {
+            int[] forceIds,
+            Voxelization.Report voxelization) {
+        this.voxelization = voxelization;
         this.shape = shape;
         this.openBoundaries = openBoundaries;
         this.forceIds = forceIds;
@@ -49,10 +53,18 @@ public final class GeometryMask {
                 new SimulationConfig.Faces(null, null, null, null, null, null),
                 shape.cellCount(),
                 null,
-                new int[0]);
+                new int[0],
+                null);
     }
 
     public static GeometryMask resolve(CfdConfiguration configuration) {
+        if (!configuration.meshes().isEmpty())
+            throw new IllegalArgumentException("STL geometry requires resolve(configuration, lattice)");
+        return resolve(configuration, null);
+    }
+
+    /// The caller owns the lattice. Mesh ranges complete before the immutable mask is published.
+    public static GeometryMask resolve(CfdConfiguration configuration, ControlPlaneLattice lattice) {
         var shape = configuration.config().grid();
         configuration.memory().requireAllocatable(shape);
         var geometry = configuration.config().geometry();
@@ -60,11 +72,13 @@ public final class GeometryMask {
         int[] forceIds = new int
                 [geometry.boxes().size()
                         + geometry.spheres().size()
-                        + geometry.cylinders().size()];
+                        + geometry.cylinders().size()
+                        + geometry.meshes().size()];
         int count = 0;
         for (var box : geometry.boxes()) forceIds[count++] = box.id();
         for (var sphere : geometry.spheres()) forceIds[count++] = sphere.id();
         for (var cylinder : geometry.cylinders()) forceIds[count++] = cylinder.id();
+        for (var mesh : geometry.meshes()) forceIds[count++] = mesh.id();
         Arrays.sort(forceIds);
         double dx = configuration.physics().voxelWidth();
         for (int size : new int[] {shape.nx(), shape.ny(), shape.nz()}) {
@@ -73,11 +87,13 @@ public final class GeometryMask {
         if (geometry.boxes().isEmpty()
                 && geometry.spheres().isEmpty()
                 && geometry.cylinders().isEmpty()
+                && geometry.meshes().isEmpty()
                 && boundaries == null)
-            return new GeometryMask(shape, null, geometry.faces(), shape.cellCount(), boundaries, forceIds);
+            return new GeometryMask(shape, null, geometry.faces(), shape.cellCount(), boundaries, forceIds, null);
         if (shape.cellCount() > MemoryEstimate.MAX_ARRAY_LENGTH)
             throw new IllegalArgumentException("geometry array exceeds Java array limit");
         int[] ids = new int[(int) shape.cellCount()];
+        var meshReports = Voxelization.paint(configuration, ids, lattice);
         long fluid = 0;
         for (int z = 0; z < shape.nz(); z++) {
             for (int y = 0; y < shape.ny(); y++) {
@@ -85,7 +101,7 @@ public final class GeometryMask {
                     if (x % 256 == 0 && Thread.currentThread().isInterrupted())
                         throw new SimulationException(0, x, y, z, "interrupted during geometry resolution");
                     double px = (x + 0.5) * dx, py = (y + 0.5) * dx, pz = (z + 0.5) * dx;
-                    int id = 0;
+                    int id = ids[x + shape.nx() * (y + shape.ny() * z)];
                     for (var box : geometry.boxes()) {
                         if (px >= box.min().x()
                                 && px <= box.max().x()
@@ -136,7 +152,21 @@ public final class GeometryMask {
             }
         }
         if (fluid == 0) throw new IllegalArgumentException("geometry leaves no fluid cells");
-        return new GeometryMask(shape, ids, geometry.faces(), fluid, boundaries, forceIds);
+        return new GeometryMask(
+                shape,
+                ids,
+                geometry.faces(),
+                fluid,
+                boundaries,
+                forceIds,
+                meshReports.isEmpty()
+                        ? null
+                        : new Voxelization.Report(
+                                meshReports, Voxelization.connectivity(shape, ids, geometry.faces())));
+    }
+
+    public Voxelization.Report voxelization() {
+        return voxelization;
     }
 
     public OpenBoundaries openBoundaries() {

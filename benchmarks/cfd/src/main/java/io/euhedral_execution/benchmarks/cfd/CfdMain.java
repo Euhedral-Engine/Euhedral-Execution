@@ -2,6 +2,7 @@ package io.euhedral_execution.benchmarks.cfd;
 
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
+import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import io.euhedral_execution.benchmarks.cfd.output.RunOutput;
 import io.euhedral_execution.benchmarks.cfd.solver.OpenBoundaries;
 import io.euhedral_execution.benchmarks.cfd.solver.SerialSimulation;
@@ -29,7 +30,7 @@ public final class CfdMain {
                 || (args.length == 2
                         && (args[0].equals("inspect") || args[0].equals("simulate"))
                         && args[1].equals("--help"))) {
-            out.println("Usage: euhedral-cfd inspect --config <file.json>");
+            out.println("Usage: euhedral-cfd inspect --config <file.json> [--voxelize]");
             out.println("       euhedral-cfd simulate --config <file.json> [--backend serial]");
             out.println("       [--steps N | --duration SECONDS] [--output DIRECTORY] [--export-every N]");
             out.println("       [--format appended|ascii] [--set path=JSON-value ...]");
@@ -43,9 +44,16 @@ public final class CfdMain {
             if (!simulate && !args[0].equals("inspect"))
                 throw new IllegalArgumentException("unknown command: " + args[0]);
             String config = null, backend = null;
+            boolean voxelize = false;
             var overrides = new ArrayList<String>();
             var options = new HashSet<String>();
             for (int i = 1; i < args.length; i += 2) {
+                if (!simulate && args[i].equals("--voxelize")) {
+                    if (voxelize) throw new IllegalArgumentException("duplicate option: --voxelize");
+                    voxelize = true;
+                    i--;
+                    continue;
+                }
                 if (i + 1 >= args.length || args[i + 1].isBlank())
                     throw new IllegalArgumentException("missing value for " + args[i]);
                 String option = args[i], value = args[i + 1];
@@ -80,6 +88,18 @@ public final class CfdMain {
             CfdConfiguration configuration = ConfigLoader.load(Path.of(config), overrides);
             if (simulate) return simulate(configuration, out, err);
             print(configuration, out);
+            if (voxelize) {
+                var lattice = ControlPlaneLattice.getOrCreate();
+                try {
+                    var mask = GeometryMask.resolve(configuration, lattice);
+                    out.println("Voxelized fluid cells: " + mask.fluidCells());
+                    out.println("Voxelization: " + ConfigLoader.json(mask.voxelization()));
+                    out.println(
+                            "Detailed inspection passed; no populations allocated. Geometry workers are closed on exit.");
+                } finally {
+                    lattice.close();
+                }
+            }
             return 0;
         } catch (IOException | IllegalArgumentException e) {
             err.println("Configuration/usage error: " + e.getMessage());
@@ -278,6 +298,11 @@ public final class CfdMain {
         printBoundaries(resolved, out);
         out.println("Geometry: " + resolved.config().geometry());
         out.println("Brick: " + resolved.config().execution().brick());
+        out.println("Geometry ingest sources: "
+                + (resolved.config().execution().geometrySources() == null
+                        ? "auto (one per active worker, at most 64)"
+                        : resolved.config().execution().geometrySources()));
+        out.println("Geometry stage deadline: " + resolved.config().execution().geometryDeadlineMillis() + " ms");
         out.println("Population bytes (exact payload): " + memory.populationBytes());
         out.println("Auxiliary bytes (estimated): " + memory.auxiliaryBytes());
         out.println("Total bytes (estimated): " + memory.totalBytes());
@@ -287,6 +312,7 @@ public final class CfdMain {
         out.println("Output directory: " + resolved.outputDirectory());
         out.println("Field format: " + resolved.config().output().format());
         out.println("Export every steps: " + resolved.config().output().exportEverySteps() + " (0 disables export)");
+        for (var mesh : resolved.meshes()) out.println("Mesh inspection: " + mesh);
         out.println("Inspection passed; no populations allocated or workers started.");
     }
 }

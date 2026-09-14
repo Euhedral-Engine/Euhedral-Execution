@@ -1,6 +1,8 @@
 package io.euhedral_execution.benchmarks.cfd.config;
 
+import io.euhedral_execution.benchmarks.cfd.geometry.StlReader;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 
 public record CfdConfiguration(
@@ -10,13 +12,21 @@ public record CfdConfiguration(
         long steps,
         Double physicalDurationSeconds,
         Path outputDirectory,
-        MemoryEstimate memory) {
+        MemoryEstimate memory,
+        List<StlReader.Info> meshes) {
     public CfdConfiguration {
         Objects.requireNonNull(configFile);
         Objects.requireNonNull(config);
         Objects.requireNonNull(physics);
         Objects.requireNonNull(outputDirectory);
         Objects.requireNonNull(memory);
+        meshes = List.copyOf(meshes);
+        Checks.require(
+                meshes.size() == config.geometry().meshes().size(), "mesh inspection count must match configuration");
+        for (int i = 0; i < meshes.size(); i++)
+            Checks.require(
+                    meshes.get(i).mesh().equals(config.geometry().meshes().get(i)),
+                    "mesh inspection must match configuration order");
         Checks.require(steps > 0, "resolved steps must be positive");
         if (physicalDurationSeconds != null) Checks.positive(physicalDurationSeconds, "resolved physical duration");
         memory.requireAllocatable(config.grid());

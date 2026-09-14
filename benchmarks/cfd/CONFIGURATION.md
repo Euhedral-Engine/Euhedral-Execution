@@ -25,7 +25,10 @@ Relocate the launcher, JAR, and `lib` directory together to preserve their relat
 are included in the normal build.
 
 Inspection reads the configuration and prints its resolved parameters and memory estimate. It
-creates no output directories, population arrays, geometry masks, or workers. A valid inspection
+creates no output directories, population arrays, geometry masks, or workers. Imported meshes are
+streamed for structure, transformed bounds, fingerprints, and memory estimates. Add `--voxelize`
+to explicitly allocate preprocessing storage and use Euhedral workers to inspect mesh topology and fluid connectivity; see
+[STL.md](STL.md). A valid inspection
 exits with code 0; usage, parsing, resolution, and memory errors exit with code 2 and a diagnostic
 on stderr. An inspection pass establishes configuration feasibility, not numerical validation.
 
@@ -50,12 +53,15 @@ to select defaults. No configuration imports or environment-variable expansion a
 | `geometry.boxes`                             | Optional list of `{id, min, max}` solid boxes; default empty                                             |
 | `geometry.spheres`                           | Optional list of `{id, center, radius}` solid spheres; default empty                                     |
 | `geometry.cylinders`                         | Optional list of `{id, start, end, radius}` finite solid cylinders; default empty                        |
+| `geometry.meshes`                           | Optional STL obstacles with `id`, `file`, and `units`; transforms and names described in [STL.md](STL.md) |
 | `physics.guards.maxMach`                     | Positive maximum actual Mach number; default `0.1`                                                       |
 | `physics.guards.maxRelativeDensityVariation` | Positive maximum `abs(rho/rho0 - 1)`; default `0.1`                                                      |
 | `execution.diagnosticsEverySteps`            | Full-field diagnostic cadence; default `1`, `0` means initial/final only                                 |
 | `execution.steps`                            | Positive integer timestep count; default `100` when no duration is supplied                              |
 | `execution.durationSeconds`                  | Alternative positive physical duration, requiring physical parameters                                    |
 | `execution.stepDeadlineMillis`               | Positive per-step deadline, default `30000`; must fit a signed long in nanoseconds                       |
+| `execution.geometrySources`                 | STL preprocessing ingest sources, 1-64; default one per active worker, capped at 64                       |
+| `execution.geometryDeadlineMillis`          | Positive deadline per parallel geometry stage, including queue waits; default `300000` ms                |
 | `execution.brick`                            | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                       |
 | `output.directory`                           | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute |
 | `output.exportEverySteps`                    | Non-negative integer cadence; default `0` disables field export                                          |
@@ -77,8 +83,7 @@ Face conditions accept `PERIODIC`, stationary `WALL`, `VELOCITY_INLET`, and `DEN
 Periodic faces must occur in opposite pairs. Open flow requires exactly one opposing inlet/outlet
 pair, on X, Y, or Z in either direction. Each transverse pair must be both periodic or both walls.
 Intersecting open faces, an open face opposite a wall, missing/extraneous `geometry.openBoundary`,
-nonzero acceleration, and shear initialization with open boundaries are rejected. STL imports
-and backend selection beyond `serial` remain unsupported.
+nonzero acceleration, and shear initialization with open boundaries are rejected. Backend selection beyond `serial` remains unsupported.
 
 `geometry.openBoundary.velocity` is a prescribed velocity vector in lattice units or m/s; its
 normal component must point inward. Its full magnitude must satisfy the configured Mach guard.
@@ -105,7 +110,7 @@ See [NUMERICS.md](NUMERICS.md) for direction mapping and flux accounting.
 Values use the selected mode (lattice units or m/s, m^2, kg/m^3). Direction is normalized during
 setup. The reference stays fixed throughout an inlet ramp; it need not equal the initial velocity.
 Forces are reported for all declared obstacle IDs, in ascending ID order, including zero for
-obstacles with no exposed fluid links. Domain walls are excluded. The CLI reports lattice force,
+obstacles with no exposed fluid links. Imported mesh IDs use the same force slots. Domain walls are excluded. The CLI reports lattice force,
 force in newtons for physical cases, and Cd when a reference is supplied. Without a reference,
 vector forces remain available and requesting Cd through the library raises an error.
 
@@ -116,7 +121,7 @@ surface, and cylinders include the side surface and flat caps at their start/end
 can have arbitrary orientation. Primitives are clipped to the grid and are not periodically copied;
 the resolved cell mask repeats across periodic faces.
 
-Obstacle IDs must be positive and unique across all three primitive lists. Overlapping solids
+Obstacle IDs must be positive and unique across all primitive and mesh lists. Overlapping solids
 assign the lowest ID at each cell, independently of declaration order. Zero denotes fluid. Domain
 walls in cases without open faces occupy exterior neighbor cells, leaving all interior grid
 centers available to fluid or obstacles; their wall planes are at `0` and the full axis extent.
@@ -222,7 +227,7 @@ Estimated auxiliary storage reserves `5*N` bytes for cell classification and obs
 current mask combines these in one `int[N]` array, omitted for domains without primitives or open faces),
 `256*brickCount` bytes for descriptors/scratch/reductions, 256 bytes per primitive,
 `24*primitiveCount*(brickCount+2)` for private, pending, and completed force vectors, and 1 MiB for
-array/JVM overhead. Enabled field export reserves 128 KiB for streaming VTI output and PVD copying. These allowances are
+array/JVM overhead. Enabled field export reserves 128 KiB for streaming VTI output and PVD copying. STL preprocessing adds the budget described in [STL.md](STL.md). These allowances are
 estimates and must evolve with later geometry and execution features. They are not measurements
 of a running solver's retained heap.
 

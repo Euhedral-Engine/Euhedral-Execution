@@ -32,7 +32,7 @@ public record MemoryEstimate(
             long primitives = Math.addExact(
                     Math.addExact(
                             (long) geometry.boxes().size(), geometry.spheres().size()),
-                    geometry.cylinders().size());
+                    Math.addExact(geometry.cylinders().size(), geometry.meshes().size()));
             auxiliary = Math.addExact(auxiliary, Math.multiplyExact(256L, primitives));
             /// Per-range force slots plus pending/completed driver force storage, indexed by compact IDs.
             auxiliary = Math.addExact(

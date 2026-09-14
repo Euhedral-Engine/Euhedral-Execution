@@ -46,8 +46,11 @@ public final class RunOutput implements AutoCloseable {
         metadata.put("steps", configuration.steps());
         metadata.put("memory", configuration.memory());
         metadata.put("configuration", configuration.config());
+        metadata.put("meshes", configuration.meshes());
         try {
-            writeJson("configuration.json", configuration.config());
+            String replay = ConfigLoader.replayJson(configuration);
+            AtomicOutput.write(
+                    directory.resolve("configuration.json"), temporary -> Files.writeString(temporary, replay + "\n"));
             writeJson("resolved.json", metadata);
             writeStatus(Status.RUNNING, null);
             collection = configuration.config().output().exportEverySteps() > 0
@@ -74,6 +77,8 @@ public final class RunOutput implements AutoCloseable {
         if (finished || elapsedSimulationNs < 0 || state.completedSteps() != recordedStep + 1)
             throw new IllegalArgumentException("record each completed step once, before finishing the run");
         completedStep = state.completedSteps();
+        if (completedStep == 0 && state.geometry().voxelization() != null)
+            writeJson("geometry.json", state.geometry().voxelization());
         simulationNs = Math.addExact(simulationNs, elapsedSimulationNs);
         AtomicOutput.checkInterrupted();
         long elapsedExportNs = 0;

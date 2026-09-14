@@ -36,13 +36,49 @@ class CfdMainTest {
         var err = new ByteArrayOutputStream();
         /// The CLI adopts the existing lattice. These serial cases need one worker, even on large hosts.
         /// Each invocation owns its fixture because a successful simulate command closes the lattice.
-        var runtime = args.length > 0 && args[0].equals("simulate") ? CfdTestRuntime.singleWorker() : null;
+        var runtime = args.length > 0
+                        && (args[0].equals("simulate")
+                                || java.util.Arrays.asList(args).contains("--voxelize"))
+                ? CfdTestRuntime.singleWorker()
+                : null;
         try {
             int code = CfdMain.run(args, new PrintStream(out), new PrintStream(err));
             return new Result(code, out.toString(StandardCharsets.UTF_8), err.toString(StandardCharsets.UTF_8));
         } finally {
             if (runtime != null) runtime.close();
         }
+    }
+
+    @Test
+    void importsStlThroughInspectionSimulationForcesAndFieldExport() throws Exception {
+        var inspected = run("inspect", "--config", "scenes/stl-obstacle.json", "--voxelize");
+        assertEquals(0, inspected.code(), inspected.err());
+        assertTrue(inspected.out().contains("Voxelized fluid cells:"));
+        assertTrue(inspected.out().contains("cad-box"));
+        assertTrue(inspected.out().contains("throughComponents"));
+        assertFalse(Files.exists(directory.resolve("runs")));
+        var simulated = run("simulate", "--config", "scenes/stl-obstacle.json", "--steps", "3", "--export-every", "2");
+        assertEquals(0, simulated.code(), simulated.err());
+        assertTrue(simulated.out().contains("Obstacle 1 force"));
+        Path folder;
+        try (var entries = Files.list(directory.resolve("runs"))) {
+            folder = entries.findFirst().orElseThrow();
+        }
+        assertTrue(Files.readString(folder.resolve("geometry.json")).contains("cad-box"));
+        assertTrue(Files.isRegularFile(folder.resolve("frame-000000000003.vti")));
+        var replay =
+                io.euhedral_execution.benchmarks.cfd.config.ConfigLoader.load(folder.resolve("configuration.json"));
+        assertTrue(
+                Path.of(replay.config().geometry().meshes().getFirst().file()).isAbsolute());
+        assertEquals(12, replay.meshes().getFirst().triangles());
+        assertEquals(
+                0,
+                run(
+                                "inspect",
+                                "--voxelize",
+                                "--config",
+                                folder.resolve("configuration.json").toString())
+                        .code());
     }
 
     @Test
