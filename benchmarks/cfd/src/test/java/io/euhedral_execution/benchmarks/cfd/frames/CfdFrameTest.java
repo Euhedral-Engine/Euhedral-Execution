@@ -75,8 +75,21 @@ class CfdFrameTest {
     private void submit(CfdFrame frame) {
         assertTrue(sink.offer(frame));
         awaitTerminal(frame);
-        /// Reacquiring pooled frames requires the completion hook to finish enqueueing them.
         awaitDrained();
+    }
+
+    private static void awaitRecycled(FrameManager<?, ?> manager, CfdFrame frame) {
+        /// Terminal status publishes results before recycler enqueue. Observe the actual queue entry;
+        /// a drained lattice does not establish that this frame is available to getOrCreate yet.
+        /// These tests have one pooled frame and this thread is the only recycler consumer.
+        var queue = manager.getRecycleQueue();
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        while (queue.peek() == null) {
+            if (Thread.currentThread().isInterrupted()) fail("interrupted while waiting for frame recycling");
+            if (System.nanoTime() - deadline >= 0) fail("frame was not returned to its recycler");
+            LockSupport.parkNanos(10_000);
+        }
+        assertSame(frame, queue.peek(), "the completed frame must be available for reuse");
     }
 
     private record Fields(GridShape shape, double[][] current, double[][] next) {}
@@ -233,6 +246,7 @@ class CfdFrameTest {
             var first = manager.getOrCreate(firstContext, password);
             assertNull(manager.get(password));
             submit(first);
+            awaitRecycled(manager, first);
             first.requireSuccess();
             double[][] firstResult =
                     Arrays.stream(state.next()).map(double[]::clone).toArray(double[][]::new);
@@ -252,6 +266,7 @@ class CfdFrameTest {
             assertFalse(reused.isOrdered());
             assertNull(manager.get(password));
             submit(reused);
+            awaitRecycled(manager, reused);
             reused.requireSuccess();
             for (int z = 0; z < 8; z++)
                 for (int y = 0; y < 10; y++)
@@ -292,6 +307,7 @@ class CfdFrameTest {
                 frame.kill();
                 frame.doFinally();
             } else submit(frame);
+            awaitRecycled(manager, frame);
             if (outcome.equals("success")) frame.requireSuccess();
             else {
                 assertThrows(SimulationException.class, frame::requireSuccess);
@@ -308,6 +324,7 @@ class CfdFrameTest {
             assertTrue(reused.isAlive());
             assertThrows(IllegalStateException.class, reused::requireSuccess);
             submit(reused);
+            awaitRecycled(manager, reused);
             reused.requireSuccess();
             for (int q = 0; q < 19; q++) assertArrayEquals(state.current()[q], state.next()[q], 1e-15);
         } finally {
