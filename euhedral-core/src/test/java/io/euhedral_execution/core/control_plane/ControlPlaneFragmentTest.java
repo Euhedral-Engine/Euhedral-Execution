@@ -11,9 +11,13 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.flow_control.LatticeHotSource;
+import io.euhedral_execution.core.frames.DummyFrame;
+import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
@@ -21,6 +25,9 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -153,16 +160,17 @@ class ControlPlaneFragmentTest {
                 base.decisionWeights(),
                 base.observer(),
                 base.maxBatchSize(),
-                new io.euhedral_execution.core.config.CacheTimingConfig(15000, 1000000, null, true),
+                base.smtEnabled(),
+                new CacheTimingConfig(15000, 1000000, null, true),
                 base.benchmarkMode(),
                 base.metricPrefix(),
                 base.registry());
         var fragment = create(config);
         for (int i = 0; i < 7; i++) {
-            fragment.ingest(new io.euhedral_execution.core.flow_control.LatticeHotSource());
+            fragment.ingest(new LatticeHotSource());
         }
-        var received = new java.util.concurrent.CountDownLatch(1);
-        var receiver = Mockito.mock(io.euhedral_execution.core.generics.LatticeReceiver.class);
+        var received = new CountDownLatch(1);
+        var receiver = Mockito.mock(LatticeReceiver.class);
         Mockito.doAnswer(call -> {
                     received.countDown();
                     return null;
@@ -170,12 +178,12 @@ class ControlPlaneFragmentTest {
                 .when(receiver)
                 .push(Mockito.any());
         fragment.output().addDownstream(receiver);
-        fragment.push(io.euhedral_execution.core.frames.DummyFrame.INSTANCE);
+        fragment.push(DummyFrame.INSTANCE);
         assertEquals(1, fragment.getLocalCacheCount());
         fragment.start();
-        assertTrue(received.await(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertTrue(received.await(5, TimeUnit.SECONDS));
         // The exact frame already in the local cache reached the output on the owner thread.
-        Mockito.verify(receiver).push(io.euhedral_execution.core.frames.DummyFrame.INSTANCE);
+        Mockito.verify(receiver).push(DummyFrame.INSTANCE);
     }
 
     @Test
