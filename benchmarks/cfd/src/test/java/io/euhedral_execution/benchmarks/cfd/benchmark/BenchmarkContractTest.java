@@ -55,6 +55,13 @@ class BenchmarkContractTest {
         assertEquals(suite.stepsPerInvocation(), config.steps());
         assertEquals(0, config.config().execution().diagnosticsEverySteps());
         assertEquals(suite.brick(), config.config().execution().brick());
+        assertEquals(new io.euhedral_execution.benchmarks.cfd.config.GridShape(8, 8, 8), suite.brick());
+        for (var variant : suite.variants()) {
+            int side = variant.backend().equals("euhedral") ? 4 : 8;
+            var brick = variant.brickOrDefault(suite.brick());
+            assertEquals(new io.euhedral_execution.benchmarks.cfd.config.GridShape(side, side, side), brick);
+            assertEquals(side == 4 ? 262_144 : 32_768, config.config().grid().brickCount(brick));
+        }
         assertTrue(config.memory().populationBytes() > 5_000_000_000L);
         assertTrue(config.memory().totalBytes() < config.memory().budgetBytes());
         assertTrue(suite.jvmArgs().contains("-Xmx12g"));
@@ -67,6 +74,19 @@ class BenchmarkContractTest {
         assertEquals(
                 BenchmarkSuite.ValidationScope.PERIODIC_SHEAR_FAMILY,
                 suite.cases().getFirst().validationScope());
+    }
+
+    @Test
+    void variantBricksAreOptionalButMustHavePositiveDimensions() throws Exception {
+        var fallback = new io.euhedral_execution.benchmarks.cfd.config.GridShape(8, 8, 8);
+        var inherited =
+                BenchmarkSuite.JSON.readValue("{\"id\":\"fjp\",\"backend\":\"fjp\"}", BenchmarkSuite.Variant.class);
+        assertEquals(fallback, inherited.brickOrDefault(fallback));
+        assertThrows(
+                Exception.class,
+                () -> BenchmarkSuite.JSON.readValue(
+                        "{\"id\":\"fjp\",\"backend\":\"fjp\",\"brick\":{\"nx\":0,\"ny\":8,\"nz\":8}}",
+                        BenchmarkSuite.Variant.class));
     }
 
     @Test

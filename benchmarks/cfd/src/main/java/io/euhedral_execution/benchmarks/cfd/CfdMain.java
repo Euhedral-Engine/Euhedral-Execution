@@ -156,7 +156,7 @@ public final class CfdMain {
         var budget = WorkerBudget.resolve(options);
         int sources = options.sourceCount(budget.workerCount());
         if (configuration.memory().totalBytes()
-                        + EuhedralBackend.sourceStorageBytes(
+                        + options.storageBytes(
                                 configuration
                                         .config()
                                         .grid()
@@ -164,9 +164,9 @@ public final class CfdMain {
                                                 .config()
                                                 .execution()
                                                 .brick()),
-                                sources)
+                                budget.workerCount())
                 > configuration.memory().budgetBytes()) {
-            throw new IllegalArgumentException("ingest sources exceed the configured memory budget");
+            throw new IllegalArgumentException("backend storage exceeds the configured memory budget");
         }
         try (var artifacts = new RunOutput(configuration, budget)) {
             out.println("Run directory: " + artifacts.directory());

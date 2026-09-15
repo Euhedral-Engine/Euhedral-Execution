@@ -66,6 +66,29 @@ public final class FlowDiagnostics {
             for (int i = 0; i < ids.length; i++)
                 for (int axis = 0; axis < 3; axis++) forces[3 * i + axis] += range.force(i, axis);
         }
+        finish(step);
+    }
+
+    public void reduce(long step, RangeResults results) {
+        if (step <= 0 || results.count <= 0 || !Arrays.equals(ids, results.ids)) {
+            throw new IllegalArgumentException("range results differ from this simulation");
+        }
+        reset();
+        var values = results.values;
+        for (int ordinal = 0; ordinal < results.count; ordinal++) {
+            massChange += values[0][ordinal];
+            inletFlux += values[1][ordinal];
+            outletFlux += values[2][ordinal];
+            macroscopicInletFlux += values[3][ordinal];
+            macroscopicOutletFlux += values[4][ordinal];
+            for (int i = 0; i < forces.length; i++) {
+                forces[i] += values[5 + i][ordinal];
+            }
+        }
+        finish(step);
+    }
+
+    private void finish(long step) {
         if (!Double.isFinite(massChange)
                 || !Double.isFinite(inletFlux)
                 || !Double.isFinite(outletFlux)

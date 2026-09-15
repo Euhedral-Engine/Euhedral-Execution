@@ -3,6 +3,7 @@ package io.euhedral_execution.benchmarks.cfd.benchmark;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
+import io.euhedral_execution.benchmarks.cfd.config.GridShape;
 import io.euhedral_execution.benchmarks.cfd.execution.BackendOptions;
 import io.euhedral_execution.benchmarks.cfd.execution.WorkerBudget;
 import io.euhedral_execution.benchmarks.cfd.validation.NumericalIdentity;
@@ -13,6 +14,7 @@ import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /// Sequential process orchestration. External accuracy, same-kernel equivalence and runtime validity stay distinct.
@@ -185,65 +187,58 @@ public final class BenchmarkRunner {
                 1,
                 budget.driverCpu(),
                 budget.affinityCapability());
-        Path referenceDirectory = Files.createDirectory(directory.resolve("reference"));
-        Path reference = referenceDirectory.resolve("populations.bin");
-        var referenceBudget = suite.referenceBackend().equals("serial") ? serialBudget : budget;
-        var referenceOptions = new BackendOptions(
-                suite.referenceBackend(), referenceBudget.workerCount(), "workers", null, suite.affinity(), null);
-        var job = job(
-                suite,
-                fixture,
-                configuration,
-                referenceDirectory,
-                reference,
-                null,
-                validation,
-                validationSha,
-                identity,
-                numerical,
-                artifact,
-                referenceOptions,
-                referenceBudget);
-        Path jobFile = referenceDirectory.resolve("job.json");
-        Files.writeString(jobFile, ConfigLoader.json(job));
-        out.println(fixture.id() + ": preparing " + suite.referenceBackend() + " reference with "
-                + referenceBudget.workerCount() + " worker(s), " + config.steps() + " steps on "
-                + config.config().grid());
-        out.println("  Reference log: " + referenceDirectory.resolve("process.log"));
-        var process = process(suite, jobFile, ReferenceWorker.class, referenceDirectory, out);
-        if (!process.completed() || !Files.isRegularFile(referenceDirectory.resolve("reference.json"))) {
-            return new CaseResult(
-                    fixture.id(),
-                    identity,
-                    "ELIGIBLE",
-                    process.timedOut()
-                            ? "reference timed out"
-                            : "reference failed; see " + referenceDirectory.resolve("process.log"),
-                    directory.toString(),
-                    suite.variants().stream()
-                            .map(v -> new BenchmarkResults.Summary(
-                                    v.id(),
-                                    v.backend(),
-                                    v.sources(),
-                                    0,
-                                    0,
-                                    process.timedOut() ? "TIMED_OUT" : "FAILED",
-                                    List.of(),
-                                    null,
-                                    null,
-                                    null,
-                                    null,
-                                    null,
-                                    null))
-                            .toList());
-        }
-        out.println(fixture.id() + ": full reference completed (" + suite.referenceBackend() + ")");
-        String referenceSha = ValidationRunner.sha(reference);
+        var references = new HashMap<GridShape, Reference>();
         var summaries = new ArrayList<BenchmarkResults.Summary>();
         for (var variant : suite.variants()) {
             var selected = variant.backend().equals("serial") ? serialBudget : budget;
             var options = new BackendOptions(
                     variant.backend(), selected.workerCount(), variant.sources(), null, suite.affinity(), null);
+            var brick = variant.brickOrDefault(suite.brick());
+            var reference = references.get(brick);
+            if (reference == null) {
+                var partition = ConfigLoader.load(
+                        configuration,
+                        List.of(
+                                "execution.brick.nx=" + brick.nx(),
+                                "execution.brick.ny=" + brick.ny(),
+                                "execution.brick.nz=" + brick.nz()));
+                Path target = directory.resolve(brick.equals(suite.brick()) ? "reference" : "reference-" + brick);
+                reference = prepareReference(
+                        suite,
+                        fixture,
+                        partition,
+                        budget,
+                        serialBudget,
+                        target,
+                        validation,
+                        validationSha,
+                        identity,
+                        numerical,
+                        artifact,
+                        out);
+                references.put(brick, reference);
+            }
+            if (reference.error() != null) {
+                summaries.add(new BenchmarkResults.Summary(
+                        variant.id(),
+                        variant.backend(),
+                        variant.sources(),
+                        options.sourceCount(selected.workerCount()),
+                        selected.workerCount(),
+                        reference.timedOut() ? "TIMED_OUT" : "FAILED",
+                        List.of(),
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null));
+                out.println(fixture.id() + "/" + variant.id() + ": " + reference.error());
+                if (Thread.currentThread().isInterrupted()) {
+                    break;
+                }
+                continue;
+            }
             var forks = new ArrayList<BenchmarkResults.Fork>();
             for (int fork = 0; fork < suite.forks(); fork++) {
                 Path target =
@@ -251,10 +246,10 @@ public final class BenchmarkRunner {
                 var forkJob = job(
                         suite,
                         fixture,
-                        configuration,
+                        reference.configuration(),
                         target,
-                        reference,
-                        referenceSha,
+                        reference.populations(),
+                        reference.sha256(),
                         validation,
                         validationSha,
                         identity,
@@ -266,7 +261,7 @@ public final class BenchmarkRunner {
                 Files.writeString(file, ConfigLoader.json(forkJob));
                 out.println(fixture.id() + "/" + variant.id() + ": starting fork " + (fork + 1) + "/" + suite.forks()
                         + ", workers=" + selected.workerCount() + ", sources="
-                        + options.sourceCount(selected.workerCount()));
+                        + options.sourceCount(selected.workerCount()) + ", brick=" + brick);
                 out.println("  Fork log: " + target.resolve("process.log"));
                 long started = System.nanoTime();
                 BenchmarkResults.Fork result;
@@ -324,12 +319,72 @@ public final class BenchmarkRunner {
                 fixture.id(),
                 identity,
                 "ELIGIBLE",
-                "external coverage: " + fixture.validationScope() + "; complete " + suite.referenceBackend()
-                        + " reference retained",
+                "external coverage: " + fixture.validationScope() + "; " + suite.referenceBackend()
+                        + " reference artifacts retained for " + references.size() + " brick shape(s)",
                 directory.toString(),
                 summaries.stream()
                         .map(s -> BenchmarkResults.compare(s, baseline, serial))
                         .toList());
+    }
+
+    /// A complete reference is shared across forks and variants with the same summation partition.
+    private record Reference(Path configuration, Path populations, String sha256, String error, boolean timedOut) {}
+
+    private static Reference prepareReference(
+            BenchmarkSuite suite,
+            BenchmarkSuite.Case fixture,
+            CfdConfiguration config,
+            WorkerBudget budget,
+            WorkerBudget serialBudget,
+            Path referenceDirectory,
+            Path validation,
+            String validationSha,
+            String identity,
+            String numerical,
+            String artifact,
+            PrintStream out)
+            throws IOException {
+        Files.createDirectory(referenceDirectory);
+        Path configuration = referenceDirectory.resolve("configuration.json");
+        Files.writeString(configuration, ConfigLoader.replayJson(config));
+        Path reference = referenceDirectory.resolve("populations.bin");
+        var referenceBudget = suite.referenceBackend().equals("serial") ? serialBudget : budget;
+        var referenceOptions = new BackendOptions(
+                suite.referenceBackend(), referenceBudget.workerCount(), "workers", null, suite.affinity(), null);
+        var job = job(
+                suite,
+                fixture,
+                configuration,
+                referenceDirectory,
+                reference,
+                null,
+                validation,
+                validationSha,
+                identity,
+                numerical,
+                artifact,
+                referenceOptions,
+                referenceBudget);
+        Path jobFile = referenceDirectory.resolve("job.json");
+        Files.writeString(jobFile, ConfigLoader.json(job));
+        out.println(fixture.id() + ": preparing " + suite.referenceBackend() + " reference with "
+                + referenceBudget.workerCount() + " worker(s), " + config.steps() + " steps on "
+                + config.config().grid() + ", brick="
+                + config.config().execution().brick());
+        out.println("  Reference log: " + referenceDirectory.resolve("process.log"));
+        var process = process(suite, jobFile, ReferenceWorker.class, referenceDirectory, out);
+        if (!process.completed() || !Files.isRegularFile(referenceDirectory.resolve("reference.json"))) {
+            return new Reference(
+                    configuration,
+                    reference,
+                    null,
+                    process.timedOut()
+                            ? "reference timed out"
+                            : "reference failed; see " + referenceDirectory.resolve("process.log"),
+                    process.timedOut());
+        }
+        out.println(fixture.id() + ": full reference completed (" + suite.referenceBackend() + ")");
+        return new Reference(configuration, reference, ValidationRunner.sha(reference), null, false);
     }
 
     private static BenchmarkJob job(
@@ -391,12 +446,12 @@ public final class BenchmarkRunner {
         Path directory = Path.of(report.directory());
         writeFile(directory.resolve("report.json"), ConfigLoader.json(report));
         var csv = new StringBuilder(
-                "case,external_coverage,variant,backend,sources,workers,status,seconds_per_invocation,fork_sd_seconds,fork_cv,mlups,speedup,parallel_efficiency\n");
+                "case,external_coverage,variant,backend,sources,workers,status,seconds_per_invocation,fork_sd_seconds,fork_cv,mlups,speedup,parallel_efficiency,brick\n");
         var markdown = new StringBuilder("# CFD execution comparison\n\nSpeedup baseline: `"
                 + report.suite().baselineVariant()
                 + "`. Only PASSED variants receive derived performance metrics.\n\n"
-                + "| Case | External coverage | Variant | Sources | Workers | Status | MLUPS | Speedup | Efficiency | Fork CV |\n"
-                + "|---|---|---|---:|---:|---|---:|---:|---:|---:|\n");
+                + "| Case | External coverage | Variant | Sources | Workers | Status | MLUPS | Speedup | Efficiency | Fork CV | Brick |\n"
+                + "|---|---|---|---:|---:|---|---:|---:|---:|---:|---|\n");
         for (var fixture : report.cases()) {
             var coverage = report.suite().cases().stream()
                     .filter(c -> c.id().equals(fixture.id()))
@@ -409,16 +464,21 @@ public final class BenchmarkRunner {
                         .append(coverage)
                         .append(",,,,,")
                         .append(fixture.externalStatus())
-                        .append(",,,,,,\n");
+                        .append(",,,,,,,\n");
                 markdown.append('|')
                         .append(fixture.id())
                         .append('|')
                         .append(coverage)
                         .append("| - | - | - |")
                         .append(fixture.externalStatus())
-                        .append("| - | - | - | - |\n");
+                        .append("| - | - | - | - | - |\n");
             }
             for (var variant : fixture.variants()) {
+                var brick = report.suite().variants().stream()
+                        .filter(v -> v.id().equals(variant.id()))
+                        .findFirst()
+                        .orElseThrow()
+                        .brickOrDefault(report.suite().brick());
                 csv.append(fixture.id())
                         .append(',')
                         .append(coverage)
@@ -444,6 +504,8 @@ public final class BenchmarkRunner {
                         .append(value(variant.speedup()))
                         .append(',')
                         .append(value(variant.parallelEfficiency()))
+                        .append(',')
+                        .append(brick)
                         .append('\n');
                 markdown.append('|')
                         .append(fixture.id())
@@ -465,6 +527,8 @@ public final class BenchmarkRunner {
                         .append(value(variant.parallelEfficiency()))
                         .append('|')
                         .append(value(variant.forkCv()))
+                        .append('|')
+                        .append(brick)
                         .append("|\n");
             }
         }

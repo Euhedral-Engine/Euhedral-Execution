@@ -54,7 +54,7 @@ class QueuedSimulationIntegrationTest {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
             var config = ConfigLoader.load(Path.of("scenes/periodic-smoke.json"));
             try (var simulation = new SerialSimulation(config, lattice, () -> {
-                /// Start-time capture and pre-offer check precede the first completion-wait check.
+                /// Start-time capture precedes the completion-wait checks; workers remain gated.
                 if (calls.incrementAndGet() >= 3) queued.countDown();
                 return clock.get();
             })) {
@@ -83,8 +83,8 @@ class QueuedSimulationIntegrationTest {
                     assertSame(current, simulation.state().current());
                     assertSame(initial, simulation.state().diagnostics());
                     assertThrows(IllegalStateException.class, simulation::step);
-                    assertEquals(1, failure.get().getSuppressed().length);
-                    assertTrue(failure.get().getSuppressed()[0].getMessage().contains("did not quiesce"));
+                    /// No CFD frames were materialized while the only worker was blocked.
+                    assertEquals(0, failure.get().getSuppressed().length);
                     /// The unrelated blocker owns the worker; release it before closing the simulation.
                     release.countDown();
                 } else {

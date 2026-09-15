@@ -19,9 +19,9 @@
     "steps": 1000,
     "diagnosticsEverySteps": 0,
     "brick": {
-      "nx": 32,
-      "ny": 32,
-      "nz": 32
+      "nx": 8,
+      "ny": 8,
+      "nz": 8
     },
     "stepDeadlineMillis": 120000
   },

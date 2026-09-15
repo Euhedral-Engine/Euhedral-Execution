@@ -43,6 +43,14 @@ public record BackendOptions(
         }
     }
 
+    public long storageBytes(long ranges, int workers) {
+        return switch (backend) {
+            case "fjp" -> Math.multiplyExact(ranges, 896L);
+            case "static" -> Math.multiplyExact(ranges, 768L);
+            default -> EuhedralBackend.sourceStorageBytes(ranges, sourceCount(workers));
+        };
+    }
+
     public int sourceCount(int workers) {
         if (backend.equals("serial")) {
             return 1;

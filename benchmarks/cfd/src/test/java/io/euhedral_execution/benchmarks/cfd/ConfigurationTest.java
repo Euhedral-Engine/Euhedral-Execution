@@ -226,6 +226,18 @@ class ConfigurationTest {
     }
 
     @Test
+    void oneCellBricksDoNotReserveMillionsOfEuhedralFrames() throws Exception {
+        var config = ConfigLoader.load(
+                Path.of("suites/cases/periodic-256.json"),
+                java.util.List.of("execution.brick.nx=1", "execution.brick.ny=1", "execution.brick.nz=1"));
+        assertEquals(
+                16_777_216,
+                config.config().grid().brickCount(config.config().execution().brick()));
+        config.memory().requireAllocatable(config.config().grid());
+        assertTrue(config.memory().totalBytes() < 8L * 1024 * 1024 * 1024);
+    }
+
+    @Test
     void memoryAccountsForPartialBricksAndStreamingExport() throws Exception {
         var result = load(MINIMAL + """
             ,"execution":{"brick":{"nx":5,"ny":4,"nz":3}},"output":{"exportEverySteps":1}
@@ -234,7 +246,7 @@ class ConfigurationTest {
                 27,
                 result.config().grid().brickCount(result.config().execution().brick()));
         assertEquals(304L * 960, result.memory().populationBytes());
-        assertEquals(5L * 960 + 768L * 27 + 1_048_576 + 131_072, result.memory().auxiliaryBytes());
+        assertEquals(5L * 960 + 40L * 27 + 1_048_576 + 131_072, result.memory().auxiliaryBytes());
         assertEquals(
                 result.memory().populationBytes() + result.memory().auxiliaryBytes(),
                 result.memory().totalBytes());

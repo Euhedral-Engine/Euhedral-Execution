@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""Run matched JMH suites at several independent XYZ brick sizes."""
+import argparse
+import copy
+import csv
+import json
+import math
+import os
+import signal
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
+
+def shape(text):
+    dimensions = [int(value) for value in text.lower().split("x")]
+    if len(dimensions) == 1:
+        dimensions *= 3
+    if len(dimensions) != 3 or min(dimensions) <= 0:
+        raise argparse.ArgumentTypeError("use positive N or XxYxZ")
+    return dict(zip(("nx", "ny", "nz"), dimensions))
+
+
+def write_json(path, value):
+    path.write_text(json.dumps(value, indent=2, allow_nan=False) + "\n")
+
+
+def stop_process_group(process):
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    else:
+        process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait(timeout=5)
+    if os.name == "posix":
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+
+
+def interrupted(signum, frame):
+    raise KeyboardInterrupt
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--suite", type=Path, required=True)
+    parser.add_argument("--sizes", nargs="+", type=shape, default=[shape(str(n)) for n in (32, 16, 8, 4, 2, 1)])
+    parser.add_argument("--short", action="store_true", help="32 cubed periodic shear, five steps, two forks")
+    parser.add_argument("--grid", type=shape, help="periodic shear grid override")
+    parser.add_argument("--steps", type=int)
+    parser.add_argument("--workers", type=int)
+    parser.add_argument("--forks", type=int)
+    parser.add_argument("--variants", nargs="+", help="subset of suite variant IDs")
+    parser.add_argument("--heap-gib", type=int, help="default: 2 for short runs, 32 for the full retained FJP/static plans")
+    parser.add_argument("--output", type=Path)
+    parser.add_argument("--prepare-only", action="store_true")
+    parser.add_argument("--launcher", type=Path, default=Path(__file__).resolve().with_name("euhedral-cfd"))
+    args = parser.parse_args()
+    if any(value is not None and value <= 0 for value in (args.steps, args.workers, args.forks, args.heap_gib)):
+        parser.error("steps, workers, forks and heap must be positive")
+    original = json.loads(args.suite.read_text())
+    base = args.suite.resolve().parent
+    parent = (args.output or base / "../build/granularity").resolve()
+    parent.mkdir(parents=True, exist_ok=True)
+    root = Path(tempfile.mkdtemp(prefix="sweep-", dir=parent))
+    print(f"Sweep directory: {root}", flush=True)
+    heap = args.heap_gib or (2 if args.short else 32)
+    grid = args.grid or (shape("32") if args.short else None)
+    steps = args.steps or (5 if args.short else None)
+    reports = []
+    rows = []
+    validation = None
+    all_valid = True
+    for brick in args.sizes:
+        label = "x".join(str(value) for value in brick.values())
+        folder = root / label
+        folder.mkdir()
+        suite = copy.deepcopy(original)
+        suite["brick"] = brick
+        for variant in suite["variants"]:
+            variant["brick"] = brick
+        suite["outputDirectory"] = str(folder / "runs")
+        for key in ("validationSuite", "validationReport"):
+            if suite.get(key):
+                suite[key] = str((base / suite[key]).resolve())
+        suite["jvmArgs"] = [arg for arg in suite["jvmArgs"] if not arg.startswith(("-Xmx", "-Xms"))]
+        suite["jvmArgs"] += ["-Xms256m", f"-Xmx{heap}g"]
+        if args.workers:
+            suite["workers"] = args.workers
+        if args.forks:
+            suite["forks"] = args.forks
+        if args.short:
+            suite.update(preSteps=0, stepsPerInvocation=steps, forks=args.forks or 2,
+                         warmupIterations=1, measurementIterations=2, iterationMillis=100,
+                         processDeadlineMillis=300000)
+        if steps:
+            suite.update(preSteps=0, stepsPerInvocation=steps)
+        if args.variants:
+            available = {variant["id"] for variant in suite["variants"]}
+            if not set(args.variants) <= available:
+                parser.error("unknown variant ID")
+            suite["variants"] = [variant for variant in suite["variants"] if variant["id"] in args.variants]
+            if suite["baselineVariant"] not in args.variants:
+                suite["baselineVariant"] = suite["variants"][0]["id"]
+        for case in suite["cases"]:
+            config_path = (base / case["config"]).resolve()
+            if case.get("validationScope") != "PERIODIC_SHEAR_FAMILY":
+                parser.error("sweep requires periodic shear family cases; other geometries need explicit suites")
+            config = json.loads(config_path.read_text())
+            config["memoryLimitBytes"] = heap * 1024**3 * 3 // 4
+            if grid:
+                config["grid"] = grid
+            if steps:
+                config["execution"]["steps"] = steps
+                config["execution"].pop("durationSeconds", None)
+            target = folder / f"{case['id']}.json"
+            write_json(target, config)
+            case["config"] = str(target)
+        if validation:
+            suite.pop("validationSuite", None)
+            suite["validationReport"] = validation
+        suite_path = folder / "suite.json"
+        write_json(suite_path, suite)
+        if args.prepare_only:
+            continue
+        started = time.monotonic()
+        with (folder / "console.log").open("w") as log:
+            process = subprocess.Popen([str(args.launcher.resolve()), "bench", "--config", str(suite_path)],
+                                       stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                       start_new_session=(os.name == "posix"))
+            try:
+                for line in process.stdout:
+                    print(line, end="", flush=True)
+                    log.write(line)
+                code = process.wait()
+            finally:
+                stop_process_group(process)
+        elapsed = time.monotonic() - started
+        candidates = list((folder / "runs").glob("benchmark-*/report.json"))
+        if not candidates:
+            raise RuntimeError(f"benchmark failed without a report; see {folder / 'console.log'}")
+        report = json.loads(candidates[0].read_text())
+        reports.append(str(candidates[0]))
+        validation = report["validationReport"]
+        for case in report["cases"]:
+            if not case["variants"]:
+                continue
+            config = json.loads((Path(case["directory"]) / "configuration.json").read_text())
+            logical = math.prod((config["grid"][axis] + brick[axis] - 1) // brick[axis] for axis in brick)
+            for variant in case["variants"]:
+                forks = []
+                for fork in variant["forks"]:
+                    raw_path = Path(fork["directory"]) / "jmh.json"
+                    trial_path = Path(fork["directory"]) / "trial.json"
+                    raw = json.loads(raw_path.read_text())[0] if raw_path.exists() else {}
+                    trial = json.loads(trial_path.read_text()) if trial_path.exists() else {}
+                    forks.append(dict(seconds=fork.get("secondsPerInvocation"), processSeconds=fork["processElapsedNs"] / 1e9,
+                                      framesCreated=trial.get("framesCreated"), gc=raw.get("secondaryMetrics", {}),
+                                      visualizationSeconds=trial.get("visualizationExportNs", 0) / 1e9))
+                row = dict(brick=label, logicalRanges=logical, backend=variant["backend"],
+                           sources=variant["resolvedSources"], workers=variant["workers"], status=variant["status"],
+                           timestepSeconds=(variant.get("meanSeconds") / suite["stepsPerInvocation"] if variant.get("meanSeconds") else None),
+                           invocationSeconds=variant.get("meanSeconds"), mlups=variant.get("mlups"),
+                           forkCv=variant.get("forkCv"), forkVarianceSecondsSquared=(variant.get("forkStdDevSeconds") ** 2 if variant.get("forkStdDevSeconds") is not None else None),
+                           suiteProcessSeconds=elapsed, intermediateDiagnosticScans=0, cpuUtilization=None, forks=forks)
+                rows.append(row)
+        all_valid &= code == 0
+        write_json(root / "sweep.json", dict(reports=reports, rows=rows,
+                   timing="JMH measurement only; suiteProcessSeconds includes validation/setup/export and all variants",
+                   allocation="JMH GC profiler includes invocation fixtures; CPU utilization and P/E tail are not instrumented"))
+        if rows:
+            with (root / "sweep.csv").open("w", newline="") as output:
+                writer = csv.DictWriter(output, fieldnames=[key for key in rows[0] if key != "forks"])
+                writer.writeheader()
+                writer.writerows({key: value for key, value in row.items() if key != "forks"} for row in rows)
+    print(f"Results: {root}", flush=True)
+    return 0 if all_valid else 4
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, interrupted)
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        raise SystemExit(130)

@@ -33,14 +33,16 @@ and logical siblings. Reports include requested/effective IDs, affinity capabili
 precision, grid, active-fluid cells, range shape, requested/resolved source count, submission
 policy, and source revision.
 
-The FJP comparison preset explicitly selects Euhedral source count `1`. A separate Euhedral variant
-selects `workers`, resolving to one source per effective physical worker; additional positive counts
-may be compared explicitly. Every variant uses the same numerical ranges, worker budget, single
-external driver, diagnostic settings, and measurement boundaries. Results retain source count as a
-comparison dimension rather than combining the variants into one Euhedral result.
+The presets select one Euhedral source per effective worker. Custom variants can select other
+positive counts. Every variant uses the same numerical kernel, cell/timestep work, worker budget,
+diagnostic settings and measurement boundaries. The normal suite selects 4-cubed bricks for
+Euhedral and 8-cubed bricks for FJP/static through per-variant `brick` overrides. Each distinct
+partition has one full correctness reference, shared across its variants and forks. Fixed-granularity
+sweeps override these settings uniformly across backends. Reports retain source count and brick
+shape as explicit dimensions.
 
-Multiple sources receive plain round-robin submissions as defined in Phase 08. Source selection and
-submission are included in the measured dispatch interval; source creation and registration occur
+Persistent sources lazily materialize ordinal ranges as defined in Phase 08. Frame acquisition and
+execution are included in the measured interval; source creation and registration occur
 during setup. Euhedral manages worker source order and internal distribution.
 
 ## Results

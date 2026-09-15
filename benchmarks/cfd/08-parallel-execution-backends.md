@@ -34,28 +34,17 @@ The runtime owner keeps one `ControlPlaneLattice` for its lifetime, using the ex
 fragment and executor pipeline. Allowed CPUs and shutdown timeout configure the lattice. No separate
 executor or Euhedral scheduling implementation is introduced.
 
-Serial execution submits equal-ID frames with unchanged routing hashes through one
-`QueueIngestSink`, preserving insertion order under a stable routing topology. Parallel execution
-mixes each frame's routing hash before submission and offers multiple frames before waiting.
-Euhedral distributes those independent frames internally.
+Serial execution uses one persistent lazy source with equal identity/routing hashes; parallel
+execution uses mixed routing hashes and a configurable positive source count or `workers`.
+The driver publishes the context once per generation. Source `i` lazily claims ordinals
+`i, i + sourceCount, ...`, computes bounds, and obtains a frame through its own `FrameManager`.
+No source is assigned to a worker; Euhedral owns acquisition, randomization and work distribution.
 
-Parallel Euhedral source count is configurable as a positive integer or `workers`. The `workers`
-setting resolves once during setup to the effective physical-worker count, excluding the driver and
-reserved cores; it is the default for parallel Euhedral execution. An explicit count of `1` selects
-the single-source configuration used for comparison with FJP. Serial execution always uses one
-source because ordering is source-scoped.
-
-All configured `QueueIngestSink` instances remain registered across timesteps. The submitting driver
-offers successive frames to sinks in plain round-robin order: `0, 1, ..., sourceCount - 1, 0, ...`.
-The cursor advances only after a successful offer; rejected offers retry the same frame and sink
-with bounded deadline/interruption handling. Successful submission counts differ by at most one
-across sinks for each timestep. The runner does not shuffle sink order. Euhedral already shuffles
-source order per worker and handles concurrent source acquisition and internal work distribution.
-
-Sink count supplies additional independently acquirable sources. It does not bind a sink to a
-particular worker, partition the numerical domain by worker, or require additional producer threads.
-One external driver submits work. Round-robin assignment requires only a reusable cursor and the
-retained sink array, with no per-frame dispatch objects.
+Source-local cursors and recycler consumption are plain under serialized source handles. Completion
+producers publish disjoint compact results and source completion counters before recycling frames.
+The driver combines results in ordinal order at the generation barrier. Cancellation freezes
+publication and waits for source calls and issued frames. See [SIMULATION.md](SIMULATION.md) for
+the ownership and memory publication contract.
 
 ## Comparison backends and worker budgets
 
@@ -104,8 +93,8 @@ timesteps, frame recycling, shutdown, and close/recreate behavior. Live lattice 
 FIFO execution, mixed-hash parallel execution, source count `1`, source count `workers`, and other
 explicit positive counts.
 
-Dispatch checks verify round-robin order, balanced successful offer counts, exact-once coverage
-across partial rounds, and bounded retry without advancing the cursor or duplicating a frame. Config
+Dispatch checks verify lazy creation, ordinal coverage, frame recycling across generations,
+partial bricks, and deadline cancellation before any work has been pulled. Config
 validation rejects zero and negative source counts. Source-count variants must produce equivalent
 complete fields. Coordination tests use deterministic synchronization. External physical correctness
 comes from [phase 07](07-external-solver-validation.md); backend checks establish execution

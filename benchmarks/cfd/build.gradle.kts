@@ -74,6 +74,10 @@ tasks.processResources {
 }
 distributions.main {
     contents {
+        from("src/main/scripts/euhedral-cfd-sweep") {
+            into("bin")
+            filePermissions { unix("rwxr-xr-x") }
+        }
         from("validation") { into("validation") }
         from("scenes") { into("scenes") }
         from("suites") { into("suites") }

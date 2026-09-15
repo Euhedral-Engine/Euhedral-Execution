@@ -3,7 +3,6 @@ package io.euhedral_execution.benchmarks.cfd.solver;
 import io.euhedral_execution.benchmarks.cfd.config.CfdConfiguration;
 import io.euhedral_execution.benchmarks.cfd.execution.ExecutionBackend;
 import io.euhedral_execution.benchmarks.cfd.execution.RangePlan;
-import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
 import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import java.util.Objects;
 import java.util.function.LongSupplier;
@@ -13,7 +12,6 @@ public class Simulation implements AutoCloseable {
     private final CfdConfiguration configuration;
     private final SimulationState state;
     private final ExecutionBackend backend;
-    private final CfdRangeFrame[] ranges;
     private FlowDiagnostics pendingFlow;
     private final LongSupplier clock;
     private final double[] diagnosticScratch = new double[5];
@@ -38,9 +36,8 @@ public class Simulation implements AutoCloseable {
         pendingFlow = new FlowDiagnostics(
                 geometry, configuration.config().physics().forceReference(), configuration.physics());
         initialize();
-        ranges = RangePlan.create(
-                state.geometry(), configuration.config().execution().brick());
-        backend.prepare(ranges);
+        backend.prepare(new RangePlan(
+                state.geometry(), configuration.config().execution().brick()));
     }
 
     public SimulationState state() {
@@ -51,11 +48,6 @@ public class Simulation implements AutoCloseable {
     public void reset() {
         if (closed || failed) {
             throw new IllegalStateException("cannot reset a closed or failed simulation");
-        }
-        if (state.completedSteps() > 0) {
-            for (var range : ranges) {
-                range.requireSuccess();
-            }
         }
         state.reset();
         pendingFlow.reset();
@@ -93,10 +85,7 @@ public class Simulation implements AutoCloseable {
                 configuration.physics().densityReference(),
                 configuration.config().physics().guards());
         try {
-            for (var range : ranges) {
-                range.replace(context);
-            }
-            backend.execute(context);
+            backend.execute(context, pendingFlow);
             long interval = configuration.config().execution().diagnosticsEverySteps();
             var diagnostics =
                     context.step() == configuration.steps() || (interval > 0 && context.step() % interval == 0)
@@ -111,7 +100,6 @@ public class Simulation implements AutoCloseable {
                                     configuration.config().physics().guards(),
                                     diagnosticScratch)
                             : null;
-            pendingFlow.reduce(context.step(), ranges);
             context.checkProgress(0, 0, 0);
             var previousFlow = state.flowDiagnostics();
             state.complete(context.step(), diagnostics, pendingFlow);

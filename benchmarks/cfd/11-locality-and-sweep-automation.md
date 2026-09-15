@@ -10,11 +10,12 @@ A bounded experiment runner compares brick geometry, worker placement, source co
 
 `scripts/run-cfd-sweep.py` builds or selects the application distribution, expands a finite configuration matrix, executes child JVMs sequentially, and combines comparison reports. Dry-run output lists commands and estimated memory. Per-process and overall deadlines, interruption handling, child cleanup, restart matching, and fail-fast/continue modes describe run lifecycle.
 
-The initial matrix includes `8x8x8`, `16x16x16`, `32x32x32`, and X-contiguous rectangular bricks,
+The bundled basic granularity sweep now covers `1x1x1` through `32x32x32`; see
+[BENCHMARKING.md](BENCHMARKING.md#granularity-sweep). The broader locality matrix adds rectangular bricks,
 plus partial-edge domains and different ratios of bricks to workers. Euhedral source count is the
 dispatch parameter implemented in [Phase 08](08-parallel-execution-backends.md). The sweep includes
-explicit `1` and `workers` variants, retaining the resolved count in every result. Multiple sinks
-receive plain round-robin submissions from one driver; Euhedral manages source acquisition and
+explicit `1` and `workers` variants, retaining the resolved count in every result. Multiple persistent sources
+lazily expose disjoint ordinal streams; Euhedral manages source acquisition and
 internal distribution. Source count does not imply a worker assignment or locality policy.
 
 Placement variants include topology-aware initialization and Euhedral `SOCKET_LOCAL`/`CACHE_LOCAL` routing with origins assigned while frames are out of flight. Execution samples outside scored timing distinguish requested placement from observed behavior, including direct-pull and fallback paths. FJP and static baselines expose corresponding affinity and initialization settings.

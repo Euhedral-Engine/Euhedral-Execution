@@ -88,7 +88,15 @@ public record BenchmarkSuite(
         }
     }
 
-    public record Variant(String id, String backend, Object sources) {
+    public record Variant(String id, String backend, Object sources, GridShape brick) {
+        public Variant(String id, String backend, Object sources) {
+            this(id, backend, sources, null);
+        }
+
+        public GridShape brickOrDefault(GridShape fallback) {
+            return brick == null ? fallback : brick;
+        }
+
         public Variant {
             safeId(id);
             var checked = new BackendOptions(backend, null, sources, null, false, null);

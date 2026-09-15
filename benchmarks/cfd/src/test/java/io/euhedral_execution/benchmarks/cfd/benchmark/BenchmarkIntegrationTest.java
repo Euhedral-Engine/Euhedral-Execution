@@ -47,6 +47,12 @@ class BenchmarkIntegrationTest {
             periodic = directory.resolve("scaled-periodic.json");
             Files.writeString(periodic, physical.toString());
             suite.put("preSteps", 119).put("referenceBackend", "fjp");
+            suite.putObject("brick").put("nx", 8).put("ny", 8).put("nz", 8);
+            ((ObjectNode) suite.path("variants").get(0))
+                    .putObject("brick")
+                    .put("nx", 4)
+                    .put("ny", 4)
+                    .put("nz", 4);
         }
         var cases = suite.putArray("cases");
         cases.addObject()
@@ -88,6 +94,7 @@ class BenchmarkIntegrationTest {
         assertFalse(Files.exists(Path.of(periodicResult.directory()).resolve("reference/qualification")));
         assertFalse(Files.exists(Path.of(periodicResult.directory()).resolve("serial")));
         var pids = new HashSet<Long>();
+        var references = new HashSet<String>();
         for (var variant : periodicResult.variants()) {
             assertEquals("PASSED", variant.status(), variant.forks().toString());
             assertEquals(2, variant.forks().size());
@@ -107,6 +114,15 @@ class BenchmarkIntegrationTest {
                 var configuration = io.euhedral_execution.benchmarks.cfd.config.ConfigLoader.load(
                         Path.of(trial.path("job").path("configuration").asText()));
                 assertEquals(0, configuration.config().execution().diagnosticsEverySteps());
+                int side = scaled && !variant.backend().equals("euhedral") ? 8 : 4;
+                assertEquals(
+                        new io.euhedral_execution.benchmarks.cfd.config.GridShape(side, side, side),
+                        configuration.config().execution().brick());
+                String referenceFile = trial.path("job").path("reference").asText();
+                references.add(referenceFile);
+                assertEquals(
+                        scaled && variant.backend().equals("euhedral") ? "reference-4x4x4" : "reference",
+                        Path.of(referenceFile).getParent().getFileName().toString());
                 assertEquals(
                         "CHECKED_WARMUP",
                         trial.path("backendQualificationPolicy").asText());
@@ -136,6 +152,14 @@ class BenchmarkIntegrationTest {
                 assertTrue(Files.isRegularFile(path.resolve("jmh.json")));
                 assertTrue(Files.isRegularFile(path.resolve("command.json")));
             }
+        }
+        assertEquals(scaled ? 2 : 1, references.size(), "reuse a reference for every matching partition");
+        try (var directories = Files.list(Path.of(periodicResult.directory()))) {
+            assertEquals(
+                    scaled ? 2 : 1,
+                    directories
+                            .filter(p -> p.getFileName().toString().startsWith("reference"))
+                            .count());
         }
         assertEquals("INELIGIBLE", report.cases().get(1).externalStatus());
         assertTrue(report.cases().get(1).variants().isEmpty());

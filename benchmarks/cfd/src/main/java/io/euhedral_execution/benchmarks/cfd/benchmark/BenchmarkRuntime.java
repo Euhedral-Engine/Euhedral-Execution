@@ -19,15 +19,15 @@ final class BenchmarkRuntime implements AutoCloseable {
         try {
             BenchmarkSuite.require(
                     config.memory().totalBytes()
-                                    + EuhedralBackend.sourceStorageBytes(
+                                    + options.storageBytes(
                                             config.config()
                                                     .grid()
                                                     .brickCount(config.config()
                                                             .execution()
                                                             .brick()),
-                                            options.sourceCount(budget.workerCount()))
+                                            budget.workerCount())
                             <= config.memory().budgetBytes(),
-                    "ingest sources exceed the configured memory budget");
+                    "backend storage exceeds the configured memory budget");
             for (int cpu : budget.effectiveCpus()) {
                 BenchmarkSuite.require(ThreadTools.BASE_MASK.get(cpu), "fork lost an assigned CPU");
             }
@@ -61,6 +61,10 @@ final class BenchmarkRuntime implements AutoCloseable {
             }
             throw error;
         }
+    }
+
+    Long framesCreated() {
+        return backend instanceof EuhedralBackend euhedral ? euhedral.framesCreated() : null;
     }
 
     Simulation simulation() {

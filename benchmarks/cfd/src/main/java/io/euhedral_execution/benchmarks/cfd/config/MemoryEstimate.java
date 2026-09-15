@@ -23,11 +23,11 @@ public record MemoryEstimate(
         long cells = grid.cellCount();
         try {
             long populations = Math.multiplyExact(304L, cells);
-            /// Byte mask + int obstacle ID per cell, descriptors/scratch/reductions per brick,
+            /// Byte mask + int obstacle ID per cell, compact deterministic result slots per brick,
             /// fixed JVM/array overhead, and a bounded streaming export buffer when enabled.
             long auxiliary = Math.addExact(
                     Math.multiplyExact(5L, cells),
-                    Math.multiplyExact(768L, grid.brickCount(config.execution().brick())));
+                    Math.multiplyExact(40L, grid.brickCount(config.execution().brick())));
             var geometry = config.geometry();
             long primitives = Math.addExact(
                     Math.addExact(

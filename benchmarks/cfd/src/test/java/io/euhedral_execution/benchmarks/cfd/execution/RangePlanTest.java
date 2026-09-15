@@ -75,12 +75,46 @@ class RangePlanTest {
                     }
                 }
             }
-            try (var backend = new ForkJoinBackend(new int[] {0}, false, 1000)) {
-                assertThrows(
-                        IllegalArgumentException.class,
-                        () -> backend.prepare(
-                                new io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame[] {ranges[0], ranges[0]
-                                }));
+            var plan = new RangePlan(geometry, config.config().execution().brick());
+            for (var frame : ranges) {
+                int ordinal = frame.rangeId();
+                assertEquals(frame.xFrom(), plan.xFrom(ordinal));
+                assertEquals(frame.xTo(), plan.xTo(ordinal));
+                assertEquals(frame.yFrom(), plan.yFrom(ordinal));
+                assertEquals(frame.yTo(), plan.yTo(ordinal));
+                assertEquals(frame.zFrom(), plan.zFrom(ordinal));
+                assertEquals(frame.zTo(), plan.zTo(ordinal));
+                assertTrue(plan.hasFluid(ordinal));
+            }
+            assertFalse(plan.hasFluid(0));
+        }
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({"32,512", "16,4096", "8,32768", "4,262144", "2,2097152", "1,16777216"
+    })
+    void everyPositiveGranularityHasCompleteOrdinalCoverage(int side, long expected) throws Exception {
+        var brick = new io.euhedral_execution.benchmarks.cfd.config.GridShape(side, side, side);
+        assertEquals(
+                expected, new io.euhedral_execution.benchmarks.cfd.config.GridShape(256, 256, 256).brickCount(brick));
+        var config = ConfigLoader.load(
+                Path.of("scenes/periodic-smoke.json"), List.of("grid.nx=31", "grid.ny=17", "grid.nz=9"));
+        var lattice = CfdTestRuntime.singleWorker();
+        try (AutoCloseable runtime = lattice::close) {
+            var plan = new RangePlan(GeometryMask.resolve(config, lattice), brick);
+            var shape = config.config().grid();
+            int[] coverage = new int[Math.toIntExact(shape.cellCount())];
+            for (int ordinal = 0; ordinal < plan.count(); ordinal++) {
+                for (int z = plan.zFrom(ordinal); z < plan.zTo(ordinal); z++) {
+                    for (int y = plan.yFrom(ordinal); y < plan.yTo(ordinal); y++) {
+                        for (int x = plan.xFrom(ordinal); x < plan.xTo(ordinal); x++) {
+                            coverage[x + shape.nx() * (y + shape.ny() * z)]++;
+                        }
+                    }
+                }
+            }
+            for (int count : coverage) {
+                assertEquals(1, count);
             }
         }
     }

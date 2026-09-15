@@ -1,7 +1,7 @@
 package io.euhedral_execution.benchmarks.cfd.execution;
 
-import io.euhedral_execution.benchmarks.cfd.frames.CfdFrame;
 import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
+import io.euhedral_execution.benchmarks.cfd.solver.FlowDiagnostics;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
 import io.euhedral_execution.benchmarks.cfd.solver.StepContext;
 import java.util.Objects;
@@ -22,7 +22,8 @@ abstract class RangeBackend implements ExecutionBackend {
     }
 
     @Override
-    public void prepare(CfdRangeFrame[] frames) {
+    public void prepare(RangePlan plan) {
+        CfdRangeFrame[] frames = plan.createFrames();
         if (ranges != null || closed) {
             throw new IllegalStateException("backend already prepared or closed");
         }
@@ -41,14 +42,12 @@ abstract class RangeBackend implements ExecutionBackend {
     }
 
     @Override
-    public final void execute(StepContext context) {
+    public final void execute(StepContext context, FlowDiagnostics diagnostics) {
         if (ranges == null || closed || failed) {
             throw new IllegalStateException("backend unavailable");
         }
         for (var frame : ranges) {
-            if (frame.status() != CfdFrame.Status.READY || frame.step() != context.step()) {
-                throw new IllegalStateException("every range must be prepared once for this generation");
-            }
+            frame.replace(context);
         }
         dispatched = false;
         try {
@@ -61,6 +60,7 @@ abstract class RangeBackend implements ExecutionBackend {
                 frame.requireSuccess();
             }
             finishGeneration(context);
+            diagnostics.reduce(context.step(), ranges);
             check(context);
         } catch (RuntimeException | Error error) {
             failed = true;

@@ -158,8 +158,15 @@ public abstract class CfdFrame extends AbstractFrame {
         /// Publish results before returning ownership through the manager's MPSC recycler.
         /// No mutable frame access is allowed after enqueueing: replacement may start immediately.
         STATUS.setRelease(this, terminal);
-        recycle();
+        try {
+            completed(terminal, failure);
+        } finally {
+            recycle();
+        }
     }
+
+    /// Called once by the completion producer before recycling; implementations must not throw.
+    protected void completed(Status terminal, RuntimeException failure) {}
 
     private Status claimTerminal() {
         Status previous = (Status) STATUS.getAcquire(this);

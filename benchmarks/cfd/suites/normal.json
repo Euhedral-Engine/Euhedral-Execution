@@ -4,9 +4,9 @@
   "validationSuite": "../validation/suites/smoke.json",
   "affinity": true,
   "brick": {
-    "nx": 32,
-    "ny": 32,
-    "nz": 32
+    "nx": 8,
+    "ny": 8,
+    "nz": 8
   },
   "preSteps": 0,
   "stepsPerInvocation": 1000,
@@ -25,15 +25,30 @@
     {
       "id": "euhedral-workers",
       "backend": "euhedral",
-      "sources": "workers"
+      "sources": "workers",
+      "brick": {
+        "nx": 4,
+        "ny": 4,
+        "nz": 4
+      }
     },
     {
       "id": "fjp",
-      "backend": "fjp"
+      "backend": "fjp",
+      "brick": {
+        "nx": 8,
+        "ny": 8,
+        "nz": 8
+      }
     },
     {
       "id": "static",
-      "backend": "static"
+      "backend": "static",
+      "brick": {
+        "nx": 8,
+        "ny": 8,
+        "nz": 8
+      }
     }
   ],
   "cases": [

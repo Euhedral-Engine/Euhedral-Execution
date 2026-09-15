@@ -16,6 +16,39 @@ public final class CfdRangeFrame extends CfdFrame {
     private static final double[] NO_FORCES = new double[0];
     private int xFrom, xTo, yFrom, yTo, zFrom, zTo;
     private final double[] incoming = new double[D3Q19.Q];
+
+    public interface Completion {
+        boolean isAlive();
+
+        void complete(CfdRangeFrame frame, RuntimeException failure);
+    }
+
+    private Completion completion;
+
+    public void completion(Completion completion) {
+        if (status() != Status.NEW) {
+            throw new IllegalStateException("completion owner must be assigned before use");
+        }
+        this.completion = completion;
+    }
+
+    @Override
+    public boolean isAlive() {
+        return super.isAlive() && (completion == null || completion.isAlive());
+    }
+
+    @Override
+    protected void completed(Status terminal, RuntimeException failure) {
+        if (completion != null) {
+            completion.complete(this, failure);
+        }
+    }
+
+    /// Completion-owner only; the generation counter publishes these disjoint slots to the driver.
+    public void copyResults(io.euhedral_execution.benchmarks.cfd.solver.RangeResults results) {
+        results.record(rangeId, massChange, inletFlux, outletFlux, macroscopicInletFlux, macroscopicOutletFlux, forces);
+    }
+
     private StepContext context;
     private int rangeId;
     private double[] forces = NO_FORCES;

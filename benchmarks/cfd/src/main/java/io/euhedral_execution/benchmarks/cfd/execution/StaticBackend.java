@@ -1,6 +1,5 @@
 package io.euhedral_execution.benchmarks.cfd.execution;
 
-import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
 import io.euhedral_execution.benchmarks.cfd.solver.StepContext;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.util.concurrent.locks.LockSupport;
@@ -25,8 +24,8 @@ public final class StaticBackend extends RangeBackend {
     }
 
     @Override
-    public void prepare(CfdRangeFrame[] ranges) {
-        super.prepare(ranges);
+    public void prepare(RangePlan plan) {
+        super.prepare(plan);
         started = true;
         try {
             for (var worker : workers) {

@@ -75,22 +75,35 @@ Its body
 performs pull/collide for that range; its terminal hook acknowledges the range result. It does not
 initialize the simulation, reduce full-field diagnostics, or swap buffers.
 
-`Simulation` retains a stable Z/Y/X brick plan across timesteps. Bounds and reduction ordinals live
-in the reusable frames; solid-only bricks are omitted. All backends execute the same frame body
-and wait for successful terminal completion of every range before diagnostics and buffer swaps.
-An empty ingest queue is not a timestep completion signal.
+`Simulation` publishes a stable Z/Y/X ordinal plan and a new context each timestep. Bounds are
+computed from grid and brick dimensions without descriptors; partial edge bricks are clipped.
+All positive brick dimensions are valid, including `1x1x1`. Solid-only ranges are discovered lazily
+by Euhedral sources. All backends execute the same frame body and complete a generation before
+reducing diagnostics and swapping buffers.
 
-`SerialSimulation` selects one persistent `QueueIngestSink` on a caller-owned lattice. Frames have
-equal unchanged identity/routing hashes, so that source follows one ordered lane. `EuhedralBackend`
-selects parallel placement by mixing each frame's routing hash and submits round-robin through
-persistent sources. `ForkJoinBackend` retains a bulk task tree in a dedicated pool; `StaticBackend`
-retains workers with fixed contiguous range sequences. Preparation allocates scratch and tasks;
-normal generation dispatch creates no per-range objects.
+`SerialSimulation` uses one persistent lazy source on a caller-owned lattice. Equal identity and
+routing hashes select ordered execution through request-and-route. Parallel `EuhedralBackend`
+uses mixed hashes. Source `i` claims ordinals `i, i + sources, ...`; every worker can acquire every
+source. The driver publishes only the context and per-source completion targets. Each serialized
+source owns a plain cursor and a `FrameManager`; a miss creates a frame, with no cap on logical work.
+A stopped pull retains its prepared frame for the next call. Empty-generation demand is discarded.
 
-The driver acquires each frame's terminal status before reading results. FJP additionally joins
-the root before task reinitialization; static workers acknowledge the generation after completing
-their assigned sequence. The shared `StepContext` is replaced once per timestep and remains stable
-while work is in flight. Source acquisition and placement remain Euhedral responsibilities.
+Completion producers copy results into disjoint numeric slots and increment a source's padded
+completion counter before recycling. The driver acquires every counter and folds slots in ordinal
+order. This preserves bitwise diagnostic reductions across backends without retaining frame objects.
+Numeric result storage is 40 bytes per logical range plus 24 bytes per range per obstacle ID.
+Source-local floating-point sums would change the validated summation order, so are not used.
+
+Source handles serialize cursor and recycler consumption. Volatile context publication and the
+source's busy flag coordinate the driver with source calls; completion counters publish numerical
+and result writes. Cancellation freezes generation publication, waits for source calls to leave,
+finishes any source-owned stopped frame, then waits for all issued work. No next-generation context
+is published until the barrier. Frame results must be consumed before recycling.
+
+`ForkJoinBackend` retains its bulk task tree and range frames in a dedicated pool; `StaticBackend`
+retains frames and workers with contiguous range sequences. Their backend owns frame preparation;
+FJP joins its root and static workers acknowledge generation exit before reuse. Runtime memory
+checks include this retained storage; very small bricks need more heap on these backends.
 
 The CLI owns synchronous output and closes the lattice on success or failure. The solver library
 does not write files when `run()` or `step()` is called. Library callers supply the lattice:
@@ -130,7 +143,7 @@ An optional `FrameManager` receives the frame after success, cancellation, or fa
 manager owner must consume all prior results before reacquiring frames and replacing their context
 and bounds. Never replace a pooled frame through an old reference while it remains in the recycler.
 Replacement clears the previous failure and resets the frame's own kill switch. Reusing a frame does
-not recover a failed simulation or make partially written populations valid. The simulation driver retains its frames without a manager and stops permanently on a failed generation.
+not recover a failed simulation or make partially written populations valid. Euhedral consumes results in the terminal hook and recycles through a source-owned manager. Every backend stops permanently on a failed generation.
 
 The factory pattern follows the [quick start](../../QUICK_START.md#recycle-custom-frames). A
 whole-volume factory can use the already shared generation context as its input without a per-frame

@@ -31,8 +31,8 @@ D3Q19 and open-boundary helpers, population buffers, macroscopic fields, reusabl
 reductions, and the shared simulation driver. The
 `frames`
 package owns reusable range bodies. The `execution` package owns range preparation, worker budgets,
-backend options, and dispatch. `QueueIngestSink` feeds serial/parallel frames to the default lattice
-with ordered/mixed hashes.
+backend options, and generation publication. Lazy `EuhedralBackend` sources materialize ordinal
+ranges through source-owned frame managers, with ordered/mixed hashes on the default lattice.
 The `geometry` package resolves immutable cell masks before population allocation. `StlReader`
 streams mesh metadata and checked coordinates; `TriangleMesh` validates welded surfaces and indexes
 triangles; `GeometryRangeFrame` executes intersection checks and voxel ranges on the lattice through
@@ -50,7 +50,7 @@ failure contracts and [VISUALIZATION.md](VISUALIZATION.md) for artifacts and rea
 CFD extends the reusable-work-unit pattern to repeated generations. Persistent sources feed
 independent range frames, and application-owned terminal acknowledgements establish timestep
 completion. Phase 08 adds configurable source counts, including one source for the FJP comparison
-and one per effective worker, with plain round-robin submission. Euhedral handles concurrent source
+and one per effective worker, with lazy disjoint ordinal streams. Euhedral handles concurrent source
 acquisition and worker distribution; sources are not assigned to particular workers.
 
 ## Euhedral runtime integration
@@ -65,7 +65,8 @@ The following paths are beneath `euhedral-core/src/main/java/io/euhedral_executi
 | `impl/DefaultExecutor.java` | Calls `AbstractFrame.execute()` | Shared brick-kernel invocation |
 | `frames/AbstractFrame.java` | Execution and terminal hooks, optional kill switch, routing metadata | Reusable brick frame with generation accounting |
 | `generics/AbstractExecutor.java` | Success and structured cancellation reach `doFinally`; exceptions reach the error hook | Separate numerical-success, cancellation, and failure states |
-| `ingest/QueueIngestSink.java` | Sealed persistent source with `offer` and draining lifecycle | Composed sources registered once |
+| `generics/LatticeSource.java` | Pull/request and terminal source contract | Published logical ranges materialized lazily; serialized ordinal cursors |
+| `impl/FrameManager.java` | Single consumer, concurrent completion producers | One recycler per CFD source, reusable directional scratch |
 
 `docs/ARCHITECTURE.md` describes the routing graph and ownership model. Physical core 0 can be reserved, logical siblings share physical cores, and origin-based routing includes fallback behavior. The adapter records effective workers and observed placement alongside requested settings.
 

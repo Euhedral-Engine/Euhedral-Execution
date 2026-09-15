@@ -265,9 +265,10 @@ mise exec -- benchmarks/cfd/build/bin/euhedral-cfd simulate --config benchmarks/
 ```
 
 Use `--sources workers` for one persistent Euhedral ingest sink per effective physical worker, or
-an explicit positive count. One driver submits ranges round-robin, restarting at source zero each
-timestep. Source count does not assign sources to workers. Zero/negative counts and non-integer
+an explicit positive count. Sources lazily claim disjoint strided ordinal streams each timestep;
+the driver publishes context and waits for completion. Source count does not assign sources to workers. Zero/negative counts and non-integer
 counts are rejected. Serial requires one worker/source; FJP and static do not accept explicit source
 counts. `inspect` validates settings without starting workers; the simulation resolves topology
 and records the effective budget in `resolved.json`. On a one-core host, the driver and worker
-necessarily share that core. Additional source storage is checked against the run's memory budget.
+necessarily share that core. Backend storage is checked against the run's memory budget. Brick dimensions are independent
+and may be any positive integers, including one; partial edges are clipped without gaps or overlaps.

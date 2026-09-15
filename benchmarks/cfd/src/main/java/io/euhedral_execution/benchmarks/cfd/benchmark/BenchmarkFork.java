@@ -17,6 +17,7 @@ public final class BenchmarkFork {
                 .include("^" + CfdBenchmark.class.getName() + ".advance$")
                 .param("jobFile", file.toString())
                 .threads(1)
+                .addProfiler(org.openjdk.jmh.profile.GCProfiler.class)
                 .forks(1)
                 .warmupForks(0)
                 .warmupIterations(job.warmupIterations())

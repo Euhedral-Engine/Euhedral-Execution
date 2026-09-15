@@ -184,7 +184,26 @@ public class CfdBenchmark {
                 metadata.put("resetPolicy", "DRIVER_ZERO_BOTH_BUFFERS_THEN_INITIALIZE_AND_PRESTEP");
                 metadata.put("firstTouchPolicy", "DRIVER");
                 metadata.put("schedulerStatePolicy", "CONTINUOUS_PER_FORK");
-                metadata.put("submissionPolicy", "ROUND_ROBIN");
+                metadata.put(
+                        "submissionPolicy",
+                        job.options().backend().equals("euhedral")
+                                        || job.options().backend().equals("serial")
+                                ? "LAZY_STRIDED_SOURCES"
+                                : "RETAINED_RANGES");
+                metadata.put("framesCreated", runtime == null ? null : runtime.framesCreated());
+                metadata.put(
+                        "logicalRangesPerTimestep",
+                        configuration == null
+                                ? null
+                                : configuration
+                                        .config()
+                                        .grid()
+                                        .brickCount(configuration
+                                                .config()
+                                                .execution()
+                                                .brick()));
+                metadata.put("intermediateDiagnostics", false);
+                metadata.put("allocationScope", "JMH GC profiler includes invocation reset and full-field validation");
                 metadata.put("precision", "double");
                 metadata.put("progressIntervalMillis", BenchmarkProgress.INTERVAL_MILLIS);
                 metadata.put("progressPolicy", "opaque counter per completed timestep; asynchronous pass ETA");

@@ -1,6 +1,5 @@
 package io.euhedral_execution.benchmarks.cfd.execution;
 
-import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
 import io.euhedral_execution.benchmarks.cfd.solver.StepContext;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.util.concurrent.ForkJoinPool;
@@ -58,8 +57,8 @@ public final class ForkJoinBackend extends RangeBackend {
     }
 
     @Override
-    public void prepare(CfdRangeFrame[] ranges) {
-        super.prepare(ranges);
+    public void prepare(RangePlan plan) {
+        super.prepare(plan);
         root = new Node(0, ranges.length);
     }
 
