@@ -56,7 +56,7 @@ class UpstreamQueueTest {
 
     @Test
     void shouldCreateThreadLocalQueue() {
-        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getCpuCount()];
         Arrays.fill(arr, this.handles);
 
         UpstreamQueue created = UpstreamQueue.get(arr, count);
@@ -67,7 +67,7 @@ class UpstreamQueueTest {
 
     @Test
     void shouldReuseThreadLocalQueue() {
-        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+        MpscQueue<UpstreamHandle>[] arr = new MpscQueue[SystemInfo.getCpuCount()];
         Arrays.fill(arr, this.handles);
 
         UpstreamQueue first = UpstreamQueue.get(arr, count);

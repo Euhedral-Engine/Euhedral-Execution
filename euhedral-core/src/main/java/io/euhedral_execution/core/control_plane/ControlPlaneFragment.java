@@ -289,7 +289,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long productiveHandleCount = this.upstreamQueue.getProductiveHandleCount();
                 long upstreamHandleCount = this.upstreamQueue.getCachedUpCount();
                 int registeredWorkers = this.state.registeredWorkers;
-                int workerRank = super.getThreadRank(this.core);
+                int workerRank = super.getThreadRank(this.cpu);
                 ExecutionPath path = this.controlPolicy.executionPath(
                         this.state.cycleEpoch,
                         this.state.batchEpoch,
@@ -466,7 +466,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
 
         int registeredWorkers = super.getThreadCount();
-        int workerRank = super.getThreadRank(this.core);
+        int workerRank = super.getThreadRank(this.cpu);
         long productiveHandleCount = this.state.productiveHandleCount;
 
         if (this.config.benchmarkMode()) {

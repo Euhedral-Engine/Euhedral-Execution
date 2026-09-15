@@ -772,7 +772,7 @@ class ControlPlaneFragmentThreadTest {
         for (int cpu = cpus.nextSetBit(0); cpu >= 0; cpu = cpus.nextSetBit(cpu + 1)) {
             firstCpuByCore.putIfAbsent(coreOfCpu.applyAsInt(cpu), cpu);
         }
-        // Match LatticeEdge's ranking: performance cores first, then ascending core IDs.
+        // Match LatticeEdge's ranking: performance cpus first, then ascending cpu IDs.
         return firstCpuByCore.keySet().stream()
                 .sorted(Comparator.<Integer>comparingInt(core -> performanceCores.get(core) ? 0 : 1)
                         .thenComparingInt(Integer::intValue))
@@ -820,7 +820,7 @@ class ControlPlaneFragmentThreadTest {
     private static final class TestDistributor extends LatticeVertex {
 
         private static String ranks() {
-            return CORE_RANK.getAcquire().toString();
+            return CPU_RANK.getAcquire().toString();
         }
 
         private TestDistributor(int downstreamCount) {
@@ -831,7 +831,7 @@ class ControlPlaneFragmentThreadTest {
         private static void resetSharedRoutingState() {
             UpstreamQueue.UP_QUEUE.remove();
             UPSTREAM_COUNT.set(0L);
-            CORE_COUNT.set(0L);
+            CPU_COUNT.set(0L);
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 if (UPSTREAMS[i] != null) {
                     UPSTREAMS[i].clear();
@@ -840,7 +840,7 @@ class ControlPlaneFragmentThreadTest {
             }
             Int2IntOpenHashMap initialRanks = new Int2IntOpenHashMap(UPSTREAMS.length);
             initialRanks.defaultReturnValue(-1);
-            CORE_RANK.set(initialRanks);
+            CPU_RANK.set(initialRanks);
         }
     }
 
