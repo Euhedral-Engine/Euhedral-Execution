@@ -37,7 +37,9 @@ public class Simulation implements AutoCloseable {
                 geometry, configuration.config().physics().forceReference(), configuration.physics());
         initialize();
         backend.prepare(new RangePlan(
-                state.geometry(), configuration.config().execution().brick()));
+                state.geometry(),
+                configuration.config().execution().brick(),
+                configuration.config().execution().bricksPerFrame()));
     }
 
     public SimulationState state() {

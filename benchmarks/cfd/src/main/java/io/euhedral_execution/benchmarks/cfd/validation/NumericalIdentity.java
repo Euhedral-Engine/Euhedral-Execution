@@ -54,6 +54,9 @@ public final class NumericalIdentity {
 
     private static boolean numerical(String path) {
         String root = "io/euhedral_execution/benchmarks/cfd/";
+        if (path.equals(root + "execution/RangePlan.class")) {
+            return true;
+        }
         for (String area : List.of("config/", "frames/", "geometry/", "solver/")) {
             if (path.startsWith(root + area) && path.endsWith(".class")) {
                 return true;
@@ -98,6 +101,7 @@ public final class NumericalIdentity {
         ObjectNode execution = (ObjectNode) value.get("execution");
         execution.remove(List.of(
                 "brick",
+                "bricksPerFrame",
                 "backendOptions",
                 "stepDeadlineMillis",
                 "geometrySources",

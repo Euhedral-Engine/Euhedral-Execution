@@ -12,7 +12,6 @@ import java.util.List;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 @Tag("integration")
 @Isolated
@@ -50,8 +49,9 @@ class EuhedralBackendIntegrationTest {
     }
 
     @ParameterizedTest
-    @ValueSource(ints = {1, 2, 7})
-    void lazySingleCellRangesRecycleAcrossGenerationsAndMatchForkJoin(int sources) throws Exception {
+    @org.junit.jupiter.params.provider.CsvSource({"1,1", "2,1", "7,1", "1,16", "2,256", "7,1024", "7,100000"})
+    void lazySingleCellRangesRecycleAcrossGenerationsAndMatchForkJoin(int sources, int bricksPerFrame)
+            throws Exception {
         var config = ConfigLoader.load(
                 Path.of("scenes/periodic-smoke.json"),
                 List.of(
@@ -59,6 +59,7 @@ class EuhedralBackendIntegrationTest {
                         "grid.ny=17",
                         "grid.nz=9",
                         "execution.steps=3",
+                        "execution.bricksPerFrame=" + bricksPerFrame,
                         "execution.brick.nx=1",
                         "execution.brick.ny=1",
                         "execution.brick.nz=1"));
@@ -69,7 +70,11 @@ class EuhedralBackendIntegrationTest {
                     var simulation = new Simulation(config, geometry, backend);
                     var reference =
                             new Simulation(config, geometry, new ForkJoinBackend(new int[] {0, 1}, false, 5000))) {
-                assertEquals(config.config().grid().cellCount(), backend.framesPreallocated());
+                assertEquals(
+                        config.config()
+                                .grid()
+                                .frameCount(config.config().execution().brick(), bricksPerFrame),
+                        backend.framesPreallocated());
                 assertEquals(0, backend.framesCreatedDuringExecution());
                 assertEquals(0, backend.recyclerMisses());
                 reference.run();
@@ -83,7 +88,11 @@ class EuhedralBackendIntegrationTest {
                 assertEquals(
                         reference.state().flowDiagnostics().massChange(),
                         simulation.state().flowDiagnostics().massChange());
-                assertEquals(config.config().grid().cellCount(), backend.framesPreallocated());
+                assertEquals(
+                        config.config()
+                                .grid()
+                                .frameCount(config.config().execution().brick(), bricksPerFrame),
+                        backend.framesPreallocated());
                 assertEquals(0, backend.framesCreatedDuringExecution());
                 assertEquals(0, backend.recyclerMisses());
                 simulation.reset();

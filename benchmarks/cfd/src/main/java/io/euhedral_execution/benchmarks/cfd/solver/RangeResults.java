@@ -2,7 +2,7 @@ package io.euhedral_execution.benchmarks.cfd.solver;
 
 import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 
-/// Disjoint numeric slots preserve the validated ordinal summation order without retaining frames.
+/// Disjoint batch slots preserve deterministic batch-ordinal reduction without retaining frames.
 /// Workers write only their ordinal; the generation barrier publishes every slot to the driver.
 public final class RangeResults {
     final double[][] values;

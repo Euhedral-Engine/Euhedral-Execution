@@ -160,10 +160,15 @@ public final class CfdMain {
                                 configuration
                                         .config()
                                         .grid()
-                                        .brickCount(configuration
-                                                .config()
-                                                .execution()
-                                                .brick()),
+                                        .frameCount(
+                                                configuration
+                                                        .config()
+                                                        .execution()
+                                                        .brick(),
+                                                configuration
+                                                        .config()
+                                                        .execution()
+                                                        .bricksPerFrame()),
                                 budget.workerCount())
                 > configuration.memory().budgetBytes()) {
             throw new IllegalArgumentException("backend storage exceeds the configured memory budget");
@@ -409,6 +414,7 @@ public final class CfdMain {
         printBoundaries(resolved, out);
         out.println("Geometry: " + resolved.config().geometry());
         out.println("Brick: " + resolved.config().execution().brick());
+        out.println("Bricks per frame: " + resolved.config().execution().bricksPerFrame());
         out.println("Execution settings: " + resolved.config().execution().backendOptions());
         out.println("Geometry ingest sources: "
                 + (resolved.config().execution().geometrySources() == null

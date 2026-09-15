@@ -188,21 +188,22 @@ consistent with reporter snapshots. Reporter and forwarding threads are closed a
 
 ## Suite settings
 
-| Setting | Meaning |
-|---|---|
-| `validationSuite` / `validationReport` | One relative or absolute path to fresh validation inputs or retained evidence |
-| `cases` | Unique ID, configuration path, external `validationCase` ID and optional `validationScope` (`EXACT` or `PERIODIC_SHEAR_FAMILY`) |
-| `variants` | Unique ID, backend, optional Euhedral `sources` integer or `"workers"`, and optional positive XYZ `brick` override |
-| `baselineVariant` | Variant used as the speedup numerator; presets select `fjp` |
-| `referenceBackend` | Backend generating the full reference; default `serial`, supplied presets `fjp` |
-| `workers`, `cpus`, `affinity` | Shared parallel physical-worker budget and optional affinity requests |
-| `brick` | Default positive XYZ range dimensions; each variant can override them with its own `brick` |
-| `preSteps`, `stepsPerInvocation` | Untimed physical preparation and exact timed work |
-| `forks`, `warmupIterations`, `measurementIterations`, `iterationMillis` | Explicit JMH repetition/duration settings |
-| `processDeadlineMillis` | Bounds each reference/JMH process tree, including startup and untimed checks; maximum seven days |
-| `maxForkCv` | Maximum coefficient of variation across independent fork means |
-| `jvmArgs` | Explicit JVM options applied to reference and benchmark children |
-| `outputDirectory` | Parent for a new `benchmark-*` directory; previous runs are preserved |
+| Setting                                                                 | Meaning                                                                                                                         |
+|-------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------|
+| `validationSuite` / `validationReport`                                  | One relative or absolute path to fresh validation inputs or retained evidence                                                   |
+| `cases`                                                                 | Unique ID, configuration path, external `validationCase` ID and optional `validationScope` (`EXACT` or `PERIODIC_SHEAR_FAMILY`) |
+| `variants`                                                              | Unique ID, backend, optional Euhedral `sources` integer or `"workers"`, and optional positive XYZ `brick` override              |
+| `baselineVariant`                                                       | Variant used as the speedup numerator; presets select `fjp`                                                                     |
+| `referenceBackend`                                                      | Backend generating the full reference; default `serial`, supplied presets `fjp`                                                 |
+| `workers`, `cpus`, `affinity`                                           | Shared parallel physical-worker budget and optional affinity requests                                                           |
+| `brick`                                                                 | Default positive XYZ numerical tile dimensions; each variant can override them with its own `brick`                             |
+| `bricksPerFrame`                                                        | Positive number of contiguous numerical bricks per scheduler task, default `1`; shared by every backend                         |
+| `preSteps`, `stepsPerInvocation`                                        | Untimed physical preparation and exact timed work                                                                               |
+| `forks`, `warmupIterations`, `measurementIterations`, `iterationMillis` | Explicit JMH repetition/duration settings                                                                                       |
+| `processDeadlineMillis`                                                 | Bounds each reference/JMH process tree, including startup and untimed checks; maximum seven days                                |
+| `maxForkCv`                                                             | Maximum coefficient of variation across independent fork means                                                                  |
+| `jvmArgs`                                                               | Explicit JVM options applied to reference and benchmark children                                                                |
+| `outputDirectory`                                                       | Parent for a new `benchmark-*` directory; previous runs are preserved                                                           |
 
 Parallel variants share the same effective physical CPU set, excluding the driver/reserved core
 where possible and counting logical siblings once. Serial uses one of those worker cores. Reports
@@ -213,18 +214,22 @@ the platform's placement support, not proof of exact placement.
 The supplied presets use only `euhedral-workers`, with one source per effective worker.
 Custom suites may still select other positive source counts as separate variants.
 Persistent sources expose disjoint ordinal streams lazily. After the plan is known, setup allocates
-one reusable physical frame per logical range, including incoming/force scratch, and seeds each
+one reusable physical frame per scheduler batch, including incoming/force scratch, and seeds each
 source's `FrameManager`. Its power-of-two queue includes the reserved slot and can retain that
 source's entire working set. Source creation, preallocation and registration are outside timing.
-Range assignment, acquisition, replacement, execution, completion and deterministic reduction are
+Batch assignment, acquisition, replacement, execution, completion and deterministic reduction are
 timed. A recycler miss fails the invocation; no frame allocation fallback exists. Completion
 acknowledgment follows result publication and recycler enqueue, so each new generation starts
 with every frame returned. Sources are never assigned to workers or shuffled by CFD.
 
-`trial.json` reports `framesPreallocated`, `framesCreatedDuringExecution`, and `recyclerMisses`
+`trial.json` distinguishes `logicalBricksPerTimestep`, `schedulerFramesPerTimestep`, and
+`bricksPerFrame`, and reports `framesPreallocated`, `framesCreatedDuringExecution`, and
+`recyclerMisses`
 for every backend. The latter two must remain zero, including warmup and physical pre-steps.
 FJP/static retain their frame arrays and execution structures. Their preallocated count excludes
-solid-only ranges; Euhedral reserves the full logical count and skips solids lazily.
+solid-only batches; Euhedral reserves the full scheduler batch count and skips solid batches lazily.
+Each batch accumulates one result, reduced in batch-ordinal order. Different batch sizes may change
+last-bit rounding in diagnostics; populations remain identical. All backends use the same grouping.
 
 ## Granularity sweep
 
@@ -248,13 +253,28 @@ mise exec -- benchmarks/cfd/build/bin/euhedral-cfd-sweep \
   --suite benchmarks/cfd/suites/normal.json --prepare-only
 ```
 
+`--bricks-per-frame 1 16 64 256` crosses independent batch sizes with `--sizes`.
+`--batching-sweep` selects the targeted ten points: `8^3/1`, `4^3/{1,16,64,256}`,
+and `2^3/{1,16,64,256,1024}`. For example, `128^3` with `2^3` bricks and 256 bricks
+per frame has 262,144 numerical bricks but only 1,024 scheduler frames per timestep.
+Frame execution keeps the X-fastest brick order within each batch. Scheduling between batches
+remains unrestricted; no application worker assignment or stealing is added.
+
+```bash
+OPENLB_HOME="$HOME/.local/opt/euhedral-openlb-1.9.0" mise exec -- \
+  benchmarks/cfd/build/bin/euhedral-cfd-sweep \
+  --suite benchmarks/cfd/suites/normal.json --batching-sweep \
+  --short --grid 128 --steps 10 --forks 2 --heap-gib 4
+```
+
 Omit `--prepare-only` to execute the full campaign. Full sweeps default to a 32 GiB maximum heap
 and a 24 GiB CFD budget for every backend because FJP/static retain range frames; short sweeps
 use 2 GiB and 1.5 GiB. `--heap-gib`, `--grid`, `--steps`, `--forks`, `--workers`, and `--variants`
 allow explicit overrides. Grid/step overrides require periodic-shear-family validation coverage.
 The script requires Python 3 and an assembled distribution; it never builds the application.
 
-`sweep.csv` and `sweep.json` retain brick size, logical ranges per step, effective sources/workers,
+`sweep.csv` and `sweep.json` retain brick size, bricks per frame, logical bricks and scheduler
+frames per step, effective sources/workers,
 JMH invocation and timestep duration, MLUPS, fork variance/CV, and separately labeled suite process
 time. Raw per-fork GC/allocation metrics and preallocation/miss counters remain in JSON. JMH's
 GC profiler observes invocation fixtures too, including reset and full-field validation; its byte

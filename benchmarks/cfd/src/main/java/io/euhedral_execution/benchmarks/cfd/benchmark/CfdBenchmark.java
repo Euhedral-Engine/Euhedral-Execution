@@ -243,6 +243,28 @@ public class CfdBenchmark {
                                                 .config()
                                                 .execution()
                                                 .brick()));
+                metadata.put("logicalBricksPerTimestep", metadata.get("logicalRangesPerTimestep"));
+                metadata.put(
+                        "bricksPerFrame",
+                        configuration == null
+                                ? null
+                                : configuration.config().execution().bricksPerFrame());
+                metadata.put(
+                        "schedulerFramesPerTimestep",
+                        configuration == null
+                                ? null
+                                : configuration
+                                        .config()
+                                        .grid()
+                                        .frameCount(
+                                                configuration
+                                                        .config()
+                                                        .execution()
+                                                        .brick(),
+                                                configuration
+                                                        .config()
+                                                        .execution()
+                                                        .bricksPerFrame()));
                 metadata.put("intermediateDiagnostics", false);
                 metadata.put("allocationScope", "JMH GC profiler includes invocation reset and full-field validation");
                 metadata.put("precision", "double");

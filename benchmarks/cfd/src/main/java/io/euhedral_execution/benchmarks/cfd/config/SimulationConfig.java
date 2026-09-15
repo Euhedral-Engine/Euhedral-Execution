@@ -334,7 +334,8 @@ public record SimulationConfig(
             Long diagnosticsEverySteps,
             Integer geometrySources,
             Long geometryDeadlineMillis,
-            BackendOptions backendOptions) {
+            BackendOptions backendOptions,
+            Integer bricksPerFrame) {
         public Execution(
                 Long steps,
                 Double durationSeconds,
@@ -351,6 +352,7 @@ public record SimulationConfig(
                     diagnosticsEverySteps,
                     geometrySources,
                     geometryDeadlineMillis,
+                    null,
                     null);
         }
 
@@ -368,6 +370,8 @@ public record SimulationConfig(
         }
 
         public Execution {
+            bricksPerFrame = bricksPerFrame == null ? 1 : bricksPerFrame;
+            Checks.require(bricksPerFrame > 0, "execution.bricksPerFrame must be positive");
             backendOptions = backendOptions == null ? BackendOptions.DEFAULT : backendOptions;
             if (geometrySources != null)
                 Checks.require(

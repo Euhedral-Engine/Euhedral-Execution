@@ -119,6 +119,31 @@ class RangePlanTest {
         }
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(ints = {1, 16, 64, 256, 1024, Integer.MAX_VALUE})
+    void batchesCoverEveryBrickOnceIncludingPartialEdges(int bricksPerFrame) throws Exception {
+        var config = ConfigLoader.load(
+                Path.of("scenes/periodic-smoke.json"), List.of("grid.nx=17", "grid.ny=9", "grid.nz=7"));
+        var lattice = CfdTestRuntime.singleWorker();
+        try (AutoCloseable runtime = lattice::close) {
+            var brick = new io.euhedral_execution.benchmarks.cfd.config.GridShape(2, 2, 2);
+            var plan = new RangePlan(GeometryMask.resolve(config, lattice), brick, bricksPerFrame);
+            int next = 0;
+            for (int batch = 0; batch < plan.frameCount(); batch++) {
+                assertEquals(next, plan.firstBrick(batch));
+                assertTrue(plan.bricksInFrame(batch) > 0);
+                assertTrue(plan.bricksInFrame(batch) <= bricksPerFrame);
+                next += plan.bricksInFrame(batch);
+            }
+            assertEquals(plan.count(), next);
+            assertThrows(IllegalArgumentException.class, () -> plan.firstBrick(plan.frameCount()));
+            assertThrows(IllegalArgumentException.class, () -> new RangePlan(plan.geometry(), brick, 0));
+            assertEquals(
+                    1024,
+                    new io.euhedral_execution.benchmarks.cfd.config.GridShape(128, 128, 128).frameCount(brick, 256));
+        }
+    }
+
     @Test
     void fatalErrorInTerminalPublicationStillAcknowledgesFailure() {
         var frame = new CfdFrame(1, null) {

@@ -33,6 +33,30 @@ class GranularitySweepTest(unittest.TestCase):
                     self.assertEqual(suite["brick"], variant["brick"], "sweeps override backend-specific defaults")
             self.assertEqual(before, SUITE.read_bytes())
 
+    def test_targeted_batching_sweep_matches_partitions_across_backends(self):
+      with tempfile.TemporaryDirectory() as directory:
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT), "--suite", str(SUITE),
+             "--batching-sweep", "--prepare-only", "--output", directory],
+            capture_output=True, text=True, timeout=10)
+        self.assertEqual(0, result.returncode, result.stderr)
+        suites = [json.loads(p.read_text()) for p in
+                  Path(directory).glob("sweep-*/*/suite.json")]
+        expected = {(8, 1)} | {(4, n) for n in (1, 16, 64, 256)} | {(2, n) for n
+                                                                    in
+                                                                    (1, 16, 64,
+                                                                     256, 1024)}
+        self.assertEqual(expected,
+                         {(s["brick"]["nx"], s["bricksPerFrame"]) for s in
+                          suites})
+        for s in suites:
+          config = json.loads(Path(s["cases"][0]["config"]).read_text())
+          self.assertEqual(s["bricksPerFrame"],
+                           config["execution"]["bricksPerFrame"])
+          self.assertEqual(3, len(s["variants"]))
+          for variant in s["variants"]:
+            self.assertEqual(s["brick"], variant["brick"])
+
     def test_unstable_forks_retain_timing_even_when_qualified_mlups_is_absent(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

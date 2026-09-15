@@ -20,16 +20,78 @@ import org.junit.jupiter.params.provider.ValueSource;
 @Isolated
 class BackendTest {
     @ParameterizedTest
+    @CsvSource({"periodic-shear,16", "forced-channel,64", "duct-obstacle-smoke,256"})
+    void batchingPreservesUnbatchedPopulationsAndPhysicalReductions(String scene, int bricksPerFrame) throws Exception {
+        var original = ConfigLoader.load(
+                Path.of("scenes/" + scene + ".json"),
+                List.of(
+                        "grid.nx=17",
+                        "grid.ny=9",
+                        "grid.nz=7",
+                        "execution.steps=3",
+                        "execution.brick.nx=2",
+                        "execution.brick.ny=2",
+                        "execution.brick.nz=2"));
+        var batched = ConfigLoader.load(
+                Path.of("scenes/" + scene + ".json"),
+                List.of(
+                        "grid.nx=17",
+                        "grid.ny=9",
+                        "grid.nz=7",
+                        "execution.steps=3",
+                        "execution.brick.nx=2",
+                        "execution.brick.ny=2",
+                        "execution.brick.nz=2",
+                        "execution.bricksPerFrame=" + bricksPerFrame));
+        var lattice = CfdTestRuntime.upToTwoWorkers();
+        try (AutoCloseable runtime = lattice::close) {
+            var geometry = GeometryMask.resolve(original, lattice);
+            try (var reference =
+                            new Simulation(original, geometry, new ForkJoinBackend(new int[] {0, 1}, false, 5000));
+                    var simulation =
+                            new Simulation(batched, geometry, new EuhedralBackend(lattice, true, 3, false, 5000))) {
+                for (int step = 0; step < 3; step++) {
+                    reference.step();
+                    simulation.step();
+                    for (int q = 0; q < 19; q++) {
+                        assertArrayEquals(
+                                reference.state().current()[q],
+                                simulation.state().current()[q],
+                                0.0);
+                    }
+                    var a = reference.state().flowDiagnostics();
+                    var b = simulation.state().flowDiagnostics();
+                    assertEquals(a.massChange(), b.massChange(), 1e-12);
+                    assertEquals(a.inletFlux(), b.inletFlux(), 1e-12);
+                    assertEquals(a.outletFlux(), b.outletFlux(), 1e-12);
+                    for (int slot = 0; slot < a.obstacleCount(); slot++) {
+                        for (int axis = 0; axis < 3; axis++) {
+                            assertEquals(a.force(a.obstacleId(slot), axis), b.force(b.obstacleId(slot), axis), 1e-12);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @ParameterizedTest
     @CsvSource({
-        "periodic-shear,5,4,3",
-        "forced-channel,5,4,3",
-        "duct-obstacle-smoke,5,4,3",
-        "periodic-shear,32,32,32",
-        "forced-channel,32,32,32",
-        "duct-obstacle-smoke,32,32,32"
+        "periodic-shear,5,4,3,1",
+        "periodic-shear,2,2,2,16",
+        "periodic-shear,2,2,2,256",
+        "periodic-shear,1,1,1,1024",
+        "forced-channel,5,4,3,1",
+        "forced-channel,2,2,2,16",
+        "forced-channel,2,2,2,256",
+        "duct-obstacle-smoke,5,4,3,1",
+        "duct-obstacle-smoke,2,2,2,16",
+        "duct-obstacle-smoke,2,2,2,256",
+        "periodic-shear,32,32,32,1",
+        "forced-channel,32,32,32,1",
+        "duct-obstacle-smoke,32,32,32,1"
     })
-    void everyBackendProducesIdenticalPopulationsFieldsAndReductions(String scene, int bx, int by, int bz)
-            throws Exception {
+    void everyBackendProducesIdenticalPopulationsFieldsAndReductions(
+            String scene, int bx, int by, int bz, int bricksPerFrame) throws Exception {
         var config = ConfigLoader.load(
                 Path.of("scenes/" + scene + ".json"),
                 List.of(
@@ -40,6 +102,7 @@ class BackendTest {
                         "execution.diagnosticsEverySteps=0",
                         "execution.brick.nx=" + bx,
                         "execution.brick.ny=" + by,
+                        "execution.bricksPerFrame=" + bricksPerFrame,
                         "execution.brick.nz=" + bz));
         var lattice = CfdTestRuntime.upToTwoWorkers();
         try (AutoCloseable runtime = lattice::close) {
@@ -57,6 +120,7 @@ class BackendTest {
                                                     "execution.diagnosticsEverySteps=1",
                                                     "execution.brick.nx=" + bx,
                                                     "execution.brick.ny=" + by,
+                                                    "execution.bricksPerFrame=" + bricksPerFrame,
                                                     "execution.brick.nz=" + bz)),
                                     lattice);
                             ExecutionBackend backend =

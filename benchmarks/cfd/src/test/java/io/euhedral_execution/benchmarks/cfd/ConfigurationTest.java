@@ -28,6 +28,40 @@ class ConfigurationTest {
     }
 
     @Test
+    void batchingIsIndependentPositiveAndReducesResultStorage() throws Exception {
+        var source = Path.of("scenes/periodic-smoke.json");
+        var unbatched = ConfigLoader.load(
+                source, java.util.List.of("execution.brick.nx=1", "execution.brick.ny=1", "execution.brick.nz=1"));
+        var batched = ConfigLoader.load(
+                source,
+                java.util.List.of(
+                        "execution.brick.nx=1",
+                        "execution.brick.ny=1",
+                        "execution.brick.nz=1",
+                        "execution.bricksPerFrame=256"));
+        assertEquals(
+                io.euhedral_execution.benchmarks.cfd.validation.NumericalIdentity.caseIdentity(unbatched),
+                io.euhedral_execution.benchmarks.cfd.validation.NumericalIdentity.caseIdentity(batched));
+        assertEquals(1, unbatched.config().execution().bricksPerFrame());
+        assertEquals(
+                unbatched.config().execution().brick(),
+                batched.config().execution().brick());
+        assertEquals(unbatched.memory().populationBytes(), batched.memory().populationBytes());
+        assertTrue(batched.memory().auxiliaryBytes() < unbatched.memory().auxiliaryBytes());
+        for (int invalid : new int[] {0, -1}) {
+            assertThrows(
+                    java.io.IOException.class,
+                    () -> ConfigLoader.load(source, java.util.List.of("execution.bricksPerFrame=" + invalid)));
+        }
+        assertEquals(
+                Integer.MAX_VALUE,
+                ConfigLoader.load(source, java.util.List.of("execution.bricksPerFrame=2147483647"))
+                        .config()
+                        .execution()
+                        .bricksPerFrame());
+    }
+
+    @Test
     void defaultsAreDeterministicAndResolvePathsWithoutCreatingOutput() throws Exception {
         var first = load(MINIMAL);
         assertEquals(first, load(MINIMAL));

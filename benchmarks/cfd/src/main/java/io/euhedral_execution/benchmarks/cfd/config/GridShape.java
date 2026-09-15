@@ -19,6 +19,11 @@ public record GridShape(int nx, int ny, int nz) {
                 Math.multiplyExact(ceilDiv(nx, brick.nx), ceilDiv(ny, brick.ny)), ceilDiv(nz, brick.nz));
     }
 
+    public long frameCount(GridShape brick, int bricksPerFrame) {
+        Checks.require(bricksPerFrame > 0, "bricksPerFrame must be positive");
+        return (brickCount(brick) - 1) / bricksPerFrame + 1;
+    }
+
     private static long ceilDiv(int length, int size) {
         return ((long) length + size - 1) / size;
     }

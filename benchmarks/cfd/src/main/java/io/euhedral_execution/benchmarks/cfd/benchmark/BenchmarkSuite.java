@@ -33,7 +33,8 @@ public record BenchmarkSuite(
         String baselineVariant,
         String referenceBackend,
         List<Variant> variants,
-        List<Case> cases) {
+        List<Case> cases,
+        Integer bricksPerFrame) {
     public static final JsonMapper JSON = JsonMapper.builder()
             .enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
             .enable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
@@ -44,6 +45,8 @@ public record BenchmarkSuite(
             .build();
 
     public BenchmarkSuite {
+        bricksPerFrame = bricksPerFrame == null ? 1 : bricksPerFrame;
+        require(bricksPerFrame > 0, "bricksPerFrame must be positive");
         require(schemaVersion == 1, "benchmark schemaVersion must be 1");
         require(outputDirectory != null && !outputDirectory.isBlank(), "outputDirectory is required");
         require((validationSuite == null) != (validationReport == null), "select validationSuite or validationReport");

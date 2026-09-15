@@ -5,18 +5,27 @@ import io.euhedral_execution.benchmarks.cfd.frames.CfdRangeFrame;
 import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import java.util.ArrayList;
 
-/// Stable Z/Y/X brick ordinals, with solid-only bricks omitted by every backend.
+/// Stable X-fastest brick ordinals grouped into contiguous scheduler batches.
 public final class RangePlan {
     private final GeometryMask geometry;
     private final GridShape brick;
-    private final int columns, rows, count;
+    private final int columns, rows, count, bricksPerFrame, frameCount;
 
     public RangePlan(GeometryMask geometry, GridShape brick) {
+        this(geometry, brick, 1);
+    }
+
+    public RangePlan(GeometryMask geometry, GridShape brick, int bricksPerFrame) {
+        if (bricksPerFrame <= 0) {
+            throw new IllegalArgumentException("bricksPerFrame must be positive");
+        }
+        this.bricksPerFrame = bricksPerFrame;
         this.geometry = java.util.Objects.requireNonNull(geometry);
         this.brick = java.util.Objects.requireNonNull(brick);
         columns = (geometry.shape().nx() - 1) / brick.nx() + 1;
         rows = (geometry.shape().ny() - 1) / brick.ny() + 1;
         count = Math.toIntExact(geometry.shape().brickCount(brick));
+        frameCount = Math.toIntExact(geometry.shape().frameCount(brick, bricksPerFrame));
     }
 
     public int count() {
@@ -59,43 +68,50 @@ public final class RangePlan {
                 geometry, xFrom(ordinal), xTo(ordinal), yFrom(ordinal), yTo(ordinal), zFrom(ordinal), zTo(ordinal));
     }
 
+    public int frameCount() {
+        return frameCount;
+    }
+
+    public int firstBrick(int batch) {
+        if (batch < 0 || batch >= frameCount) {
+            throw new IllegalArgumentException("batch ordinal outside plan");
+        }
+        return Math.multiplyExact(batch, bricksPerFrame);
+    }
+
+    public int bricksInFrame(int batch) {
+        return Math.min(bricksPerFrame, count - firstBrick(batch));
+    }
+
+    public boolean batchHasFluid(int batch) {
+        int first = firstBrick(batch), end = first + bricksInFrame(batch);
+        for (int ordinal = first; ordinal < end; ordinal++) {
+            if (hasFluid(ordinal)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     public void replace(
-            CfdRangeFrame frame, io.euhedral_execution.benchmarks.cfd.solver.StepContext context, int ordinal) {
-        frame.replace(
-                context,
-                ordinal,
-                xFrom(ordinal),
-                xTo(ordinal),
-                yFrom(ordinal),
-                yTo(ordinal),
-                zFrom(ordinal),
-                zTo(ordinal));
+            CfdRangeFrame frame, io.euhedral_execution.benchmarks.cfd.solver.StepContext context, int batch) {
+        frame.replace(context, this, batch);
     }
 
     public CfdRangeFrame[] createFrames() {
-        return create(geometry, brick);
-    }
-
-    public static CfdRangeFrame[] create(GeometryMask geometry, GridShape brick) {
-        var shape = geometry.shape();
         var frames = new ArrayList<CfdRangeFrame>();
-        int ordinal = 0;
-        for (int z = 0, zTo; z < shape.nz(); z = zTo) {
-            zTo = (int) Math.min((long) z + brick.nz(), shape.nz());
-            for (int y = 0, yTo; y < shape.ny(); y = yTo) {
-                yTo = (int) Math.min((long) y + brick.ny(), shape.ny());
-                for (int x = 0, xTo; x < shape.nx(); x = xTo) {
-                    xTo = (int) Math.min((long) x + brick.nx(), shape.nx());
-                    if (hasFluid(geometry, x, xTo, y, yTo, z, zTo)) {
-                        var frame = new CfdRangeFrame(1, ordinal, x, xTo, y, yTo, z, zTo);
-                        frame.reserveForceStorage(geometry.forceCount());
-                        frames.add(frame);
-                    }
-                    ordinal = Math.incrementExact(ordinal);
-                }
+        for (int batch = 0; batch < frameCount; batch++) {
+            if (batchHasFluid(batch)) {
+                var frame = new CfdRangeFrame(1, this, batch);
+                frame.reserveForceStorage(geometry.forceCount());
+                frames.add(frame);
             }
         }
         return frames.toArray(CfdRangeFrame[]::new);
+    }
+
+    public static CfdRangeFrame[] create(GeometryMask geometry, GridShape brick) {
+        return new RangePlan(geometry, brick).createFrames();
     }
 
     private static boolean hasFluid(GeometryMask geometry, int xFrom, int xTo, int yFrom, int yTo, int zFrom, int zTo) {

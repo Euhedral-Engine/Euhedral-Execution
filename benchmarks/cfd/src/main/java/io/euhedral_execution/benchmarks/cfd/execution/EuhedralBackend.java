@@ -98,7 +98,7 @@ public final class EuhedralBackend implements ExecutionBackend {
             throw new IllegalStateException("backend already prepared or closed");
         }
         this.plan = Objects.requireNonNull(plan);
-        results = new RangeResults(plan.count(), plan.geometry());
+        results = new RangeResults(plan.frameCount(), plan.geometry());
         for (var source : sources) {
             source.prepare();
         }
@@ -113,8 +113,8 @@ public final class EuhedralBackend implements ExecutionBackend {
             throw new IllegalStateException("backend unavailable");
         }
         for (var source : sources) {
-            source.target =
-                    source.completed.get() + (plan.count() + (long) sources.length - 1 - source.index) / sources.length;
+            source.target = source.completed.get()
+                    + (plan.frameCount() + (long) sources.length - 1 - source.index) / sources.length;
         }
         /// Release publishes context and targets. No per-range preparation occurs on the driver.
         active = context;
@@ -258,7 +258,7 @@ public final class EuhedralBackend implements ExecutionBackend {
         }
 
         void prepare() {
-            int count = sourceRangeCount(plan.count(), sources.length, index);
+            int count = sourceRangeCount(plan.frameCount(), sources.length, index);
             manager = new FrameManager<>(recyclerCapacity(count), 0);
             manager.setFactory(new FrameFactory<>(
                     (id, source) -> {
@@ -367,9 +367,9 @@ public final class EuhedralBackend implements ExecutionBackend {
                     cursor = index;
                 }
                 long emitted = 0;
-                while (emitted < limit && !cancelled && (pending != null || cursor < plan.count())) {
+                while (emitted < limit && !cancelled && (pending != null || cursor < plan.frameCount())) {
                     if (pending == null) {
-                        if (!plan.hasFluid((int) cursor)) {
+                        if (!plan.batchHasFluid((int) cursor)) {
                             cursor += sources.length;
                             issued++;
                             completed.incrementAndGet();

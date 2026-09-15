@@ -22,9 +22,13 @@ final class BenchmarkRuntime implements AutoCloseable {
                                     + options.storageBytes(
                                             config.config()
                                                     .grid()
-                                                    .brickCount(config.config()
-                                                            .execution()
-                                                            .brick()),
+                                                    .frameCount(
+                                                            config.config()
+                                                                    .execution()
+                                                                    .brick(),
+                                                            config.config()
+                                                                    .execution()
+                                                                    .bricksPerFrame()),
                                             budget.workerCount())
                             <= config.memory().budgetBytes(),
                     "backend storage exceeds the configured memory budget");

@@ -54,6 +54,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", type=Path, required=True)
     parser.add_argument("--sizes", nargs="+", type=shape, default=[shape(str(n)) for n in (32, 16, 8, 4, 2, 1)])
+    parser.add_argument("--bricks-per-frame", nargs="+", type=int, default=[1],
+                        help="independent scheduler batching; cross product with --sizes")
+    parser.add_argument("--batching-sweep", action="store_true",
+                        help="targeted 8^3/1, 4^3/{1,16,64,256}, 2^3/{1,16,64,256,1024}")
     parser.add_argument("--short", action="store_true", help="32 cubed periodic shear, five steps, two forks")
     parser.add_argument("--grid", type=shape, help="periodic shear grid override")
     parser.add_argument("--steps", type=int)
@@ -68,6 +72,8 @@ def main():
     args = parser.parse_args()
     if any(value is not None and value <= 0 for value in (args.steps, args.workers, args.forks, args.heap_gib)):
         parser.error("steps, workers, forks and heap must be positive")
+    if any(value <= 0 for value in args.bricks_per_frame):
+        parser.error("bricks per frame must be positive")
     original = json.loads(args.suite.read_text())
     base = args.suite.resolve().parent
     parent = (args.output or base / "../build/granularity").resolve()
@@ -81,12 +87,21 @@ def main():
     rows = []
     validation = None
     all_valid = True
-    for brick in args.sizes:
+    points = ([(shape("8"), 1)] + [(shape("4"), n) for n in (1, 16, 64, 256)]
+              + [(shape("2"), n) for n in
+                 (1, 16, 64, 256, 1024)] if args.batching_sweep
+              else [(brick, n) for brick in args.sizes for n in
+                    args.bricks_per_frame])
+    for brick, bricks_per_frame in points:
         label = "x".join(str(value) for value in brick.values())
-        folder = root / label
+        folder_label = (f"{label}-b{bricks_per_frame}" if args.batching_sweep
+                                                          or args.bricks_per_frame != [
+                                                              1] else label)
+        folder = root / folder_label
         folder.mkdir()
         suite = copy.deepcopy(original)
         suite["brick"] = brick
+        suite["bricksPerFrame"] = bricks_per_frame
         for variant in suite["variants"]:
             variant["brick"] = brick
         suite["outputDirectory"] = str(folder / "runs")
@@ -117,6 +132,7 @@ def main():
             if case.get("validationScope") != "PERIODIC_SHEAR_FAMILY":
                 parser.error("sweep requires periodic shear family cases; other geometries need explicit suites")
             config = json.loads(config_path.read_text())
+            config["execution"]["bricksPerFrame"] = bricks_per_frame
             config["memoryLimitBytes"] = heap * 1024**3 * 3 // 4
             if grid:
                 config["grid"] = grid
@@ -179,7 +195,11 @@ def main():
                                         "measuredNumericalWallNs"),
                                       gc=raw.get("secondaryMetrics", {}),
                                       visualizationSeconds=trial.get("visualizationExportNs", 0) / 1e9))
-                row = dict(brick=label, logicalRanges=logical, backend=variant["backend"],
+                row = dict(brick=label, bricksPerFrame=bricks_per_frame,
+                           logicalBricks=logical,
+                           schedulerFrames=(
+                                                   logical - 1) // bricks_per_frame + 1,
+                           logicalRanges=logical, backend=variant["backend"],
                            sources=variant["resolvedSources"], workers=variant["workers"], status=variant["status"],
                            timestepSeconds=(variant.get("meanSeconds") / suite["stepsPerInvocation"] if variant.get("meanSeconds") else None),
                            invocationSeconds=variant.get("meanSeconds"), mlups=variant.get("mlups"),

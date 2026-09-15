@@ -100,6 +100,7 @@ public final class BenchmarkRunner {
                                 "execution.brick.nx=" + suite.brick().nx(),
                                 "execution.brick.ny=" + suite.brick().ny(),
                                 "execution.brick.nz=" + suite.brick().nz(),
+                                "execution.bricksPerFrame=" + suite.bricksPerFrame(),
                                 "output.exportEverySteps=0",
                                 "execution.diagnosticsEverySteps=0"));
                 String identity = NumericalIdentity.caseIdentity(config);
@@ -261,7 +262,8 @@ public final class BenchmarkRunner {
                 Files.writeString(file, ConfigLoader.json(forkJob));
                 out.println(fixture.id() + "/" + variant.id() + ": starting fork " + (fork + 1) + "/" + suite.forks()
                         + ", workers=" + selected.workerCount() + ", sources="
-                        + options.sourceCount(selected.workerCount()) + ", brick=" + brick);
+                        + options.sourceCount(selected.workerCount()) + ", brick=" + brick + ", bricksPerFrame="
+                        + suite.bricksPerFrame());
                 out.println("  Fork log: " + target.resolve("process.log"));
                 long started = System.nanoTime();
                 BenchmarkResults.Fork result;
@@ -446,11 +448,13 @@ public final class BenchmarkRunner {
         Path directory = Path.of(report.directory());
         writeFile(directory.resolve("report.json"), ConfigLoader.json(report));
         var csv = new StringBuilder(
-                "case,external_coverage,variant,backend,sources,workers,status,seconds_per_invocation,fork_sd_seconds,fork_cv,mlups,speedup,parallel_efficiency,brick\n");
+                "case,external_coverage,variant,backend,sources,workers,status,seconds_per_invocation,fork_sd_seconds,fork_cv,mlups,speedup,parallel_efficiency,brick,bricks_per_frame\n");
         var markdown = new StringBuilder("# CFD execution comparison\n\nSpeedup baseline: `"
                 + report.suite().baselineVariant()
-                + "`. Only PASSED variants receive derived performance metrics.\n\n"
-                + "| Case | External coverage | Variant | Sources | Workers | Status | MLUPS | Speedup | Efficiency | Fork CV | Brick |\n"
+                + "`. Bricks per frame: " + report.suite().bricksPerFrame()
+                + ". Only PASSED variants receive derived performance metrics.\n\n"
+                + "| Case | External coverage | Variant | Sources | Workers | Status | MLUPS | Speedup | Efficiency |"
+                + " Fork CV | Brick |\n"
                 + "|---|---|---|---:|---:|---|---:|---:|---:|---:|---|\n");
         for (var fixture : report.cases()) {
             var coverage = report.suite().cases().stream()
@@ -506,6 +510,8 @@ public final class BenchmarkRunner {
                         .append(value(variant.parallelEfficiency()))
                         .append(',')
                         .append(brick)
+                        .append(',')
+                        .append(report.suite().bricksPerFrame())
                         .append('\n');
                 markdown.append('|')
                         .append(fixture.id())

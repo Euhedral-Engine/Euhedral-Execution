@@ -31,13 +31,17 @@ The shared numerical kernel uses double-precision D3Q19 BGK lattice Boltzmann, t
 
 Serial, ForkJoinPool, persistent static workers, and parallel Euhedral execute the same numerical
 body over the same destination-owned ranges. The driver owns generation publication, completion,
-diagnostics, and buffer swaps. Reusable frames retain their primitive range bounds and scratch;
-bounds derive directly from logical range ordinals. Serial and parallel Euhedral execution share the
+diagnostics, and buffer swaps. `execution.brick` defines the numerical tile;
+`execution.bricksPerFrame` (default `1`) groups contiguous X-fastest brick ordinals into one
+scheduler frame. Each frame retains primitive batch metadata and numerical scratch, derives
+each brick's bounds on demand, and executes its bricks sequentially with one completion. Serial and
+parallel Euhedral execution share the
 existing lattice path, using ordered and mixed routing hashes respectively.
 
-Parallel Euhedral uses a configurable number of persistent ingest sinks, with one per effective
+Parallel Euhedral uses a configurable number of persistent ingest sources, with one per effective
 worker by default and an explicit single-source setting for comparison. The driver publishes one
-generation context. Sources lazily claim disjoint ordinal streams and recycle completed frames;
+generation context. Sources lazily claim disjoint batch-ordinal streams from preallocated frame
+pools and recycle completed frames;
 Euhedral handles source acquisition and work distribution internally. Bricks support independent
 positive dimensions down to `1x1x1`; see the [granularity sweep](BENCHMARKING.md#granularity-sweep).
 

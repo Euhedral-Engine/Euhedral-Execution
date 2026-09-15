@@ -48,6 +48,7 @@ class BenchmarkIntegrationTest {
             Files.writeString(periodic, physical.toString());
             suite.put("preSteps", 119).put("referenceBackend", "fjp");
             suite.putObject("brick").put("nx", 8).put("ny", 8).put("nz", 8);
+            suite.put("bricksPerFrame", 16);
             ((ObjectNode) suite.path("variants").get(0))
                     .putObject("brick")
                     .put("nx", 4)
@@ -109,6 +110,12 @@ class BenchmarkIntegrationTest {
                         BenchmarkSuite.JSON.readTree(path.resolve("trial.json").toFile());
                 assertTrue(pids.add(trial.path("pid").asLong()));
                 assertTrue(trial.path("backendEquivalenceVerified").asBoolean());
+                assertEquals(scaled ? 16 : 1, trial.path("bricksPerFrame").asInt());
+                long bricks = trial.path("logicalBricksPerTimestep").asLong();
+                assertTrue(bricks > 0);
+                assertEquals(
+                        (bricks - 1) / (scaled ? 16 : 1) + 1,
+                        trial.path("schedulerFramesPerTimestep").asLong());
                 assertTrue(trial.path("checkedInvocations").asLong() >= 2);
                 assertTrue(trial.path("checkedWarmupInvocations").asLong() > 0);
                 assertTrue(trial.path("framesPreallocated").asLong() > 0);
