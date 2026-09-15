@@ -85,12 +85,17 @@ reducing diagnostics and swapping buffers.
 routing hashes select ordered execution through request-and-route. Parallel `EuhedralBackend`
 uses mixed hashes. Source `i` claims ordinals `i, i + sources, ...`; every worker can acquire every
 source. The driver publishes only the context and per-source completion targets. Each serialized
-source owns a plain cursor and a `FrameManager`; a miss creates a frame, with no cap on logical work.
+source owns a plain cursor and a `FrameManager`. Setup preallocates its full logical-range count
+of physical frames and scratch, with recycler capacity rounded up including the reserved queue slot.
+Pulls use only `get()` and lazy ordinal/context replacement; a miss is an explicit failure.
 A stopped pull retains its prepared frame for the next call. Empty-generation demand is discarded.
 
-Completion producers copy results into disjoint numeric slots and increment a source's padded
-completion counter before recycling. The driver acquires every counter and folds slots in ordinal
-order. This preserves bitwise diagnostic reductions across backends without retaining frame objects.
+Completion producers copy results into disjoint numeric slots, recycle, then increment a source's
+padded
+completion counter using an owner reference captured before recycling. No frame reads follow
+enqueue. The driver acquires every counter and folds slots in ordinal
+order. This preserves bitwise diagnostic reductions across backends without binding retained frames
+to particular ordinals.
 Numeric result storage is 40 bytes per logical range plus 24 bytes per range per obstacle ID.
 Source-local floating-point sums would change the validated summation order, so are not used.
 

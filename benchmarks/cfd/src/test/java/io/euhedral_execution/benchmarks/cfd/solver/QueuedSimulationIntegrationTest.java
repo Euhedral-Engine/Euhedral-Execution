@@ -83,7 +83,7 @@ class QueuedSimulationIntegrationTest {
                     assertSame(current, simulation.state().current());
                     assertSame(initial, simulation.state().diagnostics());
                     assertThrows(IllegalStateException.class, simulation::step);
-                    /// No CFD frames were materialized while the only worker was blocked.
+                    /// No logical ranges were assigned while the only worker was blocked.
                     assertEquals(0, failure.get().getSuppressed().length);
                     /// The unrelated blocker owns the worker; release it before closing the simulation.
                     release.countDown();

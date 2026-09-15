@@ -25,30 +25,15 @@
     {
       "id": "euhedral-workers",
       "backend": "euhedral",
-      "sources": "workers",
-      "brick": {
-        "nx": 4,
-        "ny": 4,
-        "nz": 4
-      }
+      "sources": "workers"
     },
     {
       "id": "fjp",
-      "backend": "fjp",
-      "brick": {
-        "nx": 8,
-        "ny": 8,
-        "nz": 8
-      }
+      "backend": "fjp"
     },
     {
       "id": "static",
-      "backend": "static",
-      "brick": {
-        "nx": 8,
-        "ny": 8,
-        "nz": 8
-      }
+      "backend": "static"
     }
   ],
   "cases": [

@@ -21,6 +21,8 @@ public final class CfdRangeFrame extends CfdFrame {
         boolean isAlive();
 
         void complete(CfdRangeFrame frame, RuntimeException failure);
+
+        void recycled();
     }
 
     private Completion completion;
@@ -41,6 +43,16 @@ public final class CfdRangeFrame extends CfdFrame {
     protected void completed(Status terminal, RuntimeException failure) {
         if (completion != null) {
             completion.complete(this, failure);
+        }
+    }
+
+    @Override
+    protected void recycleCompleted() {
+        /// Capture the immutable owner before enqueueing; never read the frame after returning it.
+        var owner = completion;
+        recycle();
+        if (owner != null) {
+            owner.recycled();
         }
     }
 

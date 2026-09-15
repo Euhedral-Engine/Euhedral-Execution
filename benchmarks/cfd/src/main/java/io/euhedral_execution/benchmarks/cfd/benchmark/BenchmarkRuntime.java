@@ -63,8 +63,16 @@ final class BenchmarkRuntime implements AutoCloseable {
         }
     }
 
-    Long framesCreated() {
-        return backend instanceof EuhedralBackend euhedral ? euhedral.framesCreated() : null;
+    long framesPreallocated() {
+        return backend.framesPreallocated();
+    }
+
+    long framesCreatedDuringExecution() {
+        return backend.framesCreatedDuringExecution();
+    }
+
+    long recyclerMisses() {
+        return backend.recyclerMisses();
     }
 
     Simulation simulation() {

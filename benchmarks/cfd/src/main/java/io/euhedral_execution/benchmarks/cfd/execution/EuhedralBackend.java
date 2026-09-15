@@ -63,14 +63,33 @@ public final class EuhedralBackend implements ExecutionBackend {
         }
     }
 
-    /// Recycler capacity limits retained idle frames, never logical work or creation on a miss.
+    /// Includes every physical frame and both power-of-two manager reference arrays.
     public static long sourceStorageBytes(long maximumRanges, int sources) {
         if (maximumRanges < 0 || sources < 0) {
             throw new IllegalArgumentException("invalid source storage dimensions");
         }
-        return Math.addExact(
-                Math.multiplyExact(sources, 8192L * 16 + 4096),
-                Math.multiplyExact(Math.min(maximumRanges, Math.multiplyExact(sources, 8192L)), 768));
+        if (sources == 0) {
+            return 0;
+        }
+        long bytes = Math.multiplyExact(maximumRanges, 768);
+        for (int i = 0; i < sources; i++) {
+            int capacity = recyclerCapacity(sourceRangeCount(maximumRanges, sources, i));
+            bytes = Math.addExact(bytes, 4096L + 8L * (capacity + (long) Math.max(capacity, 256)));
+        }
+        return bytes;
+    }
+
+    static int sourceRangeCount(long ranges, int sources, int index) {
+        return Math.toIntExact(ranges / sources + (index < ranges % sources ? 1 : 0));
+    }
+
+    static int recyclerCapacity(int count) {
+        /// The bounded MPSC queue reserves one slot. Round count + 1 up, not count.
+        /// Reject only the actual power-of-two array indexing limit.
+        if (count >= 1 << 30) {
+            throw new IllegalArgumentException("source working set exceeds FrameManager array indexing capacity");
+        }
+        return count <= 1 ? 2 : Integer.highestOneBit(count) << 1;
     }
 
     @Override
@@ -80,6 +99,9 @@ public final class EuhedralBackend implements ExecutionBackend {
         }
         this.plan = Objects.requireNonNull(plan);
         results = new RangeResults(plan.count(), plan.geometry());
+        for (var source : sources) {
+            source.prepare();
+        }
         for (var source : sources) {
             lattice.addUpstream(source);
         }
@@ -172,10 +194,26 @@ public final class EuhedralBackend implements ExecutionBackend {
     }
 
     /// Read only at the driver barrier, after execute has returned.
-    public long framesCreated() {
+    public long framesPreallocated() {
         long count = 0;
         for (var source : sources) {
-            count += source.created;
+            count += source.preallocated;
+        }
+        return count;
+    }
+
+    public long framesCreatedDuringExecution() {
+        long count = 0;
+        for (var source : sources) {
+            count += source.created - source.preallocated;
+        }
+        return count;
+    }
+
+    public long recyclerMisses() {
+        long count = 0;
+        for (var source : sources) {
+            count += source.recyclerMisses;
         }
         return count;
     }
@@ -205,29 +243,46 @@ public final class EuhedralBackend implements ExecutionBackend {
         private final AtomicReference<LatticeReceiver> downstream = new AtomicReference<>();
         private LatticeReceiver forwarding;
         private final Consumer<AbstractFrame> forward = frame -> forwarding.push(frame);
-        private final FrameManager<Source, CfdRangeFrame> manager = new FrameManager<>(8192, 0);
+        private FrameManager<Source, CfdRangeFrame> manager;
         private final PaddedAtomicLong completed = new PaddedAtomicLong(0);
         /// These fields have one source-handle owner. The driver reads them only after freezing and acquiring busy.
         private StepContext context;
-        private long cursor, issued, created;
+        private long cursor, issued, created, preallocated, recyclerMisses;
+        private boolean prepared;
         private CfdRangeFrame pending;
         private volatile boolean busy;
         private long target;
 
         Source(int index) {
             this.index = index;
+        }
+
+        void prepare() {
+            int count = sourceRangeCount(plan.count(), sources.length, index);
+            manager = new FrameManager<>(recyclerCapacity(count), 0);
             manager.setFactory(new FrameFactory<>(
                     (id, source) -> {
+                        if (source.prepared) {
+                            throw new IllegalStateException("CFD frame creation is restricted to setup");
+                        }
                         var frame = new CfdRangeFrame(id, source.manager);
-                        frame.completion(source);
                         source.created++;
-                        source.replace(frame);
+                        frame.completion(source);
+                        frame.reserveForceStorage(plan.geometry().forceCount());
                         if (parallel) {
                             frame.randomizeHash(1);
                         }
                         return frame;
                     },
                     (source, frame) -> source.replace(frame)));
+            for (int i = 0; i < count; i++) {
+                var frame = manager.getFactory().create(this);
+                if (!manager.recycle(frame)) {
+                    throw new IllegalStateException("CFD preallocated recycler capacity is insufficient");
+                }
+                preallocated++;
+            }
+            prepared = true;
         }
 
         private void replace(CfdRangeFrame frame) {
@@ -251,10 +306,13 @@ public final class EuhedralBackend implements ExecutionBackend {
             } catch (RuntimeException recordFailure) {
                 failure.compareAndSet(null, recordFailure);
                 cancelled = true;
-            } finally {
-                /// The release sequence publishes disjoint result slots and numerical writes to the driver.
-                completed.incrementAndGet();
             }
+        }
+
+        @Override
+        public void recycled() {
+            /// Release publishes results AND the returned frame before the next generation can start.
+            completed.incrementAndGet();
         }
 
         @Override
@@ -317,7 +375,12 @@ public final class EuhedralBackend implements ExecutionBackend {
                             completed.incrementAndGet();
                             continue;
                         }
-                        pending = manager.getOrCreate(Source.this, 0);
+                        pending = manager.get(0);
+                        if (pending == null) {
+                            recyclerMisses++;
+                            throw new IllegalStateException("preallocated CFD recycler exhausted for source " + index);
+                        }
+                        manager.getFactory().replace(this, pending);
                         cursor += sources.length;
                         issued++;
                     }

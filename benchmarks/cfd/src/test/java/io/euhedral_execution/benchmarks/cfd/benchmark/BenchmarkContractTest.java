@@ -57,10 +57,10 @@ class BenchmarkContractTest {
         assertEquals(suite.brick(), config.config().execution().brick());
         assertEquals(new io.euhedral_execution.benchmarks.cfd.config.GridShape(8, 8, 8), suite.brick());
         for (var variant : suite.variants()) {
-            int side = variant.backend().equals("euhedral") ? 4 : 8;
+            assertNull(variant.brick());
             var brick = variant.brickOrDefault(suite.brick());
-            assertEquals(new io.euhedral_execution.benchmarks.cfd.config.GridShape(side, side, side), brick);
-            assertEquals(side == 4 ? 262_144 : 32_768, config.config().grid().brickCount(brick));
+            assertEquals(suite.brick(), brick);
+            assertEquals(32_768, config.config().grid().brickCount(brick));
         }
         assertTrue(config.memory().populationBytes() > 5_000_000_000L);
         assertTrue(config.memory().totalBytes() < config.memory().budgetBytes());

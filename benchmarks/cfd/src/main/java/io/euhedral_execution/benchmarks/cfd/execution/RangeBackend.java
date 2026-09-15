@@ -76,6 +76,11 @@ abstract class RangeBackend implements ExecutionBackend {
 
     protected abstract void dispatch(StepContext context);
 
+    @Override
+    public long framesPreallocated() {
+        return ranges == null ? 0 : ranges.length;
+    }
+
     protected void finishGeneration(StepContext context) {}
 
     protected final void check(StepContext context) {

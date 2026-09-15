@@ -1,5 +1,8 @@
 # CFD lazy-source granularity check - 2026-09-14
 
+Historical measurements of allocation-on-miss sources, before full frame preallocation. See
+[PREALLOCATION_RESULTS.md](PREALLOCATION_RESULTS.md) for the subsequent same-brick comparison.
+
 Correctness: 281 CFD unit tests, 16 integration tests and two Python sweep tests passed, with no skips. Integration enabled the pinned OpenLB installation and VTK reader. All 36 small-sweep forks and both million-range forks verified complete fields against the matching FJP reference. External representative periodic-shear coverage passed; it is not direct OpenLB validation of every larger domain.
 
 Host: Intel(R) Core(TM) i9-14900K; Java 21.0.2. Affinity enabled. The small sweep used four physical workers and four Euhedral sources. The large check used all 23 available workers and sources. No core policy or physics changes were made.

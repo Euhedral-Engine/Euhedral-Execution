@@ -85,6 +85,13 @@ The geometry/reference and execution tracks branch after phase 04 and converge i
 
 ## Application interfaces
 
-The distribution provides `inspect`, `simulate`, `validate`, and `bench`. [BENCHMARKING.md](BENCHMARKING.md) describes validation-gated JMH comparisons. The stock `suites/normal.json` workload advances a 256-cubed periodic-shear domain for 1,000 timed steps per invocation; `smoke.json` is for harness checks. The normal suite uses 4-cubed bricks for Euhedral and 8-cubed bricks for FJP/static. Configuration and validation fixtures describe the physical problem; execution settings describe worker selection, brick shape, source count, and placement. Output includes resolved settings, reference-comparison reports, simulation fields, raw benchmark results, and per-fork summaries.
+The distribution provides `inspect`, `simulate`, `validate`, and
+`bench`. [BENCHMARKING.md](BENCHMARKING.md) describes validation-gated JMH comparisons. The stock
+`suites/normal.json` workload advances a 256-cubed periodic-shear domain for 1,000 timed steps per
+invocation; `smoke.json` is for harness checks. The normal suite uses the same 8-cubed bricks for
+Euhedral, FJP and static. Configuration and validation fixtures describe the physical problem;
+execution settings describe worker selection, brick shape, source count, and placement. Output
+includes resolved settings, reference-comparison reports, simulation fields, raw benchmark results,
+and per-fork summaries.
 
 A failed timestep retains the last completed state. Missing reference results, incompatible cases, failed numerical checks, and execution failures appear as distinct report states. The performance report ranks comparable, numerically verified runs.

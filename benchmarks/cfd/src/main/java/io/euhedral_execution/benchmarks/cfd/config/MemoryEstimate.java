@@ -34,12 +34,16 @@ public record MemoryEstimate(
                             (long) geometry.boxes().size(), geometry.spheres().size()),
                     Math.addExact(geometry.cylinders().size(), geometry.meshes().size()));
             auxiliary = Math.addExact(auxiliary, Math.multiplyExact(256L, primitives));
-            /// Per-range force slots plus pending/completed driver force storage, indexed by compact IDs.
+            /// Private frame and compact result force slots plus pending/completed driver force storage.
             auxiliary = Math.addExact(
                     auxiliary,
                     Math.multiplyExact(
                             Math.multiplyExact(24L, primitives),
-                            Math.addExact(grid.brickCount(config.execution().brick()), 2)));
+                            Math.addExact(
+                                    Math.multiplyExact(
+                                            2,
+                                            grid.brickCount(config.execution().brick())),
+                                    2)));
             auxiliary = Math.addExact(auxiliary, 1_048_576L);
             if (config.output().exportEverySteps() > 0) auxiliary = Math.addExact(auxiliary, 131_072L);
             long budget = config.memoryLimitBytes() == null ? defaultBudgetBytes : config.memoryLimitBytes();

@@ -3,8 +3,10 @@
 `bench` compares the Java execution backends with JMH. OpenLB supplies numerical evidence;
 its runtime is never a scheduler baseline. `normal.json` is the stock application workload:
 a **256 x 256 x 256 periodic-shear domain with 1,000 timed steps per invocation**. That is
-16,777,216 fluid cells and 16,777,216,000 cell updates per invocation. Euhedral uses 4-cubed
-bricks (262,144 ranges per timestep); FJP and static use 8-cubed bricks (32,768 ranges). `smoke.json` retains tiny periodic, obstacle, duct, and STL fixtures
+16,777,216 fluid cells and 16,777,216,000 cell updates per invocation. All three backends use
+8-cubed
+bricks (32,768 logical ranges per timestep). `smoke.json` retains tiny periodic, obstacle, duct, and
+STL fixtures
 for checking the harness. Neither preset changes production scheduling defaults.
 
 ```bash
@@ -29,8 +31,8 @@ uses
 two independent forks, one warmup iteration and two measured iterations. JMH's one-second
 iteration setting is a minimum duration, not a limit on a simulation: an invocation always
 finishes its 1,000 steps. The first checked warmup qualifies each fork; there is no extra preflight simulation.
-With one invocation per iteration, the suite runs the large simulation 20 times:
-two parallel FJP references (one per distinct brick shape) plus 18 warmup/measurement runs.
+With one invocation per iteration, the suite runs the large simulation 19 times:
+one parallel FJP reference plus 18 warmup/measurement runs.
 This is a sustained application comparison, and the complete suite can be a long campaign;
 its wall time depends on the machine. The seven-day deadline bounds each child process tree,
 not the whole suite. The replacement preset has been checked on bounded domains; its full-size
@@ -39,14 +41,14 @@ campaign has not been executed.
 The configuration estimates roughly 4.83 GiB for population arrays, geometry and retained ranges;
 the two population buffers alone use 4.75 GiB. Forks use `-Xms1g -Xmx12g`, and the simulation's
 allocation budget is 8 GiB. Use a machine with at least 16 GiB of available RAM and additional
-headroom for other processes. Each streamed reference is approximately 3.125 GiB. Two brick
-shapes require two references, reused across matching variants and all their forks; allow at least
-8 GiB of free output space for the references and two final Euhedral snapshots,
+headroom for other processes. Each streamed reference is approximately 3.125 GiB. The shared brick
+shape requires one reference, reused across all variants and forks; allow at least
+5 GiB of free output space for the references and two final Euhedral snapshots,
 in addition to validation artifacts and logs. Config inspection computes these sizes without allocating the population arrays.
 
 Parallel variants use all available physical worker cores after reserving the driver core;
-`workers`/`cpus` can cap this explicitly. Affinity requests are enabled. The selected 4-cubed and
-8-cubed shapes come from the bounded sweep; their full-domain optimum is not established. Every
+`workers`/`cpus` can cap this explicitly. Affinity requests are enabled. The common 8-cubed
+shape defines the primary comparison; the full-domain optimum is not established. Every
 variant uses final-only diagnostic scans, the same reset policy and the same cell/timestep work. Small heap
 settings from smoke runs are unsuitable for the stock domain.
 
@@ -96,8 +98,8 @@ case/artifact identity; every JMH fork requires matching completed evidence befo
 The full reference remains outside timing, with no second population grid retained in the benchmark
 JVM. Same-kernel equivalence alone does not establish external accuracy at a new size or duration.
 
-The stock order is bounded OpenLB validation, the full FJP reference with 4-cubed bricks, the two
-Euhedral forks, the full FJP reference with 8-cubed bricks, then two forks each of FJP and static. Static workers are persistent Java
+The stock order is bounded OpenLB validation, one full FJP reference with 8-cubed bricks, then two
+forks each of Euhedral, FJP and static. Static workers are persistent Java
 threads with fixed contiguous range
 assignments and a barrier each timestep; there is no task queue or work stealing. Progress output
 announces reference preparation, each fork, worker/source counts, completion and process-log paths.
@@ -210,13 +212,19 @@ the platform's placement support, not proof of exact placement.
 
 The supplied presets use only `euhedral-workers`, with one source per effective worker.
 Custom suites may still select other positive source counts as separate variants.
-Persistent sources expose disjoint ordinal streams lazily. Source creation and registration happen
-during setup; frame acquisition, creation on recycler misses, replacement, execution, completion,
-and deterministic numeric reduction are timed. Sources are never assigned to workers or shuffled by
-CFD. Each source retains an 8,192-entry `FrameManager` recycler; this does not limit logical ranges
-or creation when the recycler is empty. Runtime demand can still cause a large live-frame backlog
-and recycler overflow; the retained-storage estimate is not a hard bound on live frames. Source
-variants remain separate scores.
+Persistent sources expose disjoint ordinal streams lazily. After the plan is known, setup allocates
+one reusable physical frame per logical range, including incoming/force scratch, and seeds each
+source's `FrameManager`. Its power-of-two queue includes the reserved slot and can retain that
+source's entire working set. Source creation, preallocation and registration are outside timing.
+Range assignment, acquisition, replacement, execution, completion and deterministic reduction are
+timed. A recycler miss fails the invocation; no frame allocation fallback exists. Completion
+acknowledgment follows result publication and recycler enqueue, so each new generation starts
+with every frame returned. Sources are never assigned to workers or shuffled by CFD.
+
+`trial.json` reports `framesPreallocated`, `framesCreatedDuringExecution`, and `recyclerMisses`
+for every backend. The latter two must remain zero, including warmup and physical pre-steps.
+FJP/static retain their frame arrays and execution structures. Their preallocated count excludes
+solid-only ranges; Euhedral reserves the full logical count and skips solids lazily.
 
 ## Granularity sweep
 
@@ -226,6 +234,8 @@ output directory, preserves all fork evidence, and reuses the first external val
 later sizes. Full-field backend references remain specific to each partition's reduction order.
 The standard suite contains Euhedral with sources equal to workers, FJP, and static workers.
 The sweep overrides every variant's brick so all backends use the requested shape in each sweep cell.
+The normal suite has no backend-specific overrides. Custom mixed-brick reports must be labeled
+"best configuration" comparisons, separate from same-partition scheduler comparisons.
 
 ```bash
 # Bounded smoke comparison: 32^3 cells, five steps, two forks per size/backend.
@@ -246,11 +256,16 @@ The script requires Python 3 and an assembled distribution; it never builds the 
 
 `sweep.csv` and `sweep.json` retain brick size, logical ranges per step, effective sources/workers,
 JMH invocation and timestep duration, MLUPS, fork variance/CV, and separately labeled suite process
-time. Raw per-fork GC/allocation metrics and Euhedral frame creation counts remain in JSON. JMH's
+time. Raw per-fork GC/allocation metrics and preallocation/miss counters remain in JSON. JMH's
 GC profiler observes invocation fixtures too, including reset and full-field validation; its byte
 counts are not kernel-only allocation. Final VTI export remains outside scored timing and is reported
-separately. Intermediate full-grid diagnostics remain disabled. CPU utilization and P/E tail behavior
-are not instrumented by this sweep; a small smoke run cannot establish heterogeneous-core scaling.
+separately. Intermediate full-grid diagnostics remain disabled. CPU utilization is process CPU time
+divided by numerical invocation wall time and worker count,
+reported as a percentage for measured invocations only. Counters are sampled at invocation fixture
+boundaries, outside the JMH method. They include driver, monitor and GC CPU, can exceed 100%, and
+exclude reset, validation and export. Unsupported process CPU counters are reported as unavailable.
+Per-core P/E utilization and tail behavior are not instrumented; utilization alone cannot identify
+scheduler, locality or bandwidth bottlenecks.
 
 ## Artifacts and interpretation
 
@@ -280,8 +295,9 @@ inspection. Short integration runs verify the harness and do not establish a thr
 See [SIMULATION.md](SIMULATION.md) for source ownership, completion publication and deterministic
 reductions.
 
-The bounded smoke measurements and million-range allocation observations are in
-[GRANULARITY_RESULTS.md](GRANULARITY_RESULTS.md).
+The historical allocation-on-miss measurements are in
+[GRANULARITY_RESULTS.md](GRANULARITY_RESULTS.md). The matched preallocation comparison and
+separate diagnostic profile are in [PREALLOCATION_RESULTS.md](PREALLOCATION_RESULTS.md).
 
 Sweep preparation/report regression tests run without Java or OpenLB:
 

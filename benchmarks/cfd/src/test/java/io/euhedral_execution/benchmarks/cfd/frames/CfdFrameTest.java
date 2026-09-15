@@ -122,6 +122,42 @@ class CfdFrameTest {
     }
 
     @Test
+    void generationAcknowledgmentFollowsRecyclingAndAllowsImmediateReuse() throws Exception {
+        var manager = new FrameManager<StepContext, CfdRangeFrame>(1, 0);
+        var frame = new CfdRangeFrame(1, manager);
+        var fields = fields();
+        var context = context(fields, fields.current(), fields.next(), 1);
+        var acknowledgments = new AtomicInteger();
+        frame.completion(new CfdRangeFrame.Completion() {
+            @Override
+            public boolean isAlive() {
+                return true;
+            }
+
+            @Override
+            public void complete(CfdRangeFrame completed, RuntimeException failure) {
+                assertSame(frame, completed);
+                assertNull(failure);
+                assertNull(manager.get(0), "result publication must precede recycling");
+            }
+
+            @Override
+            public void recycled() {
+                assertSame(frame, manager.get(0), "generation acknowledgment must follow enqueue");
+                replaceWhole(frame, context);
+                acknowledgments.incrementAndGet();
+            }
+        });
+        replaceWhole(frame, context);
+        for (int i = 0; i < 100; i++) {
+            frame.execute();
+            frame.doFinally();
+            assertEquals(CfdFrame.Status.READY, frame.status());
+        }
+        assertEquals(100, acknowledgments.get());
+    }
+
+    @Test
     void rangePublishesCompletionOnlyFromItsTerminalHook() throws Exception {
         var state = fields();
         var frame = new CfdRangeFrame(1, null);

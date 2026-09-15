@@ -161,8 +161,12 @@ public abstract class CfdFrame extends AbstractFrame {
         try {
             completed(terminal, failure);
         } finally {
-            recycle();
+            recycleCompleted();
         }
+    }
+
+    protected void recycleCompleted() {
+        recycle();
     }
 
     /// Called once by the completion producer before recycling; implementations must not throw.

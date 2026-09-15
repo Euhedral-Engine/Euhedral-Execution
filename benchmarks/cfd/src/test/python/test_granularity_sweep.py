@@ -50,7 +50,7 @@ for n in range(2):
     fork = case / str(n)
     fork.mkdir()
     (fork / "jmh.json").write_text('[{"secondaryMetrics": {}}]')
-    (fork / "trial.json").write_text('{"framesCreated": 7}')
+    (fork / "trial.json").write_text('{"framesPreallocated": 32768, "framesCreatedDuringExecution": 0, "recyclerMisses": 0, "measuredProcessCpuNs": 100, "measuredNumericalWallNs": 200, "cpuUtilizationPercent": 50}')
     forks.append(dict(directory=str(fork), secondsPerInvocation=0.01, processElapsedNs=1000000000))
 report = dict(validationReport=str(run / "validation.json"), cases=[dict(directory=str(case), variants=[dict(
     backend="euhedral", status="UNSTABLE", resolvedSources=1, workers=1, meanSeconds=0.01,
@@ -69,7 +69,15 @@ raise SystemExit(4)
             self.assertIsNone(row["mlups"])
             self.assertEqual(0.002, row["timestepSeconds"])
             self.assertEqual(32768, row["logicalRanges"])
-            self.assertEqual([7, 7], [fork["framesCreated"] for fork in row["forks"]])
+            self.assertEqual([32768, 32768],
+                             [fork["framesPreallocated"] for fork in
+                              row["forks"]])
+            self.assertEqual([0, 0],
+                             [fork["framesCreatedDuringExecution"] for fork in
+                              row["forks"]])
+            self.assertEqual([0, 0],
+                             [fork["recyclerMisses"] for fork in row["forks"]])
+            self.assertEqual(50, row["cpuUtilizationPercent"])
 
 
 if __name__ == "__main__":

@@ -36,6 +36,9 @@ public class CfdBenchmark {
     private int warmupIteration, measurementIteration;
     private long setupNs, resetNs, comparisonNs, invocations, invocationStarted, endToEndNs;
     private boolean valid, pending;
+    private com.sun.management.OperatingSystemMXBean processCpu;
+    private long cpuStarted, numericalStarted, measuredCpuNs, measuredWallNs;
+    private boolean cpuAvailable;
 
     @Setup(Level.Trial)
     public void prepareTrial() throws Exception {
@@ -49,6 +52,10 @@ public class CfdBenchmark {
                 ValidationRunner.sha(Path.of(job.reference())).equals(job.referenceSha256()), "full reference changed");
         runtime = new BenchmarkRuntime(config, job.options(), job.budget());
         simulation = runtime.simulation();
+        if (ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean bean) {
+            processCpu = bean;
+            cpuAvailable = true;
+        }
         progress = new BenchmarkProgress(job);
         valid = true;
         setupNs = System.nanoTime() - started;
@@ -87,6 +94,8 @@ public class CfdBenchmark {
             progress.finish();
             progress.begin(iterationLabel + " invocation " + (++iterationInvocation), job.stepsPerInvocation());
             resetNs += System.nanoTime() - invocationStarted;
+            cpuStarted = processCpu == null ? -1 : processCpu.getProcessCpuTime();
+            numericalStarted = System.nanoTime();
         } catch (RuntimeException | Error error) {
             valid = false;
             throw error;
@@ -110,10 +119,22 @@ public class CfdBenchmark {
     @TearDown(Level.Invocation)
     public void checkInvocation() throws Exception {
         long started = System.nanoTime();
+        long cpuFinished = processCpu == null ? -1 : processCpu.getProcessCpuTime();
+        if (!warmingUp) {
+            measuredWallNs += started - numericalStarted;
+            if (cpuStarted < 0 || cpuFinished < cpuStarted) {
+                cpuAvailable = false;
+            } else {
+                measuredCpuNs += cpuFinished - cpuStarted;
+            }
+        }
         progress.finish();
         progress.begin("checking invocation fields", 0);
         try {
             runtime.checkWorkers(job.budget().workerCount());
+            BenchmarkSuite.require(
+                    runtime.framesCreatedDuringExecution() == 0 && runtime.recyclerMisses() == 0,
+                    "benchmark execution must reuse preallocated frames without recycler misses");
             BenchmarkSuite.require(
                     simulation.state().completedSteps() == job.preSteps() + job.stepsPerInvocation(),
                     "incomplete invocation");
@@ -190,7 +211,27 @@ public class CfdBenchmark {
                                         || job.options().backend().equals("serial")
                                 ? "LAZY_STRIDED_SOURCES"
                                 : "RETAINED_RANGES");
-                metadata.put("framesCreated", runtime == null ? null : runtime.framesCreated());
+                metadata.put("framesPreallocated", runtime == null ? null : runtime.framesPreallocated());
+                metadata.put(
+                        "framesCreatedDuringExecution",
+                        runtime == null ? null : runtime.framesCreatedDuringExecution());
+                metadata.put("recyclerMisses", runtime == null ? null : runtime.recyclerMisses());
+                metadata.put("frameCounterScope", "entire execution lifetime, including warmup and pre-steps");
+                metadata.put("measuredProcessCpuNs", cpuAvailable ? measuredCpuNs : null);
+                metadata.put("measuredNumericalWallNs", measuredWallNs);
+                metadata.put(
+                        "cpuUtilizationPercent",
+                        cpuAvailable && measuredWallNs > 0
+                                ? 100.0
+                                        * measuredCpuNs
+                                        / measuredWallNs
+                                        / job.budget().workerCount()
+                                : null);
+                metadata.put(
+                        "cpuUtilizationScope",
+                        "process CPU / numerical invocation wall time / worker budget; measurement only, includes"
+                                + " driver, GC and monitor CPU; excludes reset, validation and export; not per-core"
+                                + " utilization and may exceed 100 percent");
                 metadata.put(
                         "logicalRangesPerTimestep",
                         configuration == null

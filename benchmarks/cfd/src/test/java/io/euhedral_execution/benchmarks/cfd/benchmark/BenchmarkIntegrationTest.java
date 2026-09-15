@@ -111,6 +111,20 @@ class BenchmarkIntegrationTest {
                 assertTrue(trial.path("backendEquivalenceVerified").asBoolean());
                 assertTrue(trial.path("checkedInvocations").asLong() >= 2);
                 assertTrue(trial.path("checkedWarmupInvocations").asLong() > 0);
+                assertTrue(trial.path("framesPreallocated").asLong() > 0);
+                assertTrue(trial.has("framesCreatedDuringExecution"));
+                assertEquals(0, trial.path("framesCreatedDuringExecution").asLong());
+                assertTrue(trial.has("recyclerMisses"));
+                assertEquals(0, trial.path("recyclerMisses").asLong());
+                assertTrue(trial.path("measuredNumericalWallNs").asLong() > 0);
+                if (trial.hasNonNull("measuredProcessCpuNs")) {
+                    assertEquals(
+                            100.0
+                                    * trial.path("measuredProcessCpuNs").asLong()
+                                    / trial.path("measuredNumericalWallNs").asLong()
+                                    / variant.workers(),
+                            trial.path("cpuUtilizationPercent").asDouble());
+                }
                 var configuration = io.euhedral_execution.benchmarks.cfd.config.ConfigLoader.load(
                         Path.of(trial.path("job").path("configuration").asText()));
                 assertEquals(0, configuration.config().execution().diagnosticsEverySteps());

@@ -11,6 +11,17 @@ public interface ExecutionBackend extends AutoCloseable {
 
     void cancel();
 
+    long framesPreallocated();
+
+    /// Retained backends never construct frames after prepare.
+    default long framesCreatedDuringExecution() {
+        return 0;
+    }
+
+    default long recyclerMisses() {
+        return 0;
+    }
+
     @Override
     void close();
 }

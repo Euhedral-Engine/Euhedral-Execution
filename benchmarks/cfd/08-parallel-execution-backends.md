@@ -41,7 +41,9 @@ The driver publishes the context once per generation. Source `i` lazily claims o
 No source is assigned to a worker; Euhedral owns acquisition, randomization and work distribution.
 
 Source-local cursors and recycler consumption are plain under serialized source handles. Completion
-producers publish disjoint compact results and source completion counters before recycling frames.
+producers publish disjoint compact results, recycle frames, then acknowledge source completion.
+Setup preallocates every source's full generation working set, with reusable numerical scratch.
+Logical assignments remain lazy; recycler misses fail instead of allocating frames.
 The driver combines results in ordinal order at the generation barrier. Cancellation freezes
 publication and waits for source calls and issued frames. See [SIMULATION.md](SIMULATION.md) for
 the ownership and memory publication contract.
@@ -93,7 +95,8 @@ timesteps, frame recycling, shutdown, and close/recreate behavior. Live lattice 
 FIFO execution, mixed-hash parallel execution, source count `1`, source count `workers`, and other
 explicit positive counts.
 
-Dispatch checks verify lazy creation, ordinal coverage, frame recycling across generations,
+Dispatch checks verify setup preallocation, lazy assignment, ordinal coverage, frame recycling
+across generations,
 partial bricks, and deadline cancellation before any work has been pulled. Config
 validation rejects zero and negative source counts. Source-count variants must produce equivalent
 complete fields. Coordination tests use deterministic synchronization. External physical correctness

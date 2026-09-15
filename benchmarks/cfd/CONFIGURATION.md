@@ -231,11 +231,14 @@ population allocation.
 
 Estimated auxiliary storage reserves `5*N` bytes for cell classification and obstacle labels (the
 current mask combines these in one `int[N]` array, omitted for domains without primitives or open faces),
-`256*brickCount` bytes for descriptors/scratch/reductions, 256 bytes per primitive,
-`24*primitiveCount*(brickCount+2)` for private, pending, and completed force vectors, and 1 MiB for
+`40*brickCount` bytes for compact reduction slots, 256 bytes per primitive,
+`24*primitiveCount*(2*brickCount+2)` for private, pending, and completed force vectors, and 1 MiB
+for
 array/JVM overhead. Enabled field export reserves 128 KiB for streaming VTI output and PVD copying. STL preprocessing adds the budget described in [STL.md](STL.md). These allowances are
 estimates and must evolve with later geometry and execution features. They are not measurements
-of a running solver's retained heap.
+of a running solver's retained heap. Backend memory checks additionally reserve every physical
+frame and retained execution structure. Euhedral includes the complete source frame pools plus
+power-of-two recycler and consumer-buffer reference arrays; it has no fixed 8,192-frame cap.
 
 The default budget is half of currently available JVM heap:
 `(maxHeap - usedHeap)/2` from a consistent JVM heap snapshot, with a minimum of one byte. Only this

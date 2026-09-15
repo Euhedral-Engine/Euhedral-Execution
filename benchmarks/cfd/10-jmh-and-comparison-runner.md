@@ -35,15 +35,16 @@ policy, and source revision.
 
 The presets select one Euhedral source per effective worker. Custom variants can select other
 positive counts. Every variant uses the same numerical kernel, cell/timestep work, worker budget,
-diagnostic settings and measurement boundaries. The normal suite selects 4-cubed bricks for
-Euhedral and 8-cubed bricks for FJP/static through per-variant `brick` overrides. Each distinct
+diagnostic settings and measurement boundaries. The normal suite selects the same 8-cubed bricks for
+Euhedral, FJP and static, without per-variant overrides. Each distinct
 partition has one full correctness reference, shared across its variants and forks. Fixed-granularity
 sweeps override these settings uniformly across backends. Reports retain source count and brick
 shape as explicit dimensions.
 
 Persistent sources lazily materialize ordinal ranges as defined in Phase 08. Frame acquisition and
-execution are included in the measured interval; source creation and registration occur
-during setup. Euhedral manages worker source order and internal distribution.
+execution are included in the measured interval; source creation, full frame/scratch preallocation
+and registration occur during setup. Recycler misses fail without allocating. Euhedral manages
+worker source order and internal distribution.
 
 ## Results
 
