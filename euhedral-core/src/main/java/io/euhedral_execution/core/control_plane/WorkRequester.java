@@ -11,8 +11,8 @@ public abstract class WorkRequester extends ControlPlaneCache {
     private final long safetyFactor;
     private final long pullMultiplier;
 
-    protected WorkRequester(@NonNull CacheConfig cacheConfig) {
-        super(cacheConfig);
+    protected WorkRequester(@NonNull CacheConfig cacheConfig, boolean smtEnabled) {
+        super(cacheConfig, smtEnabled);
 
         if (super.getLocalCache() == null) {
             this.safetyFactor = 0;

@@ -4,6 +4,7 @@ import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
+import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
@@ -13,7 +14,6 @@ import io.euhedral_execution.core.metrics.ExecutionMetrics;
 import io.euhedral_execution.core.utils.FlowRecorder;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.MathFunctions;
-import io.euhedral_execution.core.utils.MicroCalibrator;
 import io.euhedral_execution.core.utils.StopWatch;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -24,6 +24,7 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapsho
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CpuSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.util.BitSet;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -59,6 +60,14 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
     }
 
+    private static int getPrimaryCpu(FragmentConfig config) {
+        Objects.requireNonNull(config);
+        if (config.cloneConfig() != null) {
+            return config.cloneConfig().effectiveCpus().nextSetBit(0);
+        }
+        return -1;
+    }
+
     public final int socket;
     public final int core;
     public final int cpu;
@@ -81,8 +90,10 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final PinnedThreadExecutor mainExecutor;
     private final CycleState state;
 
+    @Getter
+    private ControlPlaneFragment smtBuddy = null;
+
     private FragmentDecisionTree controlPolicy;
-    private long productivityThresholdNs;
 
     private UpstreamQueue upstreamQueue;
     boolean drainMode = false;
@@ -97,19 +108,39 @@ public final class ControlPlaneFragment extends WorkRequester {
     private volatile boolean initialized;
 
     public ControlPlaneFragment(@NonNull FragmentConfig config) {
-        super(config.cacheConfig());
+        this(config, getPrimaryCpu(config));
+
+        if (config.smtEnabled()
+                && this.cpu > -1
+                && config.cloneConfig().effectiveCpus().cardinality() > 1) {
+            this.smtBuddy =
+                    new ControlPlaneFragment(config, config.cloneConfig().getCpuSet()[1]);
+
+            BitSet mappings = new BitSet(2);
+            mappings.set(0, 2);
+            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain), new LatticeEdge(super.drain)};
+            terminal[0].addDownstream(this.cacheTerminal);
+            terminal[1].addDownstream(this.smtBuddy.cacheTerminal);
+
+            setDrain(true);
+            super.setDownstreamMapping(mappings, terminal);
+            setDrain(false);
+        }
+    }
+
+    private ControlPlaneFragment(@NonNull FragmentConfig config, int cpu) {
+        super(config.cacheConfig(), config.smtEnabled());
         this.config = config;
         this.benchmarkMode = config.benchmarkMode();
+        this.cpu = cpu;
 
         if (config.cloneConfig() == null) {
             this.socket = -1;
             this.core = -1;
-            this.cpu = -1;
             this.observer = null;
             this.observeContentionStaleness = false;
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
             this.controlPolicy = null;
-            this.productivityThresholdNs = 0L;
             this.state = null;
             this.mainExecutor = null;
             this.isPCore = false;
@@ -120,9 +151,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             String name = config.cloneConfig().shardName() + "-Worker-"
                     + config.cloneConfig().coreId();
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
-
-            int[] cpus = config.cloneConfig().getCpuSet();
-            this.cpu = cpus[0];
 
             CpuInfo info = SystemInfo.getCpuInfo(this.cpu);
             this.socket = info.socket();
@@ -166,6 +194,14 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     @Override
+    public void firstTouch() {
+        if (this.smtBuddy != null) {
+            this.smtBuddy.firstTouch();
+        }
+        super.firstTouch();
+    }
+
+    @Override
     protected void accept(AbstractFrame frame) {
         this.metrics.addInProgress(1);
         try {
@@ -182,12 +218,12 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public boolean isStarted() {
-        return this.running.getAcquire();
+        return this.running.getAcquire() && (this.smtBuddy == null || this.smtBuddy.isStarted());
     }
 
     @Override
     public boolean ready() {
-        return this.running.getAcquire() && this.initialized;
+        return this.running.getAcquire() && this.initialized && (this.smtBuddy == null || this.smtBuddy.ready());
     }
 
     @Override
@@ -200,6 +236,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (this.running.compareAndSet(false, true)) {
             if (this.mainExecutor.isShutdown()) {
                 this.mainExecutor.start(this.logger.getName(), Thread.MAX_PRIORITY, false);
+            }
+            if (this.smtBuddy != null) {
+                this.smtBuddy.start();
             }
 
             this.mainExecutor.execute(() -> {
@@ -222,7 +261,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                         resolveForcedActiveParticipantCount(),
                         this.config.cacheTimingConfig(),
                         resolveParticipationPolicyEnabled());
-                this.productivityThresholdNs = resolveProductivityThresholdNs();
 
                 try {
                     cycle();
@@ -522,30 +560,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         return cap;
     }
 
-    private long resolveProductivityThresholdNs() {
-        String gateMode = System.getProperty(FragmentControlConfig.PRODUCTIVITY_GATE_MODE);
-        if (gateMode != null && !gateMode.isBlank()) {
-            if (!this.config.benchmarkMode()) {
-                throw new IllegalStateException("Forced productivity gate mode is only valid in benchmark mode");
-            }
-            return switch (gateMode) {
-                case "FORCE_OFF" -> 0L;
-                case "FORCE_ON" -> Long.MAX_VALUE;
-                default -> throw new IllegalArgumentException("Unknown productivity gate mode: " + gateMode);
-            };
-        }
-        String configuredWeight = System.getProperty(FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT);
-        int weight = configuredWeight == null || configuredWeight.isBlank()
-                ? FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT
-                : Integer.parseInt(configuredWeight);
-        if (weight <= 0) {
-            return 0L;
-        }
-        MicroCalibrator calibrator = new MicroCalibrator();
-        calibrator.warmup();
-        return calibrator.benchmark(weight);
-    }
-
     private boolean resolveParticipationPolicyEnabled() {
         String configuredMode = System.getProperty(FragmentControlConfig.PARTICIPATION_POLICY_MODE, "POLICY_ON");
         return resolveParticipationPolicyEnabled(this.config.benchmarkMode(), configuredMode);
@@ -584,42 +598,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         return count;
     }
 
-    private boolean productivityParkRequired() {
-        if (this.productivityThresholdNs <= 0L
-                || !this.controlPolicy.hasBodyCostHistory()
-                || this.state.upstreamCount <= 0L
-                || this.state.registeredWorkers <= 1
-                || this.state.workerRank <= 0
-                || this.controlPolicy.smoothedBodyCostNs() > this.productivityThresholdNs) {
-            return false;
-        }
-        return productivityParkRequired(
-                this.productivityThresholdNs,
-                this.controlPolicy.smoothedBodyCostNs(),
-                true,
-                this.state.upstreamCount,
-                this.state.registeredWorkers,
-                this.state.workerRank,
-                this.upstreamQueue.getProductiveHandleCount());
-    }
-
-    static boolean productivityParkRequired(
-            long thresholdNs,
-            double bodyCostNs,
-            boolean hasBodyCostHistory,
-            long upstreamHandles,
-            int registeredWorkers,
-            int workerRank,
-            long productiveHandles) {
-        return thresholdNs > 0L
-                && hasBodyCostHistory
-                && upstreamHandles > 0L
-                && registeredWorkers > 1
-                && workerRank > 0
-                && workerRank > productiveHandles
-                && bodyCostNs <= thresholdNs;
-    }
-
     long getAdaptiveBatchCap() {
         return (long) ADAPTIVE_BATCH_CAP.getOpaque(this);
     }
@@ -629,11 +607,14 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (snapshot == null || snapshot.cpuSnapshots() == null) {
             return;
         }
-        int cpuId = this.cpu;
-        if (cpuId < 0 || cpuId >= snapshot.cpuSnapshots().length) {
+        if (this.smtBuddy != null) {
+            this.smtBuddy.update(snapshot);
+        }
+
+        if (this.cpu < 0 || this.cpu >= snapshot.cpuSnapshots().length) {
             return;
         }
-        CpuSnapshot cpuSnap = snapshot.cpuSnapshots()[cpuId];
+        CpuSnapshot cpuSnap = snapshot.cpuSnapshots()[this.cpu];
         if (cpuSnap == null) {
             return;
         }
@@ -703,12 +684,12 @@ public final class ControlPlaneFragment extends WorkRequester {
     @Override
     public long reset(long deadlineNanos) {
         if (this.state == null) {
-            return 0;
+            return (this.smtBuddy == null ? 0 : this.smtBuddy.reset(deadlineNanos));
         }
         if (!this.running.getAcquire()) {
             long cleared = super.clearLocalCacheOnOwnerThread();
             this.state.reset();
-            return cleared;
+            return cleared + (this.smtBuddy == null ? 0 : this.smtBuddy.reset(deadlineNanos));
         }
 
         long request = this.resetRequested.incrementAndGet();
@@ -724,7 +705,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (this.resetCompleted.getAcquire() < request) {
             throw new IllegalStateException("Timed out resetting fragment cache on core " + this.core);
         }
-        return this.resetCleared.getAcquire();
+        return this.resetCleared.getAcquire() + (this.smtBuddy == null ? 0 : this.smtBuddy.reset(deadlineNanos));
     }
 
     @Override
@@ -734,13 +715,18 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public boolean isDrained() {
-        return super.isDrained() && this.metrics.getInProgress() == 0;
+        return super.isDrained()
+                && this.metrics.getInProgress() == 0
+                && (this.smtBuddy == null || this.smtBuddy.isDrained());
     }
 
     @Override
     public void setDrainMode(boolean value) {
         DRAIN.setRelease(this, value);
         super.setDrainMode(value);
+        if (this.smtBuddy != null) {
+            this.smtBuddy.setDrainMode(value);
+        }
     }
 
     @Override
@@ -762,12 +748,18 @@ public final class ControlPlaneFragment extends WorkRequester {
         }
         super.close();
         this.logger.debug("Closed");
+        if (this.smtBuddy != null) {
+            this.smtBuddy.close();
+        }
     }
 
     @Override
     public void dumpLocks() {
         if (this.mainExecutor != null) {
             this.mainExecutor.close();
+        }
+        if (this.smtBuddy != null) {
+            this.smtBuddy.dumpLocks();
         }
     }
 

@@ -63,7 +63,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     private final PaddedAtomicLongArray pLocks;
 
     private final int chunkSize;
-    private final CacheTerminal cacheTerminal;
+    final CacheTerminal cacheTerminal;
 
     @Getter
     private final long frameQuota;
@@ -72,8 +72,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     double capFactor = 1.0;
     long totalCount = 0L;
 
-    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
-        super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
+    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig, boolean smtEnabled) {
+        super(
+                getName(cacheConfig),
+                smtEnabled ? 2 : 1,
+                smtEnabled ? (frame, mapSize) -> (int) frame.getRoutingHash() & 1 : (frame, mapSize) -> 0,
+                0,
+                RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitions();
@@ -93,7 +98,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         } else {
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
-            this.chunkSize = getChunkSize(cacheConfig, partitions);
+            this.chunkSize = getChunkSize(cacheConfig, partitions, smtEnabled);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.core = cacheConfig.getCore();
             this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
@@ -102,9 +107,16 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
             this.pLocks = cacheConfig.workSteal() ? new PaddedAtomicLongArray(partitions, true, false) : null;
 
-            BitSet mappings = new BitSet(1);
-            mappings.set(0);
-            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+            BitSet mappings = new BitSet(smtEnabled ? 2 : 1);
+            mappings.set(0, smtEnabled ? 2 : 1);
+            LatticeEdge[] terminal;
+            if (smtEnabled) {
+                terminal = new LatticeEdge[] {new LatticeEdge(super.drain), new LatticeEdge(super.drain)};
+                terminal[1].addDownstream(this.cacheTerminal);
+            } else {
+                terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+            }
+
             terminal[0].addDownstream(this.cacheTerminal);
 
             setDrain(true);
@@ -127,7 +139,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 : "ControlPlaneCache";
     }
 
-    protected static int getChunkSize(CacheConfig config, int partitions) {
+    protected static int getChunkSize(CacheConfig config, int partitions, boolean smtEnabled) {
         CloneConfig cloneConfig = config.cloneConfig();
         if (cloneConfig == null) {
             return 512;
@@ -135,10 +147,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
         long l2 = layout.bytesL2();
-        if (layout.sharesL2() > 2) {
+        if (layout.sharesL2() > 2 || smtEnabled) {
             l2 /= layout.sharesL2();
         }
         long l1 = layout.bytesL1();
+        if (layout.sharesL1() > 2 || smtEnabled) {
+            l1 /= layout.sharesL1();
+        }
 
         double budget = config.memoryBudget();
         budget = clampDouble(budget, 0, 1.0);

@@ -61,7 +61,7 @@ class WorkRequesterTest {
 
         /// Creates a requester with a real owner-local cache and a mocked upstream queue.
         private TestRequester(CacheConfig config) {
-            super(config);
+            super(config, false);
         }
 
         /// Exposes one staged request/pull attempt to package-owned tests.

@@ -1,10 +1,9 @@
 package io.euhedral_execution.core.config;
 
-import java.util.Objects;
-
 import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.Objects;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 

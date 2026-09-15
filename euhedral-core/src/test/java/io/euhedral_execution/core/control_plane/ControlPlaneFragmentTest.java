@@ -27,7 +27,6 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
@@ -134,21 +133,6 @@ class ControlPlaneFragmentTest {
             assertTrue(fragment.isDrained());
             assertEquals(0, fragment.reset(System.nanoTime()));
         }
-    }
-
-    @Test
-    void productivityParkingDependsOnBodyCostAndSurplusWorkerEligibilityWithoutContention() {
-        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 3, 2L));
-        assertTrue(ControlPlaneFragment.productivityParkRequired(300L, 300.0, true, 2L, 4, 3, 2L));
-        assertTrue(ControlPlaneFragment.productivityParkRequired(Long.MAX_VALUE, 1_000_000.0, true, 2L, 4, 3, 2L));
-
-        assertFalse(ControlPlaneFragment.productivityParkRequired(0L, 0.0, true, 2L, 4, 3, 2L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, false, 2L, 4, 3, 2L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 0L, 4, 3, 2L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 1, 1, 0L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 0, 2L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 200.0, true, 2L, 4, 2, 2L));
-        assertFalse(ControlPlaneFragment.productivityParkRequired(300L, 301.0, true, 2L, 4, 3, 2L));
     }
 
     @Test
