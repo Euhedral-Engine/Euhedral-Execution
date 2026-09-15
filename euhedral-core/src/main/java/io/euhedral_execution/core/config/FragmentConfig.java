@@ -22,6 +22,7 @@ public record FragmentConfig(
         @NonNull FragmentDecisionWeights decisionWeights,
         @Nullable FragmentObserver observer,
         long maxBatchSize,
+        boolean smtEnabled,
         @NonNull CacheTimingConfig cacheTimingConfig,
         boolean benchmarkMode,
         @Nullable String metricPrefix,
@@ -49,6 +50,7 @@ public record FragmentConfig(
             @NonNull FragmentDecisionWeights decisionWeights,
             @Nullable FragmentObserver observer,
             long maxBatchSize,
+            boolean smtEnabled,
             long contentionHalfLifeNanos,
             boolean benchmarkMode,
             @Nullable String metricPrefix,
@@ -59,6 +61,7 @@ public record FragmentConfig(
                 decisionWeights,
                 observer,
                 maxBatchSize,
+                smtEnabled,
                 new CacheTimingConfig(CacheTimingConfig.DEFAULT_CACHE_PARK_NS, contentionHalfLifeNanos),
                 benchmarkMode,
                 metricPrefix,
@@ -80,6 +83,7 @@ public record FragmentConfig(
                 FragmentDecisionWeights.DEFAULT,
                 null,
                 4_096,
+                true,
                 CacheTimingConfig.DEFAULT,
                 false,
                 metricPrefix,
@@ -97,7 +101,16 @@ public record FragmentConfig(
             @NonNull CacheTimingConfig cacheTimingConfig) {
         Objects.requireNonNull(observer);
         return new FragmentConfig(
-                null, CacheConfig.ofDefaults(), decisionWeights, observer, 4_096, cacheTimingConfig, true, null, null);
+                null,
+                CacheConfig.ofDefaults(),
+                decisionWeights,
+                observer,
+                4_096,
+                true,
+                cacheTimingConfig,
+                true,
+                null,
+                null);
     }
 
     @Override
@@ -108,6 +121,7 @@ public record FragmentConfig(
                 this.decisionWeights,
                 this.observer,
                 this.maxBatchSize,
+                this.benchmarkMode,
                 this.cacheTimingConfig,
                 this.benchmarkMode,
                 this.metricPrefix,

@@ -11,6 +11,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
@@ -153,7 +154,8 @@ class ControlPlaneFragmentTest {
                 base.decisionWeights(),
                 base.observer(),
                 base.maxBatchSize(),
-                new io.euhedral_execution.core.config.CacheTimingConfig(15000, 1000000, null, true),
+                base.smtEnabled(),
+                new CacheTimingConfig(15000, 1000000, null, true),
                 base.benchmarkMode(),
                 base.metricPrefix(),
                 base.registry());

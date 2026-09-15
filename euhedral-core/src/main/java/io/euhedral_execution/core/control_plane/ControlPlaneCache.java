@@ -48,6 +48,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
     }
 
+    final CacheTerminal cacheTerminal;
     private final Logger logger;
     private final CacheConfig cacheConfig;
     private final CacheMetrics metrics;
@@ -57,7 +58,6 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     private final PartitionedMpscQueue<AbstractFrame> localCache;
 
     private final int chunkSize;
-    private final CacheTerminal cacheTerminal;
 
     @Getter
     private final long frameQuota;
@@ -66,8 +66,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     double capFactor = 1.0;
     long totalCount = 0L;
 
-    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
-        super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
+    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig, boolean smtMode) {
+        super(
+                getName(cacheConfig),
+                smtMode ? 2 : 1,
+                smtMode ? (frame, mapSize) -> (int) frame.getRoutingHash() & 1 : (frame, mapSize) -> 0,
+                0,
+                RoutingPolicy.CACHE_LOCAL);
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitions();
@@ -86,20 +91,22 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         } else {
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
-            this.chunkSize = getChunkSize(cacheConfig, partitions);
+            this.chunkSize = getChunkSize(cacheConfig, partitions, smtMode);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.core = cacheConfig.getCore();
             this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
 
-            BitSet mappings = new BitSet(1);
-            mappings.set(0);
-            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
-            terminal[0].addDownstream(this.cacheTerminal);
+            if (!smtMode) {
+                BitSet mappings = new BitSet(1);
+                mappings.set(0);
+                LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+                terminal[0].addDownstream(this.cacheTerminal);
 
-            setDrain(true);
-            super.setDownstreamMapping(mappings, terminal);
-            setDrain(false);
+                setDrain(true);
+                super.setDownstreamMapping(mappings, terminal);
+                setDrain(false);
+            }
 
             String chunkSize = NumberFormat.getNumberInstance().format(this.chunkSize);
             String cacheCapacity = NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize);
@@ -116,7 +123,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 : "ControlPlaneCache";
     }
 
-    protected static int getChunkSize(CacheConfig config, int partitions) {
+    protected static int getChunkSize(CacheConfig config, int partitions, boolean smtMode) {
         CloneConfig cloneConfig = config.cloneConfig();
         if (cloneConfig == null) {
             return 512;
@@ -124,10 +131,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
         long l2 = layout.bytesL2();
-        if (layout.sharesL2() > 2) {
+        if (layout.sharesL2() > 2 || smtMode) {
             l2 /= layout.sharesL2();
         }
         long l1 = layout.bytesL1();
+        if (layout.sharesL1() > 2 || smtMode) {
+            l1 /= layout.sharesL1();
+        }
 
         double budget = config.memoryBudget();
         budget = clampDouble(budget, 0, 1.0);

@@ -304,7 +304,7 @@ class ControlPlaneCacheTest {
     private static class CPCImpl extends ControlPlaneCache {
 
         public CPCImpl(@NonNull CacheConfig cacheConfig) {
-            super(cacheConfig);
+            super(cacheConfig, false);
         }
 
         @Override

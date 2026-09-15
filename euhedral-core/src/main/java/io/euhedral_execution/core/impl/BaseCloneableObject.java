@@ -63,13 +63,19 @@ public final class BaseCloneableObject implements CloneableObject {
         this.config = config;
         this.fragment = fragment;
         this.executor = executor;
+
+        this.executor.input(this.fragment.output());
+        if (this.fragment.getSmtBuddy() != null && config != null) {
+            this.executor
+                    .hookOnClone(config.getCpuSet()[1])
+                    .input(this.fragment.getSmtBuddy().output());
+        }
     }
 
     @Override
     public void start() {
         this.executor.start();
         this.fragment.start();
-        this.executor.input(this.fragment.output());
     }
 
     @Override
@@ -94,9 +100,6 @@ public final class BaseCloneableObject implements CloneableObject {
     public void update(CoreSnapshot snapshot) {
         if (this.fragment != null) {
             this.fragment.update(snapshot);
-        }
-        if (this.executor != null) {
-            this.executor.update(snapshot);
         }
     }
 
