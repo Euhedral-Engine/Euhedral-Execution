@@ -16,6 +16,7 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.CacheMetrics;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLongArray;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
@@ -26,6 +27,7 @@ import java.lang.invoke.VarHandle;
 import java.text.NumberFormat;
 import java.util.BitSet;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import lombok.AccessLevel;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
@@ -37,6 +39,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected static final VarHandle CAP_FACTOR;
     protected static final VarHandle PRIMED;
     protected static final VarHandle TOTAL_COUNT;
+
+    private static final ControlPlaneCache[] WORK_STEAL = new ControlPlaneCache[SystemInfo.getMaxCoreId() + 1];
 
     static {
         try {
@@ -55,6 +59,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> localCache;
+
+    private final PaddedAtomicLongArray pLocks;
 
     private final int chunkSize;
     private final CacheTerminal cacheTerminal;
@@ -83,6 +89,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.cacheTerminal = null;
             this.frameQuota = 0;
             this.core = -1;
+            this.pLocks = null;
         } else {
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
@@ -91,6 +98,9 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.core = cacheConfig.getCore();
             this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
+            WORK_STEAL[this.core] = this;
+
+            this.pLocks = cacheConfig.workSteal() ? new PaddedAtomicLongArray(partitions, true, false) : null;
 
             BitSet mappings = new BitSet(1);
             mappings.set(0);
@@ -105,6 +115,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             String cacheCapacity = NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize);
             this.logger.debug(
                     "Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions, chunkSize, cacheCapacity);
+            VarHandle.releaseFence();
         }
     }
 
@@ -168,6 +179,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     }
 
     public final long drain(Consumer<AbstractFrame> consumer, long limit) {
+        return drain(consumer, NO_STOP, limit);
+    }
+
+    public final long drain(
+            Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long limit) {
         if (limit <= 0) {
             return 0;
         }
@@ -175,16 +191,45 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         long total = 0;
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         if (initialCount > 0) {
-            total = this.localCache.drain(consumer, limit);
             long count = total;
-            while (total < limit && count > this.cacheConfig.ringWalkResetThreshold()) {
-                count = this.localCache.drain(consumer, limit - total);
-                total += count;
-            }
+            for (int i = 0; i < this.localCache.partitions(); i++) {
+                if (this.pLocks != null && !this.pLocks.compareAndSet(i, 0, 1)) {
+                    continue;
+                }
 
-            TOTAL_COUNT.getAndAdd(this, -total);
+                try {
+                    total = this.localCache.drain(i, consumer, stopCondition, limit);
+                    while (total < limit && count > this.cacheConfig.ringWalkResetThreshold()) {
+                        count = this.localCache.drain(i, consumer, stopCondition, limit - total);
+                        total += count;
+                    }
+
+                    TOTAL_COUNT.getAndAdd(this, -total);
+                } finally {
+                    if (this.pLocks != null) {
+                        this.pLocks.setRelease(i, 0);
+                    }
+                }
+            }
         }
 
+        return total;
+    }
+
+    protected final long workSteal(Consumer<AbstractFrame> consumer, long limit) {
+        if (!this.cacheConfig.workSteal()) {
+            return 0;
+        }
+
+        long total = 0;
+
+        BitSet cores = SystemInfo.getCoreSet();
+        for (int i = cores.nextSetBit(0); i >= 0 && total < limit; i = cores.nextSetBit(i + 1)) {
+            if (WORK_STEAL[i] == null) {
+                continue;
+            }
+            total += WORK_STEAL[i].drain(consumer, AbstractFrame::isOrdered, limit - total);
+        }
         return total;
     }
 

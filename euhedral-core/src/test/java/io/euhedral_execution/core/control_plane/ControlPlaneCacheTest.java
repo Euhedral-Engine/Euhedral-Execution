@@ -43,7 +43,7 @@ class ControlPlaneCacheTest {
     }
 
     private CacheConfig config() {
-        return new CacheConfig(cloneConfig(), 0.7, 1, 4, 64, null, null);
+        return new CacheConfig(cloneConfig(), 0.7, 1, 4, 64, false, null, null);
     }
 
     private ControlPlaneCache manager() {
@@ -182,16 +182,21 @@ class ControlPlaneCacheTest {
     @Test
     void testConstructorValidationAndNullCloneConfig() {
         // Partitions <= 0 throws IllegalArgumentException
-        assertThrows(IllegalArgumentException.class, () -> new CacheConfig(cloneConfig(), 0.7, 0, 4, 64, null, null));
+        assertThrows(
+                IllegalArgumentException.class, () -> new CacheConfig(cloneConfig(), 0.7, 0, 4, 64, false, null, null));
 
         // MemoryBudget <= 0 or non-finite throws IllegalArgumentException
-        assertThrows(IllegalArgumentException.class, () -> new CacheConfig(cloneConfig(), 0.0, 1, 4, 64, null, null));
-        assertThrows(IllegalArgumentException.class, () -> new CacheConfig(cloneConfig(), -0.5, 1, 4, 64, null, null));
         assertThrows(
-                IllegalArgumentException.class, () -> new CacheConfig(cloneConfig(), Double.NaN, 1, 4, 64, null, null));
+                IllegalArgumentException.class, () -> new CacheConfig(cloneConfig(), 0.0, 1, 4, 64, false, null, null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new CacheConfig(cloneConfig(), -0.5, 1, 4, 64, false, null, null));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new CacheConfig(cloneConfig(), Double.NaN, 1, 4, 64, false, null, null));
 
         // Null cloneConfig creates uninitialized lightweight cache
-        CacheConfig noCloneConfig = new CacheConfig(null, 0.7, 1, 4, 64, null, null);
+        CacheConfig noCloneConfig = new CacheConfig(null, 0.7, 1, 4, 64, false, null, null);
         CPCImpl noCloneCache = new CPCImpl(noCloneConfig);
 
         assertNull(noCloneCache.getLocalCache());
@@ -208,10 +213,10 @@ class ControlPlaneCacheTest {
         when(mockClone.shardName()).thenReturn("MainShard");
         when(mockClone.coreId()).thenReturn(3);
 
-        CacheConfig configWithClone = new CacheConfig(mockClone, 0.7, 1, 4, 64, null, null);
+        CacheConfig configWithClone = new CacheConfig(mockClone, 0.7, 1, 4, 64, false, null, null);
         assertEquals("MainShard-ControlPlaneCache-3", ControlPlaneCache.getName(configWithClone));
 
-        CacheConfig configWithoutClone = new CacheConfig(null, 0.7, 1, 4, 64, null, null);
+        CacheConfig configWithoutClone = new CacheConfig(null, 0.7, 1, 4, 64, false, null, null);
         assertEquals("ControlPlaneCache", ControlPlaneCache.getName(configWithoutClone));
     }
 

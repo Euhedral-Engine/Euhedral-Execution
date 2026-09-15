@@ -355,6 +355,17 @@ public final class ControlPlaneFragment extends WorkRequester {
                         }
                         this.state.nowNs = end;
                     }
+                    if (processed == 0) {
+                        long start = System.nanoTime();
+                        long count = super.workSteal(this.outputStream, limit);
+                        long end = System.nanoTime();
+                        if (count > 0L) {
+                            executionFrames += count;
+                            executionElapsedNs += end - start;
+                            processed += count;
+                        }
+                        this.state.nowNs = end;
+                    }
                 } else if (path == ExecutionPath.CACHE && processed <= 0L) {
                     idleCache(
                             this.config.cacheTimingConfig(),

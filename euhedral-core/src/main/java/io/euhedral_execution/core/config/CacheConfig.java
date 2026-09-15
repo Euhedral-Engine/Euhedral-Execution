@@ -24,6 +24,7 @@ public record CacheConfig(
         int partitions,
         int maxPooledChunks,
         int ringWalkResetThreshold,
+        boolean workSteal,
         @Nullable String metricPrefix,
         @Nullable MeterRegistry registry)
         implements CloneableObject {
@@ -43,13 +44,20 @@ public record CacheConfig(
     }
 
     public static CacheConfig ofDefaults(String metricPrefix, MeterRegistry registry) {
-        return new CacheConfig(null, 0.7, 8, 0, 4, metricPrefix, registry);
+        return new CacheConfig(null, 0.7, 8, 0, 4, true, metricPrefix, registry);
     }
 
     @Override
     public CacheConfig clone(CloneConfig cloneConfig) {
         return new CacheConfig(
-                cloneConfig, memoryBudget, partitions, maxPooledChunks, ringWalkResetThreshold, metricPrefix, registry);
+                cloneConfig,
+                memoryBudget,
+                partitions,
+                maxPooledChunks,
+                ringWalkResetThreshold,
+                workSteal,
+                metricPrefix,
+                registry);
     }
 
     @Override
