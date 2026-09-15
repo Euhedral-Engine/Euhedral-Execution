@@ -14,7 +14,7 @@ import io.euhedral_execution.hashing.HasherApi;
 import io.euhedral_execution.reactor.common.EuhedralSubscriber;
 import java.lang.invoke.VarHandle;
 import java.util.concurrent.TimeUnit;
-import org.jspecify.annotations.NonNull;
+import java.util.function.Function;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -31,9 +31,9 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 @SuppressWarnings("unchecked")
@@ -46,6 +46,7 @@ public class BatchedMandelbrotBenchmark {
     public static final int BATCH = 1024;
     public static final int ITERATION_CAP = 5_000;
     public static final double BAILOUT_RADIUS_SQ = 1_000_000.0;
+    private static final long EXPECTED_OPERATIONS = (long) CANVAS * 4;
     private static final Logger LOGGER = LoggerFactory.getLogger(BatchedMandelbrotBenchmark.class);
     private static final long SEED = HasherApi.BASE_SEED;
     private static final double CENTER_X = -0.743_644_786_0;
@@ -68,32 +69,7 @@ public class BatchedMandelbrotBenchmark {
     }
 
     private static void waitOnRender(PaddedLongAdder counters) {
-        long sum = 0;
-        int spin = 0;
-        long log = System.nanoTime();
-        long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(5);
-
-        long now;
-        while ((now = System.nanoTime()) < deadline) {
-            if ((spin++ & 31) == 0) {
-                sum = counters.sum();
-                if (sum >= CANVAS * 4) {
-                    break;
-                }
-                if (now - log >= TimeUnit.SECONDS.toNanos(3)) {
-                    LOGGER.info("Progress: {}", sum);
-                    log = now;
-                }
-            }
-            if ((spin & 127) == 0) {
-                Thread.yield();
-            } else {
-                Thread.onSpinWait();
-            }
-        }
-        if (sum < CANVAS) {
-            throw new RuntimeException("Stall detected. Pending: " + (CANVAS - sum));
-        }
+        MandelbrotCompletion.await(counters, EXPECTED_OPERATIONS, TimeUnit.MINUTES.toNanos(5), LOGGER);
     }
 
     @BenchmarkMode({Mode.AverageTime})
@@ -108,19 +84,29 @@ public class BatchedMandelbrotBenchmark {
         private final int[] escapes = new int[CANVAS * 4];
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), false, true);
-        private Mono<BenchArrayFrame>[] monos;
-        private BaseSubscriber<BenchArrayFrame> subscriber;
+        private final ThreadLocal<Integer> counterSlot = ThreadLocal.withInitial(
+                () -> counters.fromRawIdx(Thread.currentThread().threadId()));
+        private BenchArrayFrame[] frames;
+        private Mono<Void> parallelFluxPipeline;
+        private Mono<Void> boundedElasticPipeline;
 
-        private void makeSub(Blackhole blackhole) {
-            this.subscriber = new BaseSubscriber<>() {
-                @Override
-                protected void hookOnNext(@NonNull BenchArrayFrame frame) {
-                    frame.execute();
-                    frame.cpu = counters.fromRawIdx(Thread.currentThread().threadId());
-                    frame.doFinally();
-                    blackhole.consume(frame);
-                }
-            };
+        private void execute(BenchArrayFrame frame, Blackhole blackhole) {
+            frame.execute();
+            frame.cpu = this.counterSlot.get();
+            frame.doFinally();
+            blackhole.consume(frame);
+        }
+
+        private Mono<Void> scheduledTasks(Blackhole blackhole, Scheduler scheduler) {
+            Mono<Void>[] tasks = new Mono[this.frames.length];
+            for (int i = 0; i < this.frames.length; i++) {
+                BenchArrayFrame frame = this.frames[i];
+                tasks[i] =
+                        Mono.<Void>fromRunnable(() -> execute(frame, blackhole)).subscribeOn(scheduler);
+            }
+            return Flux.fromArray(tasks)
+                    .flatMap(Function.identity(), Runtime.getRuntime().availableProcessors())
+                    .then();
         }
 
         @Setup(Level.Trial)
@@ -146,39 +132,37 @@ public class BatchedMandelbrotBenchmark {
                     pixels);
             shuffle(pixels);
 
-            MandelbrotPixel[][] pixelArray = new MandelbrotPixel[CANVAS / BATCH + (CANVAS % BATCH > 0 ? 1 : 0)][];
-            BenchArrayFrame[] frames = new BenchArrayFrame[pixelArray.length];
-            this.monos = new Mono[pixelArray.length];
+            int frameCount = CANVAS / BATCH + (CANVAS % BATCH > 0 ? 1 : 0);
+            this.frames = new BenchArrayFrame[frameCount];
 
             int idx = 0;
             int total = CANVAS;
             while (total > 0) {
                 AbstractFrame[] set = new AbstractFrame[Math.min(BATCH, total)];
                 System.arraycopy(pixels, idx * BATCH, set, 0, set.length);
-                frames[idx] = new BenchArrayFrame(pixels[0].getIdHash(), set, this.counters);
-                this.monos[idx] = Mono.just(frames[idx]);
+                this.frames[idx] = new BenchArrayFrame(pixels[0].getIdHash(), set, this.counters);
                 total -= Math.min(BATCH, total);
                 idx++;
             }
-            makeSub(blackhole);
+            int parallelism = Runtime.getRuntime().availableProcessors();
+            this.boundedElasticPipeline = scheduledTasks(blackhole, Schedulers.boundedElastic());
+            this.parallelFluxPipeline = Flux.fromArray(this.frames)
+                    .parallel(parallelism)
+                    .runOn(Schedulers.parallel())
+                    .doOnNext(frame -> execute(frame, blackhole))
+                    .then();
         }
 
         @Setup(Level.Invocation)
-        public void setupInvocation(Blackhole blackhole) {
+        public void setupInvocation() {
             this.counters.reset();
-            makeSub(blackhole);
         }
 
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersParallel(Blackhole blackhole) {
-            Flux.fromArray(this.monos)
-                    .flatMap(
-                            m -> m.subscribeOn(Schedulers.parallel()),
-                            Runtime.getRuntime().availableProcessors())
-                    .subscribe(this.subscriber);
-
-            waitOnRender(this.counters);
+            this.parallelFluxPipeline.block();
+            MandelbrotCompletion.verify(this.counters, EXPECTED_OPERATIONS);
             blackhole.consume(this.escapes);
             blackhole.consume(this.magnitudes);
         }
@@ -186,13 +170,8 @@ public class BatchedMandelbrotBenchmark {
         @Benchmark
         @OperationsPerInvocation(CANVAS * 4)
         public void renderSchedulersBoundedElastic(Blackhole blackhole) {
-            Flux.fromArray(this.monos)
-                    .flatMap(
-                            m -> m.subscribeOn(Schedulers.boundedElastic()),
-                            Runtime.getRuntime().availableProcessors())
-                    .subscribe(this.subscriber);
-
-            waitOnRender(this.counters);
+            this.boundedElasticPipeline.block();
+            MandelbrotCompletion.verify(this.counters, EXPECTED_OPERATIONS);
             blackhole.consume(this.escapes);
             blackhole.consume(this.magnitudes);
         }
