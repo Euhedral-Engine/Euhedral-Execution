@@ -2,7 +2,6 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -463,30 +462,5 @@ class FragmentDecisionTreeTest {
         assertEquals(
                 ParticipationLogisticModel.shouldIdle(2, 1L, 7, tree.smoothedBodyCostNs(), 0.431857),
                 tree.shouldIdle(431_857L, 1L, 7, 2));
-    }
-
-    @Test
-    void forcedParticipantCountCachesOnlyRanksAboveTheCutoff() {
-        FragmentDecisionTree tree = new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 2, 7_500L);
-        populateBodyCosts(tree, 32, 100L);
-
-        assertFalse(tree.shouldIdle(100L, 2L, 4, 2));
-        assertTrue(tree.shouldIdle(100L, 2L, 4, 3));
-        assertEquals(7_500L, tree.idleParkNs());
-    }
-
-    @Test
-    void forcedCacheDoesNotRequireBodyHistoryOrUpstreamHandles() {
-        FragmentDecisionTree tree = new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 1, 7_500L);
-
-        assertTrue(tree.shouldIdle(0L, 0L, 4, 2));
-    }
-
-    @Test
-    void forcedParticipantConfigurationRejectsInvalidValues() {
-        assertThrows(
-                IllegalArgumentException.class, () -> new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 0, 1L));
-        assertThrows(
-                IllegalArgumentException.class, () -> new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 1, -1L));
     }
 }

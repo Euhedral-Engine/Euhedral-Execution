@@ -256,11 +256,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 super.register();
                 this.mainThread = Thread.currentThread();
                 this.controlPolicy = new FragmentDecisionTree(
-                        this.observer,
-                        this.core,
-                        this.socket,
-                        resolveForcedActiveParticipantCount(),
-                        this.config.cacheTimingConfig());
+                        this.observer, this.core, this.socket, this.config.cacheTimingConfig());
 
                 try {
                     this.state.neighborCursor = this.cpu + 1;
@@ -496,26 +492,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             cap = Math.max(2L, Math.min(maxBatch, quota));
         }
         return cap;
-    }
-
-    private Integer resolveForcedActiveParticipantCount() {
-        String configuredCount = System.getProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
-        if (configuredCount == null || configuredCount.isBlank()) {
-            return null;
-        }
-        if (!this.config.benchmarkMode()) {
-            throw new IllegalStateException("Forced active participant count is only valid in benchmark mode");
-        }
-        int count;
-        try {
-            count = Integer.parseInt(configuredCount);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Forced active participant count must be an integer", e);
-        }
-        if (count <= 0) {
-            throw new IllegalArgumentException("Forced active participant count must be positive");
-        }
-        return count;
     }
 
     long getAdaptiveBatchCap() {

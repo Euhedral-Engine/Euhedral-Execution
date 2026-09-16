@@ -33,7 +33,6 @@ final class FragmentDecisionTree {
     private final int core;
     private final int socket;
     private final FragmentObserver observer;
-    private final Integer forcedActiveParticipantCount;
     private final CacheTimingConfig cacheTimingConfig;
 
     private final long bodyCostDirectThreshold;
@@ -50,42 +49,23 @@ final class FragmentDecisionTree {
     private int activeMissStreak;
 
     FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket) {
-        this(observer, core, socket, null, CacheTimingConfig.DEFAULT);
+        this(observer, core, socket, CacheTimingConfig.DEFAULT);
     }
 
-    FragmentDecisionTree(
-            @Nullable FragmentObserver observer, int core, int socket, @NonNull CacheTimingConfig cacheTimingConfig) {
-        this(observer, core, socket, null, cacheTimingConfig);
-    }
-
-    FragmentDecisionTree(
-            @Nullable FragmentObserver observer,
-            int core,
-            int socket,
-            @Nullable Integer forcedActiveParticipantCount,
-            long cacheParkNs) {
+    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket, long cacheParkNs) {
         this(
                 observer,
                 core,
                 socket,
-                forcedActiveParticipantCount,
                 new CacheTimingConfig(cacheParkNs, CacheTimingConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS));
     }
 
     FragmentDecisionTree(
-            @Nullable FragmentObserver observer,
-            int core,
-            int socket,
-            @Nullable Integer forcedActiveParticipantCount,
-            @NonNull CacheTimingConfig cacheTimingConfig) {
-        if (forcedActiveParticipantCount != null && forcedActiveParticipantCount <= 0) {
-            throw new IllegalArgumentException("forcedActiveParticipantCount must be positive");
-        }
+            @Nullable FragmentObserver observer, int core, int socket, @NonNull CacheTimingConfig cacheTimingConfig) {
         Objects.requireNonNull(cacheTimingConfig);
         this.observer = observer;
         this.core = core;
         this.socket = socket;
-        this.forcedActiveParticipantCount = forcedActiveParticipantCount;
         this.cacheTimingConfig = cacheTimingConfig;
 
         MicroCalibrator calibrator = new MicroCalibrator();
@@ -101,27 +81,17 @@ final class FragmentDecisionTree {
     }
 
     boolean shouldIdle(long contention, long productiveHandles, int registeredWorkers, int workerRank) {
-        if (!isPlentiful(productiveHandles, registeredWorkers) && isForcedCacheRank(workerRank)) {
-            return true;
-        }
-        if (workerRank <= 1 || registeredWorkers <= 1 || this.bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
+        if (workerRank <= 1
+                || registeredWorkers <= 1
+                || this.bodyCostHistoryCount < BODY_COST_MIN_HISTORY
+                || isPlentiful(productiveHandles, registeredWorkers)) {
             return false;
         }
         if (productiveHandles <= 0) {
             return true;
         }
-        if (isPlentiful(productiveHandles, registeredWorkers)) {
-            return false;
-        }
         return ParticipationLogisticModel.shouldIdle(
                 workerRank, productiveHandles, registeredWorkers, this.smoothedBodyCostNs, contention / 1_000_000.0);
-    }
-
-    private boolean isForcedCacheRank(int workerRank) {
-        if (this.forcedActiveParticipantCount == null || workerRank <= 0) {
-            return false;
-        }
-        return workerRank > this.forcedActiveParticipantCount;
     }
 
     void idle(UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
