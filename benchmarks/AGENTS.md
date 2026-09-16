@@ -170,7 +170,7 @@ based on the 5x5 contention and body-cost matrix:
 
 - **`DIRECT`**:
   The fragment worker immediately pulls from remote caches and upstream handles and executes frames
-  directly within the active cycle. If no frames were available, it issues a combined `requestAndPull`.
+  directly within the active cycle. If no frames were available, it issues a combined `request`.
   Optimized for low-to-moderate contention where direct execution minimizes end-to-end latency.
 - **`STAGED`**:
   The fragment worker decouples demand signaling from execution. It issues an asynchronous upstream

@@ -80,7 +80,7 @@ public class CfdBenchmark {
         invocationStarted = System.nanoTime();
         pending = true;
         try {
-            runtime.checkWorkers(job.budget().workerCount());
+            runtime.checkWorkers(job.budget().physicalCoreCount());
             progress.begin("resetting fields", 0);
             simulation.reset();
             progress.finish();
@@ -131,7 +131,7 @@ public class CfdBenchmark {
         progress.finish();
         progress.begin("checking invocation fields", 0);
         try {
-            runtime.checkWorkers(job.budget().workerCount());
+            runtime.checkWorkers(job.budget().physicalCoreCount());
             BenchmarkSuite.require(
                     runtime.framesCreatedDuringExecution() == 0 && runtime.recyclerMisses() == 0,
                     "benchmark execution must reuse preallocated frames without recycler misses");

@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -25,7 +24,7 @@ class BackendOptionsTest {
     }
 
     @Test
-    void sourcesResolveOnceAgainstEffectivePhysicalWorkersAndReplayPreservesTheSetting() throws Exception {
+    void sourcesResolveOnceAgainstEffectiveCpuWorkersAndReplayPreservesTheSetting() throws Exception {
         var config = ConfigLoader.load(
                 Path.of("scenes/periodic-smoke.json"),
                 List.of("execution.backendOptions.backend=\"euhedral\"", "execution.backendOptions.workers=2"));
@@ -33,18 +32,21 @@ class BackendOptionsTest {
         var budget = WorkerBudget.resolve(options);
         assertTrue(budget.workerCount() <= 2);
         assertEquals(budget.workerCount(), options.sourceCount(budget.workerCount()));
-        var cores = new HashSet<Integer>();
         for (int cpu : budget.effectiveCpus()) {
-            assertTrue(cores.add(SystemInfo.getCpuInfo(cpu).core()));
+            assertTrue(SystemInfo.getCpuSet().get(cpu));
         }
-        long availableCores = SystemInfo.getCpuSet().stream()
+        long availableCpus = SystemInfo.getCpuSet().stream()
                 .filter(io.euhedral_execution.hardware_utils.ThreadTools.BASE_MASK::get)
-                .map(cpu -> SystemInfo.getCpuInfo(cpu).core())
-                .distinct()
                 .count();
-        if (availableCores > 1) {
-            assertFalse(cores.contains(SystemInfo.getCpuInfo(budget.driverCpu()).core()));
+        if (availableCpus >= 2) {
+            assertEquals(2, budget.workerCount());
         }
+        assertEquals(
+                java.util.Arrays.stream(budget.effectiveCpus())
+                        .map(cpu -> SystemInfo.getCpuInfo(cpu).core())
+                        .distinct()
+                        .count(),
+                budget.physicalCoreCount());
         assertTrue(ConfigLoader.replayJson(config).contains("\"sources\" : \"workers\""));
         assertEquals(1, new BackendOptions("euhedral", 2, 1, null, false, null).sourceCount(2));
         assertEquals(5, new BackendOptions("euhedral", 2, 5, null, false, null).sourceCount(2));

@@ -71,7 +71,7 @@ public final class BenchmarkRunner {
         out.println("Benchmark directory: " + directory);
         var budget = WorkerBudget.resolve(
                 new BackendOptions("euhedral", suite.workers(), "workers", suite.cpus(), suite.affinity(), null));
-        out.println("Parallel worker budget: " + budget.workerCount() + " physical cores");
+        out.println("Parallel worker budget: " + budget.workerCount() + " logical CPUs");
         String numerical = NumericalIdentity.current(), artifact = ValidationRunner.candidateIdentity();
         JsonNode validation;
         if (suite.validationSuite() != null) {

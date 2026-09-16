@@ -56,7 +56,7 @@ final class BenchmarkRuntime implements AutoCloseable {
                             options.shutdownTimeoutMillis());
             };
             simulation = new Simulation(config, geometry, backend);
-            checkWorkers(budget.workerCount());
+            checkWorkers(budget.physicalCoreCount());
         } catch (RuntimeException | Error error) {
             try {
                 close();

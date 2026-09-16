@@ -124,9 +124,9 @@ two reuse a task tree and persistent contiguous-range workers respectively. No E
 or producer threads are added. The driver retains frames directly, without recycler handoffs.
 
 Settings live in `execution.backendOptions` and are retained in replay configuration. CPU budgets
-select one available logical CPU per physical core and reserve a separate driver core when
-possible. On a single-core host the driver necessarily shares that core. Requested workers are
-capped to available eligible cores. Euhedral uses its ordinary managed affinity; `--affinity true`
+select available logical CPUs directly. The benchmark driver can share a selected CPU when every
+available CPU participates. Requested workers are capped to available eligible CPUs. Euhedral uses
+its ordinary managed affinity; `--affinity true`
 also requests driver and comparison-worker affinity through `ThreadTools`. Capability labels do
 not assert exact physical placement. `resolved.json` records requested/effective CPUs, worker
 count, affinity capability, and requested/resolved sources. Geometry workers close before a FJP
