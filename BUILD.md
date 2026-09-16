@@ -102,7 +102,9 @@ ZIG = "{{env.HOME}}/.local/share/mise/installs/zig/0.16.0/zig"
 
 Native binary tests require LLVM inspection tools on PATH, on both x64 and ARM64
 build hosts. They accept `llvm-readobj` / `llvm-objdump` and version-suffixed names
-such as `llvm-readobj-18`. If LLVM is installed elsewhere, set `LLVM_READOBJ` and
-`LLVM_OBJDUMP` to absolute executable paths. Explicit overrides are validated and
-never silently replaced. Missing tools fail the tests with installation guidance;
-the architecture, imports, exports and runtime-floor checks are not skipped.
+such as `llvm-readobj-18`. Discovery also checks `LLVM_PATH`, `LLVM_HOME`, and
+versioned `/usr/lib/llvm-N/bin` or `/usr/local/lib/llvm-N/bin` installations. If LLVM
+is installed elsewhere, set `LLVM_READOBJ` and `LLVM_OBJDUMP` to absolute executable
+paths. Explicit overrides are validated and never silently replaced. Missing tools
+fail the tests with installation guidance; the architecture, imports, exports and
+runtime-floor checks are not skipped.

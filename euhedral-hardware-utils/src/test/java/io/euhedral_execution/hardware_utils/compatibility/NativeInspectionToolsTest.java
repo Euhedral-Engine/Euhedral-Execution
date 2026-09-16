@@ -29,6 +29,15 @@ class NativeInspectionToolsTest {
     }
 
     @Test
+    void findsToolsInsideVersionedLlvmInstallationRoots() throws Exception {
+        Path bin = Files.createDirectories(directory.resolve("llvm-18/bin"));
+        Path readobj = Files.writeString(bin.resolve("llvm-readobj"), "test fixture");
+        assertTrue(readobj.toFile().setExecutable(true));
+
+        assertEquals(readobj, NativeInspectionTools.resolve("", "llvm-readobj", directory.toString(), "LLVM_READOBJ"));
+    }
+
+    @Test
     void prefersUnversionedPathEntryAndHonorsExplicitOverride() throws Exception {
         Path versioned = executable("llvm-readobj-18");
         Path unversioned = executable("llvm-readobj");
