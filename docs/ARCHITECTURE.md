@@ -297,8 +297,7 @@ primary worker (rank 1) is never forced into CACHE withdrawal.
 
 Freshly started workers default to `DIRECT` until baseline execution samples are gathered. Once
 warmed up, switching to `DIRECT` requires low contention (at or below 85%) and execution runtimes
-within the configured threshold. If all upstream sources are absent, the worker enters an internal
-`SKIP_THEN_DIRECT` mode to clear internal queues without attempting source acquisition.
+within the configured threshold.
 
 Batch sizes are dynamically budgeted using smoothed execution service times, allowing batch
 processing to scale up or down smoothly within bounded limits (defaulting to a maximum of 4,096

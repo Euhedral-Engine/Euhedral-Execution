@@ -62,8 +62,7 @@ public final class FragmentControlConfig {
     public enum ExecutionPath {
         IDLE,
         DIRECT,
-        STAGED,
-        SKIP_THEN_DIRECT,
+        STAGED
     }
 
     public static final class BodyCostThresholds {

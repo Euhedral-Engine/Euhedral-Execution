@@ -292,7 +292,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.initialized = true;
             while (keepRunning()) {
                 this.state.cycleEpoch++;
-                serviceResetRequest();
+                handleResetRequest();
 
                 long contention = cacheContention(
                         this.config.cacheTimingConfig(), this.controlPolicy, this.upstreamQueue, this.state.nowNs);
@@ -331,14 +331,18 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long upstreamHandleCount = this.upstreamQueue.getCachedUpCount();
                 int registeredWorkers = this.state.registeredWorkers;
                 int workerRank = super.getThreadRank(this.cpu);
-                ExecutionPath path = this.controlPolicy.executionPath(
-                        this.state.cycleEpoch,
-                        this.state.batchEpoch,
-                        productiveHandleCount,
-                        upstreamHandleCount,
-                        registeredWorkers,
-                        contention,
-                        workerRank);
+                ExecutionPath path;
+                if (this.controlPolicy.shouldIdle(contention, productiveHandleCount, registeredWorkers, workerRank)) {
+                    path = ExecutionPath.IDLE;
+                } else {
+                    path = this.controlPolicy.executionPath(
+                            this.state.cycleEpoch,
+                            this.state.batchEpoch,
+                            productiveHandleCount,
+                            upstreamHandleCount,
+                            registeredWorkers,
+                            contention);
+                }
 
                 if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
@@ -586,7 +590,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         return this.running.getOpaque() && !Thread.currentThread().isInterrupted();
     }
 
-    private void serviceResetRequest() {
+    private void handleResetRequest() {
         long requested = this.resetRequested.getAcquire();
         if (this.state == null || requested <= this.resetCompleted.getOpaque()) {
             return;
