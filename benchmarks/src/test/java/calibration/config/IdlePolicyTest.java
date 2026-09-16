@@ -4,12 +4,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.IdlePolicy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class CacheTimingConfigTest {
+class IdlePolicyTest {
     private final ObjectMapper mapper = new ObjectMapper();
 
     private ObjectNode input() throws Exception {
@@ -59,8 +59,7 @@ class CacheTimingConfigTest {
                 .resolveCalibrationProfiles();
         TrialConfig resolved = harness.trials().getFirst();
         assertEquals(
-                new CacheTimingConfig(43000L, 7000000L),
-                resolved.calibrationConfig().toCacheTimingConfig());
+                new IdlePolicy(43000L, 7000000L), resolved.calibrationConfig().toCacheTimingConfig());
         assertEquals(
                 FragmentDecisionWeights.DEFAULT, resolved.calibrationConfig().decisionWeights());
         ObjectNode persisted = mapper.valueToTree(resolved);
@@ -74,11 +73,11 @@ class CacheTimingConfigTest {
     @Test
     void omittedHistoricalValuesAndRoundTrip() throws Exception {
         CalibrationBenchmarkConfig defaults = mapper.treeToValue(input(), CalibrationBenchmarkConfig.class);
-        assertEquals(new CacheTimingConfig(15000L, 1000000L), defaults.toCacheTimingConfig());
+        assertEquals(new IdlePolicy(15000L, 1000000L), defaults.toCacheTimingConfig());
         ObjectNode json = mapper.valueToTree(defaults);
         assertEquals(1000000L, json.get("contentionHalfLifeNanos").longValue());
         assertFalse(json.has("toCacheTimingConfig"));
-        assertFalse(json.has("cacheTimingConfig"));
+        assertFalse(json.has("idlePolicy"));
         json.put("idleParkNs", 43000L).put("contentionHalfLifeNanos", 7000000L);
         CalibrationBenchmarkConfig custom = mapper.treeToValue(json, CalibrationBenchmarkConfig.class);
         assertEquals(custom, mapper.readValue(mapper.writeValueAsString(custom), CalibrationBenchmarkConfig.class));
@@ -87,7 +86,7 @@ class CacheTimingConfigTest {
                 custom.withDecisionWeightProfile("other"),
                 custom.withLifecycleMode(CalibrationLifecycleMode.CONTINUOUS),
                 custom.withCurrentCacheActuatorIdentity())) {
-            assertEquals(new CacheTimingConfig(43000L, 7000000L), copy.toCacheTimingConfig());
+            assertEquals(new IdlePolicy(43000L, 7000000L), copy.toCacheTimingConfig());
         }
     }
 

@@ -3,22 +3,21 @@ package io.euhedral_execution.core.config;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 
-/// Immutable CACHE policy timing. Other idle and miss parking policies remain separate.
-public record CacheTimingConfig(
+public record IdlePolicy(
         long idleParkNs,
         long contentionHalfLifeNanos,
-        @Nullable CacheTimingFunctionConfig function) {
+        @Nullable IdleTimingFunction function) {
 
     /// Explicit fixed timing, including legacy callers and benchmark POLICY_OFF.
-    public CacheTimingConfig(long cacheParkNs, long contentionHalfLifeNanos) {
-        this(cacheParkNs, contentionHalfLifeNanos, null);
+    public IdlePolicy(long idleParkNs, long contentionHalfLifeNanos) {
+        this(idleParkNs, contentionHalfLifeNanos, null);
     }
 
-    public static final long DEFAULT_CACHE_PARK_NS = 15_000L;
+    public static final long DEFAULT_IDLE_PARK_NS = 15_000L;
     public static final long DEFAULT_CONTENTION_HALF_LIFE_NANOS = 1_000_000L;
-    /// Default CACHE timing policy selected from scarce-source calibration.
+    /// Default IDLE timing policy selected from scarce-source calibration.
     /// Source policy: cache-scarce-v1 / policy-158a61afee6653cbbfde.
-    public static final CacheTimingFunctionConfig DEFAULT_FUNCTION = new CacheTimingFunctionConfig(
+    public static final IdleTimingFunction DEFAULT_FUNCTION = new IdleTimingFunction(
             "cache-local-bounded-v1",
             List.of(0.5, 2.0, 8.0),
             List.of(0.5, 2.0, 8.0),
@@ -46,10 +45,10 @@ public record CacheTimingConfig(
             814375L,
             250000L,
             2000000L);
-    public static final CacheTimingConfig DEFAULT =
-            new CacheTimingConfig(DEFAULT_CACHE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION);
+    public static final IdlePolicy DEFAULT =
+            new IdlePolicy(DEFAULT_IDLE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION);
 
-    public CacheTimingConfig {
+    public IdlePolicy {
         if (idleParkNs < 0L) {
             throw new IllegalArgumentException("idleParkNs must not be negative");
         }

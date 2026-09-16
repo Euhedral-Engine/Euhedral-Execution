@@ -1,9 +1,8 @@
 package io.euhedral_execution.core.control_plane;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.utils.MicroCalibrator;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
@@ -18,13 +17,13 @@ public final class FragmentControlConfig {
     public static final String PARTICIPATION_POLICY_MODE = "euhedral.calibration.participationPolicyMode";
 
     public static final long DEFAULT_PARK_NS = 15_000L;
-    public static final long DEFAULT_CACHE_PARK_NS = CacheTimingConfig.DEFAULT_CACHE_PARK_NS;
+    public static final long DEFAULT_CACHE_PARK_NS = IdlePolicy.DEFAULT_IDLE_PARK_NS;
     public static final String CACHE_ACTUATOR_VERSION = "cache-v1";
     public static final int DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT = 40;
 
     public final BodyCostThresholds idleBodyCostThresholds;
     public final long bodyCostDirectThreshold;
-    public final IdlePolicy idleTimeNs;
+    public final FragmentDecisionWeights.IdlePolicy idleTimeNs;
 
     public FragmentControlConfig(@NonNull FragmentDecisionWeights weights) {
         Objects.requireNonNull(weights);

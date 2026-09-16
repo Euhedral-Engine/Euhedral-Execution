@@ -1,6 +1,6 @@
 package io.euhedral_execution.core.control_plane;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.utils.MicroCalibrator;
@@ -33,7 +33,7 @@ final class FragmentDecisionTree {
     private final int core;
     private final int socket;
     private final FragmentObserver observer;
-    private final CacheTimingConfig cacheTimingConfig;
+    private final IdlePolicy idlePolicy;
 
     private final long bodyCostDirectThreshold;
 
@@ -49,24 +49,19 @@ final class FragmentDecisionTree {
     private int activeMissStreak;
 
     FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket) {
-        this(observer, core, socket, CacheTimingConfig.DEFAULT);
+        this(observer, core, socket, IdlePolicy.DEFAULT);
     }
 
-    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket, long cacheParkNs) {
-        this(
-                observer,
-                core,
-                socket,
-                new CacheTimingConfig(cacheParkNs, CacheTimingConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS));
+    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket, long idleParkNs) {
+        this(observer, core, socket, new IdlePolicy(idleParkNs, IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS));
     }
 
-    FragmentDecisionTree(
-            @Nullable FragmentObserver observer, int core, int socket, @NonNull CacheTimingConfig cacheTimingConfig) {
-        Objects.requireNonNull(cacheTimingConfig);
+    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket, @NonNull IdlePolicy idlePolicy) {
+        Objects.requireNonNull(idlePolicy);
         this.observer = observer;
         this.core = core;
         this.socket = socket;
-        this.cacheTimingConfig = cacheTimingConfig;
+        this.idlePolicy = idlePolicy;
 
         MicroCalibrator calibrator = new MicroCalibrator();
         calibrator.warmup();
@@ -95,7 +90,7 @@ final class FragmentDecisionTree {
     }
 
     void idle(UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
-        var function = this.cacheTimingConfig.function();
+        var function = this.idlePolicy.function();
         if (function == null) {
             simpleIdle();
         } else {
@@ -258,11 +253,11 @@ final class FragmentDecisionTree {
 
     /// Returns the configured CACHE miss park duration for this actuator fixture.
     long idleParkNs() {
-        return this.cacheTimingConfig.idleParkNs();
+        return this.idlePolicy.idleParkNs();
     }
 
     long contentionHalfLifeNanos() {
-        return this.cacheTimingConfig.contentionHalfLifeNanos();
+        return this.idlePolicy.contentionHalfLifeNanos();
     }
 
     /// Returns the current sparse executor-body estimate in nanoseconds.

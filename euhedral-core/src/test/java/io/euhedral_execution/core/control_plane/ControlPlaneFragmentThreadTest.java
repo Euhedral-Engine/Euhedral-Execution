@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
@@ -79,7 +79,7 @@ class ControlPlaneFragmentThreadTest {
         if (pauseQueueInitialization) {
             Mockito.doAnswer(pauseInitialization).when(observer).pullBucketTarget();
         } else {
-            Mockito.doAnswer(pauseInitialization).when(config).cacheTimingConfig();
+            Mockito.doAnswer(pauseInitialization).when(config).idlePolicy();
         }
         try {
             assertFalse(fragment.ready());
@@ -104,9 +104,7 @@ class ControlPlaneFragmentThreadTest {
 
     @Test
     void latticeFactoryPropagatesIndependentTimingToStartedTrees() throws Exception {
-        for (CacheTimingConfig timing :
-                new CacheTimingConfig[] {new CacheTimingConfig(43_000L, 7_000_000L), new CacheTimingConfig(0L, 29_000L)
-                }) {
+        for (IdlePolicy timing : new IdlePolicy[] {new IdlePolicy(43_000L, 7_000_000L), new IdlePolicy(0L, 29_000L)}) {
             CloneConfig clone = cloneConfigOnCoreIndex(0);
             LatticeConfig lattice = LatticeConfig.ofBenchmark(
                     new UnmodifiableBitSet(clone.effectiveCpus()),
@@ -399,14 +397,10 @@ class ControlPlaneFragmentThreadTest {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(),
-                        FragmentDecisionWeights.DEFAULT,
-                        new CacheTimingConfig(10000L, 2_000_000L))
+                        createRecordingObserver(), FragmentDecisionWeights.DEFAULT, new IdlePolicy(10000L, 2_000_000L))
                 .clone(cloneConfigOnCoreIndex(0)));
         ControlPlaneFragment fragment2 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(),
-                        FragmentDecisionWeights.DEFAULT,
-                        new CacheTimingConfig(10000L, 2_000_000L))
+                        createRecordingObserver(), FragmentDecisionWeights.DEFAULT, new IdlePolicy(10000L, 2_000_000L))
                 .clone(cloneConfigOnCoreIndex(1)));
 
         try (fragment1;

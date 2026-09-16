@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.IdlePolicy;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -79,17 +80,17 @@ class TrialSweepExpanderTest {
                                         "/calibrationConfig/contentionHalfLifeNanos",
                                         List.of(new LongNode(29_000L), new LongNode(7_000_000L))))));
         assertEquals(4, generated.size());
-        java.util.Set<io.euhedral_execution.core.config.CacheTimingConfig> actual = new java.util.HashSet<>();
+        java.util.Set<IdlePolicy> actual = new java.util.HashSet<>();
         for (TrialConfig trial : generated) {
             actual.add(trial.calibrationConfig().toCacheTimingConfig());
             assertEquals(trial, mapper.readValue(mapper.writeValueAsString(trial), TrialConfig.class));
         }
         assertEquals(
                 java.util.Set.of(
-                        new io.euhedral_execution.core.config.CacheTimingConfig(0L, 29_000L),
-                        new io.euhedral_execution.core.config.CacheTimingConfig(0L, 7_000_000L),
-                        new io.euhedral_execution.core.config.CacheTimingConfig(43_000L, 29_000L),
-                        new io.euhedral_execution.core.config.CacheTimingConfig(43_000L, 7_000_000L)),
+                        new IdlePolicy(0L, 29_000L),
+                        new IdlePolicy(0L, 7_000_000L),
+                        new IdlePolicy(43_000L, 29_000L),
+                        new IdlePolicy(43_000L, 7_000_000L)),
                 actual);
     }
 

@@ -1,8 +1,8 @@
 package io.euhedral_execution.core.control_plane;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
@@ -255,8 +255,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ThreadTools.setTimerResolution(1);
                 super.register();
                 this.mainThread = Thread.currentThread();
-                this.controlPolicy = new FragmentDecisionTree(
-                        this.observer, this.core, this.socket, this.config.cacheTimingConfig());
+                this.controlPolicy =
+                        new FragmentDecisionTree(this.observer, this.core, this.socket, this.config.idlePolicy());
 
                 try {
                     this.state.neighborCursor = this.cpu + 1;
@@ -289,7 +289,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 handleResetRequest();
 
                 long contention = cacheContention(
-                        this.config.cacheTimingConfig(), this.controlPolicy, this.upstreamQueue, this.state.nowNs);
+                        this.config.idlePolicy(), this.controlPolicy, this.upstreamQueue, this.state.nowNs);
                 long newUpCount = this.upstreamQueue.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
                     this.state.upstreamCount = newUpCount;
@@ -404,8 +404,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     // Owner-thread helpers preserve the fixed production bypass. CACHE remains the hybrid mode;
     // this policy only chooses the local idle interval and prospective evidence decay.
-    static long cacheContention(
-            CacheTimingConfig timing, FragmentDecisionTree policy, UpstreamQueue upstream, long now) {
+    static long cacheContention(IdlePolicy timing, FragmentDecisionTree policy, UpstreamQueue upstream, long now) {
         return timing.function() == null
                 ? upstream.getEffectiveContention(now, policy.contentionHalfLifeNanos())
                 : upstream.getAdaptiveContention(now, policy.contentionHalfLifeNanos());

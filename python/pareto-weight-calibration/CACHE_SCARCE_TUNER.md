@@ -138,7 +138,7 @@ available before that point.
 round summaries and exact arm/proposal definitions expose the accepted result.
 The config file contains the timing function; using the new regime behavior also
 requires `cacheScarcityGateEnabled: true` in calibration or the corresponding
-runtime `CacheTimingConfig` flag.
+runtime `IdlePolicy` flag.
 
 Successful raw attempts are cleaned only after every fork is parsed, committed to
 SQLite, summarized and UPDATE is durably committed. Failed/interrupted logs remain.

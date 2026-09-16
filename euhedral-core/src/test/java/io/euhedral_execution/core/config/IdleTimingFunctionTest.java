@@ -6,9 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class CacheTimingFunctionConfigTest {
-    static CacheTimingFunctionConfig function(List<Double> park, List<Double> halfLife) {
-        return new CacheTimingFunctionConfig(
+class IdleTimingFunctionTest {
+    static IdleTimingFunction function(List<Double> park, List<Double> halfLife) {
+        return new IdleTimingFunction(
                 "bounded-v1",
                 List.of(0.5, 2.0, 8.0),
                 List.of(0.5, 2.0, 8.0),
@@ -33,7 +33,7 @@ class CacheTimingFunctionConfigTest {
                 assertEquals(1_000_000, model.halfLifeNanos(c, p, 200, 7));
             }
         }
-        assertNull(new CacheTimingConfig(15_000, 1_000_000).function());
+        assertNull(new IdlePolicy(15_000, 1_000_000).function());
     }
 
     @Test

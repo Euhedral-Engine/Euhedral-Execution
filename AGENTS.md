@@ -206,7 +206,7 @@ caller.
 
 Keep fitting and candidate search in the offline tools. Regenerate learned model code through its
 exporter and preserve model/dataset provenance. When changing policy, inspect the tree tests,
-`ParticipationLogisticModelTest`, `ProductionCacheTimingConfigTest`, and `CacheScarcityGateTest`.
+`ParticipationLogisticModelTest`, `ProductionIdlePolicyTest`, and `CacheScarcityGateTest`.
 Preserve Java/Python parity and frozen fixtures when the task affects exported policies. Do not
 promote a benchmark finding to a production default without that scope being requested.
 

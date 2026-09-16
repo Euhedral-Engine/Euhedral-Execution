@@ -11,10 +11,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -145,7 +145,7 @@ class ControlPlaneFragmentTest {
                 base.observer(),
                 base.maxBatchSize(),
                 base.smtEnabled(),
-                new CacheTimingConfig(15000, 1000000, null),
+                new IdlePolicy(15000, 1000000, null),
                 base.benchmarkMode(),
                 base.metricPrefix(),
                 base.registry());

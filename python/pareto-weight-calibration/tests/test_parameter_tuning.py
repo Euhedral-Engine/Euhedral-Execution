@@ -283,7 +283,7 @@ def assert_java_runtime_and_export_parity(spec, policies, tmp_path):
     parts.append('{ var config=new CacheTimingFunctionConfig(' + ','.join(
       args) + '); for(var x:inputs) System.out.println(config.parkNanos(x[0],x[1],x[2],15000L)+","+config.halfLifeNanos(x[0],x[1],x[2],1000000L)+","+' + class_name + '.parkNanos(x[0],x[1],x[2],15000L)+","+' + class_name + '.halfLifeNanos(x[0],x[1],x[2],1000000L)); }')
     expected.extend([evaluate(cfg, *point) * 2 for point in inputs])
-  source = 'import io.euhedral_execution.core.config.CacheTimingFunctionConfig; class Check { public static void main(String[] args) { double[][] inputs={' + ','.join(
+  source = 'import io.euhedral_execution.core.config.IdleTimingFunction; class Check { public static void main(String[] args) { double[][] inputs={' + ','.join(
       '{' + ','.join(literal(x) for x in p) + '}' for p in
       inputs) + '};' + ''.join(parts) + '}}'
   (tmp_path / 'Check.java').write_text(source)

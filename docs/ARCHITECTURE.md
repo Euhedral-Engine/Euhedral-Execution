@@ -305,7 +305,7 @@ frames per batch) while respecting CPU pressure caps.
 
 When no work is found, workers use targeted parking strategies tailored to whether the stall was an
 upstream dry-spell or a cache miss. [
-`CacheTimingConfig`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/CacheTimingConfig.java)
+`IdlePolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/CacheTimingConfig.java)
 defines park backoffs and contention-history decay rates, adapting automatically to real-time
 measurements or falling back to fixed timing. Crucially, `CACHE` workers always double-check local
 queues for fresh work before entering park states.
