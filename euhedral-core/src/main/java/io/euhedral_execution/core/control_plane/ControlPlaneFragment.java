@@ -125,11 +125,13 @@ public final class ControlPlaneFragment extends WorkRequester {
             setDrain(true);
             super.setDownstreamMapping(mappings, terminal);
             setDrain(false);
+
+            this.smtBuddy.setParent(super.parent);
         }
     }
 
     private ControlPlaneFragment(@NonNull FragmentConfig config, int cpu) {
-        super(config.cacheConfig(), config.smtEnabled());
+        super(config.cacheConfig(), cpu, config.smtEnabled());
         this.config = config;
         this.benchmarkMode = config.benchmarkMode();
         this.cpu = cpu;
@@ -263,6 +265,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                         resolveParticipationPolicyEnabled());
 
                 try {
+                    this.state.neighborCursor = this.cpu + 1;
                     cycle();
                 } finally {
                     this.initialized = false;
@@ -337,19 +340,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                         contention,
                         workerRank);
 
-                if (limit > 0L) {
-                    long start = System.nanoTime();
-                    long count = remoteCacheExecute(limit);
-                    long end = System.nanoTime();
-                    if (count > 0L) {
-                        executionFrames += count;
-                        executionElapsedNs += end - start;
-                        processed += count;
-                        limit -= count;
-                    }
-                    this.state.nowNs = end;
-                }
-
                 if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
                         long start = System.nanoTime();
@@ -362,49 +352,27 @@ public final class ControlPlaneFragment extends WorkRequester {
                         }
                         this.state.nowNs = end;
                     }
-                    if (processed == 0L) {
-                        super.requestAndPull(context, this.state.batchSize);
-                        this.state.nowNs = System.nanoTime();
-                    }
-                } else if (path == ExecutionPath.STAGED) {
-                    if (limit > 0L) {
-                        super.request(context);
-                    }
-                    if (limit > 0L && super.getLocalCacheCount() > 0L) {
-                        long start = System.nanoTime();
-                        long count = localCacheExecute(limit);
-                        long end = System.nanoTime();
-                        if (count > 0L) {
-                            executionFrames += count;
-                            executionElapsedNs += end - start;
-                            processed += count;
-                            limit -= count;
-                        }
-                        this.state.nowNs = end;
-                    }
-                    if (limit > 0L) {
-                        long start = System.nanoTime();
-                        long count = remoteCacheExecute(limit);
-                        long end = System.nanoTime();
-                        if (count > 0L) {
-                            executionFrames += count;
-                            executionElapsedNs += end - start;
-                            processed += count;
-                        }
-                        this.state.nowNs = end;
-                    }
                     if (processed == 0) {
-                        long start = System.nanoTime();
-                        long count = super.workSteal(this.outputStream, limit);
-                        long end = System.nanoTime();
-                        if (count > 0L) {
-                            executionFrames += count;
-                            executionElapsedNs += end - start;
-                            processed += count;
-                        }
-                        this.state.nowNs = end;
+                        super.request(context, this.state.batchSize);
                     }
-                } else if (path == ExecutionPath.CACHE && processed <= 0L) {
+                } else if (path == ExecutionPath.STAGED
+                        && limit > 0L
+                        && super.getLocalCacheCount() <= this.state.batchSize) {
+                    super.request(context, this.state.batchSize);
+                    this.state.nowNs = System.nanoTime();
+                }
+                if (processed <= 0) {
+                    long start = System.nanoTime();
+                    long count = super.workSteal(this.outputStream, limit, this.state.neighborCursor++);
+                    long end = System.nanoTime();
+                    if (count > 0L) {
+                        executionFrames += count;
+                        executionElapsedNs += end - start;
+                        processed += count;
+                    }
+                    this.state.nowNs = end;
+                }
+                if (path == ExecutionPath.CACHE && processed == 0L) {
                     idleCache(
                             this.config.cacheTimingConfig(),
                             this.controlPolicy,
@@ -413,12 +381,11 @@ public final class ControlPlaneFragment extends WorkRequester {
                             registeredWorkers,
                             productiveHandleCount);
                     this.state.nowNs = System.nanoTime();
+                    Thread.yield();
                     continue;
-                } else if (processed <= 0L && this.controlPolicy.missRequiresPark()) {
-                    LockSupport.parkNanos(1_000L);
-                    continue;
-                } else if (processed <= 0L) {
-                    Thread.onSpinWait();
+                }
+                if (processed <= 0L) {
+                    Thread.yield();
                     continue;
                 }
 
@@ -436,10 +403,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     private long localCacheExecute(long limit) {
         return super.drain(this.outputStream, limit);
-    }
-
-    private long remoteCacheExecute(long limit) {
-        return super.pull(this.outputStream, NO_STOP, limit);
     }
 
     private long remoteExecute(FlowThread.FlowContext context, long limit) {
@@ -785,6 +748,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         long consecutiveIdleDecisions = 0L;
 
         long nowNs = System.nanoTime();
+
+        int neighborCursor = 0;
 
         void reset() {
             this.batchRecorder.reset();

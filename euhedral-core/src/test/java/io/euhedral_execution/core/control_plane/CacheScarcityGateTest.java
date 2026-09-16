@@ -127,7 +127,7 @@ class CacheScarcityGateTest {
     }
 
     @Test
-    void plentifulOverridesEvenExplicitCacheCutoffButKeepsNormalRouting() {
+    void plentifulAndFullParticipationOverrideExplicitCacheCutoff() {
         var forced = new FragmentDecisionTree(
                 FragmentDecisionWeights.DEFAULT,
                 null,
@@ -136,8 +136,10 @@ class CacheScarcityGateTest {
                 1,
                 new CacheTimingConfig(15000, 1000000, function(), true),
                 true);
-        for (int i = 0; i < 64; i++) forced.recordBodyCost(96);
+        for (int i = 0; i < 64; i++) {
+            forced.recordBodyCost(96);
+        }
         assertEquals(ExecutionPath.CACHE, forced.executionPath(1, 1, 1, 7, 7, 1000000, 7));
-        assertEquals(ExecutionPath.STAGED, forced.executionPath(1, 1, 7, 7, 7, 1000000, 7));
+        assertEquals(ExecutionPath.DIRECT, forced.executionPath(1, 1, 7, 7, 7, 1000000, 7));
     }
 }

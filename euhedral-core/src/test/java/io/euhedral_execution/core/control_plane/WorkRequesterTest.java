@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Test;
 
 class WorkRequesterTest {
 
-    /// Verifies a staged attempt clears stale counters before recording its current pull and request.
+    /// Verifies a request clears stale counters and records demand before socket fan-out.
     @Test
-    void requestAndPullClearsCountersAndRetainsWatermarks() {
+    void requestClearsCountersAndRecordsDemandBeforeSocketFanOut() {
         int cpu = SystemInfo.getCpuSet().nextSetBit(0);
         int core = SystemInfo.getCpuInfo(cpu).core();
         BitSet cpus = new BitSet();
@@ -41,8 +41,8 @@ class WorkRequesterTest {
                         >> 3,
                 2L);
         long batchSize = 4L;
-        long expectedDemand = batchSize * multiplier * SystemInfo.SOCKET_COUNT;
-        long expectedPull = Math.min(requester.getMaxLocalCacheCount() >> 1, batchSize * multiplier);
+        long expectedDemand = Math.min(requester.getMaxLocalCacheCount(), batchSize * multiplier);
+        long expectedRequest = expectedDemand * SystemInfo.SOCKET_COUNT;
 
         try {
             requester.stage(context, batchSize);
@@ -50,8 +50,8 @@ class WorkRequesterTest {
             assertEquals(0L, context.satisfiedRequest);
             assertEquals(expectedDemand, context.originalRequest);
             assertEquals(0L, context.satisfiedPull);
-            assertEquals(expectedPull, context.originalPull);
-            verify(upstream).request(expectedDemand);
+            assertEquals(0L, context.originalPull);
+            verify(upstream).request(expectedRequest);
         } finally {
             requester.close();
         }
@@ -61,12 +61,12 @@ class WorkRequesterTest {
 
         /// Creates a requester with a real owner-local cache and a mocked upstream queue.
         private TestRequester(CacheConfig config) {
-            super(config, false);
+            super(config, config.cloneConfig().getCpuSet()[0], false);
         }
 
         /// Exposes one staged request/pull attempt to package-owned tests.
         private void stage(FlowThread.FlowContext context, long batchSize) {
-            requestAndPull(context, batchSize);
+            request(context, batchSize);
         }
 
         @Override

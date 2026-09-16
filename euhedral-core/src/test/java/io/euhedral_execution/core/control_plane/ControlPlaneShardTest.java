@@ -91,6 +91,9 @@ class ControlPlaneShardTest {
         BitSet cores = new BitSet(2);
         cores.set(0, 2);
         mockSysInfo.when(() -> SystemInfo.fromHexMask("3")).thenReturn(cores);
+        BitSet cpus = new BitSet(4);
+        cpus.set(0, 4);
+        mockSysInfo.when(() -> SystemInfo.fromHexMask("f")).thenReturn(cpus);
         mockSysInfo.when(() -> SystemInfo.getSocketInfo(0)).thenReturn(new SocketInfo("f", "3", 0));
         mockSysInfo.when(() -> SystemInfo.socketL3Cache(0)).thenReturn(0L);
     }

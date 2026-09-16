@@ -2,7 +2,6 @@ package io.euhedral_execution.hardware_utils.compatibility;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.TopologyMapper;
@@ -46,28 +45,12 @@ class CoreZeroReservationCompatibilityTest {
     }
 
     @Test
-    void reservesCoreZeroWhenAnotherCoreIsAvailable() {
+    void retainsCoreZeroWhenItIsAllowedAndAvailable() {
         BitSet allowed = SystemInfo.getCpuSet();
         assertFalse(allowed.isEmpty(), "system topology contains no CPUs");
         TopologyMapper mapper = new TopologyMapper((BitSet) allowed.clone());
         mapper.update(utilization(allowed));
 
-        BitSet expected = (BitSet) allowed.clone();
-        SystemInfo.CoreInfo coreZero = SystemInfo.getCoreInfo(0);
-        if (coreZero != null) {
-            BitSet zeroCpus = coreZero.getCpuSet();
-            expected.andNot(zeroCpus);
-            if (expected.isEmpty()) {
-                expected.or(zeroCpus);
-            }
-        }
-        expected.and(allowed);
-        assertEquals(expected, mapper.getEffectiveTopology().effectiveCpus());
-        if (coreZero != null && !expected.equals(allowed)) {
-            BitSet zeroOnly = coreZero.getCpuSet();
-            zeroOnly.and(expected);
-            assertTrue(zeroOnly.isEmpty(), "core-zero CPUs remain despite an alternative");
-        }
-        assertFalse(expected.isEmpty(), "core-zero reservation emptied the topology");
+        assertEquals(allowed, mapper.getEffectiveTopology().effectiveCpus());
     }
 }

@@ -87,7 +87,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         this.hasCache = cachePool > 0;
         this.cachePool = cachePool;
         this.remoteCache = this.hasCache ? new BoundedMpmcQueue[downstreamCount] : null;
-        this.cacheCount = this.hasCache ? new PaddedLongAdder(downstreamCount, false, false) : null;
+        this.cacheCount = this.hasCache ? new PaddedLongAdder(SystemInfo.getCpuCount(), false, false) : null;
         this.cachePolicy = cachePolicy;
     }
 
@@ -103,8 +103,8 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         if (this.hasCache) {
             CacheHead head = this.cacheHead.get();
             if (head == null) {
-                int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
-                this.cacheHead.set(new CacheHead(this.cacheCount.fromRawIdx(core)));
+                int cpu = ThreadTools.getCpu();
+                this.cacheHead.set(new CacheHead(this.cacheCount.fromRawIdx(cpu)));
             }
         }
         super.register();

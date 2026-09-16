@@ -96,21 +96,21 @@ public class ControlPlaneShard {
 
         SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
         long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
-        int cores = info.getCoreSet().cardinality();
+        int cpus = info.getCpuSet().cardinality();
         long capacity = (long) (sizeL3 * 0.7);
         capacity /= QueueUtils.REFERENCE_SIZE;
 
         long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
 
-        String partChunk = NumberFormat.getNumberInstance().format(chunkSize / Math.max(cores, 1));
-        String strCap = NumberFormat.getNumberInstance().format(cores * chunkSize);
-        logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cores, partChunk, strCap);
+        String partChunk = NumberFormat.getNumberInstance().format(chunkSize / Math.max(cpus, 1));
+        String strCap = NumberFormat.getNumberInstance().format(cpus * chunkSize);
+        logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cpus, partChunk, strCap);
 
         LatticeVertex coreDistributor = new LatticeVertex(
                 this.shardName + "-CoreDistributor",
                 SystemInfo.getMaxCoreId() + 1,
                 this::route,
-                (int) capacity,
+                (int) 0,
                 RoutingPolicy.SOCKET_LOCAL);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);

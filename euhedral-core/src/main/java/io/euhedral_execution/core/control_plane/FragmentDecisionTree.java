@@ -232,7 +232,8 @@ final class FragmentDecisionTree {
             return ExecutionPath.CACHE;
         }
 
-        if (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold) {
+        if (productiveHandles >= registeredWorkers
+                || (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold)) {
             recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
             this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;

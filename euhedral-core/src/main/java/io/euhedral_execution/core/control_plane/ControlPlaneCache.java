@@ -40,7 +40,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected static final VarHandle PRIMED;
     protected static final VarHandle TOTAL_COUNT;
 
-    private static final ControlPlaneCache[] WORK_STEAL = new ControlPlaneCache[SystemInfo.getMaxCoreId() + 1];
+    private static final ControlPlaneCache[] WORK_STEAL = new ControlPlaneCache[SystemInfo.getCpuCount()];
 
     static {
         try {
@@ -72,7 +72,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     double capFactor = 1.0;
     long totalCount = 0L;
 
-    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig, boolean smtEnabled) {
+    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig, int cpu, boolean smtEnabled) {
         super(
                 getName(cacheConfig),
                 smtEnabled ? 2 : 1,
@@ -103,7 +103,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.core = cacheConfig.getCore();
             this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
-            WORK_STEAL[this.core] = this;
+            WORK_STEAL[cpu] = this;
 
             this.pLocks = cacheConfig.workSteal() ? new PaddedAtomicLongArray(partitions, true, false) : null;
 
@@ -231,21 +231,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return total;
     }
 
-    protected final long workSteal(Consumer<AbstractFrame> consumer, long limit) {
+    protected final long workSteal(Consumer<AbstractFrame> consumer, long limit, int cursor) {
         if (!this.cacheConfig.workSteal()) {
             return 0;
         }
 
-        long total = 0;
-
-        BitSet cores = SystemInfo.getCoreSet();
-        for (int i = cores.nextSetBit(0); i >= 0 && total < limit; i = cores.nextSetBit(i + 1)) {
-            if (WORK_STEAL[i] == null) {
-                continue;
-            }
-            total += WORK_STEAL[i].drain(consumer, AbstractFrame::isOrdered, limit - total);
+        int cpuCount = SystemInfo.getCpuCount();
+        int pos = cursor % cpuCount;
+        if (WORK_STEAL[pos] == null) {
+            return 0;
         }
-        return total;
+        return WORK_STEAL[pos].drain(consumer, AbstractFrame::isOrdered, limit);
     }
 
     @Override
