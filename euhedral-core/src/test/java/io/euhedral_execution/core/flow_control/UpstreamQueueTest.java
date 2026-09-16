@@ -10,8 +10,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import io.euhedral_execution.core.config.CacheConfig;
+import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.control_plane.ControlPlaneCache;
 import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
+import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.core.utils.FlowThread;
@@ -166,6 +170,7 @@ class UpstreamQueueTest {
 
             assertEquals(1L, this.flowContext.satisfiedRequest);
             assertEquals(0L, fixture.sink.size());
+            assertEquals(1L, fixture.cache.getLocalCacheCount());
             assertEquals(1L, fixture.queue.getProductiveHandleCount());
         } finally {
             fixture.vertex.close();
@@ -747,11 +752,17 @@ class UpstreamQueueTest {
 
     private static CachedQueueFixture cachedQueueFixture() {
         QueueIngestSink sink = new QueueIngestSink();
-        LatticeVertex vertex = new LatticeVertex(
-                "productive-request-test", 2, LatticeVertex.RoutingFunction.DEFAULT);
+        int cpu = SystemInfo.getCpuSet().nextSetBit(0);
+        int core = SystemInfo.getCpuInfo(cpu).core();
+        BitSet cpus = new BitSet();
+        cpus.set(cpu);
+        CacheConfig cacheConfig = new CacheConfig(
+                new CloneConfig("productive-request-test", core, cpus), 0.7, 1, 0, 4, false, null, null);
+        TestControlPlaneCache cache = new TestControlPlaneCache(cacheConfig, cpu);
+        LatticeVertex vertex = new LatticeVertex("productive-request-test", 2, LatticeVertex.RoutingFunction.DEFAULT);
         BitSet active = new BitSet(2);
-        active.set(0, 2);
-        LatticeEdge[] downstreams = {new LatticeEdge(vertex.getDrainFlag()), new LatticeEdge(vertex.getDrainFlag())};
+        active.set(0);
+        LatticeEdge[] downstreams = {cache, null};
         vertex.setDrain(true);
         vertex.setDownstreamMapping(active, downstreams);
         vertex.setDrain(false);
@@ -759,7 +770,7 @@ class UpstreamQueueTest {
         handle.upstream = sink.getDelegate();
         sink.getDelegate().addDownstream(handle);
         PaddedAtomicLong count = new PaddedAtomicLong(1L);
-        return new CachedQueueFixture(sink, vertex, queueWith(handle, count));
+        return new CachedQueueFixture(sink, vertex, cache, queueWith(handle, count));
     }
 
     private record QueueFixture(
@@ -768,7 +779,20 @@ class UpstreamQueueTest {
             LatticeVertex.UpstreamInterceptor handle,
             UpstreamQueue queue) {}
 
-    private record CachedQueueFixture(QueueIngestSink sink, LatticeVertex vertex, UpstreamQueue queue) {}
+    private record CachedQueueFixture(
+            QueueIngestSink sink, LatticeVertex vertex, TestControlPlaneCache cache, UpstreamQueue queue) {}
+
+    private static final class TestControlPlaneCache extends ControlPlaneCache {
+
+        private TestControlPlaneCache(CacheConfig config, int cpu) {
+            super(config, cpu, false);
+        }
+
+        @Override
+        public CloneableObject clone(CloneConfig cloneConfig) {
+            return null;
+        }
+    }
 
     static class TestUpstreamHandle extends UpstreamQueue.UpstreamHandle {
 

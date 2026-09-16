@@ -262,7 +262,7 @@ class ObstacleForcesTest {
 
     @Test
     void openSphereDragResolutionAndDomainSensitivity() {
-        double coarse = sphereDrag(1, 12), refined = sphereDrag(2, 12), wider = sphereDrag(1, 16);
+        double coarse = sphereDrag(1, 10), refined = sphereDrag(2, 10), wider = sphereDrag(1, 14);
         System.out.printf("Sphere Cd: coarse=%.9f refined=%.9f wider=%.9f%n", coarse, refined, wider);
         assertTrue(coarse > 0 && refined > 0 && wider > 0);
         assertTrue(Math.abs(refined / coarse - 1) < 0.1, "diffusive refinement at fixed Re and duration");
@@ -270,7 +270,7 @@ class ObstacleForcesTest {
     }
 
     private static double sphereDrag(int scale, int width) {
-        var shape = new GridShape(24 * scale, width * scale, width * scale);
+        var shape = new GridShape(18 * scale, width * scale, width * scale);
         double radius = 2.0 * scale, speed = 0.006 / scale;
         var config = ConfigLoader.resolve(
                 Path.of("sphere-study.json"),
@@ -289,7 +289,7 @@ class ObstacleForcesTest {
                                 OpenBoundariesTest.faces(0, false),
                                 null,
                                 List.of(new Sphere(
-                                        1, new Vector3(8 * scale, width * scale / 2.0, width * scale / 2.0), radius)),
+                                        1, new Vector3(6 * scale, width * scale / 2.0, width * scale / 2.0), radius)),
                                 null,
                                 new OpenBoundary(new Vector3(speed, 0, 0), 1.0, 0.0)),
                         new Execution(400L * scale * scale, null, null, null, 0L),

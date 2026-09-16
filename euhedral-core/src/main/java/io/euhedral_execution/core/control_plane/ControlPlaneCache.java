@@ -7,7 +7,6 @@ import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
-import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.DummyFrame;
@@ -16,6 +15,7 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.CacheMetrics;
+import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLongArray;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
@@ -369,6 +369,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             }
 
             TOTAL_COUNT.getAndAddRelease(this.cpc, 1);
+            FlowThread.FlowContext context = FlowThread.getContext();
+            if (context != null) {
+                context.satisfiedRequest++;
+            }
         }
 
         @Override

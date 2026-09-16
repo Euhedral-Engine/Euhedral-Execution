@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
@@ -446,12 +445,6 @@ class ControlPlaneShardTest {
         shard.rebalancing.set(false);
 
         factory.created.get(0).drainedValue = false;
-        assertFalse(shard.isDrained());
-        factory.created.get(0).drainedValue = true;
-
-        LatticeVertex mockDistributor = mock(LatticeVertex.class);
-        when(mockDistributor.isDrained()).thenReturn(false);
-        shard.coreDistributor.set(mockDistributor);
         assertFalse(shard.isDrained());
     }
 

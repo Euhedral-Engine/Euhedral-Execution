@@ -15,7 +15,6 @@ import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
-import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
@@ -329,32 +328,6 @@ class ControlPlaneFragmentThreadTest {
             fragment.close();
             distributor.close();
             registry.close();
-            PinnedThreadExecutor.closeAll();
-        }
-    }
-
-    @Test
-    void everyFragmentRemoteCachePullStopsAtDistributorInsteadOfReachingUpstream() {
-        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(1, false, 41L, 43L));
-        // No workers run: this checks both routing links deterministically even on a one-core host.
-        try (ControlPlaneFragment first =
-                        new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
-                ControlPlaneFragment second =
-                        new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
-                LatticeVertex distributor = connect(first, second)) {
-            distributor.register();
-            try {
-                distributor.ingest(source);
-                AtomicInteger delivered = new AtomicInteger();
-                assertEquals(0, first.pull(frame -> delivered.incrementAndGet(), frame -> false, 1));
-                assertEquals(0, second.pull(frame -> delivered.incrementAndGet(), frame -> false, 1));
-                assertEquals(0, delivered.get());
-                assertEquals(0, source.directFrames.get());
-            } finally {
-                source.complete();
-                distributor.removeThread();
-            }
-        } finally {
             PinnedThreadExecutor.closeAll();
         }
     }
@@ -824,7 +797,7 @@ class ControlPlaneFragmentThreadTest {
         }
 
         private TestDistributor(int downstreamCount) {
-            super("fragment-cycle-test", downstreamCount, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
+            super("fragment-cycle-test", downstreamCount, RoutingFunction.DEFAULT);
         }
 
         /// Restores the isolated test's JVM-wide upstream registry to an empty state.

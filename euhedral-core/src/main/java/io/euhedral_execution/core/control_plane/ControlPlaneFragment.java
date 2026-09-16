@@ -374,10 +374,7 @@ public final class ControlPlaneFragment extends WorkRequester {
                 }
                 if (path == ExecutionPath.IDLE && processed == 0L) {
                     this.controlPolicy.idle(
-                            this.upstreamQueue,
-                            this.state.nowNs,
-                            registeredWorkers,
-                            productiveHandleCount);
+                            this.upstreamQueue, this.state.nowNs, registeredWorkers, productiveHandleCount);
                     this.state.nowNs = System.nanoTime();
                     Thread.yield();
                     continue;

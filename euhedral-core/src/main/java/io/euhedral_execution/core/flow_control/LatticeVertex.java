@@ -8,14 +8,9 @@ import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.CommonVarHandles;
-import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
-import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
-import io.euhedral_execution.data_structures.queues.BoundedMpmcQueue;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hashing.HasherApi;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
@@ -67,10 +62,7 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         this(name, downstreamCount, RoutingFunction.DEFAULT);
     }
 
-    public LatticeVertex(
-            String name,
-            int downstreamCount,
-            RoutingFunction routingFunction) {
+    public LatticeVertex(String name, int downstreamCount, RoutingFunction routingFunction) {
         super(new AtomicBoolean(false));
         this.logger = LoggerFactory.getLogger(Constants.getLoggerName(name));
         this.downstreams = new LatticeEdge[downstreamCount];

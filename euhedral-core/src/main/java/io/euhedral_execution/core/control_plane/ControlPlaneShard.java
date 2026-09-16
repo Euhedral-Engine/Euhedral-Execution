@@ -11,7 +11,6 @@ import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.queues.PlainQueue;
-import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
@@ -20,7 +19,6 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapsho
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.text.NumberFormat;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -98,9 +96,7 @@ public class ControlPlaneShard {
         BitSet coreSet = info.getCoreSet();
 
         LatticeVertex coreDistributor = new LatticeVertex(
-                this.shardName + "-CoreDistributor",
-                coreSet.previousSetBit(coreSet.length()) + 1,
-                this::route);
+                this.shardName + "-CoreDistributor", coreSet.previousSetBit(coreSet.length()) + 1, this::route);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);
         update(snapshot, topology);

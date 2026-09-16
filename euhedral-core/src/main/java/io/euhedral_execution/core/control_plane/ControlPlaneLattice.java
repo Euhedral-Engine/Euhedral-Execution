@@ -228,10 +228,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
-        LatticeVertex controller = new LatticeVertex(
-                this.name + "-GlobalDistributor",
-                SystemInfo.getMaxSocketId() + 1,
-                this::route);
+        LatticeVertex controller =
+                new LatticeVertex(this.name + "-GlobalDistributor", SystemInfo.getMaxSocketId() + 1, this::route);
         this.ingestController.set(controller);
     }
 

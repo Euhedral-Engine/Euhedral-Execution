@@ -1,7 +1,5 @@
 package io.euhedral_execution.core.control_plane;
 
-import static io.euhedral_execution.core.control_plane.FragmentControlConfig.DEFAULT_PARK_NS;
-
 import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
@@ -120,11 +118,7 @@ final class FragmentDecisionTree {
         return value > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : value * 2L;
     }
 
-    void idle(
-        UpstreamQueue upstream,
-        long now,
-        long registeredWorkers,
-        long productiveHandleCount) {
+    void idle(UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
         var function = this.cacheTimingConfig.function();
         if (function == null) {
             simpleIdle();
