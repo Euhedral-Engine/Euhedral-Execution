@@ -24,7 +24,7 @@ class FragmentConfigTest {
                 new CacheTimingConfig(15_000L, 1_000_000L, CacheTimingConfig.DEFAULT_FUNCTION, true),
                 CacheTimingConfig.DEFAULT);
         assertEquals(CacheTimingConfig.DEFAULT, FragmentConfig.ofDefaults().cacheTimingConfig());
-        assertEquals(0L, new CacheTimingConfig(0L, 1L).cacheParkNs());
+        assertEquals(0L, new CacheTimingConfig(0L, 1L).idleParkNs());
         assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(-1L, 1L));
         assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(1L, 0L));
         assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(1L, -1L));

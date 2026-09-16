@@ -126,7 +126,7 @@ public final class TrialConfigDiffer {
                 || normalized.startsWith("forcedActiveParticipantCount")) {
             return DifferenceCategory.POLICY;
         }
-        if (normalized.startsWith("cacheParkNs")
+        if (normalized.startsWith("idleParkNs")
                 || normalized.startsWith("contentionHalfLifeNanos")
                 || normalized.startsWith("cacheActuatorVersion")) {
             return DifferenceCategory.ACTUATOR;

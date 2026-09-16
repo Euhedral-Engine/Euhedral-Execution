@@ -50,7 +50,7 @@ class FragmentDecisionTreeTest {
         FragmentDecisionTree tree = createDefaultTree(null);
 
         assertEquals(0.0, tree.serviceTimeNs());
-        assertEquals(FragmentControlConfig.DEFAULT_CACHE_PARK_NS, tree.cacheParkNs());
+        assertEquals(FragmentControlConfig.DEFAULT_CACHE_PARK_NS, tree.idleParkNs());
         assertEquals(1_000_000L, tree.contentionHalfLifeNanos());
 
         // Initial batch size starts at 2
@@ -444,106 +444,6 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
-    void idle_earlyExitsWhenUpstreamHandlesZero() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 32, 100L);
-
-        tree.idle(1L, 1L, 0L, 4, 1, 100L);
-        tree.idle(1L, 1L, -1L, 4, 1, 100L);
-
-        // Observer not called for upstream <= 0
-        verify(observer, never())
-                .idleBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void idle_earlyExitsWhenRegisteredWorkersIsOneOrZero() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 32, 100L);
-
-        tree.idle(1L, 1L, 2L, 1, 1, 100L);
-        tree.idle(1L, 1L, 2L, 0, 1, 100L);
-
-        verify(observer, never())
-                .idleBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void idle_earlyExitsWhenBodyCostHistoryBelowMin() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-
-        // Only 31 samples (< 32)
-        populateBodyCosts(tree, 31, 100L);
-
-        tree.idle(1L, 1L, 2L, 4, 1, 100L);
-        verify(observer, never())
-                .idleBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void idle_earlyExitsWhenWorkerRankNonPositive() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 32, 100L);
-
-        tree.idle(1L, 1L, 2L, 4, 0, 100L);
-        tree.idle(1L, 1L, 2L, 4, -1, 100L);
-
-        verify(observer, never())
-                .idleBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void idle_evaluatesBothContentionBranchesAndNotifiesObserver() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 32, 1L);
-
-        assertEquals(-1L, tree.idle(1L, 1L, 2L, 4, 1, 850_000L));
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, -1, 850_000L, 1.0);
-
-        assertEquals(50_000L, tree.idle(2L, 1L, 2L, 4, 1, 850_001L));
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
-    }
-
-    @Test
-    void idle_evaluatesAllBodyCostBranches() {
-        assertIdleBodyCostDecision(new BodyCostWeights(10, 20, 30, 40), 32, 0);
-        assertIdleBodyCostDecision(new BodyCostWeights(0, 10, 20, 30), 32, 1);
-        assertIdleBodyCostDecision(new BodyCostWeights(0, 0, 10, 20), 32, 2);
-        assertIdleBodyCostDecision(new BodyCostWeights(0, 0, 0, 10), 32, 3);
-        assertIdleBodyCostDecision(new BodyCostWeights(0, 0, 0, 0), 64, 4);
-    }
-
-    private static void assertIdleBodyCostDecision(BodyCostWeights weights, int samples, int decision) {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        IdlePolicy policy = new IdlePolicy(0, 0, 0, 0, 0);
-        FragmentDecisionTree tree =
-                new FragmentDecisionTree(createCustomWeights(weights, policy), observer, TEST_CORE, TEST_SOCKET);
-        populateBodyCosts(tree, samples, 1L);
-
-        tree.idle(1L, 1L, 2L, 4, 1, 900_000L);
-
-        verify(observer).idleBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 1, decision, 900_000L, 1.0);
-    }
-
-    @Test
-    void idle_worksWithoutObserver() {
-        FragmentDecisionTree tree = createDefaultTree(null);
-        populateBodyCosts(tree, 32, 100L);
-
-        // Does not throw NPE when observer is null
-        tree.idle(1L, 1L, 2L, 4, 1, 100L);
-    }
-
-    @Test
     void executionPath_earlyExitsWhenUpstreamHandlesZero() {
         FragmentObserver observer = mock(FragmentObserver.class);
         FragmentDecisionTree tree = createDefaultTree(observer);
@@ -667,8 +567,8 @@ class FragmentDecisionTreeTest {
 
         assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L, 2));
         assertEquals(ExecutionPath.STAGED, tree.executionPath(2L, 1L, 2L, 2L, 4, 900_000L, 2));
-        assertEquals(ExecutionPath.CACHE, tree.executionPath(3L, 1L, 2L, 2L, 4, 100L, 3));
-        assertEquals(7_500L, tree.cacheParkNs());
+        assertEquals(ExecutionPath.IDLE, tree.executionPath(3L, 1L, 2L, 2L, 4, 100L, 3));
+        assertEquals(7_500L, tree.idleParkNs());
     }
 
     @Test
@@ -677,7 +577,7 @@ class FragmentDecisionTreeTest {
                 new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 1, 7_500L);
 
         assertTrue(tree.willCacheExecute(0L, 0L, 4, 0L, 2));
-        assertEquals(ExecutionPath.CACHE, tree.executionPath(1L, 1L, 0L, 0L, 4, 0L, 2));
+        assertEquals(ExecutionPath.IDLE, tree.executionPath(1L, 1L, 0L, 0L, 4, 0L, 2));
     }
 
     @Test

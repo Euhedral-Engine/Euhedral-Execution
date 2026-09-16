@@ -2035,7 +2035,7 @@ class HarnessConfigTest {
 
         ObjectNode configuredJson = mapper.valueToTree(defaults);
         configuredJson.put("forcedActiveParticipantCount", 3);
-        configuredJson.put("cacheParkNs", 7_500L);
+        configuredJson.put("idleParkNs", 7_500L);
         CalibrationBenchmarkConfig configured = mapper.treeToValue(configuredJson, CalibrationBenchmarkConfig.class);
 
         assertEquals(3, configured.forcedActiveParticipantCount());
@@ -2050,7 +2050,7 @@ class HarnessConfigTest {
                 JsonMappingException.class, () -> mapper.treeToValue(invalidCount, CalibrationBenchmarkConfig.class));
 
         ObjectNode invalidPark = configuredJson.deepCopy();
-        invalidPark.put("cacheParkNs", -1L);
+        invalidPark.put("idleParkNs", -1L);
         assertThrows(
                 JsonMappingException.class, () -> mapper.treeToValue(invalidPark, CalibrationBenchmarkConfig.class));
 
@@ -2064,7 +2064,7 @@ class HarnessConfigTest {
     void omittedCacheActuatorFieldsRemainDistinguishableUntilExecution() throws Exception {
         ObjectNode legacyJson = mapper.valueToTree(dummyCalibrationConfig());
         legacyJson.remove("forcedActiveParticipantCount");
-        legacyJson.remove("cacheParkNs");
+        legacyJson.remove("idleParkNs");
         legacyJson.remove("cacheActuatorVersion");
 
         CalibrationBenchmarkConfig legacy = mapper.treeToValue(legacyJson, CalibrationBenchmarkConfig.class);

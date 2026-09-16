@@ -60,7 +60,7 @@ public final class FragmentControlConfig {
 
     /// Execution strategies selected only at completed-batch boundaries.
     public enum ExecutionPath {
-        CACHE,
+        IDLE,
         DIRECT,
         STAGED,
         SKIP_THEN_DIRECT,

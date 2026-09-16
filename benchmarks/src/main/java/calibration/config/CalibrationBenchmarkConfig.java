@@ -588,7 +588,7 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("productivityThresholdWeight") @Nullable Integer productivityThresholdWeight,
             @JsonProperty("productivityGateMode") @Nullable ProductivityGateMode productivityGateMode,
             @JsonProperty("forcedActiveParticipantCount") @Nullable Integer forcedActiveParticipantCount,
-            @JsonProperty("cacheParkNs") @Nullable Long cacheParkNs,
+            @JsonProperty("idleParkNs") @Nullable Long cacheParkNs,
             @JsonProperty("contentionHalfLifeNanos") @Nullable Long contentionHalfLifeNanos,
             @JsonProperty("cacheTimingFunction") @Nullable CacheTimingFunctionConfig cacheTimingFunction,
             @JsonProperty("cacheActuatorVersion") @Nullable String cacheActuatorVersion,

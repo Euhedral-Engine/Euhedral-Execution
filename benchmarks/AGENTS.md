@@ -108,7 +108,7 @@ HarnessConfig
      - `forcedActiveParticipantCount`: Optional benchmark-only one-based rank cutoff. Ranks above the
        cutoff use CACHE without being unregistered; ranks at or below it retain ordinary DIRECT/STAGED
        selection.
-     - `cacheParkNs`: Non-negative CACHE miss park duration, persisted as part of fixture identity.
+     - `idleParkNs`: Non-negative CACHE miss park duration, persisted as part of fixture identity.
      - `cacheActuatorVersion`: Semantic CACHE actuator identity. New runs currently resolve to `cache-v1`.
      - `decisionWeightProfile` (`string`): Reference to local or namespaced imported decision weight profile (e.g. `"host.baseline"`).
      - `decisionWeights`: 28 fixed weights defining thresholds, costs, park times, and execution policies.

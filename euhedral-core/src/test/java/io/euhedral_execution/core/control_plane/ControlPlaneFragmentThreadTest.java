@@ -125,7 +125,7 @@ class ControlPlaneFragmentThreadTest {
                 Field policyField = ControlPlaneFragment.class.getDeclaredField("controlPolicy");
                 policyField.setAccessible(true);
                 FragmentDecisionTree tree = (FragmentDecisionTree) policyField.get(fragment);
-                assertEquals(timing.cacheParkNs(), tree.cacheParkNs());
+                assertEquals(timing.idleParkNs(), tree.idleParkNs());
                 assertEquals(timing.contentionHalfLifeNanos(), tree.contentionHalfLifeNanos());
             } finally {
                 template.close();

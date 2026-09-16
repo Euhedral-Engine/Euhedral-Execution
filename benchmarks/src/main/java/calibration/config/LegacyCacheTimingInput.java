@@ -19,7 +19,7 @@ public final class LegacyCacheTimingInput {
         }
         long parkNs = Long.parseLong(parkProperty);
         if (parkNs < 0L) {
-            throw new IllegalArgumentException("cacheParkNs must not be negative");
+            throw new IllegalArgumentException("idleParkNs must not be negative");
         }
         SimpleModule module = new SimpleModule();
         module.addDeserializer(CalibrationBenchmarkConfig.class, new JsonDeserializer<>() {
@@ -27,12 +27,11 @@ public final class LegacyCacheTimingInput {
             public CalibrationBenchmarkConfig deserialize(JsonParser parser, DeserializationContext context)
                     throws IOException {
                 ObjectNode node = parser.readValueAsTree();
-                if (node.hasNonNull("cacheParkNs")
-                        && mapper.treeToValue(node.get("cacheParkNs"), Long.class) != parkNs) {
+                if (node.hasNonNull("idleParkNs") && mapper.treeToValue(node.get("idleParkNs"), Long.class) != parkNs) {
                     throw new IllegalArgumentException(
-                            "Conflicting explicit cacheParkNs and deprecated " + FragmentControlConfig.CACHE_PARK_NS);
+                            "Conflicting explicit idleParkNs and deprecated " + FragmentControlConfig.CACHE_PARK_NS);
                 }
-                node.put("cacheParkNs", parkNs);
+                node.put("idleParkNs", parkNs);
                 return mapper.treeToValue(node, CalibrationBenchmarkConfig.class);
             }
         });
@@ -50,7 +49,7 @@ public final class LegacyCacheTimingInput {
                     || (arg.startsWith(prefix)
                             && Long.parseLong(arg.substring(prefix.length()))
                                     != trial.calibrationConfig().cacheParkNs())) {
-                throw new IllegalArgumentException("Conflicting cacheParkNs and deprecated trial JVM argument: " + arg);
+                throw new IllegalArgumentException("Conflicting idleParkNs and deprecated trial JVM argument: " + arg);
             }
         }
     }

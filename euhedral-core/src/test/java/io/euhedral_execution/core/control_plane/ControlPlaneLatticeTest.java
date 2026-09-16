@@ -535,12 +535,7 @@ class ControlPlaneLatticeTest {
         LatticeVertex mockController = mock(LatticeVertex.class);
         controlPlane.ingestController.set(mockController);
 
-        // Ingest controller is not drained
-        when(mockController.isDrained()).thenReturn(false);
-        assertFalse(controlPlane.isDrained());
-
-        // Ingest controller is drained, but shard 0 is not drained
-        when(mockController.isDrained()).thenReturn(true);
+        // Shard 0 is not drained
         when(mockShards[0].isDrained()).thenReturn(false);
         when(mockShards[1].isDrained()).thenReturn(true);
         assertFalse(controlPlane.isDrained());

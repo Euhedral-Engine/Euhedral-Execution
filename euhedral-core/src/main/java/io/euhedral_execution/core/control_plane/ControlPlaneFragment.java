@@ -372,10 +372,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                     }
                     this.state.nowNs = end;
                 }
-                if (path == ExecutionPath.CACHE && processed == 0L) {
-                    idleCache(
-                            this.config.cacheTimingConfig(),
-                            this.controlPolicy,
+                if (path == ExecutionPath.IDLE && processed == 0L) {
+                    this.controlPolicy.idle(
                             this.upstreamQueue,
                             this.state.nowNs,
                             registeredWorkers,
@@ -416,28 +414,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         return timing.function() == null
                 ? upstream.getEffectiveContention(now, policy.contentionHalfLifeNanos())
                 : upstream.getAdaptiveContention(now, policy.contentionHalfLifeNanos());
-    }
-
-    static void idleCache(
-            CacheTimingConfig timing,
-            FragmentDecisionTree policy,
-            UpstreamQueue upstream,
-            long now,
-            long registeredWorkers,
-            long productiveHandleCount) {
-        var function = timing.function();
-        if (function == null) {
-            policy.cachePark();
-        } else {
-            long contention = upstream.getAdaptiveContention(now, timing.contentionHalfLifeNanos());
-            double c = contention / 1_000_000.0;
-            double p = registeredWorkers > 0 ? (double) productiveHandleCount / registeredWorkers : Double.NaN;
-            double body = policy.smoothedBodyCostNs();
-            long park = function.parkNanos(c, p, body, timing.cacheParkNs());
-            long halfLife = function.halfLifeNanos(c, p, body, timing.contentionHalfLifeNanos());
-            upstream.installContentionHalfLife(now, halfLife, timing.contentionHalfLifeNanos());
-            LockSupport.parkNanos(park);
-        }
     }
 
     /// Records loop execution telemetry and advances policy only at a batch boundary.
