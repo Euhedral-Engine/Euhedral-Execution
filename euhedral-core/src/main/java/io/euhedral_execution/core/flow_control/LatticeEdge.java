@@ -157,22 +157,6 @@ public class LatticeEdge extends UpstreamHandle {
         }
     }
 
-    public long getUpstreamCacheCapacity() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            return parent.getUpstreamCacheCapacity();
-        }
-        return 0;
-    }
-
-    public long getUpstreamCacheCount() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            return parent.getUpstreamCacheCount();
-        }
-        return 0;
-    }
-
     /// Returns the number of [UpstreamHandles][UpstreamHandle]
     public long getUpstreamHandleCount() {
         return UPSTREAM_COUNT.getOpaque();

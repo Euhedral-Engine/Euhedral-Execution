@@ -303,7 +303,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 long localCache = super.getLocalCacheCount();
 
-                if (newUpCount == 0 && localCache == 0 && super.getUpstreamCacheCount() == 0) {
+                if (newUpCount == 0 && localCache == 0) {
                     LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
                     continue;
                 }

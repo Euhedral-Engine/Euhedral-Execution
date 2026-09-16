@@ -748,7 +748,7 @@ class UpstreamQueueTest {
     private static CachedQueueFixture cachedQueueFixture() {
         QueueIngestSink sink = new QueueIngestSink();
         LatticeVertex vertex = new LatticeVertex(
-                "productive-request-test", 2, LatticeVertex.RoutingFunction.DEFAULT, 32, RoutingPolicy.ANYWHERE);
+                "productive-request-test", 2, LatticeVertex.RoutingFunction.DEFAULT);
         BitSet active = new BitSet(2);
         active.set(0, 2);
         LatticeEdge[] downstreams = {new LatticeEdge(vertex.getDrainFlag()), new LatticeEdge(vertex.getDrainFlag())};

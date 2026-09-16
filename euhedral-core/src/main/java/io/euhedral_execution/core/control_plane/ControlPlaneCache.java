@@ -76,9 +76,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         super(
                 getName(cacheConfig),
                 smtEnabled ? 2 : 1,
-                smtEnabled ? (frame, mapSize) -> (int) frame.getRoutingHash() & 1 : (frame, mapSize) -> 0,
-                0,
-                RoutingPolicy.CACHE_LOCAL);
+                smtEnabled ? (frame, mapSize) -> (int) frame.getRoutingHash() & 1 : (frame, mapSize) -> 0);
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitions();

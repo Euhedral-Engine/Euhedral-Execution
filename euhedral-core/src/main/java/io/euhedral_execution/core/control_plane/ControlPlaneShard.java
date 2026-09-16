@@ -95,23 +95,12 @@ public class ControlPlaneShard {
                 topology.effectiveCores().length(), r -> new Thread(r, this.shardName + "-ExecutorService"));
 
         SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
-        long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
-        int cpus = info.getCpuSet().cardinality();
-        long capacity = (long) (sizeL3 * 0.7);
-        capacity /= QueueUtils.REFERENCE_SIZE;
-
-        long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
-
-        String partChunk = NumberFormat.getNumberInstance().format(chunkSize / Math.max(cpus, 1));
-        String strCap = NumberFormat.getNumberInstance().format(cpus * chunkSize);
-        logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cpus, partChunk, strCap);
+        BitSet coreSet = info.getCoreSet();
 
         LatticeVertex coreDistributor = new LatticeVertex(
                 this.shardName + "-CoreDistributor",
-                SystemInfo.getMaxCoreId() + 1,
-                this::route,
-                (int) 0,
-                RoutingPolicy.SOCKET_LOCAL);
+                coreSet.previousSetBit(coreSet.length()) + 1,
+                this::route);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);
         update(snapshot, topology);
@@ -437,8 +426,8 @@ public class ControlPlaneShard {
             }
         }
 
-        long cleared = distributor.clearCachedFrames();
         try {
+            long cleared = 0;
             for (CloneableObject clone : activeClones) {
                 if (clone != null) {
                     cleared += clone.reset(deadlineNanos);
@@ -480,11 +469,6 @@ public class ControlPlaneShard {
             return true;
         }
         if (this.rebalancing.get()) {
-            return false;
-        }
-
-        LatticeVertex coreDistributor = this.coreDistributor.get();
-        if (coreDistributor != null && !coreDistributor.isDrained()) {
             return false;
         }
 
