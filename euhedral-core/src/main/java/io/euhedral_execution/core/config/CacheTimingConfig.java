@@ -7,11 +7,7 @@ import org.jspecify.annotations.Nullable;
 public record CacheTimingConfig(
         long idleParkNs,
         long contentionHalfLifeNanos,
-        @Nullable CacheTimingFunctionConfig function,
-        boolean scarcityGateEnabled) {
-    public CacheTimingConfig(long park, long halfLife, @Nullable CacheTimingFunctionConfig function) {
-        this(park, halfLife, function, false);
-    }
+        @Nullable CacheTimingFunctionConfig function) {
 
     /// Explicit fixed timing, including legacy callers and benchmark POLICY_OFF.
     public CacheTimingConfig(long cacheParkNs, long contentionHalfLifeNanos) {
@@ -51,7 +47,7 @@ public record CacheTimingConfig(
             250000L,
             2000000L);
     public static final CacheTimingConfig DEFAULT =
-            new CacheTimingConfig(DEFAULT_CACHE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION, true);
+            new CacheTimingConfig(DEFAULT_CACHE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION);
 
     public CacheTimingConfig {
         if (idleParkNs < 0L) {

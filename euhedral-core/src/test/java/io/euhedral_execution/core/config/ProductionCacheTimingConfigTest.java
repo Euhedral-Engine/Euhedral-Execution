@@ -23,7 +23,6 @@ class ProductionCacheTimingConfigTest {
         assertEquals(frozen, runtimeOnly);
         assertEquals(frozen, CacheTimingConfig.DEFAULT_FUNCTION);
         assertSame(CacheTimingConfig.DEFAULT_FUNCTION, CacheTimingConfig.DEFAULT.function());
-        assertTrue(CacheTimingConfig.DEFAULT.scarcityGateEnabled());
         for (var values : List.of(frozen.parkCoefficients(), frozen.halfLifeCoefficients())) {
             assertThrows(UnsupportedOperationException.class, () -> values.set(0, 0.0));
         }
@@ -57,7 +56,7 @@ class ProductionCacheTimingConfigTest {
                 defaults.clone(new CloneConfig("test", 0, new BitSet())).cacheTimingConfig());
         var suppliedFunction =
                 CacheTimingFunctionConfigTest.function(List.of(0.0, 0.0, 0.0, 0.0), List.of(0.0, 0.0, 0.0, 0.0));
-        var supplied = new CacheTimingConfig(32000, 6000000, suppliedFunction, true);
+        var supplied = new CacheTimingConfig(32000, 6000000, suppliedFunction);
         var config =
                 FragmentConfig.ofBenchmark(mock(FragmentObserver.class), FragmentDecisionWeights.DEFAULT, supplied);
         assertSame(supplied, config.cacheTimingConfig());
@@ -65,7 +64,6 @@ class ProductionCacheTimingConfigTest {
         assertSame(
                 supplied, config.clone(new CloneConfig("test", 0, new BitSet())).cacheTimingConfig());
         assertNull(new CacheTimingConfig(32000, 6000000).function());
-        assertNull(new CacheTimingConfig(32000, 6000000, null, true).function());
-        assertFalse(new CacheTimingConfig(32000, 6000000, suppliedFunction, false).scarcityGateEnabled());
+        assertNull(new CacheTimingConfig(32000, 6000000, null).function());
     }
 }

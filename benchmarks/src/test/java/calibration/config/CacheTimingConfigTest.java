@@ -31,14 +31,12 @@ class CacheTimingConfigTest {
             """));
         var config = mapper.treeToValue(json, CalibrationBenchmarkConfig.class);
         assertNotNull(config.toCacheTimingConfig().function());
-        assertTrue(config.toCacheTimingConfig().scarcityGateEnabled());
         assertEquals(config, mapper.readValue(mapper.writeValueAsString(config), CalibrationBenchmarkConfig.class));
         for (var copy : List.of(
                 config.withDecisionWeights(FragmentDecisionWeights.DEFAULT),
                 config.withDecisionWeightProfile("other"),
                 config.withLifecycleMode(CalibrationLifecycleMode.CONTINUOUS),
                 config.withCurrentCacheActuatorIdentity())) {
-            assertTrue(copy.toCacheTimingConfig().scarcityGateEnabled());
             assertEquals(
                     config.cacheTimingFunction(), copy.toCacheTimingConfig().function());
         }

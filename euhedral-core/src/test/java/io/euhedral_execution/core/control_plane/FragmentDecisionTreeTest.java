@@ -13,10 +13,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
@@ -27,22 +23,13 @@ class FragmentDecisionTreeTest {
     private static final int TEST_SOCKET = 1;
 
     private static FragmentDecisionTree createDefaultTree(FragmentObserver observer) {
-        return new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, observer, TEST_CORE, TEST_SOCKET);
-    }
-
-    private static FragmentDecisionWeights createCustomWeights(BodyCostWeights bodyWeights, IdlePolicy idlePolicy) {
-        return new FragmentDecisionWeights(bodyWeights, idlePolicy, ParetoWeights.DEFAULT);
+        return new FragmentDecisionTree(observer, TEST_CORE, TEST_SOCKET);
     }
 
     private static void populateBodyCosts(FragmentDecisionTree tree, int count, long valueNs) {
         for (int i = 0; i < count; i++) {
             tree.recordBodyCost(valueNs);
         }
-    }
-
-    @Test
-    void constructorThrowsOnNullDecisionWeights() {
-        assertThrows(NullPointerException.class, () -> new FragmentDecisionTree(null, null, 0, 0));
     }
 
     @Test
@@ -212,34 +199,6 @@ class FragmentDecisionTreeTest {
         verify(observer)
                 .execBranchDecision(
                         eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(150.0));
-    }
-
-    @Test
-    void recordBodyCost_circularBufferUpdatesEvery32Samples() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = new FragmentDecisionTree(
-                createCustomWeights(
-                        new BodyCostWeights(10_000, 10_000, 10_000, 10_000),
-                        FragmentDecisionWeights.IdlePolicy.DEFAULT),
-                observer,
-                TEST_CORE,
-                TEST_SOCKET);
-
-        // Window 1: 32 samples of 100ns -> second minimum 100.0
-        populateBodyCosts(tree, 32, 100L);
-        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(100.0));
-
-        reset(observer);
-
-        // Window 2: 32 samples of 300ns -> circular buffer overwrites, second minimum becomes 300.0
-        populateBodyCosts(tree, 32, 300L);
-        tree.executionPath(2L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(2L), eq(1L), anyInt(), anyInt(), eq(100L), eq(300.0));
     }
 
     @Test
@@ -476,16 +435,6 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
-    void executionPath_stagesLowContentionWhenBodyCostExceedsDirectThreshold() {
-        FragmentDecisionWeights weights =
-                new FragmentDecisionWeights(BodyCostWeights.DEFAULTS, IdlePolicy.DEFAULT, 0, ParetoWeights.DEFAULT);
-        FragmentDecisionTree tree = new FragmentDecisionTree(weights, null, TEST_CORE, TEST_SOCKET);
-        populateBodyCosts(tree, 32, 1L);
-
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L));
-    }
-
-    @Test
     void executionPath_withProductiveHandles() {
         FragmentObserver observer = mock(FragmentObserver.class);
         FragmentDecisionTree tree = createDefaultTree(observer);
@@ -518,8 +467,7 @@ class FragmentDecisionTreeTest {
 
     @Test
     void forcedParticipantCountCachesOnlyRanksAboveTheCutoff() {
-        FragmentDecisionTree tree =
-                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 2, 7_500L);
+        FragmentDecisionTree tree = new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 2, 7_500L);
         populateBodyCosts(tree, 32, 100L);
 
         assertFalse(tree.shouldIdle(100L, 2L, 4, 2));
@@ -529,8 +477,7 @@ class FragmentDecisionTreeTest {
 
     @Test
     void forcedCacheDoesNotRequireBodyHistoryOrUpstreamHandles() {
-        FragmentDecisionTree tree =
-                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 1, 7_500L);
+        FragmentDecisionTree tree = new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 1, 7_500L);
 
         assertTrue(tree.shouldIdle(0L, 0L, 4, 2));
     }
@@ -538,10 +485,8 @@ class FragmentDecisionTreeTest {
     @Test
     void forcedParticipantConfigurationRejectsInvalidValues() {
         assertThrows(
-                IllegalArgumentException.class,
-                () -> new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 0, 1L));
+                IllegalArgumentException.class, () -> new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 0, 1L));
         assertThrows(
-                IllegalArgumentException.class,
-                () -> new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, TEST_CORE, TEST_SOCKET, 1, -1L));
+                IllegalArgumentException.class, () -> new FragmentDecisionTree(null, TEST_CORE, TEST_SOCKET, 1, -1L));
     }
 }

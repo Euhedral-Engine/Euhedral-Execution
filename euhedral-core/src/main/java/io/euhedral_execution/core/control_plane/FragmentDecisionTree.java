@@ -1,9 +1,9 @@
 package io.euhedral_execution.core.control_plane;
 
 import io.euhedral_execution.core.config.CacheTimingConfig;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
+import io.euhedral_execution.core.utils.MicroCalibrator;
 import java.util.Objects;
 import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
@@ -14,6 +14,11 @@ import org.jspecify.annotations.Nullable;
 /// All fields use plain access because one pinned fragment thread owns the policy for its lifetime.
 final class FragmentDecisionTree {
     static final long CONTENTION_THRESHOLD = 850_000; // 85%
+
+    static final int EXPENSIVE_BODY_WEIGHT =
+            Integer.parseInt(System.getProperty("euhedral.expensive.body.weight", "288"));
+    static final int DIRECT_EXECUTION_BODY_WEIGHT =
+            Integer.parseInt(System.getProperty("euhedral.direct.exec.bw", "272"));
 
     static final long DIRECT_BATCH_WORK_TARGET_NS = 250_000L;
     static final long STAGED_BATCH_WORK_TARGET_NS = 8_000_000L;
@@ -30,11 +35,10 @@ final class FragmentDecisionTree {
     private final FragmentObserver observer;
     private final Integer forcedActiveParticipantCount;
     private final CacheTimingConfig cacheTimingConfig;
-    private final boolean participationPolicyEnabled;
 
     private final long bodyCostDirectThreshold;
 
-    private final long maxBodyCostThreshold;
+    private final long expensiveBodyCostThreshold;
     private final double[] bodyCostWindow = new double[BODY_COST_WINDOW_SAMPLES];
     private ExecutionPath executionPath;
     private long batchSize;
@@ -45,60 +49,35 @@ final class FragmentDecisionTree {
     private int expensiveConfirmationWindows;
     private int activeMissStreak;
 
-    FragmentDecisionTree(
-            @NonNull FragmentDecisionWeights decisionWeights,
-            @Nullable FragmentObserver observer,
-            int core,
-            int socket) {
-        this(decisionWeights, observer, core, socket, null, CacheTimingConfig.DEFAULT, true);
+    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket) {
+        this(observer, core, socket, null, CacheTimingConfig.DEFAULT);
     }
 
     FragmentDecisionTree(
-            @NonNull FragmentDecisionWeights decisionWeights,
-            @Nullable FragmentObserver observer,
-            int core,
-            int socket,
-            @NonNull CacheTimingConfig cacheTimingConfig) {
-        this(decisionWeights, observer, core, socket, null, cacheTimingConfig, true);
+            @Nullable FragmentObserver observer, int core, int socket, @NonNull CacheTimingConfig cacheTimingConfig) {
+        this(observer, core, socket, null, cacheTimingConfig);
     }
 
     FragmentDecisionTree(
-            @NonNull FragmentDecisionWeights decisionWeights,
             @Nullable FragmentObserver observer,
             int core,
             int socket,
             @Nullable Integer forcedActiveParticipantCount,
             long cacheParkNs) {
-        this(decisionWeights, observer, core, socket, forcedActiveParticipantCount, cacheParkNs, true);
-    }
-
-    FragmentDecisionTree(
-            @NonNull FragmentDecisionWeights decisionWeights,
-            @Nullable FragmentObserver observer,
-            int core,
-            int socket,
-            @Nullable Integer forcedActiveParticipantCount,
-            long cacheParkNs,
-            boolean participationPolicyEnabled) {
         this(
-                decisionWeights,
                 observer,
                 core,
                 socket,
                 forcedActiveParticipantCount,
-                new CacheTimingConfig(cacheParkNs, CacheTimingConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS),
-                participationPolicyEnabled);
+                new CacheTimingConfig(cacheParkNs, CacheTimingConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS));
     }
 
     FragmentDecisionTree(
-            @NonNull FragmentDecisionWeights decisionWeights,
             @Nullable FragmentObserver observer,
             int core,
             int socket,
             @Nullable Integer forcedActiveParticipantCount,
-            @NonNull CacheTimingConfig cacheTimingConfig,
-            boolean participationPolicyEnabled) {
-        Objects.requireNonNull(decisionWeights);
+            @NonNull CacheTimingConfig cacheTimingConfig) {
         if (forcedActiveParticipantCount != null && forcedActiveParticipantCount <= 0) {
             throw new IllegalArgumentException("forcedActiveParticipantCount must be positive");
         }
@@ -108,17 +87,17 @@ final class FragmentDecisionTree {
         this.socket = socket;
         this.forcedActiveParticipantCount = forcedActiveParticipantCount;
         this.cacheTimingConfig = cacheTimingConfig;
-        this.participationPolicyEnabled = participationPolicyEnabled;
 
-        FragmentControlConfig config = new FragmentControlConfig(decisionWeights);
-        this.maxBodyCostThreshold = config.idleBodyCostThresholds.h;
-        this.bodyCostDirectThreshold = config.bodyCostDirectThreshold;
+        MicroCalibrator calibrator = new MicroCalibrator();
+        calibrator.warmup();
+        this.expensiveBodyCostThreshold = calibrator.benchmark(EXPENSIVE_BODY_WEIGHT);
+        this.bodyCostDirectThreshold = calibrator.benchmark(DIRECT_EXECUTION_BODY_WEIGHT);
         reset();
     }
 
     /// Doubles a positive batch limit without signed overflow.
     static long saturatingDouble(long value) {
-        return value > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : value * 2L;
+        return value > (Long.MAX_VALUE >>> 1) ? Long.MAX_VALUE : value << 1;
     }
 
     boolean shouldIdle(long contention, long productiveHandles, int registeredWorkers, int workerRank) {
@@ -132,9 +111,6 @@ final class FragmentDecisionTree {
             return true;
         }
         if (isPlentiful(productiveHandles, registeredWorkers)) {
-            return false;
-        }
-        if (!this.participationPolicyEnabled) {
             return false;
         }
         return ParticipationLogisticModel.shouldIdle(
@@ -192,9 +168,7 @@ final class FragmentDecisionTree {
     }
 
     boolean isPlentiful(long productiveHandles, int registeredWorkers) {
-        return this.cacheTimingConfig.scarcityGateEnabled()
-                && registeredWorkers > 0
-                && productiveHandles >= registeredWorkers;
+        return registeredWorkers > 0 && productiveHandles >= registeredWorkers;
     }
 
     private void recordExecDecision(
@@ -338,7 +312,7 @@ final class FragmentDecisionTree {
                 secondMinimum = sample;
             }
         }
-        if (secondMinimum >= this.maxBodyCostThreshold) {
+        if (secondMinimum >= this.expensiveBodyCostThreshold) {
             if (this.expensiveConfirmationWindows < EXPENSIVE_CONFIRMATION_WINDOWS) {
                 this.expensiveConfirmationWindows++;
             }

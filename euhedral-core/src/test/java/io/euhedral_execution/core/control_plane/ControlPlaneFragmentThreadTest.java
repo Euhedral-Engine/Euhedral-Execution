@@ -79,7 +79,7 @@ class ControlPlaneFragmentThreadTest {
         if (pauseQueueInitialization) {
             Mockito.doAnswer(pauseInitialization).when(observer).pullBucketTarget();
         } else {
-            Mockito.doAnswer(pauseInitialization).when(config).decisionWeights();
+            Mockito.doAnswer(pauseInitialization).when(config).cacheTimingConfig();
         }
         try {
             assertFalse(fragment.ready());

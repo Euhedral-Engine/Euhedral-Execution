@@ -21,7 +21,7 @@ class FragmentConfigTest {
     @Test
     void cacheTimingDefaultsValidationAndCompatibility() {
         assertEquals(
-                new CacheTimingConfig(15_000L, 1_000_000L, CacheTimingConfig.DEFAULT_FUNCTION, true),
+                new CacheTimingConfig(15_000L, 1_000_000L, CacheTimingConfig.DEFAULT_FUNCTION),
                 CacheTimingConfig.DEFAULT);
         assertEquals(CacheTimingConfig.DEFAULT, FragmentConfig.ofDefaults().cacheTimingConfig());
         assertEquals(0L, new CacheTimingConfig(0L, 1L).idleParkNs());

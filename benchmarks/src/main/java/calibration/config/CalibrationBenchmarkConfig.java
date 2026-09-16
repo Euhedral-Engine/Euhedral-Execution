@@ -48,8 +48,7 @@ public record CalibrationBenchmarkConfig(
 
     @JsonIgnore
     public CacheTimingConfig toCacheTimingConfig() {
-        return new CacheTimingConfig(
-                cacheParkNs, contentionHalfLifeNanos, cacheTimingFunction, cacheScarcityGateEnabled);
+        return new CacheTimingConfig(cacheParkNs, contentionHalfLifeNanos, cacheTimingFunction);
     }
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;

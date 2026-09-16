@@ -2,10 +2,8 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -82,37 +80,8 @@ class ParticipationLogisticModelTest {
     }
 
     @Test
-    void policyModeOverrideIsRestrictedToTheBenchmarkHarness() {
-        assertTrue(ControlPlaneFragment.resolveParticipationPolicyEnabled(false, "POLICY_ON"));
-        assertFalse(ControlPlaneFragment.resolveParticipationPolicyEnabled(true, "POLICY_OFF"));
-        assertThrows(
-                IllegalStateException.class,
-                () -> ControlPlaneFragment.resolveParticipationPolicyEnabled(false, "POLICY_OFF"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> ControlPlaneFragment.resolveParticipationPolicyEnabled(true, "FORCE_CACHE"));
-    }
-
-    @Test
-    void benchmarkPolicyOffBypassesOnlyTheLearnedCacheDecision() {
-        FragmentDecisionTree policyOn =
-                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, 0, 0, null, 15_000L, true);
-        FragmentDecisionTree policyOff =
-                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, 0, 0, null, 15_000L, false);
-        for (int index = 0; index < 32; index++) {
-            policyOn.recordBodyCost(1L);
-            policyOff.recordBodyCost(1L);
-        }
-
-        assertTrue(policyOn.shouldIdle(431_857L, 1L, 7, 2));
-        assertFalse(policyOff.shouldIdle(431_857L, 1L, 7, 2));
-        assertTrue(policyOff.shouldIdle(431_857L, 0L, 7, 2));
-        assertFalse(policyOff.shouldIdle(431_857L, 1L, 7, 1));
-    }
-
-    @Test
     void modelOnlyOverridesTheIdleBranch() {
-        FragmentDecisionTree tree = new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, 0, 0);
+        FragmentDecisionTree tree = new FragmentDecisionTree(null, 0, 0);
         for (int index = 0; index < 32; index++) {
             tree.recordBodyCost(1L);
         }

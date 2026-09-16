@@ -145,7 +145,7 @@ class ControlPlaneFragmentTest {
                 base.observer(),
                 base.maxBatchSize(),
                 base.smtEnabled(),
-                new CacheTimingConfig(15000, 1000000, null, true),
+                new CacheTimingConfig(15000, 1000000, null),
                 base.benchmarkMode(),
                 base.metricPrefix(),
                 base.registry());

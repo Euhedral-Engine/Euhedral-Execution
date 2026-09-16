@@ -29,7 +29,7 @@ No production default or winning coefficient is installed by this command.
 
 ## Runtime boundary
 
-`CacheTimingConfig.DEFAULT` enables `scarcityGateEnabled` and the exact frozen
+`CacheTimingConfig.DEFAULT` uses the exact frozen
 timing function. Historical constructors preserve their false gate default.
 The calibration JSON switch is
 `cacheScarcityGateEnabled`. With it enabled, the local gate is:
