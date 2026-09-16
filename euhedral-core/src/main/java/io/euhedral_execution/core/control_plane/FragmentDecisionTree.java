@@ -1,12 +1,11 @@
 package io.euhedral_execution.core.control_plane;
 
-import static io.euhedral_execution.core.control_plane.FragmentControlConfig.DEFAULT_PARK_NS;
-
 import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.BodyCostThresholds;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import java.util.Objects;
 import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
@@ -119,81 +118,19 @@ final class FragmentDecisionTree {
         return value > Long.MAX_VALUE / 2L ? Long.MAX_VALUE : value * 2L;
     }
 
-    /// Makes an idling decision using the idle branch and parks the fragment
-    public long idle(
-            long cycleEpoch,
-            long batchEpoch,
-            long upstreamHandles,
-            int registeredWorkers,
-            int workerRank,
-            long contention) {
-        if (upstreamHandles <= 0) {
-            LockSupport.parkNanos(DEFAULT_PARK_NS);
-            return DEFAULT_PARK_NS;
-        }
-        if (registeredWorkers <= 1 || bodyCostHistoryCount < BODY_COST_MIN_HISTORY) {
-            return -1L;
-        }
-        if (workerRank <= 0) {
-            return -1L;
-        }
-
-        if (contention <= CONTENTION_THRESHOLD) {
-            if (this.observer != null) {
-                this.observer.idleBranchDecision(
-                        this.core, this.socket, cycleEpoch, batchEpoch, 0, -1, contention, this.smoothedBodyCostNs);
-            }
-            return -1;
-        }
-
-        return idle(cycleEpoch, batchEpoch, this.idleBodyCostThresholds, this.idleTimeNs, contention);
-    }
-
-    private long idle(
-            long cycleEpoch, long batchEpoch, BodyCostThresholds thresholds, IdlePolicy policy, long contention) {
-        int decision = -1;
-        long idleDurationNs;
-        try {
-            if (this.smoothedBodyCostNs <= thresholds.xs) {
-                decision = 0;
-                idleDurationNs = policy.xsPark();
-                LockSupport.parkNanos(idleDurationNs);
-                return idleDurationNs;
-            }
-            if (this.smoothedBodyCostNs <= thresholds.s) {
-                decision = 1;
-                idleDurationNs = policy.sPark();
-                LockSupport.parkNanos(idleDurationNs);
-                return idleDurationNs;
-            }
-            if (this.smoothedBodyCostNs <= thresholds.m) {
-                decision = 2;
-                idleDurationNs = policy.mPark();
-                LockSupport.parkNanos(idleDurationNs);
-                return idleDurationNs;
-            }
-            if (this.smoothedBodyCostNs <= thresholds.h) {
-                decision = 3;
-                idleDurationNs = policy.hPark();
-                LockSupport.parkNanos(idleDurationNs);
-                return idleDurationNs;
-            }
-            decision = 4;
-            idleDurationNs = policy.xhPark();
-            LockSupport.parkNanos(idleDurationNs);
-            return idleDurationNs;
-        } finally {
-            if (this.observer != null) {
-                this.observer.idleBranchDecision(
-                        this.core,
-                        this.socket,
-                        cycleEpoch,
-                        batchEpoch,
-                        1,
-                        decision,
-                        contention,
-                        this.smoothedBodyCostNs);
-            }
+    void idle(UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
+        var function = this.cacheTimingConfig.function();
+        if (function == null) {
+            simpleIdle();
+        } else {
+            long contention = upstream.getAdaptiveContention(now, contentionHalfLifeNanos());
+            double c = contention / 1_000_000.0;
+            double p = registeredWorkers > 0 ? (double) productiveHandleCount / registeredWorkers : Double.NaN;
+            double body = this.smoothedBodyCostNs;
+            long park = function.parkNanos(c, p, body, idleParkNs());
+            long halfLife = function.halfLifeNanos(c, p, body, contentionHalfLifeNanos());
+            upstream.installContentionHalfLife(now, halfLife, contentionHalfLifeNanos());
+            LockSupport.parkNanos(park);
         }
     }
 
@@ -207,7 +144,7 @@ final class FragmentDecisionTree {
             int workerRank) {
         if (!isPlentiful(productiveHandles, registeredWorkers) && isForcedCacheRank(workerRank)) {
             recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
-            this.executionPath = ExecutionPath.CACHE;
+            this.executionPath = ExecutionPath.IDLE;
             return this.executionPath;
         }
         if (upstreamHandles <= 0) {
@@ -228,11 +165,12 @@ final class FragmentDecisionTree {
                 && shouldCacheExecute(
                         (double) contention / 1_000_000.0, productiveHandles, registeredWorkers, workerRank)) {
             recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
-            this.executionPath = ExecutionPath.CACHE;
-            return ExecutionPath.CACHE;
+            this.executionPath = ExecutionPath.IDLE;
+            return ExecutionPath.IDLE;
         }
 
-        if (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold) {
+        if (productiveHandles >= registeredWorkers
+                || (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold)) {
             recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
             this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;
@@ -400,17 +338,17 @@ final class FragmentDecisionTree {
         return this.bodyCostHistoryCount >= BODY_COST_MIN_HISTORY;
     }
 
+    void simpleIdle() {
+        LockSupport.parkNanos(idleParkNs());
+    }
+
     /// Returns the configured CACHE miss park duration for this actuator fixture.
-    long cacheParkNs() {
-        return this.cacheTimingConfig.cacheParkNs();
+    long idleParkNs() {
+        return this.cacheTimingConfig.idleParkNs();
     }
 
     long contentionHalfLifeNanos() {
         return this.cacheTimingConfig.contentionHalfLifeNanos();
-    }
-
-    void cachePark() {
-        LockSupport.parkNanos(this.cacheTimingConfig.cacheParkNs());
     }
 
     /// Returns the current sparse executor-body estimate in nanoseconds.

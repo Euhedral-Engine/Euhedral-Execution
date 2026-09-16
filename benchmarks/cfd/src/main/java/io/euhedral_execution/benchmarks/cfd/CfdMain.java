@@ -224,7 +224,7 @@ public final class CfdMain {
                                                 options.shutdownTimeoutMillis());
                                 };
                         var simulation = new Simulation(configuration, geometry, execution)) {
-                    if (lattice != null && lattice.getActiveWorkers() != budget.workerCount()) {
+                    if (lattice != null && lattice.getActiveWorkers() != budget.physicalCoreCount()) {
                         throw new IllegalStateException(
                                 "effective lattice workers differ from the requested comparison budget");
                     }

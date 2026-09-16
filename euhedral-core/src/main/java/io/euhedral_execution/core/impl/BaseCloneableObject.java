@@ -70,6 +70,11 @@ public final class BaseCloneableObject implements CloneableObject {
         this.executor.start();
         this.fragment.start();
         this.executor.input(this.fragment.output());
+        if (this.fragment.getSmtBuddy() != null) {
+            this.executor
+                    .hookOnClone(this.config.getCpuSet()[1])
+                    .input(this.fragment.getSmtBuddy().output());
+        }
     }
 
     @Override

@@ -119,6 +119,6 @@ class ParticipationLogisticModelTest {
         }
 
         assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 1L, 1L, 7, 431_856L, 2));
-        assertEquals(ExecutionPath.CACHE, tree.executionPath(2L, 1L, 1L, 1L, 7, 431_857L, 2));
+        assertEquals(ExecutionPath.IDLE, tree.executionPath(2L, 1L, 1L, 1L, 7, 431_857L, 2));
     }
 }

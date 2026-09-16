@@ -309,7 +309,12 @@ class ControlPlaneCacheTest {
     private static class CPCImpl extends ControlPlaneCache {
 
         public CPCImpl(@NonNull CacheConfig cacheConfig) {
-            super(cacheConfig);
+            super(
+                    cacheConfig,
+                    cacheConfig.cloneConfig() == null
+                            ? 0
+                            : cacheConfig.cloneConfig().getCpuSet()[0],
+                    false);
         }
 
         @Override

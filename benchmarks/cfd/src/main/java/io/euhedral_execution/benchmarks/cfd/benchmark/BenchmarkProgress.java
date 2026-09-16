@@ -33,6 +33,13 @@ final class BenchmarkProgress implements AutoCloseable {
     }
 
     BenchmarkProgress(String label, PrintStream out, LongSupplier clock, boolean periodic) {
+        this(label, out, clock, periodic, INTERVAL_MILLIS);
+    }
+
+    BenchmarkProgress(String label, PrintStream out, LongSupplier clock, boolean periodic, long intervalMillis) {
+        if (periodic && intervalMillis <= 0) {
+            throw new IllegalArgumentException("intervalMillis must be positive");
+        }
         this.label = label;
         this.out = out;
         this.clock = clock;
@@ -41,7 +48,7 @@ final class BenchmarkProgress implements AutoCloseable {
                         Thread.ofPlatform().daemon().name("cfd-progress").factory())
                 : null;
         if (reporter != null) {
-            reporter.scheduleWithFixedDelay(this::report, INTERVAL_MILLIS, INTERVAL_MILLIS, TimeUnit.MILLISECONDS);
+            reporter.scheduleWithFixedDelay(this::report, intervalMillis, intervalMillis, TimeUnit.MILLISECONDS);
         }
     }
 

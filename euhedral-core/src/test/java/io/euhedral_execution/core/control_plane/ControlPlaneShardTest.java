@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
@@ -91,6 +90,9 @@ class ControlPlaneShardTest {
         BitSet cores = new BitSet(2);
         cores.set(0, 2);
         mockSysInfo.when(() -> SystemInfo.fromHexMask("3")).thenReturn(cores);
+        BitSet cpus = new BitSet(4);
+        cpus.set(0, 4);
+        mockSysInfo.when(() -> SystemInfo.fromHexMask("f")).thenReturn(cpus);
         mockSysInfo.when(() -> SystemInfo.getSocketInfo(0)).thenReturn(new SocketInfo("f", "3", 0));
         mockSysInfo.when(() -> SystemInfo.socketL3Cache(0)).thenReturn(0L);
     }
@@ -443,12 +445,6 @@ class ControlPlaneShardTest {
         shard.rebalancing.set(false);
 
         factory.created.get(0).drainedValue = false;
-        assertFalse(shard.isDrained());
-        factory.created.get(0).drainedValue = true;
-
-        LatticeVertex mockDistributor = mock(LatticeVertex.class);
-        when(mockDistributor.isDrained()).thenReturn(false);
-        shard.coreDistributor.set(mockDistributor);
         assertFalse(shard.isDrained());
     }
 

@@ -15,7 +15,6 @@ import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
-import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
@@ -125,7 +124,7 @@ class ControlPlaneFragmentThreadTest {
                 Field policyField = ControlPlaneFragment.class.getDeclaredField("controlPolicy");
                 policyField.setAccessible(true);
                 FragmentDecisionTree tree = (FragmentDecisionTree) policyField.get(fragment);
-                assertEquals(timing.cacheParkNs(), tree.cacheParkNs());
+                assertEquals(timing.idleParkNs(), tree.idleParkNs());
                 assertEquals(timing.contentionHalfLifeNanos(), tree.contentionHalfLifeNanos());
             } finally {
                 template.close();
@@ -329,32 +328,6 @@ class ControlPlaneFragmentThreadTest {
             fragment.close();
             distributor.close();
             registry.close();
-            PinnedThreadExecutor.closeAll();
-        }
-    }
-
-    @Test
-    void everyFragmentRemoteCachePullStopsAtDistributorInsteadOfReachingUpstream() {
-        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(1, false, 41L, 43L));
-        // No workers run: this checks both routing links deterministically even on a one-core host.
-        try (ControlPlaneFragment first =
-                        new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
-                ControlPlaneFragment second =
-                        new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
-                LatticeVertex distributor = connect(first, second)) {
-            distributor.register();
-            try {
-                distributor.ingest(source);
-                AtomicInteger delivered = new AtomicInteger();
-                assertEquals(0, first.pull(frame -> delivered.incrementAndGet(), frame -> false, 1));
-                assertEquals(0, second.pull(frame -> delivered.incrementAndGet(), frame -> false, 1));
-                assertEquals(0, delivered.get());
-                assertEquals(0, source.directFrames.get());
-            } finally {
-                source.complete();
-                distributor.removeThread();
-            }
-        } finally {
             PinnedThreadExecutor.closeAll();
         }
     }
@@ -772,7 +745,7 @@ class ControlPlaneFragmentThreadTest {
         for (int cpu = cpus.nextSetBit(0); cpu >= 0; cpu = cpus.nextSetBit(cpu + 1)) {
             firstCpuByCore.putIfAbsent(coreOfCpu.applyAsInt(cpu), cpu);
         }
-        // Match LatticeEdge's ranking: performance cores first, then ascending core IDs.
+        // Match LatticeEdge's ranking: performance cpus first, then ascending cpu IDs.
         return firstCpuByCore.keySet().stream()
                 .sorted(Comparator.<Integer>comparingInt(core -> performanceCores.get(core) ? 0 : 1)
                         .thenComparingInt(Integer::intValue))
@@ -820,18 +793,18 @@ class ControlPlaneFragmentThreadTest {
     private static final class TestDistributor extends LatticeVertex {
 
         private static String ranks() {
-            return CORE_RANK.getAcquire().toString();
+            return CPU_RANK.getAcquire().toString();
         }
 
         private TestDistributor(int downstreamCount) {
-            super("fragment-cycle-test", downstreamCount, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
+            super("fragment-cycle-test", downstreamCount, RoutingFunction.DEFAULT);
         }
 
         /// Restores the isolated test's JVM-wide upstream registry to an empty state.
         private static void resetSharedRoutingState() {
             UpstreamQueue.UP_QUEUE.remove();
             UPSTREAM_COUNT.set(0L);
-            CORE_COUNT.set(0L);
+            CPU_COUNT.set(0L);
             for (int i = 0; i < UPSTREAMS.length; i++) {
                 if (UPSTREAMS[i] != null) {
                     UPSTREAMS[i].clear();
@@ -840,7 +813,7 @@ class ControlPlaneFragmentThreadTest {
             }
             Int2IntOpenHashMap initialRanks = new Int2IntOpenHashMap(UPSTREAMS.length);
             initialRanks.defaultReturnValue(-1);
-            CORE_RANK.set(initialRanks);
+            CPU_RANK.set(initialRanks);
         }
     }
 

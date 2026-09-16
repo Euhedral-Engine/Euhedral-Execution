@@ -25,13 +25,15 @@ class TopologyMapperPublicationTest {
         mapper.update(TopologyHelpers.utilization(TopologyHelpers.bits(0, 3, 7, 100)));
 
         EffectiveSystemTopology topology = mapper.getEffectiveTopology();
-        assertEquals(TopologyHelpers.bits(3, 7), topology.effectiveCpus());
+        assertEquals(TopologyHelpers.bits(0, 3, 7), topology.effectiveCpus());
         assertEquals(2, topology.socketTopologies().size());
         for (int socket = 0; socket < 2; socket++) {
             EffectiveSocketTopology entry = topology.socketTopologies().get(socket);
             assertEquals(3, entry.effectiveCoreToCpu().size());
         }
-        assertNull(topology.socketTopologies().get(0).effectiveCoreToCpu().get(0));
+        assertEquals(
+                TopologyHelpers.bits(0),
+                topology.socketTopologies().get(0).effectiveCoreToCpu().get(0));
         assertThrows(RuntimeException.class, () -> topology.effectiveCpus().set(0));
 
         BitSet directMask = TopologyHelpers.bits(3);

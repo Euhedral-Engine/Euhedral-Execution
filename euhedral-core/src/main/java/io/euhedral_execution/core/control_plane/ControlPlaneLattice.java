@@ -228,12 +228,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
-        LatticeVertex controller = new LatticeVertex(
-                this.name + "-GlobalDistributor",
-                SystemInfo.getMaxSocketId() + 1,
-                this::route,
-                0,
-                RoutingPolicy.ANYWHERE);
+        LatticeVertex controller =
+                new LatticeVertex(this.name + "-GlobalDistributor", SystemInfo.getMaxSocketId() + 1, this::route);
         this.ingestController.set(controller);
     }
 
@@ -481,7 +477,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             if (controller != null) {
                 controller.setDrain(true);
             }
-            long cleared = controller == null ? 0 : controller.clearCachedFrames();
+            long cleared = 0;
             for (ControlPlaneShard shard : this.shards) {
                 if (shard != null) {
                     cleared += shard.resetForNextTrial(deadline);
@@ -553,11 +549,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by
     /// this ControlPlaneLattice.
     public boolean isDrained() {
-        LatticeVertex controller = this.ingestController.get();
-        if (controller != null && !controller.isDrained()) {
-            return false;
-        }
-
         for (ControlPlaneShard shard : this.shards) {
             if (shard != null && !shard.isDrained()) {
                 return false;

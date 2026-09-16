@@ -39,40 +39,40 @@ non-finite numbers, fractional integers, and scalar type coercions are rejected.
 fields
 to select defaults. No configuration imports or environment-variable expansion are performed.
 
-| Field                                        | Meaning and default                                                                                      |
-|----------------------------------------------|----------------------------------------------------------------------------------------------------------|
-| `schemaVersion`                              | Required integer `1`                                                                                     |
-| `grid`                                       | Required `nx`, `ny`, `nz` integers, each at least 3                                                      |
-| `physics.densityReference`                   | Positive lattice reference density `rho0`; default `1`                                                   |
-| `physics.lattice`                            | Lattice parameters; defaults to an empty lattice section when neither mode is supplied                   |
-| `physics.physical`                           | Alternative SI parameters; mutually exclusive with `lattice`                                             |
-| `geometry.openBoundary`                     | Required with open faces; inlet `velocity`, optional `outletDensity` and `rampTime`                      |
-| `physics.forceReference`                     | Optional drag reference: positive `velocity`, `area`, `density`, and nonzero `direction`                |
-| `physics.referenceLength`                    | Optional positive reference length in the selected mode's units                                          |
-| `geometry.faces`                             | `xMin`, `xMax`, `yMin`, `yMax`, `zMin`, `zMax`; each defaults to `PERIODIC`                              |
-| `geometry.boxes`                             | Optional list of `{id, min, max}` solid boxes; default empty                                             |
-| `geometry.spheres`                           | Optional list of `{id, center, radius}` solid spheres; default empty                                     |
-| `geometry.cylinders`                         | Optional list of `{id, start, end, radius}` finite solid cylinders; default empty                        |
-| `geometry.meshes`                           | Optional STL obstacles with `id`, `file`, and `units`; transforms and names described in [STL.md](STL.md) |
-| `physics.guards.maxMach`                     | Positive maximum actual Mach number; default `0.1`                                                       |
-| `physics.guards.maxRelativeDensityVariation` | Positive maximum `abs(rho/rho0 - 1)`; default `0.1`                                                      |
-| `execution.diagnosticsEverySteps`            | Full-field diagnostic cadence; default `1`, `0` means initial/final only                                 |
-| `execution.steps`                            | Positive integer timestep count; default `100` when no duration is supplied                              |
-| `execution.durationSeconds`                  | Alternative positive physical duration, requiring physical parameters                                    |
-| `execution.stepDeadlineMillis`               | Positive per-step deadline, default `30000`; must fit a signed long in nanoseconds                       |
-| `execution.geometrySources`                 | STL preprocessing ingest sources, 1-64; default one per active worker, capped at 64                       |
-| `execution.geometryDeadlineMillis`          | Positive deadline per parallel geometry stage, including queue waits; default `300000` ms                |
-| `execution.brick`                            | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                       |
-| `execution.backendOptions.backend` | `serial` (default), `euhedral`, `fjp`, or `static` |
-| `execution.backendOptions.workers` | Positive physical-worker budget; serial uses 1, parallel defaults to eligible physical cores |
-| `execution.backendOptions.sources` | Positive JSON integer or `"workers"` (default); Euhedral only; serial resolves to 1 |
-| `execution.backendOptions.cpus` | Optional comma-separated available logical CPU IDs; worker selection excludes reserved/driver cores |
-| `execution.backendOptions.affinity` | Boolean, default false; request driver and FJP/static worker affinity; Euhedral retains normal managed affinity |
-| `execution.backendOptions.shutdownTimeoutMillis` | Positive shutdown/quiescence timeout, default 5000 ms |
-| `output.directory`                           | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute |
-| `output.exportEverySteps`                    | Non-negative integer cadence; default `0` disables field export                                          |
-| `output.format`                             | `APPENDED` (default) for uncompressed binary VTI or `ASCII` for diagnostic fixtures                         |
-| `memoryLimitBytes`                           | Optional positive integer budget; overrides the heap-based default                                       |
+| Field                                            | Meaning and default                                                                                             |
+|--------------------------------------------------|-----------------------------------------------------------------------------------------------------------------|
+| `schemaVersion`                                  | Required integer `1`                                                                                            |
+| `grid`                                           | Required `nx`, `ny`, `nz` integers, each at least 3                                                             |
+| `physics.densityReference`                       | Positive lattice reference density `rho0`; default `1`                                                          |
+| `physics.lattice`                                | Lattice parameters; defaults to an empty lattice section when neither mode is supplied                          |
+| `physics.physical`                               | Alternative SI parameters; mutually exclusive with `lattice`                                                    |
+| `geometry.openBoundary`                          | Required with open faces; inlet `velocity`, optional `outletDensity` and `rampTime`                             |
+| `physics.forceReference`                         | Optional drag reference: positive `velocity`, `area`, `density`, and nonzero `direction`                        |
+| `physics.referenceLength`                        | Optional positive reference length in the selected mode's units                                                 |
+| `geometry.faces`                                 | `xMin`, `xMax`, `yMin`, `yMax`, `zMin`, `zMax`; each defaults to `PERIODIC`                                     |
+| `geometry.boxes`                                 | Optional list of `{id, min, max}` solid boxes; default empty                                                    |
+| `geometry.spheres`                               | Optional list of `{id, center, radius}` solid spheres; default empty                                            |
+| `geometry.cylinders`                             | Optional list of `{id, start, end, radius}` finite solid cylinders; default empty                               |
+| `geometry.meshes`                                | Optional STL obstacles with `id`, `file`, and `units`; transforms and names described in [STL.md](STL.md)       |
+| `physics.guards.maxMach`                         | Positive maximum actual Mach number; default `0.1`                                                              |
+| `physics.guards.maxRelativeDensityVariation`     | Positive maximum `abs(rho/rho0 - 1)`; default `0.1`                                                             |
+| `execution.diagnosticsEverySteps`                | Full-field diagnostic cadence; default `1`, `0` means initial/final only                                        |
+| `execution.steps`                                | Positive integer timestep count; default `100` when no duration is supplied                                     |
+| `execution.durationSeconds`                      | Alternative positive physical duration, requiring physical parameters                                           |
+| `execution.stepDeadlineMillis`                   | Positive per-step deadline, default `30000`; must fit a signed long in nanoseconds                              |
+| `execution.geometrySources`                      | STL preprocessing ingest sources, 1-64; default one per active worker, capped at 64                             |
+| `execution.geometryDeadlineMillis`               | Positive deadline per parallel geometry stage, including queue waits; default `300000` ms                       |
+| `execution.brick`                                | Positive integer `nx`, `ny`, `nz`; default `16x16x16`, partial edge bricks allowed                              |
+| `execution.backendOptions.backend`               | `serial` (default), `euhedral`, `fjp`, or `static`                                                              |
+| `execution.backendOptions.workers`               | Positive logical-CPU worker budget; serial uses 1, parallel defaults to eligible CPUs                           |
+| `execution.backendOptions.sources`               | Positive JSON integer or `"workers"` (default); Euhedral only; serial resolves to 1                             |
+| `execution.backendOptions.cpus`                  | Optional comma-separated available logical CPU IDs; parallel workers use the selected CPUs directly             |
+| `execution.backendOptions.affinity`              | Boolean, default false; request driver and FJP/static worker affinity; Euhedral retains normal managed affinity |
+| `execution.backendOptions.shutdownTimeoutMillis` | Positive shutdown/quiescence timeout, default 5000 ms                                                           |
+| `output.directory`                               | Default `output`, resolved relative to the declaring JSON file's directory; absolute paths stay absolute        |
+| `output.exportEverySteps`                        | Non-negative integer cadence; default `0` disables field export                                                 |
+| `output.format`                                  | `APPENDED` (default) for uncompressed binary VTI or `ASCII` for diagnostic fixtures                             |
+| `memoryLimitBytes`                               | Optional positive integer budget; overrides the heap-based default                                              |
 
 The `lattice` section accepts positive `viscosity` (default `0.1`), `initialVelocity` (default
 zero),

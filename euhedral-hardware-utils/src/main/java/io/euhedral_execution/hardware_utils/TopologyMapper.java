@@ -1,6 +1,5 @@
 package io.euhedral_execution.hardware_utils;
 
-import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
@@ -85,26 +84,12 @@ public final class TopologyMapper {
         BitSet membership = (BitSet) utilization.globalEffectiveCpus().clone();
         membership.and(topologyModel.cpuSet());
         membership.and(allowedCpus);
-        reserveCoreZero(membership);
 
         long sequence = nextSequence();
         PendingRequest request = new PendingRequest(sequence, new UnmodifiableBitSet(membership));
         installGreatest(request);
         if (drainOwner.compareAndSet(false, true)) {
             drain();
-        }
-    }
-
-    private void reserveCoreZero(BitSet membership) {
-        CoreInfo coreZero = topologyModel.coreInfo().get(0);
-        if (coreZero == null || membership.isEmpty()) {
-            return;
-        }
-        BitSet zeroCpus = coreZero.getCpuSet();
-        BitSet alternatives = (BitSet) membership.clone();
-        alternatives.andNot(zeroCpus);
-        if (!alternatives.isEmpty()) {
-            membership.andNot(zeroCpus);
         }
     }
 

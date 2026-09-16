@@ -173,12 +173,15 @@ public class MandelbrotBenchmark {
     @Fork(value = 1)
     public static class EuhedralMandelbrot {
 
-        public final MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
         private final double[] magnitudes = new double[CANVAS * 4];
         private final int[] escapes = new int[CANVAS * 4];
+        private final int sourceCount = Runtime.getRuntime().availableProcessors();
+        private final EuhedralSubscriber[] subscribers = new EuhedralSubscriber[this.sourceCount];
 
         private final PaddedLongAdder counters =
                 new PaddedLongAdder(Runtime.getRuntime().availableProcessors(), true, true);
+
+        private Flux<MandelbrotPixel>[] sources;
 
         private BufferedImage outputImage;
         private int[] rawImageBuffer;
@@ -188,12 +191,14 @@ public class MandelbrotBenchmark {
         private String outputFileName;
 
         private ControlPlaneLattice controlPlane;
-        private EuhedralSubscriber subscriber;
 
-        private void makeSub() {
-            this.subscriber = new EuhedralSubscriber();
+        private void makeSubscribers() {
+            for (int i = 0; i < this.subscribers.length; i++) {
+                this.subscribers[i] = new EuhedralSubscriber();
+            }
         }
 
+        @SuppressWarnings("unchecked")
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
             this.outputImage = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
@@ -212,6 +217,7 @@ public class MandelbrotBenchmark {
             this.controlPlane = ControlPlaneLattice.getOrCreate(config);
             this.controlPlane.start();
 
+            MandelbrotPixel[] pixels = new MandelbrotPixel[CANVAS];
             MandelbrotCanvas.generate(
                     WIDTH,
                     HEIGHT,
@@ -224,16 +230,30 @@ public class MandelbrotBenchmark {
                     this.magnitudes,
                     this.escapes,
                     this.counters,
-                    this.pixels);
+                    pixels);
 
-            shuffle(this.pixels);
-            makeSub();
+            shuffle(pixels);
+            this.sources = new Flux[this.sourceCount];
+            int sourceSize = CANVAS / this.sourceCount;
+            int remainder = CANVAS % this.sourceCount;
+            int offset = 0;
+            for (int i = 0; i < this.sourceCount; i++) {
+                int length = sourceSize;
+                if (i < remainder) {
+                    length++;
+                }
+                MandelbrotPixel[] sourcePixels = new MandelbrotPixel[length];
+                System.arraycopy(pixels, offset, sourcePixels, 0, length);
+                this.sources[i] = Flux.fromArray(sourcePixels);
+                offset += length;
+            }
+            makeSubscribers();
         }
 
         @Setup(Level.Invocation)
         public void setupInvocation() {
             this.counters.reset();
-            makeSub();
+            makeSubscribers();
         }
 
         @Benchmark
@@ -241,8 +261,12 @@ public class MandelbrotBenchmark {
         public void render(Blackhole blackhole) {
             LOGGER.info(TOTAL_TASKS);
 
-            Flux.fromArray(this.pixels).subscribe(subscriber);
-            this.controlPlane.addUpstream(this.subscriber);
+            for (int i = 0; i < this.sourceCount; i++) {
+                this.sources[i].subscribe(this.subscribers[i]);
+            }
+            for (EuhedralSubscriber subscriber : this.subscribers) {
+                this.controlPlane.addUpstream(subscriber);
+            }
 
             waitOnRender(this.counters);
             blackhole.consume(this.escapes);

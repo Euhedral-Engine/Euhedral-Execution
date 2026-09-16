@@ -16,17 +16,7 @@ import org.junit.jupiter.api.Test;
 class TopologyMapperTest {
 
     private static BitSet expectedEffectiveCpus(BitSet allowed) {
-        BitSet expected = (BitSet) allowed.clone();
-        SystemInfo.CoreInfo coreZero = SystemInfo.getCoreInfo(0);
-        if (coreZero != null) {
-            BitSet coreZeroCpus = coreZero.getCpuSet();
-            expected.andNot(coreZeroCpus);
-            if (expected.isEmpty()) {
-                expected.or(coreZeroCpus);
-            }
-        }
-        expected.and(allowed);
-        return expected;
+        return (BitSet) allowed.clone();
     }
 
     private static HardwareUtilization utilization(BitSet effectiveCpus) {

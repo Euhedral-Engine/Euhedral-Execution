@@ -11,7 +11,6 @@ import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.queues.PlainQueue;
-import io.euhedral_execution.data_structures.queues.common.QueueUtils;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
@@ -20,7 +19,6 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapsho
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.SocketSnapshot;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.text.NumberFormat;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -95,23 +93,10 @@ public class ControlPlaneShard {
                 topology.effectiveCores().length(), r -> new Thread(r, this.shardName + "-ExecutorService"));
 
         SocketInfo info = SystemInfo.getSocketInfo(snapshot.socketId());
-        long sizeL3 = SystemInfo.socketL3Cache(snapshot.socketId());
-        int cores = info.getCoreSet().cardinality();
-        long capacity = (long) (sizeL3 * 0.7);
-        capacity /= QueueUtils.REFERENCE_SIZE;
-
-        long chunkSize = capacity == 0 ? 0 : QueueUtils.roundChunkSize(capacity);
-
-        String partChunk = NumberFormat.getNumberInstance().format(chunkSize / Math.max(cores, 1));
-        String strCap = NumberFormat.getNumberInstance().format(cores * chunkSize);
-        logger.debug("L3 Cache: Partitions: {} PartitionChunkSize: {} Capacity: {}", cores, partChunk, strCap);
+        BitSet coreSet = info.getCoreSet();
 
         LatticeVertex coreDistributor = new LatticeVertex(
-                this.shardName + "-CoreDistributor",
-                SystemInfo.getMaxCoreId() + 1,
-                this::route,
-                (int) capacity,
-                RoutingPolicy.SOCKET_LOCAL);
+                this.shardName + "-CoreDistributor", coreSet.previousSetBit(coreSet.length()) + 1, this::route);
         this.coreDistributor.set(coreDistributor);
         coreDistributor.addUpstream(upstream);
         update(snapshot, topology);
@@ -437,8 +422,8 @@ public class ControlPlaneShard {
             }
         }
 
-        long cleared = distributor.clearCachedFrames();
         try {
+            long cleared = 0;
             for (CloneableObject clone : activeClones) {
                 if (clone != null) {
                     cleared += clone.reset(deadlineNanos);
@@ -480,11 +465,6 @@ public class ControlPlaneShard {
             return true;
         }
         if (this.rebalancing.get()) {
-            return false;
-        }
-
-        LatticeVertex coreDistributor = this.coreDistributor.get();
-        if (coreDistributor != null && !coreDistributor.isDrained()) {
             return false;
         }
 

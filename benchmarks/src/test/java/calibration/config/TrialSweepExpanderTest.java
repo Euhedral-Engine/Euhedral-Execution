@@ -73,7 +73,7 @@ class TrialSweepExpanderTest {
                         "trial-001",
                         List.of(
                                 new SweepParameter(
-                                        "/calibrationConfig/cacheParkNs",
+                                        "/calibrationConfig/idleParkNs",
                                         List.of(new LongNode(0L), new LongNode(43_000L))),
                                 new SweepParameter(
                                         "/calibrationConfig/contentionHalfLifeNanos",

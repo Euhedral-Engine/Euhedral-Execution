@@ -7,7 +7,6 @@ import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
-import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.DummyFrame;
@@ -16,6 +15,7 @@ import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.internal.Constants;
 import io.euhedral_execution.core.metrics.CacheMetrics;
+import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLongArray;
 import io.euhedral_execution.data_structures.queues.PartitionedMpscQueue;
 import io.euhedral_execution.data_structures.queues.common.QueueUtils;
@@ -40,7 +40,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected static final VarHandle PRIMED;
     protected static final VarHandle TOTAL_COUNT;
 
-    private static final ControlPlaneCache[] WORK_STEAL = new ControlPlaneCache[SystemInfo.getMaxCoreId() + 1];
+    private static final ControlPlaneCache[] WORK_STEAL = new ControlPlaneCache[SystemInfo.getCpuCount()];
 
     static {
         try {
@@ -63,7 +63,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     private final PaddedAtomicLongArray pLocks;
 
     private final int chunkSize;
-    private final CacheTerminal cacheTerminal;
+    final CacheTerminal cacheTerminal;
 
     @Getter
     private final long frameQuota;
@@ -72,8 +72,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     double capFactor = 1.0;
     long totalCount = 0L;
 
-    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig) {
-        super(getName(cacheConfig), 1, (frame, mapSize) -> 0, 0, RoutingPolicy.CACHE_LOCAL);
+    protected ControlPlaneCache(@NonNull CacheConfig cacheConfig, int cpu, boolean smtEnabled) {
+        super(
+                getName(cacheConfig),
+                smtEnabled ? 2 : 1,
+                smtEnabled ? (frame, mapSize) -> (int) frame.getRoutingHash() & 1 : (frame, mapSize) -> 0);
         this.cacheConfig = cacheConfig;
 
         int partitions = cacheConfig.partitions();
@@ -93,18 +96,25 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         } else {
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
             this.metrics = new CacheMetrics(cacheConfig, () -> (long) TOTAL_COUNT.getAcquire(this));
-            this.chunkSize = getChunkSize(cacheConfig, partitions);
+            this.chunkSize = getChunkSize(cacheConfig, partitions, smtEnabled);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.core = cacheConfig.getCore();
             this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
-            WORK_STEAL[this.core] = this;
+            WORK_STEAL[cpu] = this;
 
             this.pLocks = cacheConfig.workSteal() ? new PaddedAtomicLongArray(partitions, true, false) : null;
 
-            BitSet mappings = new BitSet(1);
-            mappings.set(0);
-            LatticeEdge[] terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+            BitSet mappings = new BitSet(smtEnabled ? 2 : 1);
+            mappings.set(0, smtEnabled ? 2 : 1);
+            LatticeEdge[] terminal;
+            if (smtEnabled) {
+                terminal = new LatticeEdge[] {new LatticeEdge(super.drain), new LatticeEdge(super.drain)};
+                terminal[1].addDownstream(this.cacheTerminal);
+            } else {
+                terminal = new LatticeEdge[] {new LatticeEdge(super.drain)};
+            }
+
             terminal[0].addDownstream(this.cacheTerminal);
 
             setDrain(true);
@@ -127,7 +137,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
                 : "ControlPlaneCache";
     }
 
-    protected static int getChunkSize(CacheConfig config, int partitions) {
+    protected static int getChunkSize(CacheConfig config, int partitions, boolean smtEnabled) {
         CloneConfig cloneConfig = config.cloneConfig();
         if (cloneConfig == null) {
             return 512;
@@ -135,10 +145,13 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         CpuCacheLayout layout = SystemInfo.getCacheLayout(cloneConfig.getCpuSet()[0]);
         long l2 = layout.bytesL2();
-        if (layout.sharesL2() > 2) {
+        if (layout.sharesL2() > 2 || smtEnabled) {
             l2 /= layout.sharesL2();
         }
         long l1 = layout.bytesL1();
+        if (layout.sharesL1() > 2 || smtEnabled) {
+            l1 /= layout.sharesL1();
+        }
 
         double budget = config.memoryBudget();
         budget = clampDouble(budget, 0, 1.0);
@@ -216,21 +229,17 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return total;
     }
 
-    protected final long workSteal(Consumer<AbstractFrame> consumer, long limit) {
+    protected final long workSteal(Consumer<AbstractFrame> consumer, long limit, int cursor) {
         if (!this.cacheConfig.workSteal()) {
             return 0;
         }
 
-        long total = 0;
-
-        BitSet cores = SystemInfo.getCoreSet();
-        for (int i = cores.nextSetBit(0); i >= 0 && total < limit; i = cores.nextSetBit(i + 1)) {
-            if (WORK_STEAL[i] == null) {
-                continue;
-            }
-            total += WORK_STEAL[i].drain(consumer, AbstractFrame::isOrdered, limit - total);
+        int cpuCount = SystemInfo.getCpuCount();
+        int pos = cursor % cpuCount;
+        if (WORK_STEAL[pos] == null) {
+            return 0;
         }
-        return total;
+        return WORK_STEAL[pos].drain(consumer, AbstractFrame::isOrdered, limit);
     }
 
     @Override
@@ -360,6 +369,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             }
 
             TOTAL_COUNT.getAndAddRelease(this.cpc, 1);
+            FlowThread.FlowContext context = FlowThread.getContext();
+            if (context != null) {
+                context.satisfiedRequest++;
+            }
         }
 
         @Override

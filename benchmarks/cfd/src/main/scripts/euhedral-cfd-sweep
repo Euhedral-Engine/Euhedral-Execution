@@ -178,7 +178,12 @@ def main():
                 for fork in variant["forks"]:
                     raw_path = Path(fork["directory"]) / "jmh.json"
                     trial_path = Path(fork["directory"]) / "trial.json"
-                    raw = json.loads(raw_path.read_text())[0] if raw_path.exists() else {}
+                    raw = {}
+                    if raw_path.exists() and raw_path.stat().st_size > 0:
+                      try:
+                        raw = json.loads(raw_path.read_text())[0]
+                      except (json.JSONDecodeError, IndexError):
+                        pass
                     trial = json.loads(trial_path.read_text()) if trial_path.exists() else {}
                     forks.append(dict(seconds=fork.get("secondsPerInvocation"), processSeconds=fork["processElapsedNs"] / 1e9,
                                       framesPreallocated=trial.get(

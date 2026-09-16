@@ -86,7 +86,7 @@ class TrialConfigDifferTest {
 
     @Test
     void testCacheActuatorIdentityFieldsAreActuatorDifferences() {
-        assertEquals(DifferenceCategory.ACTUATOR, TrialConfigDiffer.categorize("/calibrationConfig/cacheParkNs"));
+        assertEquals(DifferenceCategory.ACTUATOR, TrialConfigDiffer.categorize("/calibrationConfig/idleParkNs"));
         assertEquals(
                 DifferenceCategory.ACTUATOR,
                 TrialConfigDiffer.categorize("/calibrationConfig/contentionHalfLifeNanos"));

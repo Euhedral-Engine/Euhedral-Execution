@@ -70,7 +70,7 @@ class BenchmarkProgressTest {
                 }
             }
         };
-        try (var progress = new BenchmarkProgress("fjp", output, clock::get, true)) {
+        try (var progress = new BenchmarkProgress("fjp", output, clock::get, true, 10)) {
             progress.begin("reference", 10);
             progress.completed(5);
             clock.set(2_000_000_000L);

@@ -5,7 +5,7 @@ import org.jspecify.annotations.Nullable;
 
 /// Immutable CACHE policy timing. Other idle and miss parking policies remain separate.
 public record CacheTimingConfig(
-        long cacheParkNs,
+        long idleParkNs,
         long contentionHalfLifeNanos,
         @Nullable CacheTimingFunctionConfig function,
         boolean scarcityGateEnabled) {
@@ -54,8 +54,8 @@ public record CacheTimingConfig(
             new CacheTimingConfig(DEFAULT_CACHE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION, true);
 
     public CacheTimingConfig {
-        if (cacheParkNs < 0L) {
-            throw new IllegalArgumentException("cacheParkNs must not be negative");
+        if (idleParkNs < 0L) {
+            throw new IllegalArgumentException("idleParkNs must not be negative");
         }
         if (contentionHalfLifeNanos <= 0L) {
             throw new IllegalArgumentException("contentionHalfLifeNanos must be positive");

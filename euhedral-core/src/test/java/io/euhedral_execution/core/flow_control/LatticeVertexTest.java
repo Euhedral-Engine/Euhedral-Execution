@@ -35,7 +35,7 @@ class LatticeVertexTest {
     void setup() {
         UpstreamQueue.UP_QUEUE.remove();
 
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 32, RoutingPolicy.ANYWHERE);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT);
         BitSet active = new BitSet(4);
         active.set(0, 4);
 
@@ -60,45 +60,15 @@ class LatticeVertexTest {
     @Test
     void shouldInitializeNode() {
         assertEquals(4, node.downstreams.length);
-        assertNotNull(node.remoteCache);
         assertNotNull(node.getDrainFlag());
-        assertTrue(node.hasCache);
-    }
-
-    @Test
-    void shouldInitializeTerminalNode() {
-        LatticeVertex terminal =
-                new LatticeVertex("terminal", 2, LatticeVertex.RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
-
-        assertFalse(terminal.hasCache);
-        assertNull(terminal.remoteCache);
-    }
-
-    @Test
-    void shouldReportUpstreamCacheCapacityInsteadOfOccupancy() {
-        LatticeVertex upstream = new LatticeVertex("upstream", 1, RoutingFunction.DEFAULT, 256, RoutingPolicy.ANYWHERE);
-        LatticeEdge edge = new LatticeEdge(new AtomicBoolean());
-        edge.setParent(upstream);
-        node.setParent(edge);
-
-        assertEquals(288, node.getUpstreamCacheCapacity());
-        assertEquals(0, node.getUpstreamCacheCount());
     }
 
     @Test
     void shouldSetDrainFlag() {
         node.setDrain(true);
-
         assertTrue(node.getDrainFlag().get());
-
         node.setDrain(false);
-
         assertFalse(node.getDrainFlag().get());
-    }
-
-    @Test
-    void shouldReportDrainedWhenQueueEmpty() {
-        assertTrue(node.isDrained());
     }
 
     @Test
@@ -157,7 +127,7 @@ class LatticeVertexTest {
 
     @Test
     void shouldRouteFramesToCorrectDownstream() {
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT);
         node.setDrain(true);
 
         TestReceiver first = new TestReceiver();
@@ -284,27 +254,8 @@ class LatticeVertexTest {
     }
 
     @Test
-    void shouldPushUnorderedFramesIntoParallelQueue() {
-        TestFrame frame = spy(new TestFrame("unordered"));
-
-        doReturn(false).when(frame).isOrdered();
-
-        LatticeVertex.UpstreamInterceptor interceptor = node.new UpstreamInterceptor();
-
-        interceptor.push(frame);
-
-        boolean hasItem = false;
-        for (var queue : node.remoteCache) {
-            if (queue != null) {
-                hasItem |= !queue.isEmpty();
-            }
-        }
-        assertTrue(hasItem);
-    }
-
-    @Test
     void shouldDirectlyRouteOrderedFrames() {
-        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT, 0, RoutingPolicy.ANYWHERE);
+        node = new LatticeVertex("test-node", 4, RoutingFunction.DEFAULT);
         node.setDrain(true);
 
         TestReceiver terminal = new TestReceiver();
@@ -332,20 +283,6 @@ class LatticeVertexTest {
 
         assertEquals(1, terminal.received.size());
     }
-
-    //    @Test
-    //    void shouldRequestFromUpstream() {
-    //        LatticeVertex.UpstreamInterceptor interceptor =
-    //                node.new UpstreamInterceptor();
-    //
-    //        LatticeSource upstream = mock(LatticeSource.class);
-    //
-    //        interceptor.upstream = upstream;
-    //
-    //        interceptor.request(10);
-    //
-    //        verify(upstream).request(10);
-    //    }
 
     @Test
     void shouldIgnoreInvalidRequest() {

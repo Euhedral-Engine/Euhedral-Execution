@@ -7,7 +7,7 @@ import io.euhedral_execution.hardware_utils.ThreadTools;
 import java.time.Duration;
 import java.util.BitSet;
 
-/// One logical CPU per physical core, after reserving a separate driver core when available.
+/// Logical CPU budget shared by every parallel backend.
 public record WorkerBudget(
         int[] requestedCpus, int[] effectiveCpus, Integer requestedWorkers, int driverCpu, String affinityCapability) {
     public WorkerBudget {
@@ -73,31 +73,17 @@ public record WorkerBudget(
                 break;
             }
         }
-        int driverCore = SystemInfo.getCpuInfo(driver).core();
-        BitSet selected = new BitSet(), cores = new BitSet();
+        BitSet selected = new BitSet();
         int limit = options.backend().equals("serial")
                 ? 1
                 : options.workers() == null ? Integer.MAX_VALUE : options.workers();
         for (int cpu = requested.nextSetBit(0);
                 cpu >= 0 && selected.cardinality() < limit;
                 cpu = requested.nextSetBit(cpu + 1)) {
-            int core = SystemInfo.getCpuInfo(cpu).core();
-            if (core == driverCore || core == 0 || cores.get(core)) {
-                continue;
-            }
             selected.set(cpu);
-            cores.set(core);
-        }
-        /// A single-core host necessarily shares its only core with the driver.
-        if (selected.isEmpty()
-                && available.stream().allMatch(cpu -> SystemInfo.getCpuInfo(cpu).core() == driverCore)) {
-            int cpu = requested.nextSetBit(0);
-            if (cpu >= 0) {
-                selected.set(cpu);
-            }
         }
         if (selected.isEmpty()) {
-            throw new IllegalArgumentException("no worker CPUs remain after reserving the driver core");
+            throw new IllegalArgumentException("no worker CPUs are available");
         }
         return new WorkerBudget(
                 requested.stream().toArray(),
@@ -109,6 +95,13 @@ public record WorkerBudget(
 
     public int workerCount() {
         return effectiveCpus.length;
+    }
+
+    public int physicalCoreCount() {
+        return (int) java.util.Arrays.stream(effectiveCpus)
+                .map(cpu -> SystemInfo.getCpuInfo(cpu).core())
+                .distinct()
+                .count();
     }
 
     public ControlPlaneLattice lattice(long shutdownMillis) {

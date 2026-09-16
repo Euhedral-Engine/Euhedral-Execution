@@ -24,7 +24,7 @@ class FragmentConfigTest {
                 new CacheTimingConfig(15_000L, 1_000_000L, CacheTimingConfig.DEFAULT_FUNCTION, true),
                 CacheTimingConfig.DEFAULT);
         assertEquals(CacheTimingConfig.DEFAULT, FragmentConfig.ofDefaults().cacheTimingConfig());
-        assertEquals(0L, new CacheTimingConfig(0L, 1L).cacheParkNs());
+        assertEquals(0L, new CacheTimingConfig(0L, 1L).idleParkNs());
         assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(-1L, 1L));
         assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(1L, 0L));
         assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(1L, -1L));
@@ -34,6 +34,7 @@ class FragmentConfigTest {
                 FragmentDecisionWeights.DEFAULT,
                 null,
                 100,
+                false,
                 7_000_000L,
                 false,
                 null,
@@ -47,6 +48,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         100,
+                        false,
                         null,
                         false,
                         null,
@@ -126,6 +128,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         100,
+                        false,
                         FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                         false,
                         null,
@@ -142,6 +145,7 @@ class FragmentConfigTest {
                         null,
                         null,
                         100,
+                        false,
                         FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                         false,
                         null,
@@ -158,6 +162,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         0,
+                        false,
                         FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                         false,
                         null,
@@ -171,6 +176,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         -1,
+                        false,
                         FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                         false,
                         null,
@@ -184,6 +190,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         -100,
+                        false,
                         FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                         false,
                         null,
@@ -200,6 +207,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         100,
+                        false,
                         0L,
                         false,
                         null,
@@ -216,6 +224,7 @@ class FragmentConfigTest {
                         FragmentDecisionWeights.DEFAULT,
                         null,
                         100,
+                        false,
                         FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                         true,
                         null,
@@ -257,6 +266,7 @@ class FragmentConfigTest {
                 FragmentDecisionWeights.DEFAULT,
                 null,
                 1_024,
+                false,
                 FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                 false,
                 null,

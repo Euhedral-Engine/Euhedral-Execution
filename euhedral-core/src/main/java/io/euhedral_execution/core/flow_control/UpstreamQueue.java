@@ -42,9 +42,9 @@ public class UpstreamQueue {
     private static final double LN_2 = Math.log(2.0);
 
     public static final ThreadLocal<UpstreamQueue> UP_QUEUE = new ThreadLocal<>();
-    public final int core;
+    public final int cpu;
     private final MpscQueue<UpstreamHandle> upstreams;
-    private final UpstreamHandle[] buffer = new UpstreamHandle[SystemInfo.getCoreCount()];
+    private final UpstreamHandle[] buffer = new UpstreamHandle[SystemInfo.getCpuCount()];
 
     private final PaddedAtomicLong upstreamCount;
     private final AverageFlow acquireContention = new AverageFlow();
@@ -93,8 +93,8 @@ public class UpstreamQueue {
     /// A stopped direct pull must get a routed request instead of alternating past the same source.
     private UpstreamHandle pendingRequest;
 
-    public UpstreamQueue(int core, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
-        this.core = core;
+    public UpstreamQueue(int cpu, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
+        this.cpu = cpu;
         this.upstreams = upstreams;
         this.upstreamCount = upstreamCount;
     }
@@ -103,8 +103,8 @@ public class UpstreamQueue {
     public static UpstreamQueue get(MpscQueue<UpstreamHandle>[] upstreams, PaddedAtomicLong upstreamCount) {
         UpstreamQueue queue = UP_QUEUE.get();
         if (queue == null) {
-            int core = SystemInfo.getCpuInfo(ThreadTools.getCpu()).core();
-            queue = new UpstreamQueue(core, upstreams[core], upstreamCount);
+            int cpu = ThreadTools.getCpu();
+            queue = new UpstreamQueue(cpu, upstreams[cpu], upstreamCount);
             UP_QUEUE.set(queue);
         }
         return queue;
@@ -404,7 +404,7 @@ public class UpstreamQueue {
                 handle.releaseLock();
                 long holdDurationNs =
                         this.pullConvoyObserver == null ? 0L : Math.max(0L, System.nanoTime() - holdStartNs);
-                recordPullConvoy(handle, this.core, demand, request, producedFrameCount, true, holdDurationNs);
+                recordPullConvoy(handle, this.cpu, demand, request, producedFrameCount, true, holdDurationNs);
                 if (!preferredRequest) {
                     bufferHandle(handle);
                 }
@@ -451,7 +451,7 @@ public class UpstreamQueue {
         observer.pullConvoyState(
                 System.nanoTime(),
                 handle.getId(),
-                this.core,
+                this.cpu,
                 ownerCore,
                 requestedDemand,
                 calculatedPullSize,

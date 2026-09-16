@@ -17,7 +17,6 @@ import static org.mockito.Mockito.when;
 import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.ThreadTools;
 import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
@@ -56,18 +55,14 @@ class LatticeEdgeTest {
         ThreadTools.getCpu();
 
         mockSysInfo = Mockito.mockStatic(SystemInfo.class);
-        mockSysInfo.when(SystemInfo::getMaxCoreId).thenReturn(64);
-        mockSysInfo.when(SystemInfo::getCoreCount).thenReturn(64);
-
-        CoreInfo core = new CoreInfo("", true, 0, 0);
-        mockSysInfo.when(() -> SystemInfo.getCoreInfo(anyInt())).thenReturn(core);
+        mockSysInfo.when(SystemInfo::getCpuCount).thenReturn(64);
 
         CpuInfo cpu = new CpuInfo(0, 0, 0);
         mockSysInfo.when(() -> SystemInfo.getCpuInfo(anyInt())).thenReturn(cpu);
 
-        BitSet pCores = new BitSet();
-        pCores.set(0, 64);
-        mockSysInfo.when(SystemInfo::getPCoreSet).thenReturn(UnmodifiableBitSet.wrap(pCores));
+        BitSet pCpus = new BitSet();
+        pCpus.set(0, 64);
+        mockSysInfo.when(SystemInfo::getPCpuSet).thenReturn(UnmodifiableBitSet.wrap(pCpus));
 
         mockThreadTools = Mockito.mockStatic(ThreadTools.class);
         mockThreadTools.when(ThreadTools::getCpu).thenReturn(0);
@@ -364,16 +359,41 @@ class LatticeEdgeTest {
     }
 
     @Test
-    void shouldReturnNegativeRankForUnregisteredCore() {
+    void shouldReturnNegativeRankForUnregisteredCpu() {
         assertEquals(-1, edge.getThreadRank(99));
     }
 
     @Test
-    void shouldRankRegisteredCore() {
+    void shouldRankRegisteredCpu() {
         edge.register();
 
         assertEquals(1, edge.getThreadRank(0));
         assertEquals(-1, edge.getThreadRank(1));
+    }
+
+    @Test
+    void shouldRankPerformanceCpusBeforeEfficiencyCpus() {
+        BitSet pCpus = new BitSet();
+        pCpus.set(1);
+        mockSysInfo.when(SystemInfo::getPCpuSet).thenReturn(UnmodifiableBitSet.wrap(pCpus));
+
+        mockThreadTools.when(ThreadTools::getCpu).thenReturn(0);
+        edge.register();
+
+        mockThreadTools.when(ThreadTools::getCpu).thenReturn(1);
+        UpstreamQueue.UP_QUEUE.remove();
+        edge.register();
+
+        try {
+            assertEquals(1, edge.getThreadRank(1));
+            assertEquals(2, edge.getThreadRank(0));
+        } finally {
+            edge.removeThread();
+            mockThreadTools.when(ThreadTools::getCpu).thenReturn(0);
+            UpstreamQueue.UP_QUEUE.remove();
+            edge.getThreadUpstreamQueue();
+            edge.removeThread();
+        }
     }
 
     @Test

@@ -108,7 +108,7 @@ HarnessConfig
      - `forcedActiveParticipantCount`: Optional benchmark-only one-based rank cutoff. Ranks above the
        cutoff use CACHE without being unregistered; ranks at or below it retain ordinary DIRECT/STAGED
        selection.
-     - `cacheParkNs`: Non-negative CACHE miss park duration, persisted as part of fixture identity.
+     - `idleParkNs`: Non-negative CACHE miss park duration, persisted as part of fixture identity.
      - `cacheActuatorVersion`: Semantic CACHE actuator identity. New runs currently resolve to `cache-v1`.
      - `decisionWeightProfile` (`string`): Reference to local or namespaced imported decision weight profile (e.g. `"host.baseline"`).
      - `decisionWeights`: 28 fixed weights defining thresholds, costs, park times, and execution policies.
@@ -170,7 +170,7 @@ based on the 5x5 contention and body-cost matrix:
 
 - **`DIRECT`**:
   The fragment worker immediately pulls from remote caches and upstream handles and executes frames
-  directly within the active cycle. If no frames were available, it issues a combined `requestAndPull`.
+  directly within the active cycle. If no frames were available, it issues a combined `request`.
   Optimized for low-to-moderate contention where direct execution minimizes end-to-end latency.
 - **`STAGED`**:
   The fragment worker decouples demand signaling from execution. It issues an asynchronous upstream

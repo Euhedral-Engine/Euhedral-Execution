@@ -10,7 +10,7 @@ import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
 import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
+import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hashing.HasherApi;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.lang.invoke.VarHandle;
@@ -48,8 +48,8 @@ public class LatticeEdge extends UpstreamHandle {
 
     protected static final MpscQueue<UpstreamHandle>[] UPSTREAMS;
     protected static final AtomicLongArray ACTIVE_PARTITIONS;
-    protected static final AtomicLong CORE_COUNT = new AtomicLong(0);
-    protected static final AtomicReference<Int2IntOpenHashMap> CORE_RANK;
+    protected static final AtomicLong CPU_COUNT = new AtomicLong(0);
+    protected static final AtomicReference<Int2IntOpenHashMap> CPU_RANK;
     private static final AtomicBoolean LOCK = new AtomicBoolean(false);
 
     protected static final PaddedAtomicLong UPSTREAM_COUNT = new PaddedAtomicLong(0);
@@ -59,17 +59,17 @@ public class LatticeEdge extends UpstreamHandle {
 
     static {
         try {
-            UPSTREAMS = new MpscQueue[SystemInfo.getMaxCoreId() + 1];
+            UPSTREAMS = new MpscQueue[SystemInfo.getCpuCount()];
             ACTIVE_PARTITIONS = new AtomicLongArray(UPSTREAMS.length);
             for (int i = 0; i < UPSTREAMS.length; i++) {
-                CoreInfo info = SystemInfo.getCoreInfo(i);
+                CpuInfo info = SystemInfo.getCpuInfo(i);
                 if (info != null) {
                     UPSTREAMS[i] = new MpscQueue<>(256);
                 }
             }
             Int2IntOpenHashMap initialRanks = new Int2IntOpenHashMap(UPSTREAMS.length);
             initialRanks.defaultReturnValue(-1);
-            CORE_RANK = new AtomicReference<>(initialRanks);
+            CPU_RANK = new AtomicReference<>(initialRanks);
         } catch (Exception e) {
             throw new ExceptionInInitializerError(e);
         }
@@ -99,13 +99,13 @@ public class LatticeEdge extends UpstreamHandle {
             parent.register();
         } else {
             UpstreamQueue queue = getThreadUpstreamQueue();
-            int core = queue.core;
-            if (ACTIVE_PARTITIONS.compareAndSet(core, 0L, 1L)) {
+            int cpu = queue.cpu;
+            if (cpu >= 0 && cpu < UPSTREAMS.length && ACTIVE_PARTITIONS.compareAndSet(cpu, 0L, 1L)) {
                 try {
                     SpinWait.awaitWhile(() -> !LOCK.compareAndSet(false, true));
-                    rankCores();
-                    CORE_COUNT.incrementAndGet();
-                    LOGGER.trace("Registered thread on core {}", core);
+                    rankCpus();
+                    CPU_COUNT.incrementAndGet();
+                    LOGGER.trace("Registered thread on cpu {}", cpu);
                 } finally {
                     LOCK.lazySet(false);
                 }
@@ -139,38 +139,22 @@ public class LatticeEdge extends UpstreamHandle {
         UpstreamQueue queue = UpstreamQueue.UP_QUEUE.get();
         if (queue != null) {
             UpstreamQueue.UP_QUEUE.remove();
-            int core = queue.core;
-            if (core >= 0 && core < UPSTREAMS.length && ACTIVE_PARTITIONS.compareAndSet(core, 1L, 0L)) {
-                CORE_COUNT.decrementAndGet();
-                MpscQueue<UpstreamHandle> upstreams = UPSTREAMS[core];
+            int cpu = queue.cpu;
+            if (cpu >= 0 && cpu < UPSTREAMS.length && ACTIVE_PARTITIONS.compareAndSet(cpu, 1L, 0L)) {
+                CPU_COUNT.decrementAndGet();
+                MpscQueue<UpstreamHandle> upstreams = UPSTREAMS[cpu];
                 if (upstreams != null) {
                     upstreams.clear();
                 }
                 try {
                     SpinWait.awaitWhile(() -> !LOCK.compareAndSet(false, true));
-                    rankCores();
+                    rankCpus();
                 } finally {
                     LOCK.lazySet(false);
                 }
-                LOGGER.trace("Removed entry for thread on core {}", core);
+                LOGGER.trace("Removed entry for thread on cpu {}", cpu);
             }
         }
-    }
-
-    public long getUpstreamCacheCapacity() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            return parent.getUpstreamCacheCapacity();
-        }
-        return 0;
-    }
-
-    public long getUpstreamCacheCount() {
-        LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
-        if (parent != null) {
-            return parent.getUpstreamCacheCount();
-        }
-        return 0;
     }
 
     /// Returns the number of [UpstreamHandles][UpstreamHandle]
@@ -180,35 +164,35 @@ public class LatticeEdge extends UpstreamHandle {
 
     /// Returns the number of threads registered with this LatticeEdge.
     public int getThreadCount() {
-        return CORE_COUNT.intValue();
+        return CPU_COUNT.intValue();
     }
 
-    /// Returns this core's current rank in the existing registered-core bitmap.
-    protected int getThreadRank(int core) {
+    /// Returns this cpu's current rank in the existing registered-cpu bitmap.
+    protected int getThreadRank(int cpu) {
         LatticeEdge parent = (LatticeEdge) PARENT.getOpaque(this);
         if (parent != null) {
-            return parent.getThreadRank(core);
+            return parent.getThreadRank(cpu);
         }
-        Int2IntOpenHashMap ranks = CORE_RANK.getAcquire();
-        return ranks.get(core);
+        Int2IntOpenHashMap ranks = CPU_RANK.getAcquire();
+        return ranks.get(cpu);
     }
 
-    private void rankCores() {
-        BitSet pCores = SystemInfo.getPCoreSet();
+    private void rankCpus() {
+        BitSet pCpus = SystemInfo.getPCpuSet();
         int rank = 1;
         Int2IntOpenHashMap nextRanks = new Int2IntOpenHashMap(ACTIVE_PARTITIONS.length());
         nextRanks.defaultReturnValue(-1);
         for (int c = 0; c < ACTIVE_PARTITIONS.length(); c++) {
-            if (ACTIVE_PARTITIONS.getOpaque(c) != 0L && pCores != null && pCores.get(c)) {
+            if (ACTIVE_PARTITIONS.getOpaque(c) != 0L && pCpus != null && pCpus.get(c)) {
                 nextRanks.put(c, rank++);
             }
         }
         for (int c = 0; c < ACTIVE_PARTITIONS.length(); c++) {
-            if (ACTIVE_PARTITIONS.getOpaque(c) != 0L && (pCores == null || !pCores.get(c))) {
+            if (ACTIVE_PARTITIONS.getOpaque(c) != 0L && (pCpus == null || !pCpus.get(c))) {
                 nextRanks.put(c, rank++);
             }
         }
-        CORE_RANK.setRelease(nextRanks);
+        CPU_RANK.setRelease(nextRanks);
     }
 
     /// Sets the parent LatticeEdge.

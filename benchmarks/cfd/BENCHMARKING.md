@@ -46,7 +46,7 @@ shape requires one reference, reused across all variants and forks; allow at lea
 5 GiB of free output space for the references and two final Euhedral snapshots,
 in addition to validation artifacts and logs. Config inspection computes these sizes without allocating the population arrays.
 
-Parallel variants use all available physical worker cores after reserving the driver core;
+Parallel variants use all available logical CPUs; the benchmark driver can share a selected CPU.
 `workers`/`cpus` can cap this explicitly. Affinity requests are enabled. The common 8-cubed
 shape defines the primary comparison; the full-domain optimum is not established. Every
 variant uses final-only diagnostic scans, the same reset policy and the same cell/timestep work. Small heap
@@ -205,8 +205,8 @@ consistent with reporter snapshots. Reporter and forwarding threads are closed a
 | `jvmArgs`                                                               | Explicit JVM options applied to reference and benchmark children                                                                |
 | `outputDirectory`                                                       | Parent for a new `benchmark-*` directory; previous runs are preserved                                                           |
 
-Parallel variants share the same effective physical CPU set, excluding the driver/reserved core
-where possible and counting logical siblings once. Serial uses one of those worker cores. Reports
+Parallel variants share the same effective logical CPU set. Serial uses one of those worker CPUs.
+Reports
 retain requested and effective CPU IDs, affinity capability, worker counts, JVM arguments, precision,
 fluid cells, range shape, source revision, and requested/resolved sources. Capability labels describe
 the platform's placement support, not proof of exact placement.
