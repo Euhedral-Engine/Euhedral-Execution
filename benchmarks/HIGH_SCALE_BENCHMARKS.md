@@ -4,8 +4,9 @@ In the 8K Mandelbrot workload across the three high-scale systems:
 
 - **AMD EPYC 9R45 (Dual-socket NUMA, 192 cores):** Euhedral Core is **10.92x faster** than Reactor
   Parallel (82.2 ns vs 897.3 ns) and **12.97x faster** than Reactor BoundedElastic (1,066.1 ns).
-  Unpinned Reactor scheduling incurs severe cross-socket synchronization overhead and cache
-  degradation, while Euhedral's topology-aware pinned worker shards keep execution localized.
+  The result reflects the topology Euhedral was designed for: pinned, socket-local worker shards
+  preserve ownership and execution locality, while Reactor's unpinned shared scheduling model pays
+  severe cross-socket coordination and cache-locality costs.
 - **Intel Xeon 6 (Single-socket, 96 physical cores / 192 vCPUs):** Euhedral Core is **1.10x faster**
   than Reactor Parallel (73.1 ns vs 80.6 ns) and **1.60x faster** than Reactor BoundedElastic (116.6
   ns).
@@ -14,7 +15,10 @@ In the 8K Mandelbrot workload across the three high-scale systems:
   execution latency and highest overall throughput.
 
 These results reflect a CPU-heavy, fine-grained workload measuring scheduling, coordination, and
-execution paths.
+execution paths. The comparison also shows where topology-aware execution begins to matter: the
+single-socket systems remain relatively close, while the dual-socket NUMA system exposes a large
+difference between Euhedral's deliberate socket-local ownership model and Reactor's shared
+scheduling model.
 
 [Jump to methodology](#methodology) | [Detailed results](#detailed-results) | [Reproduce the benchmark](#reproducing-the-benchmark)
 
@@ -136,12 +140,16 @@ MandelbrotCompletion.verify(this.counters, EXPECTED_OPERATIONS);
 Both frameworks execute the identical 132,710,400 pre-allocated subpixel operations with concurrency
 matching the host processor count:
 
-- **Euhedral Core** assigns dedicated, core-pinned worker shards with private queue structures,
-  avoiding cross-core and cross-socket synchronization.
+- **Euhedral Core** deliberately assigns dedicated, core-pinned worker shards with topology-local
+  ownership and private queue structures. On multi-socket systems, work remains partitioned by
+  socket so normal execution does not depend on a global shared scheduler.
 - **Reactor** schedules tasks across its parallel rails via `Schedulers.parallel()` or
-  `Schedulers.boundedElastic()`. On single-socket systems (Intel and Graviton5), Reactor maintains
-  high cache efficiency. On multi-socket NUMA systems (AMD EPYC), thread migration and shared queue
-  synchronization between sockets cause severe latency degradation.
+  `Schedulers.boundedElastic()`. On the single-socket Intel and Graviton5 systems, this remains
+  efficient and the schedulers stay relatively close. On the dual-socket AMD EPYC system, the
+  combination of unpinned scheduling, cross-socket coordination, and degraded locality corresponds
+  with the 10.92x-12.97x slowdown relative to Euhedral. The perf counters and the two execution
+  models are consistent with NUMA coordination and locality being the dominant cause of that
+  collapse.
 
 ### Known limitations
 
