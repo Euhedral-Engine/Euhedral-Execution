@@ -55,8 +55,7 @@ class ProductionIdlePolicyTest {
         var suppliedFunction =
                 IdleTimingFunctionTest.function(List.of(0.0, 0.0, 0.0, 0.0), List.of(0.0, 0.0, 0.0, 0.0));
         var supplied = new IdlePolicy(32000, 6000000, suppliedFunction);
-        var config =
-                FragmentConfig.ofBenchmark(mock(FragmentObserver.class), FragmentDecisionWeights.DEFAULT, supplied);
+        var config = FragmentConfig.ofBenchmark(mock(FragmentObserver.class), supplied);
         assertSame(supplied, config.idlePolicy());
         assertSame(suppliedFunction, config.idlePolicy().function());
         assertSame(

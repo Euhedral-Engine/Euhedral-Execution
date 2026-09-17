@@ -20,7 +20,7 @@ Before creating or modifying trial configurations, inspect the canonical example
   is the reference configuration illustrating all available schema features and options.
 - [
 `src/main/presets/examples/example_profile_library.json`](src/main/presets/examples/example_profile_library.json)
-  is an example reusable profile library containing calibration and decision weight profiles.
+  is an example reusable calibration profile library.
 - [
 `src/main/presets/examples/example_comparison_config.json`](src/main/presets/examples/example_comparison_config.json)
   is an example comparison configuration referencing an experiment directory or completed run directories.
@@ -40,7 +40,6 @@ HarnessConfig
 +-- runOptions: global execution control (randomization, repeats, failFast)
 +-- artifacts: output paths and retention toggles
 +-- calibrationProfiles: local reusable calibration configurations
-+-- decisionWeightProfiles: local reusable decision weight matrices
 +-- sweeps: parameter variation declarations (Cartesian expansion)
 +-- trials: explicit trial definitions and benchmark configurations
 ```
@@ -53,7 +52,7 @@ HarnessConfig
    - Each import specifies `path` (relative to the declaring JSON file or absolute) and a non-blank `namespace` without dots.
    - Imported libraries are parsed into
      [`ProfileLibrary`](src/main/java/calibration/config/ProfileLibrary.java)
-     which may contain nested `imports`, `calibrationProfiles`, and `decisionWeightProfiles`.
+     which may contain nested `imports` and `calibrationProfiles`.
    - Imported symbols are referenced as `<namespace>.<profileName>` (e.g. `common.uniform-xs` or `host.baseline`). Nested library imports compose namespaces explicitly (e.g. `common.base.baseline`).
    - Import cycles (`a.json -> b.json -> a.json`) are detected via canonical paths and rejected. Loaded libraries are cached per resolution operation.
 
@@ -78,7 +77,8 @@ HarnessConfig
    - Declares parameter sweeps against a `baseTrialId`.
    - Expanded into concrete trial variations via Cartesian product by
      [`TrialSweepExpander`](src/main/java/calibration/config/TrialSweepExpander.java).
-   - Parameters use JSON Pointers (e.g. `/calibrationConfig/decisionWeights/executionPolicies` or `/calibrationConfig/parallelSources`).
+   - Parameters use JSON Pointers (e.g. `/calibrationConfig/idleParkNs` or
+     `/calibrationConfig/parallelSources`).
 
 5. **`trials`**
    ([`TrialConfig`](src/main/java/calibration/config/TrialConfig.java)):
@@ -110,8 +110,6 @@ HarnessConfig
        selection.
      - `idleParkNs`: Non-negative CACHE miss park duration, persisted as part of fixture identity.
      - `cacheActuatorVersion`: Semantic CACHE actuator identity. New runs currently resolve to `cache-v1`.
-     - `decisionWeightProfile` (`string`): Reference to local or namespaced imported decision weight profile (e.g. `"host.baseline"`).
-     - `decisionWeights`: 28 fixed weights defining thresholds, costs, park times, and execution policies.
      - Observation Toggles:
        - `observeCycleStart`: Fragment cycle boundary metrics.
        - `observeBatchProgress`: In-flight batch service metrics.
@@ -165,8 +163,8 @@ cores (e.g. `[2, 4]` or `[2, 3, 4, 5]` for 2 P-cores).
 
 The
 [`ExecutionPath`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/FragmentControlConfig.java#L65-L70)
-enum defines the execution strategies selected by a fragment worker at completed-batch boundaries
-based on the 5x5 contention and body-cost matrix:
+enum defines the execution strategies selected by a fragment worker from its current contention,
+body-cost history, and source availability:
 
 - **`DIRECT`**:
   The fragment worker immediately pulls from remote caches and upstream handles and executes frames
@@ -177,12 +175,8 @@ based on the 5x5 contention and body-cost matrix:
   `request`, drains its local MPSC cache first, and then executes remaining work. Staging isolates
   upstream contention from the hot execution path and prevents queue thrashing under high concurrency.
 
-In trial configurations, `decisionWeights.executionPolicies` specifies a 5x5 grid of `ExecutionPath`
-values across all contention bands (`XS`..`XH`) and body-cost bands (`xsBody`..`xhBody`). Calibration
-sweeps (such as
-[`exec_contention_band_calibration.json`](src/main/presets/exec_contention_band_calibration.json))
-vary these mappings to find the empirical boundary where switching from `DIRECT` to `STAGED` maximizes
-throughput.
+The production boundary is owned by `FragmentDecisionTree`; benchmark configurations observe or
+force supported treatment seams rather than supplying an alternate decision matrix.
 
 ---
 

@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.IdlePolicy;
 import java.util.List;
 import java.util.Map;
@@ -55,7 +54,6 @@ class TrialSweepExpanderTest {
                 true,
                 1_000_000,
                 60_000,
-                FragmentDecisionWeights.DEFAULT,
                 1024,
                 false,
                 false,
@@ -160,92 +158,6 @@ class TrialSweepExpanderTest {
         assertEquals("trial-001__sweep-cart__3", generated.get(3).id());
     }
 
-    /// Verifies nested object property mutation via JSON Pointer.
-    @Test
-    void nestedObjectProperty() {
-        SweepParameter param = new SweepParameter(
-                "/calibrationConfig/decisionWeights/idleBodyCostWeights/xs", List.of(new IntNode(10), new IntNode(20)));
-        SweepConfig sweep = new SweepConfig("sweep-nested", "trial-001", List.of(param));
-
-        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
-        assertEquals(2, generated.size());
-
-        assertEquals(
-                10,
-                generated
-                        .get(0)
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleBodyCostWeights()
-                        .xs());
-        assertEquals(
-                20,
-                generated
-                        .get(1)
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleBodyCostWeights()
-                        .xs());
-    }
-
-    /// Verifies array element property mutation via JSON Pointer.
-    @Test
-    void idlePolicyProperty() {
-        SweepParameter param = new SweepParameter(
-                "/calibrationConfig/decisionWeights/idleTimeNs/sPark",
-                List.of(new LongNode(1000L), new LongNode(2000L)));
-        SweepConfig sweep = new SweepConfig("sweep-array", "trial-001", List.of(param));
-
-        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
-        assertEquals(2, generated.size());
-
-        assertEquals(
-                1000L,
-                generated
-                        .get(0)
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleTimeNs()
-                        .sPark());
-        assertEquals(
-                2000L,
-                generated
-                        .get(1)
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleTimeNs()
-                        .sPark());
-    }
-
-    /// Verifies another scalar policy property can be swept.
-    @Test
-    void bodyCostProperty() {
-        SweepParameter param = new SweepParameter(
-                "/calibrationConfig/decisionWeights/idleBodyCostWeights/h",
-                List.of(new IntNode(288), new IntNode(320)));
-        SweepConfig sweep = new SweepConfig("sweep-body-cost", "trial-001", List.of(param));
-
-        List<TrialConfig> generated = expander.expandSweep(baseTrial, sweep);
-        assertEquals(2, generated.size());
-
-        assertEquals(
-                288,
-                generated
-                        .get(0)
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleBodyCostWeights()
-                        .h());
-        assertEquals(
-                320,
-                generated
-                        .get(1)
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleBodyCostWeights()
-                        .h());
-    }
-
     /// Verifies disabled base template generates enabled candidates.
     @Test
     void disabledBaseTemplate() {
@@ -271,7 +183,7 @@ class TrialSweepExpanderTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new HarnessConfig(
-                        null, null, null, null, null, null, null, null, null, List.of(sweep), List.of(baseTrial)));
+                        null, null, null, null, null, null, null, null, List.of(sweep), List.of(baseTrial)));
         assertThrows(IllegalArgumentException.class, () -> expander.expandSweep(baseTrial, sweep));
     }
 
@@ -580,7 +492,6 @@ class TrialSweepExpanderTest {
                 null,
                 null,
                 Map.of("my-profile", dummyCalibrationConfig()),
-                null,
                 List.of(sweep),
                 null,
                 List.of(baseProfileTrial));
@@ -602,154 +513,5 @@ class TrialSweepExpanderTest {
         assertEquals("my-profile", candidate2.calibrationProfile());
         assertNotNull(candidate2.calibrationConfig());
         assertEquals(500, candidate2.calibrationConfig().workUnits());
-    }
-
-    /// Verifies sweep expansion on base trial that references a decisionWeightProfile.
-    @Test
-    void sweepOnBaseTrialReferencingDecisionWeightProfile() {
-        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                0,
-                100,
-                false,
-                1000,
-                1000,
-                "weights-test",
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-        TrialConfig baseProfileTrial = new TrialConfig(
-                "weight-base",
-                "Weight Base Trial",
-                "profile-group",
-                "desc",
-                "hyp",
-                null,
-                null,
-                null,
-                true,
-                null,
-                1,
-                1,
-                5,
-                null,
-                null,
-                null,
-                null,
-                calConfig);
-
-        SweepParameter param =
-                new SweepParameter("/calibrationConfig/workUnits", List.of(new IntNode(250), new IntNode(500)));
-        SweepConfig sweep = new SweepConfig("sweep-weight", "weight-base", List.of(param));
-
-        HarnessConfig harnessConfig = new HarnessConfig(
-                1,
-                "harness-weight",
-                "Harness Weight Profile",
-                "desc",
-                null,
-                null,
-                null,
-                null,
-                Map.of("weights-test", FragmentDecisionWeights.DEFAULT),
-                List.of(sweep),
-                null,
-                List.of(baseProfileTrial));
-
-        HarnessConfig expanded = expander.expand(harnessConfig);
-        assertEquals(3, expanded.trials().size());
-        TrialConfig base = expanded.trials().get(0);
-        assertEquals("weight-base", base.id());
-        assertNotNull(base.calibrationConfig());
-        assertNotNull(base.calibrationConfig().decisionWeights());
-
-        TrialConfig candidate1 = expanded.trials().get(1);
-        assertEquals("weight-base__sweep-weight__0", candidate1.id());
-        assertNotNull(candidate1.calibrationConfig());
-        assertNotNull(candidate1.calibrationConfig().decisionWeights());
-        assertEquals(250, candidate1.calibrationConfig().workUnits());
-
-        TrialConfig candidate2 = expanded.trials().get(2);
-        assertEquals("weight-base__sweep-weight__1", candidate2.id());
-        assertNotNull(candidate2.calibrationConfig());
-        assertNotNull(candidate2.calibrationConfig().decisionWeights());
-        assertEquals(500, candidate2.calibrationConfig().workUnits());
-    }
-
-    /// Verifies sweep expansion on base trial with calibrationProfile referencing decisionWeightProfile.
-    @Test
-    void sweepOnBaseTrialWithCalibrationProfileReferencingDecisionWeightProfile() {
-        CalibrationBenchmarkConfig profileCalConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                0,
-                100,
-                false,
-                1000,
-                1000,
-                "weights-test",
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-        TrialConfig baseTrial = new TrialConfig(
-                "chained-base",
-                "Chained Base Trial",
-                "profile-group",
-                "desc",
-                "hyp",
-                null,
-                null,
-                true,
-                1,
-                1,
-                5,
-                null,
-                "cal-profile");
-
-        SweepParameter param =
-                new SweepParameter("/calibrationConfig/parallelSources", List.of(new IntNode(2), new IntNode(8)));
-        SweepConfig sweep = new SweepConfig("sweep-chained", "chained-base", List.of(param));
-
-        HarnessConfig harnessConfig = new HarnessConfig(
-                1,
-                "harness-chained",
-                "Harness Chained",
-                "desc",
-                null,
-                null,
-                null,
-                Map.of("cal-profile", profileCalConfig),
-                Map.of("weights-test", FragmentDecisionWeights.DEFAULT),
-                List.of(sweep),
-                null,
-                List.of(baseTrial));
-
-        HarnessConfig expanded = expander.expand(harnessConfig);
-        assertEquals(3, expanded.trials().size());
-        TrialConfig base = expanded.trials().get(0);
-        assertEquals("chained-base", base.id());
-        assertNotNull(base.calibrationConfig());
-        assertNotNull(base.calibrationConfig().decisionWeights());
-
-        TrialConfig candidate1 = expanded.trials().get(1);
-        assertEquals("chained-base__sweep-chained__0", candidate1.id());
-        assertNotNull(candidate1.calibrationConfig());
-        assertNotNull(candidate1.calibrationConfig().decisionWeights());
-        assertEquals(2, candidate1.calibrationConfig().parallelSources());
-
-        TrialConfig candidate2 = expanded.trials().get(2);
-        assertEquals("chained-base__sweep-chained__1", candidate2.id());
-        assertNotNull(candidate2.calibrationConfig());
-        assertNotNull(candidate2.calibrationConfig().decisionWeights());
-        assertEquals(8, candidate2.calibrationConfig().parallelSources());
     }
 }

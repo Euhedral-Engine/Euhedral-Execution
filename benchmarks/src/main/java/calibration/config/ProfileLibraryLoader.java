@@ -1,7 +1,6 @@
 package calibration.config;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -62,19 +61,11 @@ public class ProfileLibraryLoader {
         File importingFile = canonicalFile.isDirectory() ? new File(canonicalFile, "root.json") : canonicalFile;
 
         Map<String, CalibrationBenchmarkConfig> accumulatedCalProfiles = new HashMap<>();
-        Map<String, FragmentDecisionWeights> accumulatedWeightProfiles = new HashMap<>();
-
         List<File> activeImportChain = new ArrayList<>();
         activeImportChain.add(importingFile);
 
         for (ProfileImport importDecl : imports) {
-            loadLibraryRecursively(
-                    importingFile,
-                    "",
-                    importDecl,
-                    activeImportChain,
-                    accumulatedCalProfiles,
-                    accumulatedWeightProfiles);
+            loadLibraryRecursively(importingFile, "", importDecl, activeImportChain, accumulatedCalProfiles);
         }
 
         if (rootConfig.calibrationProfiles() != null) {
@@ -84,16 +75,6 @@ public class ProfileLibraryLoader {
                     throw new IllegalArgumentException("Duplicate calibration profile name: " + entry.getKey());
                 }
                 accumulatedCalProfiles.put(entry.getKey(), entry.getValue());
-            }
-        }
-
-        if (rootConfig.decisionWeightProfiles() != null) {
-            for (Map.Entry<String, FragmentDecisionWeights> entry :
-                    rootConfig.decisionWeightProfiles().entrySet()) {
-                if (accumulatedWeightProfiles.containsKey(entry.getKey())) {
-                    throw new IllegalArgumentException("Duplicate decision weight profile name: " + entry.getKey());
-                }
-                accumulatedWeightProfiles.put(entry.getKey(), entry.getValue());
             }
         }
 
@@ -107,7 +88,6 @@ public class ProfileLibraryLoader {
                 rootConfig.runOptions(),
                 rootConfig.artifacts(),
                 accumulatedCalProfiles.isEmpty() ? null : Map.copyOf(accumulatedCalProfiles),
-                accumulatedWeightProfiles.isEmpty() ? null : Map.copyOf(accumulatedWeightProfiles),
                 rootConfig.sweeps(),
                 rootConfig.searches(),
                 rootConfig.trials());
@@ -118,8 +98,7 @@ public class ProfileLibraryLoader {
             String namespacePrefix,
             ProfileImport importDecl,
             List<File> activeImportChain,
-            Map<String, CalibrationBenchmarkConfig> accumulatedCalProfiles,
-            Map<String, FragmentDecisionWeights> accumulatedWeightProfiles) {
+            Map<String, CalibrationBenchmarkConfig> accumulatedCalProfiles) {
 
         String rawPath = importDecl.path();
         String ns = importDecl.namespace();
@@ -167,18 +146,6 @@ public class ProfileLibraryLoader {
 
         String currentNs = namespacePrefix.isEmpty() ? ns : namespacePrefix + "." + ns;
 
-        if (library.decisionWeightProfiles() != null) {
-            for (Map.Entry<String, FragmentDecisionWeights> entry :
-                    library.decisionWeightProfiles().entrySet()) {
-                String qualifiedName = currentNs + "." + entry.getKey();
-                if (accumulatedWeightProfiles.containsKey(qualifiedName)) {
-                    throw new IllegalArgumentException(
-                            "Duplicate decision weight profile name in namespace: " + qualifiedName);
-                }
-                accumulatedWeightProfiles.put(qualifiedName, entry.getValue());
-            }
-        }
-
         if (library.calibrationProfiles() != null) {
             for (Map.Entry<String, CalibrationBenchmarkConfig> entry :
                     library.calibrationProfiles().entrySet()) {
@@ -187,13 +154,7 @@ public class ProfileLibraryLoader {
                     throw new IllegalArgumentException(
                             "Duplicate calibration profile name in namespace: " + qualifiedName);
                 }
-                CalibrationBenchmarkConfig profile = entry.getValue();
-                if (profile.decisionWeightProfile() != null) {
-                    String ref = profile.decisionWeightProfile();
-                    String qualifiedRef = currentNs + "." + ref;
-                    profile = profile.withDecisionWeightProfile(qualifiedRef);
-                }
-                accumulatedCalProfiles.put(qualifiedName, profile);
+                accumulatedCalProfiles.put(qualifiedName, entry.getValue());
             }
         }
 
@@ -202,12 +163,7 @@ public class ProfileLibraryLoader {
             try {
                 for (ProfileImport nestedImport : library.imports()) {
                     loadLibraryRecursively(
-                            canonicalTarget,
-                            currentNs,
-                            nestedImport,
-                            activeImportChain,
-                            accumulatedCalProfiles,
-                            accumulatedWeightProfiles);
+                            canonicalTarget, currentNs, nestedImport, activeImportChain, accumulatedCalProfiles);
                 }
             } finally {
                 activeImportChain.remove(activeImportChain.size() - 1);

@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,42 +22,9 @@ class ProfileLibraryLoaderTest {
 
     private final ObjectMapper mapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true);
 
-    private static CalibrationBenchmarkConfig dummyCalibrationConfig(int workUnits, String weightProfile) {
+    private static CalibrationBenchmarkConfig dummyCalibrationConfig(int workUnits) {
         return new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                2,
-                workUnits,
-                false,
-                1000,
-                5000,
-                weightProfile,
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-    }
-
-    private static CalibrationBenchmarkConfig dummyCalibrationConfigWithWeights(int workUnits) {
-        return new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                2,
-                workUnits,
-                false,
-                1000,
-                5000,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
+                List.of(1, 2), 4, 2, workUnits, false, 1000, 5000, 1024, false, false, false, false, false, false);
     }
 
     /// Verifies single imported library loads and namespaced profiles are accessible.
@@ -76,10 +42,6 @@ class ProfileLibraryLoaderTest {
                   "randomizeWork": false,
                   "totalRequiredExecutions": 1000,
                   "invocationTimeoutMillis": 5000,
-                  "decisionWeights": {
-                    "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                    "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                  },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
                   "observeBatchProgress": false,
@@ -87,12 +49,6 @@ class ProfileLibraryLoaderTest {
                   "observeRawBodyCost": false,
                   "observeIdleDecision": false,
                   "observeExecDecision": false
-                }
-              },
-              "decisionWeightProfiles": {
-                "baseline-weights": {
-                  "idleBodyCostWeights": { "xs": 200, "s": 200, "m": 200, "h": 200 },
-                  "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
                 }
               }
             }
@@ -124,8 +80,6 @@ class ProfileLibraryLoaderTest {
         HarnessConfig loaded = ProfileLibraryLoader.loadAndResolve(harnessFile.toFile(), mapper);
         assertNotNull(loaded.calibrationProfiles());
         assertTrue(loaded.calibrationProfiles().containsKey("common.uniform-xs"));
-        assertNotNull(loaded.decisionWeightProfiles());
-        assertTrue(loaded.decisionWeightProfiles().containsKey("common.baseline-weights"));
 
         HarnessConfig resolved = loaded.resolveCalibrationProfiles();
         assertNotNull(resolved.trials().getFirst().calibrationConfig());
@@ -136,8 +90,7 @@ class ProfileLibraryLoaderTest {
     @Test
     void testCalibrationProfileLookup(@TempDir Path tempDir) throws Exception {
         Path profileFile = tempDir.resolve("lib.json");
-        ProfileLibrary library =
-                new ProfileLibrary(Map.of("fast-profile", dummyCalibrationConfigWithWeights(15)), null);
+        ProfileLibrary library = new ProfileLibrary(Map.of("fast-profile", dummyCalibrationConfig(15)));
         mapper.writeValue(profileFile.toFile(), library);
 
         HarnessConfig config = new HarnessConfig(
@@ -147,7 +100,6 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 List.of(new ProfileImport("lib.json", "lib")),
-                null,
                 null,
                 null,
                 null,
@@ -181,64 +133,11 @@ class ProfileLibraryLoaderTest {
         assertEquals(15, trial.calibrationConfig().workUnits());
     }
 
-    /// Verifies decision weight profile lookup resolves imported decisionWeightProfile reference into decisionWeights.
-    @Test
-    void testDecisionWeightProfileLookup(@TempDir Path tempDir) throws Exception {
-        Path profileFile = tempDir.resolve("weights.json");
-        ProfileLibrary library = new ProfileLibrary(null, Map.of("custom-weights", FragmentDecisionWeights.DEFAULT));
-        mapper.writeValue(profileFile.toFile(), library);
-
-        CalibrationBenchmarkConfig trialCalConfig = dummyCalibrationConfig(80, "imported.custom-weights");
-        TrialConfig trial = new TrialConfig(
-                "t1",
-                "name",
-                "group",
-                null,
-                null,
-                null,
-                null,
-                null,
-                true,
-                null,
-                1,
-                1,
-                1,
-                null,
-                null,
-                null,
-                null,
-                trialCalConfig);
-
-        HarnessConfig config = new HarnessConfig(
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(new ProfileImport("weights.json", "imported")),
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                List.of(trial));
-
-        HarnessConfig withImports = config.resolveImports(tempDir.toFile(), mapper);
-        HarnessConfig resolved = withImports.resolveCalibrationProfiles();
-
-        TrialConfig resolvedTrial = resolved.trials().getFirst();
-        assertNotNull(resolvedTrial.calibrationConfig());
-        assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
-    }
-
     /// Verifies local profiles and imported profiles coexist cleanly without interference.
     @Test
     void testLocalAndImportedProfileCoexistence(@TempDir Path tempDir) throws Exception {
         Path profileFile = tempDir.resolve("imported.json");
-        ProfileLibrary library = new ProfileLibrary(
-                Map.of("cal-imported", dummyCalibrationConfigWithWeights(99)),
-                Map.of("weights-imported", FragmentDecisionWeights.DEFAULT));
+        ProfileLibrary library = new ProfileLibrary(Map.of("cal-imported", dummyCalibrationConfig(99)));
         mapper.writeValue(profileFile.toFile(), library);
 
         TrialConfig trialLocal = new TrialConfig(
@@ -289,8 +188,7 @@ class ProfileLibraryLoaderTest {
                 List.of(new ProfileImport("imported.json", "ns")),
                 null,
                 null,
-                Map.of("local-cal", dummyCalibrationConfigWithWeights(11)),
-                Map.of("local-weights", FragmentDecisionWeights.DEFAULT),
+                Map.of("local-cal", dummyCalibrationConfig(11)),
                 null,
                 null,
                 List.of(trialLocal, trialImported));
@@ -299,10 +197,6 @@ class ProfileLibraryLoaderTest {
         assertEquals(2, withImports.calibrationProfiles().size());
         assertTrue(withImports.calibrationProfiles().containsKey("local-cal"));
         assertTrue(withImports.calibrationProfiles().containsKey("ns.cal-imported"));
-
-        assertEquals(2, withImports.decisionWeightProfiles().size());
-        assertTrue(withImports.decisionWeightProfiles().containsKey("local-weights"));
-        assertTrue(withImports.decisionWeightProfiles().containsKey("ns.weights-imported"));
 
         HarnessConfig resolved = withImports.resolveCalibrationProfiles();
         assertEquals(11, resolved.trials().get(0).calibrationConfig().workUnits());
@@ -313,11 +207,11 @@ class ProfileLibraryLoaderTest {
     @Test
     void testSameProfileNameInTwoNamespaces(@TempDir Path tempDir) throws Exception {
         Path lib1File = tempDir.resolve("lib1.json");
-        ProfileLibrary lib1 = new ProfileLibrary(Map.of("baseline", dummyCalibrationConfigWithWeights(100)), null);
+        ProfileLibrary lib1 = new ProfileLibrary(Map.of("baseline", dummyCalibrationConfig(100)));
         mapper.writeValue(lib1File.toFile(), lib1);
 
         Path lib2File = tempDir.resolve("lib2.json");
-        ProfileLibrary lib2 = new ProfileLibrary(Map.of("baseline", dummyCalibrationConfigWithWeights(200)), null);
+        ProfileLibrary lib2 = new ProfileLibrary(Map.of("baseline", dummyCalibrationConfig(200)));
         mapper.writeValue(lib2File.toFile(), lib2);
 
         TrialConfig t1 = new TrialConfig(
@@ -371,7 +265,6 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 null,
-                null,
                 List.of(t1, t2));
 
         HarnessConfig withImports = config.resolveImports(tempDir.toFile(), mapper);
@@ -398,13 +291,12 @@ class ProfileLibraryLoaderTest {
                         null,
                         null,
                         null,
-                        null,
-                        List.of(new TrialConfig(1, 1, 1, null, dummyCalibrationConfigWithWeights(1)))));
+                        List.of(new TrialConfig(1, 1, 1, null, dummyCalibrationConfig(1)))));
 
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new ProfileLibrary(
-                        List.of(new ProfileImport("a.json", "base"), new ProfileImport("b.json", "base")), null, null));
+                        List.of(new ProfileImport("a.json", "base"), new ProfileImport("b.json", "base")), null));
     }
 
     /// Verifies missing or blank namespace declarations are rejected.
@@ -443,8 +335,7 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 null,
-                null,
-                List.of(new TrialConfig(1, 1, 1, null, dummyCalibrationConfigWithWeights(1))));
+                List.of(new TrialConfig(1, 1, 1, null, dummyCalibrationConfig(1))));
 
         IllegalArgumentException ex =
                 assertThrows(IllegalArgumentException.class, () -> config.resolveImports(configFile, mapper));
@@ -464,7 +355,7 @@ class ProfileLibraryLoaderTest {
         Files.createDirectories(sharedDir);
 
         Path sharedLib = sharedDir.resolve("profiles.json");
-        ProfileLibrary library = new ProfileLibrary(Map.of("shared-cal", dummyCalibrationConfigWithWeights(77)), null);
+        ProfileLibrary library = new ProfileLibrary(Map.of("shared-cal", dummyCalibrationConfig(77)));
         mapper.writeValue(sharedLib.toFile(), library);
 
         Path rootJson = subDir.resolve("harness.json");
@@ -497,7 +388,7 @@ class ProfileLibraryLoaderTest {
     @Test
     void testAbsolutePathResolution(@TempDir Path tempDir) throws Exception {
         Path absLib = tempDir.resolve("abs_lib.json");
-        ProfileLibrary library = new ProfileLibrary(Map.of("abs-cal", dummyCalibrationConfigWithWeights(88)), null);
+        ProfileLibrary library = new ProfileLibrary(Map.of("abs-cal", dummyCalibrationConfig(88)));
         mapper.writeValue(absLib.toFile(), library);
 
         HarnessConfig config = new HarnessConfig(
@@ -507,7 +398,6 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 List.of(new ProfileImport(absLib.toAbsolutePath().toString(), "abs")),
-                null,
                 null,
                 null,
                 null,
@@ -542,16 +432,12 @@ class ProfileLibraryLoaderTest {
     @Test
     void testRecursiveImportsAndNestedNamespaceComposition(@TempDir Path tempDir) throws Exception {
         Path libBFile = tempDir.resolve("libB.json");
-        ProfileLibrary libB = new ProfileLibrary(
-                Map.of("cal-b", dummyCalibrationConfig(33, "weights-b")),
-                Map.of("weights-b", FragmentDecisionWeights.DEFAULT));
+        ProfileLibrary libB = new ProfileLibrary(Map.of("cal-b", dummyCalibrationConfig(33)));
         mapper.writeValue(libBFile.toFile(), libB);
 
         Path libAFile = tempDir.resolve("libA.json");
         ProfileLibrary libA = new ProfileLibrary(
-                List.of(new ProfileImport("libB.json", "base")),
-                Map.of("cal-a", dummyCalibrationConfig(44, "base.weights-b")),
-                null);
+                List.of(new ProfileImport("libB.json", "base")), Map.of("cal-a", dummyCalibrationConfig(44)));
         mapper.writeValue(libAFile.toFile(), libA);
 
         Path rootFile = tempDir.resolve("root.json");
@@ -586,13 +472,10 @@ class ProfileLibraryLoaderTest {
         HarnessConfig loaded = ProfileLibraryLoader.loadAndResolve(rootFile.toFile(), mapper);
         assertTrue(loaded.calibrationProfiles().containsKey("common.cal-a"));
         assertTrue(loaded.calibrationProfiles().containsKey("common.base.cal-b"));
-        assertTrue(loaded.decisionWeightProfiles().containsKey("common.base.weights-b"));
 
         HarnessConfig resolved = loaded.resolveCalibrationProfiles();
         assertEquals(44, resolved.trials().get(0).calibrationConfig().workUnits());
-        assertNotNull(resolved.trials().get(0).calibrationConfig().decisionWeights());
         assertEquals(33, resolved.trials().get(1).calibrationConfig().workUnits());
-        assertNotNull(resolved.trials().get(1).calibrationConfig().decisionWeights());
     }
 
     /// Verifies cyclic import detection across a chain: a.json -> b.json -> c.json -> a.json.
@@ -602,9 +485,9 @@ class ProfileLibraryLoaderTest {
         Path fileB = tempDir.resolve("b.json");
         Path fileC = tempDir.resolve("c.json");
 
-        ProfileLibrary libA = new ProfileLibrary(List.of(new ProfileImport("b.json", "b")), null, null);
-        ProfileLibrary libB = new ProfileLibrary(List.of(new ProfileImport("c.json", "c")), null, null);
-        ProfileLibrary libC = new ProfileLibrary(List.of(new ProfileImport("a.json", "a")), null, null);
+        ProfileLibrary libA = new ProfileLibrary(List.of(new ProfileImport("b.json", "b")), null);
+        ProfileLibrary libB = new ProfileLibrary(List.of(new ProfileImport("c.json", "c")), null);
+        ProfileLibrary libC = new ProfileLibrary(List.of(new ProfileImport("a.json", "a")), null);
 
         mapper.writeValue(fileA.toFile(), libA);
         mapper.writeValue(fileB.toFile(), libB);
@@ -622,8 +505,7 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 null,
-                null,
-                List.of(new TrialConfig(1, 1, 1, null, dummyCalibrationConfigWithWeights(1))));
+                List.of(new TrialConfig(1, 1, 1, null, dummyCalibrationConfig(1))));
 
         IllegalArgumentException ex =
                 assertThrows(IllegalArgumentException.class, () -> config.resolveImports(tempDir.toFile(), mapper));
@@ -638,15 +520,15 @@ class ProfileLibraryLoaderTest {
     @Test
     void testDiamondImportsCacheReuse(@TempDir Path tempDir) throws Exception {
         Path sharedFile = tempDir.resolve("shared.json");
-        ProfileLibrary shared = new ProfileLibrary(Map.of("leaf", dummyCalibrationConfigWithWeights(55)), null);
+        ProfileLibrary shared = new ProfileLibrary(Map.of("leaf", dummyCalibrationConfig(55)));
         mapper.writeValue(sharedFile.toFile(), shared);
 
         Path libA = tempDir.resolve("libA.json");
-        ProfileLibrary a = new ProfileLibrary(List.of(new ProfileImport("shared.json", "s")), null, null);
+        ProfileLibrary a = new ProfileLibrary(List.of(new ProfileImport("shared.json", "s")), null);
         mapper.writeValue(libA.toFile(), a);
 
         Path libB = tempDir.resolve("libB.json");
-        ProfileLibrary b = new ProfileLibrary(List.of(new ProfileImport("shared.json", "s")), null, null);
+        ProfileLibrary b = new ProfileLibrary(List.of(new ProfileImport("shared.json", "s")), null);
         mapper.writeValue(libB.toFile(), b);
 
         HarnessConfig config = new HarnessConfig(
@@ -656,7 +538,6 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 List.of(new ProfileImport("libA.json", "a"), new ProfileImport("libB.json", "b")),
-                null,
                 null,
                 null,
                 null,
@@ -712,7 +593,7 @@ class ProfileLibraryLoaderTest {
     @Test
     void testUnknownNamespacedProfileRejection(@TempDir Path tempDir) throws Exception {
         Path libFile = tempDir.resolve("lib.json");
-        ProfileLibrary lib = new ProfileLibrary(Map.of("existing", dummyCalibrationConfigWithWeights(1)), null);
+        ProfileLibrary lib = new ProfileLibrary(Map.of("existing", dummyCalibrationConfig(1)));
         mapper.writeValue(libFile.toFile(), lib);
 
         HarnessConfig config = new HarnessConfig(
@@ -722,7 +603,6 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 List.of(new ProfileImport("lib.json", "common")),
-                null,
                 null,
                 null,
                 null,
@@ -756,7 +636,7 @@ class ProfileLibraryLoaderTest {
     @Test
     void testUnknownNamespaceRejection(@TempDir Path tempDir) throws Exception {
         Path libFile = tempDir.resolve("lib.json");
-        ProfileLibrary lib = new ProfileLibrary(Map.of("existing", dummyCalibrationConfigWithWeights(1)), null);
+        ProfileLibrary lib = new ProfileLibrary(Map.of("existing", dummyCalibrationConfig(1)));
         mapper.writeValue(libFile.toFile(), lib);
 
         assertThrows(
@@ -768,7 +648,6 @@ class ProfileLibraryLoaderTest {
                         null,
                         null,
                         List.of(new ProfileImport("lib.json", "common")),
-                        null,
                         null,
                         null,
                         null,
@@ -799,7 +678,7 @@ class ProfileLibraryLoaderTest {
     @Test
     void testSweepExpansionWithImportedProfiles(@TempDir Path tempDir) throws Exception {
         Path libFile = tempDir.resolve("lib.json");
-        ProfileLibrary lib = new ProfileLibrary(Map.of("base-cal", dummyCalibrationConfigWithWeights(10)), null);
+        ProfileLibrary lib = new ProfileLibrary(Map.of("base-cal", dummyCalibrationConfig(10)));
         mapper.writeValue(libFile.toFile(), lib);
 
         TrialConfig baseTrial = new TrialConfig(
@@ -843,7 +722,6 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 null,
-                null,
                 List.of(sweep),
                 null,
                 List.of(baseTrial));
@@ -858,7 +736,6 @@ class ProfileLibraryLoaderTest {
 
         for (TrialConfig trial : expanded.trials()) {
             assertNotNull(trial.calibrationConfig());
-            assertNotNull(trial.calibrationConfig().decisionWeights());
         }
 
         // Verify original template is unmodified
@@ -876,8 +753,7 @@ class ProfileLibraryLoaderTest {
                 null,
                 null,
                 null,
-                Map.of("local-cal", dummyCalibrationConfigWithWeights(12)),
-                Map.of("local-weights", FragmentDecisionWeights.DEFAULT),
+                Map.of("local-cal", dummyCalibrationConfig(12)),
                 null,
                 null,
                 List.of(new TrialConfig(

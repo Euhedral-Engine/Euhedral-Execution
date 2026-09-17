@@ -55,7 +55,7 @@ def main() -> int:
     "compactEvidenceSha256": actual,
     "currentExecutionPathRule": {
       "directWhen": "contention <= 0.85 and smoothedBodyCostNs <= calibrated threshold",
-      "defaultBodyCostDirectThresholdWeight": 272,
+      "directExecutionBodyThresholdWeight": 272,
     },
     "currentHostThresholdProbe": {
       "sampleCount": args.threshold_samples,

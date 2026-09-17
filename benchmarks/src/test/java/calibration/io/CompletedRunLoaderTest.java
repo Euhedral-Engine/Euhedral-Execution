@@ -26,7 +26,6 @@ import calibration.statistics.iteration.CoreIterationResult;
 import calibration.statistics.iteration.IterationResult;
 import calibration.statistics.iteration.SystemIterationResult;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,21 +40,7 @@ class CompletedRunLoaderTest {
 
     private static TrialConfig createTrialConfig(String id, String name, String group) {
         CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                2,
-                10,
-                false,
-                1000L,
-                5000L,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                true,
-                true,
-                true,
-                true,
-                true,
-                true);
+                List.of(1, 2), 4, 2, 10, false, 1000L, 5000L, 1024, true, true, true, true, true, true);
         return new TrialConfig(
                 id,
                 name,

@@ -25,8 +25,8 @@
       "group": "exec-contention-calibration",
       "parameters": [
         {
-          "path": "/calibrationConfig/decisionWeights/idleTimeNs/xsPark",
-          "description": "Varies the XS body-cost idle duration",
+          "path": "/calibrationConfig/idleParkNs",
+          "description": "Varies the CACHE miss park duration",
           "values": [0, 1000]
         }
       ]
@@ -64,10 +64,6 @@
         "randomizeWork": false,
         "totalRequiredExecutions": 32000000,
         "invocationTimeoutMillis": 6000,
-        "decisionWeights": {
-          "idleBodyCostWeights": {"xs": 256,"s": 256,"m": 256,"h": 256},
-          "idleTimeNs": {"xsPark": 0,"sPark": 0,"mPark": 0,"hPark": 0,"xhPark": 0}
-        },
         "rawSampleLimit": 16384,
         "observeCycleStart": false,
         "observeBatchProgress": true,

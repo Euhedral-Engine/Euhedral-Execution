@@ -30,8 +30,6 @@ class ComparisonKeyExtractorTest {
                 false,
                 1000L,
                 5000L,
-                null,
-                io.euhedral_execution.core.config.FragmentDecisionWeights.DEFAULT,
                 1024,
                 true,
                 true,

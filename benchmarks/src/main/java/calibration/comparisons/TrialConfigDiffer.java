@@ -119,9 +119,7 @@ public final class TrialConfigDiffer {
             normalized = normalized.substring("calibrationConfig/".length());
         }
 
-        if (normalized.startsWith("decisionWeights")
-                || normalized.startsWith("decisionWeightProfile")
-                || normalized.startsWith("productivityThresholdWeight")
+        if (normalized.startsWith("productivityThresholdWeight")
                 || normalized.startsWith("productivityGateMode")
                 || normalized.startsWith("forcedActiveParticipantCount")) {
             return DifferenceCategory.POLICY;

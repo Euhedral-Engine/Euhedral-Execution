@@ -10,7 +10,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
@@ -68,8 +67,7 @@ class ControlPlaneFragmentThreadTest {
         var entered = new CountDownLatch(1);
         var release = new CountDownLatch(1);
         var observer = Mockito.spy(createRecordingObserver());
-        var config = Mockito.spy(FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT)
-                .clone(cloneConfig()));
+        var config = Mockito.spy(FragmentConfig.ofBenchmark(observer).clone(cloneConfig()));
         ControlPlaneFragment fragment = new ControlPlaneFragment(config);
         org.mockito.stubbing.Answer<Object> pauseInitialization = invocation -> {
             entered.countDown();
@@ -109,7 +107,6 @@ class ControlPlaneFragmentThreadTest {
             LatticeConfig lattice = LatticeConfig.ofBenchmark(
                     new UnmodifiableBitSet(clone.effectiveCpus()),
                     createRecordingObserver(),
-                    FragmentDecisionWeights.DEFAULT,
                     new DefaultExecutor(-1),
                     timing);
             BaseCloneableObject pipeline = (BaseCloneableObject) lattice.baseShard().cloneableObject;
@@ -336,11 +333,9 @@ class ControlPlaneFragmentThreadTest {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         ControlPlaneFragment fragment1 = new ControlPlaneFragment(
-                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
-                        .clone(cloneConfigOnCoreIndex(0)));
+                FragmentConfig.ofBenchmark(createRecordingObserver()).clone(cloneConfigOnCoreIndex(0)));
         ControlPlaneFragment fragment2 = new ControlPlaneFragment(
-                FragmentConfig.ofBenchmark(createRecordingObserver(), FragmentDecisionWeights.DEFAULT)
-                        .clone(cloneConfigOnCoreIndex(1)));
+                FragmentConfig.ofBenchmark(createRecordingObserver()).clone(cloneConfigOnCoreIndex(1)));
         LatticeVertex distributor = connect(fragment1, fragment2);
 
         BenchmarkFrame frame = BenchmarkFrame.generate(1, false, 79L, 83L)[0];
@@ -396,12 +391,12 @@ class ControlPlaneFragmentThreadTest {
         requireTwoWorkerCores();
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
-        ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(), FragmentDecisionWeights.DEFAULT, new IdlePolicy(10000L, 2_000_000L))
-                .clone(cloneConfigOnCoreIndex(0)));
-        ControlPlaneFragment fragment2 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(), FragmentDecisionWeights.DEFAULT, new IdlePolicy(10000L, 2_000_000L))
-                .clone(cloneConfigOnCoreIndex(1)));
+        ControlPlaneFragment fragment1 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), new IdlePolicy(10000L, 2_000_000L))
+                        .clone(cloneConfigOnCoreIndex(0)));
+        ControlPlaneFragment fragment2 = new ControlPlaneFragment(
+                FragmentConfig.ofBenchmark(createRecordingObserver(), new IdlePolicy(10000L, 2_000_000L))
+                        .clone(cloneConfigOnCoreIndex(1)));
 
         try (fragment1;
                 fragment2;
@@ -540,11 +535,9 @@ class ControlPlaneFragmentThreadTest {
         };
 
         ControlPlaneFragment fragment1 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT)
-                        .clone(cloneConfigOnCoreIndex(0)));
+                new ControlPlaneFragment(FragmentConfig.ofBenchmark(observer).clone(cloneConfigOnCoreIndex(0)));
         ControlPlaneFragment fragment2 =
-                new ControlPlaneFragment(FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT)
-                        .clone(cloneConfigOnCoreIndex(1)));
+                new ControlPlaneFragment(FragmentConfig.ofBenchmark(observer).clone(cloneConfigOnCoreIndex(1)));
         LatticeVertex distributor = connect(fragment1, fragment2);
 
         // Preload 2 frames to complete a batch on fragment 2 and update registeredWorkers at boundary

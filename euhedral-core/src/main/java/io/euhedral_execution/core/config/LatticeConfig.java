@@ -97,22 +97,20 @@ public record LatticeConfig(
     public static LatticeConfig ofBenchmark(
             @NonNull UnmodifiableBitSet allowedCpus,
             @NonNull FragmentObserver observer,
-            @NonNull FragmentDecisionWeights decisionWeights,
             @NonNull AbstractExecutor executor) {
-        return ofBenchmark(allowedCpus, observer, decisionWeights, executor, IdlePolicy.DEFAULT);
+        return ofBenchmark(allowedCpus, observer, executor, IdlePolicy.DEFAULT);
     }
 
     public static LatticeConfig ofBenchmark(
             @NonNull UnmodifiableBitSet allowedCpus,
             @NonNull FragmentObserver observer,
-            @NonNull FragmentDecisionWeights decisionWeights,
             @NonNull AbstractExecutor executor,
             @NonNull IdlePolicy idlePolicy) {
         return new LatticeConfig(
                 DEFAULT_NAME,
                 allowedCpus,
                 Duration.ofMinutes(1),
-                ControlPlaneShard.createBaseShard(new BaseCloneableObject(
-                        FragmentConfig.ofBenchmark(observer, decisionWeights, idlePolicy), executor)));
+                ControlPlaneShard.createBaseShard(
+                        new BaseCloneableObject(FragmentConfig.ofBenchmark(observer, idlePolicy), executor)));
     }
 }

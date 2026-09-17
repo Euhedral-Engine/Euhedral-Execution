@@ -14,7 +14,6 @@ import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.CalibrationLifecycleMode;
 import calibration.config.TrialConfig;
 import calibration.statistics.fork.SystemForkResult;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -53,8 +52,6 @@ class CalibrationLifecycleComparisonTest {
                         false,
                         1_000L,
                         10_000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
                         1024,
                         true,
                         true,

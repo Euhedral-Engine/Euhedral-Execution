@@ -2,10 +2,8 @@ package calibration.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.io.File;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +14,7 @@ import org.jspecify.annotations.Nullable;
 
 /// Configuration for benchmark calibration harness execution.
 /// Holds optional metadata, external profile imports, run options, artifact retention settings,
-/// reusable calibration and decision weight profiles, parameter sweeps, search configurations,
+/// reusable calibration profiles, parameter sweeps, search configurations,
 /// and non-empty trial specifications.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
@@ -28,7 +26,6 @@ public record HarnessConfig(
         @Nullable HarnessRunOptions runOptions,
         @Nullable ArtifactConfig artifacts,
         @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-        @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
         @Nullable List<SweepConfig> sweeps,
         @Nullable List<SearchConfig> searches,
         @NonNull List<TrialConfig> trials) {
@@ -37,7 +34,7 @@ public record HarnessConfig(
 
     /// Convenience constructor for harness configs containing only trials.
     public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, null, null, null, null, null, null, null, trials);
+        this(null, null, null, null, null, null, null, null, null, null, null, trials);
     }
 
     /// Convenience constructor for harness configs without runOptions, artifacts, profiles, sweeps, and searches.
@@ -48,7 +45,7 @@ public record HarnessConfig(
             @Nullable String description,
             @Nullable Map<String, String> labels,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, null, null, null, null, null, null, trials);
+        this(schemaVersion, id, name, description, labels, null, null, null, null, null, null, trials);
     }
 
     /// Convenience constructor for harness configs without profiles, sweeps, and searches.
@@ -61,34 +58,7 @@ public record HarnessConfig(
             @Nullable HarnessRunOptions runOptions,
             @Nullable ArtifactConfig artifacts,
             @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, runOptions, artifacts, null, null, null, null, trials);
-    }
-
-    /// Convenience constructor for harness configs without decisionWeightProfiles, sweeps, and searches.
-    public HarnessConfig(
-            @Nullable Integer schemaVersion,
-            @Nullable String id,
-            @Nullable String name,
-            @Nullable String description,
-            @Nullable Map<String, String> labels,
-            @Nullable HarnessRunOptions runOptions,
-            @Nullable ArtifactConfig artifacts,
-            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @NonNull List<TrialConfig> trials) {
-        this(
-                schemaVersion,
-                id,
-                name,
-                description,
-                labels,
-                null,
-                runOptions,
-                artifacts,
-                calibrationProfiles,
-                null,
-                null,
-                null,
-                trials);
+        this(schemaVersion, id, name, description, labels, null, runOptions, artifacts, null, null, null, trials);
     }
 
     /// Convenience constructor for harness configs without sweeps and searches.
@@ -101,7 +71,6 @@ public record HarnessConfig(
             @Nullable HarnessRunOptions runOptions,
             @Nullable ArtifactConfig artifacts,
             @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
             @NonNull List<TrialConfig> trials) {
         this(
                 schemaVersion,
@@ -113,7 +82,6 @@ public record HarnessConfig(
                 runOptions,
                 artifacts,
                 calibrationProfiles,
-                decisionWeightProfiles,
                 null,
                 null,
                 trials);
@@ -129,7 +97,6 @@ public record HarnessConfig(
             @Nullable HarnessRunOptions runOptions,
             @Nullable ArtifactConfig artifacts,
             @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
             @Nullable List<SweepConfig> sweeps,
             @NonNull List<TrialConfig> trials) {
         this(
@@ -142,7 +109,6 @@ public record HarnessConfig(
                 runOptions,
                 artifacts,
                 calibrationProfiles,
-                decisionWeightProfiles,
                 sweeps,
                 null,
                 trials);
@@ -158,7 +124,6 @@ public record HarnessConfig(
             @Nullable HarnessRunOptions runOptions,
             @Nullable ArtifactConfig artifacts,
             @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles,
             @Nullable List<SweepConfig> sweeps,
             @Nullable List<SearchConfig> searches,
             @NonNull List<TrialConfig> trials) {
@@ -172,7 +137,6 @@ public record HarnessConfig(
                 runOptions,
                 artifacts,
                 calibrationProfiles,
-                decisionWeightProfiles,
                 sweeps,
                 searches,
                 trials);
@@ -185,7 +149,7 @@ public record HarnessConfig(
     ///                                  referenced baselineTrialIds are invalid/self-referential,
     ///                                  profile keys or label keys/values are blank,
     ///                                  duplicate import namespaces are found,
-    ///                                  referenced decisionWeightProfile or calibrationProfile does not exist,
+    ///                                  referenced calibrationProfile does not exist,
     ///                                  sweep/search IDs are duplicated, or referenced sweepIds do not exist
     /// @throws NullPointerException     if trials is null or imports/profiles/sweeps/searches contain null values
     @JsonCreator
@@ -236,43 +200,8 @@ public record HarnessConfig(
                 Objects.requireNonNull(
                         entry.getValue(),
                         "HarnessConfig calibrationProfiles value cannot be null for key: " + profileName);
-                CalibrationBenchmarkConfig profile = entry.getValue();
-                if (profile.decisionWeightProfile() != null) {
-                    if (decisionWeightProfiles == null
-                            || !decisionWeightProfiles.containsKey(profile.decisionWeightProfile())) {
-                        String ref = profile.decisionWeightProfile();
-                        if (imports == null || imports.isEmpty() || !ref.contains(".")) {
-                            throw new IllegalArgumentException("Referenced decisionWeightProfile '" + ref
-                                    + "' was not found in decisionWeightProfiles");
-                        }
-                        String rootNs = ref.substring(0, ref.indexOf('.'));
-                        boolean nsDeclared = false;
-                        for (ProfileImport imp : imports) {
-                            if (imp.namespace().equals(rootNs)) {
-                                nsDeclared = true;
-                                break;
-                            }
-                        }
-                        if (!nsDeclared) {
-                            throw new IllegalArgumentException("Referenced decisionWeightProfile '" + ref
-                                    + "' was not found in decisionWeightProfiles or declared imports");
-                        }
-                    }
-                }
             }
             calibrationProfiles = Map.copyOf(calibrationProfiles);
-        }
-        if (decisionWeightProfiles != null) {
-            for (Map.Entry<String, FragmentDecisionWeights> entry : decisionWeightProfiles.entrySet()) {
-                String profileName = entry.getKey();
-                if (profileName == null || profileName.isBlank()) {
-                    throw new IllegalArgumentException("HarnessConfig decisionWeightProfiles key cannot be blank");
-                }
-                Objects.requireNonNull(
-                        entry.getValue(),
-                        "HarnessConfig decisionWeightProfiles value cannot be null for key: " + profileName);
-            }
-            decisionWeightProfiles = Map.copyOf(decisionWeightProfiles);
         }
         Set<String> declaredSweepIds = new HashSet<>();
         if (sweeps != null) {
@@ -348,29 +277,6 @@ public record HarnessConfig(
                     }
                 }
             }
-            if (trial.calibrationConfig() != null && trial.calibrationConfig().decisionWeightProfile() != null) {
-                if (decisionWeightProfiles == null
-                        || !decisionWeightProfiles.containsKey(
-                                trial.calibrationConfig().decisionWeightProfile())) {
-                    String ref = trial.calibrationConfig().decisionWeightProfile();
-                    if (imports == null || imports.isEmpty() || !ref.contains(".")) {
-                        throw new IllegalArgumentException("Referenced decisionWeightProfile '" + ref
-                                + "' was not found in decisionWeightProfiles");
-                    }
-                    String rootNs = ref.substring(0, ref.indexOf('.'));
-                    boolean nsDeclared = false;
-                    for (ProfileImport imp : imports) {
-                        if (imp.namespace().equals(rootNs)) {
-                            nsDeclared = true;
-                            break;
-                        }
-                    }
-                    if (!nsDeclared) {
-                        throw new IllegalArgumentException("Referenced decisionWeightProfile '" + ref
-                                + "' was not found in decisionWeightProfiles or declared imports");
-                    }
-                }
-            }
             if (trial.comparison() != null && trial.comparison().baselineTrialId() != null) {
                 String baselineId = trial.comparison().baselineTrialId();
                 if (trial.id() != null && trial.id().equals(baselineId)) {
@@ -402,58 +308,29 @@ public record HarnessConfig(
         return ProfileLibraryLoader.loadAndResolve(rootConfigFile, mapper);
     }
 
-    /// Resolves decisionWeightProfiles references across calibrationProfiles and trials, populating decisionWeights
-    /// where needed.
+    /// Resolves calibrationProfiles references across all trials, populating calibrationConfig where needed.
     ///
-    /// @return a new HarnessConfig with decision weight profiles resolved, or this instance if no resolution was needed
-    public HarnessConfig resolveDecisionWeightProfiles() {
-        if (decisionWeightProfiles == null || decisionWeightProfiles.isEmpty()) {
+    /// @return a new HarnessConfig with all profiles resolved, or this instance if no resolution was needed
+    public HarnessConfig resolveCalibrationProfiles() {
+        if (calibrationProfiles == null || calibrationProfiles.isEmpty()) {
             return this;
         }
+
         boolean modified = false;
-
-        Map<String, CalibrationBenchmarkConfig> resolvedCalibrationProfiles = calibrationProfiles;
-        if (calibrationProfiles != null && !calibrationProfiles.isEmpty()) {
-            Map<String, CalibrationBenchmarkConfig> updatedProfiles = new HashMap<>(calibrationProfiles.size());
-            for (Map.Entry<String, CalibrationBenchmarkConfig> entry : calibrationProfiles.entrySet()) {
-                CalibrationBenchmarkConfig profile = entry.getValue();
-                if (profile.decisionWeightProfile() != null && profile.decisionWeights() == null) {
-                    FragmentDecisionWeights weights = decisionWeightProfiles.get(profile.decisionWeightProfile());
-                    if (weights == null) {
-                        throw new IllegalArgumentException("Referenced decisionWeightProfile '"
-                                + profile.decisionWeightProfile() + "' was not found in decisionWeightProfiles");
-                    }
-                    updatedProfiles.put(entry.getKey(), profile.withDecisionWeights(weights));
-                    modified = true;
-                } else {
-                    updatedProfiles.put(entry.getKey(), profile);
-                }
-            }
-            if (modified) {
-                resolvedCalibrationProfiles = updatedProfiles;
-            }
-        }
-
         List<TrialConfig> resolvedTrials = new ArrayList<>(trials.size());
         for (TrialConfig trial : trials) {
-            if (trial.calibrationConfig() != null
-                    && trial.calibrationConfig().decisionWeightProfile() != null
-                    && trial.calibrationConfig().decisionWeights() == null) {
-                FragmentDecisionWeights weights =
-                        decisionWeightProfiles.get(trial.calibrationConfig().decisionWeightProfile());
-                if (weights == null) {
-                    throw new IllegalArgumentException("Referenced decisionWeightProfile '"
-                            + trial.calibrationConfig().decisionWeightProfile()
-                            + "' was not found in decisionWeightProfiles");
+            if (trial.calibrationProfile() != null && trial.calibrationConfig() == null) {
+                CalibrationBenchmarkConfig profileConfig = calibrationProfiles.get(trial.calibrationProfile());
+                if (profileConfig == null) {
+                    throw new IllegalArgumentException("Referenced calibrationProfile '" + trial.calibrationProfile()
+                            + "' was not found in calibrationProfiles");
                 }
-                resolvedTrials.add(
-                        trial.withCalibrationConfig(trial.calibrationConfig().withDecisionWeights(weights)));
+                resolvedTrials.add(trial.withCalibrationConfig(profileConfig));
                 modified = true;
             } else {
                 resolvedTrials.add(trial);
             }
         }
-
         if (!modified) {
             return this;
         }
@@ -466,58 +343,9 @@ public record HarnessConfig(
                 imports,
                 runOptions,
                 artifacts,
-                resolvedCalibrationProfiles,
-                decisionWeightProfiles,
+                calibrationProfiles,
                 sweeps,
                 searches,
-                resolvedTrials);
-    }
-
-    /// Resolves calibrationProfiles and decisionWeightProfiles references across all trials, populating
-    /// calibrationConfig and
-    /// decisionWeights where needed.
-    ///
-    /// @return a new HarnessConfig with all profiles resolved, or this instance if no resolution was needed
-    public HarnessConfig resolveCalibrationProfiles() {
-        HarnessConfig withWeights = resolveDecisionWeightProfiles();
-
-        if (withWeights.calibrationProfiles() == null
-                || withWeights.calibrationProfiles().isEmpty()) {
-            return withWeights;
-        }
-
-        boolean modified = (withWeights != this);
-        List<TrialConfig> resolvedTrials = new ArrayList<>(withWeights.trials().size());
-        for (TrialConfig trial : withWeights.trials()) {
-            if (trial.calibrationProfile() != null && trial.calibrationConfig() == null) {
-                CalibrationBenchmarkConfig profileConfig =
-                        withWeights.calibrationProfiles().get(trial.calibrationProfile());
-                if (profileConfig == null) {
-                    throw new IllegalArgumentException("Referenced calibrationProfile '" + trial.calibrationProfile()
-                            + "' was not found in calibrationProfiles");
-                }
-                resolvedTrials.add(trial.withCalibrationConfig(profileConfig));
-                modified = true;
-            } else {
-                resolvedTrials.add(trial);
-            }
-        }
-        if (!modified) {
-            return withWeights;
-        }
-        return new HarnessConfig(
-                withWeights.schemaVersion(),
-                withWeights.id(),
-                withWeights.name(),
-                withWeights.description(),
-                withWeights.labels(),
-                withWeights.imports(),
-                withWeights.runOptions(),
-                withWeights.artifacts(),
-                withWeights.calibrationProfiles(),
-                withWeights.decisionWeightProfiles(),
-                withWeights.sweeps(),
-                withWeights.searches(),
                 resolvedTrials);
     }
 }

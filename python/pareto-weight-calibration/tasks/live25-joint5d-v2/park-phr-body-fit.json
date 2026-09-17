@@ -687,33 +687,6 @@
       "randomizeWork": false,
       "totalRequiredExecutions": 1000000,
       "invocationTimeoutMillis": 120000,
-      "decisionWeightProfile": null,
-      "decisionWeights": {
-        "idleBodyCostWeights": {
-          "xs": 96,
-          "s": 128,
-          "m": 216,
-          "h": 288
-        },
-        "idleTimeNs": {
-          "xsPark": 50000,
-          "sPark": 0,
-          "mPark": 0,
-          "hPark": 0,
-          "xhPark": 0
-        },
-        "bodyCostDirectThresholdWeight": 272,
-        "paretoWeights": {
-          "activeWorkersWeight": 1.0,
-          "contentionPhrWeight": 1.0,
-          "contentionWorkersWeight": 1.0,
-          "phrWeight": 1.0,
-          "bodyPhrWeight": 1.0,
-          "bodyWorkersWeight": 1.0,
-          "registeredWorkersPhrWeight": 1.0,
-          "registeredActiveWorkersWeight": 1.0
-        }
-      },
       "rawSampleLimit": 1024,
       "observeCycleStart": false,
       "observeBatchProgress": false,

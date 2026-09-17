@@ -244,11 +244,7 @@ public class CalibrationBenchmark {
         this.executor =
                 new CalibrationExecutor(this.calibrationConfig.workUnits(), this.calibrationConfig.randomizeWork());
         LatticeConfig latticeConfig = LatticeConfig.ofBenchmark(
-                cpuSet,
-                this.observer,
-                this.calibrationConfig.decisionWeights(),
-                this.executor,
-                this.calibrationConfig.toCacheTimingConfig());
+                cpuSet, this.observer, this.executor, this.calibrationConfig.toCacheTimingConfig());
         this.controlPlane = ControlPlaneLattice.getOrCreate(latticeConfig);
         this.controlPlane.start();
         for (RepeatingSink s : this.sinks) {

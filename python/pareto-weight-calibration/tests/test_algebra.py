@@ -80,15 +80,15 @@ def test_algebraic_parity_random_coordinates():
     model = MarginalModel(logical_weights=LogicalWeights.from_array(w))
     model_marginal = model.predict_marginal(features)
 
-    # 4. Java evaluator parity
-    java_marginal = model.evaluate_java_marginal(c, body_cost_ns, P, R, K)
+    # 4. Runtime evaluator parity
+    runtime_marginal = model.evaluate_runtime_marginal(c, body_cost_ns, P, R, K)
 
     # Assert exact agreement within machine precision
     assert math.isclose(expected_marginal, dot_marginal, rel_tol=1e-12,
                         abs_tol=1e-12)
     assert math.isclose(expected_marginal, model_marginal, rel_tol=1e-12,
                         abs_tol=1e-12)
-    assert math.isclose(expected_marginal, java_marginal, rel_tol=1e-12,
+    assert math.isclose(expected_marginal, runtime_marginal, rel_tol=1e-12,
                         abs_tol=1e-12)
 
 
@@ -115,5 +115,5 @@ def test_algebraic_parity_boundary_coordinates():
     )
     x = features.feature_vector
     dot_res = float(np.dot(x, w))
-    java_res = model.evaluate_java_marginal(c, body_cost, P, R, K)
-    assert math.isclose(dot_res, java_res, rel_tol=1e-12, abs_tol=1e-12)
+    runtime_res = model.evaluate_runtime_marginal(c, body_cost, P, R, K)
+    assert math.isclose(dot_res, runtime_res, rel_tol=1e-12, abs_tol=1e-12)

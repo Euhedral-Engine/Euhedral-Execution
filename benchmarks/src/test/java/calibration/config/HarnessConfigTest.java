@@ -11,7 +11,6 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.IntNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
 import java.util.Arrays;
@@ -53,21 +52,7 @@ class HarnessConfigTest {
 
     private static CalibrationBenchmarkConfig dummyCalibrationConfig() {
         return new CalibrationBenchmarkConfig(
-                List.of(1, 2, 3, 4),
-                4,
-                2,
-                100,
-                false,
-                100,
-                1000,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
+                List.of(1, 2, 3, 4), 4, 2, 100, false, 100, 1000, 1024, false, false, false, false, false, false);
     }
 
     /// Verifies static constant CURRENT_SCHEMA_VERSION.
@@ -94,10 +79,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -120,7 +101,6 @@ class HarnessConfigTest {
         assertNull(config.runOptions());
         assertNull(config.artifacts());
         assertNull(config.calibrationProfiles());
-        assertNull(config.decisionWeightProfiles());
         assertNull(config.sweeps());
         assertNull(config.searches());
         assertEquals(1, config.trials().size());
@@ -156,10 +136,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -316,10 +292,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -414,10 +386,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -498,10 +466,6 @@ class HarnessConfigTest {
                   "randomizeWork": true,
                   "totalRequiredExecutions": 1000000,
                   "invocationTimeoutMillis": 60000,
-                  "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                  },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
                   "observeBatchProgress": false,
@@ -524,10 +488,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "rawSampleLimit": 1024,
                   "observeCycleStart": false,
@@ -567,10 +527,6 @@ class HarnessConfigTest {
                   "randomizeWork": true,
                   "totalRequiredExecutions": 1000000,
                   "invocationTimeoutMillis": 60000,
-                  "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                  },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
                   "observeBatchProgress": false,
@@ -619,128 +575,6 @@ class HarnessConfigTest {
         assertThrows(
                 UnsupportedOperationException.class,
                 () -> config.calibrationProfiles().put("profile-2", dummyCalibrationConfig()));
-    }
-
-    /// Verifies decisionWeightProfiles JSON parsing and round-trip equivalence with distinct profiles.
-    @Test
-    void parseDecisionWeightProfilesAndRoundTrip() throws Exception {
-        String json = """
-            {
-              "decisionWeightProfiles": {
-                "default-weights": {
-                  "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                  "idleTimeNs": { "xsPark": 1, "sPark": 1, "mPark": 1, "hPark": 1, "xhPark": 1 }
-                },
-                "aggressive-weights": {
-                  "idleBodyCostWeights": { "xs": 10, "s": 20, "m": 30, "h": 40 },
-                  "idleTimeNs": { "xsPark": 10, "sPark": 20, "mPark": 30, "hPark": 40, "xhPark": 50 }
-                }
-              },
-              "trials": [
-                {
-                  "forks": 1,
-                  "warmups": 1,
-                  "iterations": 5,
-                  "calibrationConfig": {
-                    "cpuSet": [1, 2, 3, 4],
-                    "parallelSources": 4,
-                    "orderedSources": 2,
-                    "workUnits": 100,
-                    "randomizeWork": true,
-                    "totalRequiredExecutions": 1000000,
-                    "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 1, "sPark": 1, "mPark": 1, "hPark": 1, "xhPark": 1 }
-                    },
-                    "rawSampleLimit": 1024,
-                    "observeCycleStart": false,
-                    "observeBatchProgress": false,
-                    "observeBatchComplete": false,
-                    "observeRawBodyCost": false,
-                    "observeIdleDecision": false,
-                    "observeExecDecision": false
-                  }
-                }
-              ]
-            }
-            """;
-
-        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
-        assertNotNull(config.decisionWeightProfiles());
-        assertEquals(2, config.decisionWeightProfiles().size());
-        assertTrue(config.decisionWeightProfiles().containsKey("default-weights"));
-        assertTrue(config.decisionWeightProfiles().containsKey("aggressive-weights"));
-
-        assertEquals(
-                1,
-                config.decisionWeightProfiles()
-                        .get("default-weights")
-                        .idleBodyCostWeights()
-                        .h());
-        assertEquals(
-                40,
-                config.decisionWeightProfiles()
-                        .get("aggressive-weights")
-                        .idleBodyCostWeights()
-                        .h());
-
-        String reSerialized = mapper.writeValueAsString(config);
-        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
-        assertEquals(config, roundTrip);
-    }
-
-    /// Verifies blank decisionWeightProfiles names are rejected.
-    @Test
-    void rejectBlankDecisionWeightProfileName() {
-        String jsonBlankProfileName = """
-            {
-              "decisionWeightProfiles": {
-                "   ": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                }
-              },
-              "trials": []
-            }
-            """;
-        assertThrows(Exception.class, () -> mapper.readValue(jsonBlankProfileName, HarnessConfig.class));
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig(
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        Map.of("  ", FragmentDecisionWeights.DEFAULT),
-                        List.of(dummyTrialConfig())));
-    }
-
-    /// Verifies null decisionWeightProfiles values are rejected and map is defensively copied.
-    @Test
-    void rejectNullDecisionWeightProfileValueAndDefensivelyCopy() {
-        Map<String, FragmentDecisionWeights> mutableProfiles = new HashMap<>();
-        mutableProfiles.put("profile-1", FragmentDecisionWeights.DEFAULT);
-        mutableProfiles.put("profile-2", null);
-
-        assertThrows(
-                NullPointerException.class,
-                () -> new HarnessConfig(
-                        null, null, null, null, null, null, null, null, mutableProfiles, List.of(dummyTrialConfig())));
-
-        Map<String, FragmentDecisionWeights> validProfiles = Map.of("profile-1", FragmentDecisionWeights.DEFAULT);
-        HarnessConfig config = new HarnessConfig(
-                null, null, null, null, null, null, null, null, validProfiles, List.of(dummyTrialConfig()));
-
-        assertNotNull(config.decisionWeightProfiles());
-        assertThrows(
-                UnsupportedOperationException.class,
-                () -> config.decisionWeightProfiles().put("profile-2", FragmentDecisionWeights.DEFAULT));
     }
 
     /// Verifies sweeps JSON parsing and round-trip with various JsonNode value types.
@@ -799,10 +633,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -896,7 +726,6 @@ class HarnessConfigTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> new HarnessConfig(
-                        null,
                         null,
                         null,
                         null,
@@ -1057,10 +886,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -1220,10 +1045,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -1249,10 +1070,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -1345,10 +1162,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -1404,10 +1217,6 @@ class HarnessConfigTest {
                     "randomizeWork": true,
                     "totalRequiredExecutions": 1000000,
                     "invocationTimeoutMillis": 60000,
-                    "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                    },
                     "rawSampleLimit": 1024,
                     "observeCycleStart": false,
                     "observeBatchProgress": false,
@@ -1667,10 +1476,6 @@ class HarnessConfigTest {
                   "randomizeWork": true,
                   "totalRequiredExecutions": 1000000,
                   "invocationTimeoutMillis": 60000,
-                  "decisionWeights": {
-                      "idleBodyCostWeights": { "xs": 1, "s": 1, "m": 1, "h": 1 },
-                      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                  },
                   "rawSampleLimit": 1024,
                   "observeCycleStart": false,
                   "observeBatchProgress": false,
@@ -1709,321 +1514,6 @@ class HarnessConfigTest {
         String reSerialized = mapper.writeValueAsString(config);
         HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
         assertEquals(config, roundTrip);
-    }
-
-    /// Verifies trial with inline calibrationConfig referencing decisionWeightProfile parses, resolves, and round-trips
-    /// correctly.
-    @Test
-    void parseTrialReferencingDecisionWeightProfileAndResolve() throws Exception {
-        String json = """
-            {
-              "decisionWeightProfiles": {
-                "weights-a": {
-                  "idleBodyCostWeights": { "xs": 50, "s": 50, "m": 50, "h": 50 },
-                  "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                }
-              },
-              "trials": [
-                {
-                  "id": "trial-001",
-                  "forks": 1,
-                  "warmups": 1,
-                  "iterations": 5,
-                  "calibrationConfig": {
-                    "cpuSet": [1, 2, 3, 4],
-                    "parallelSources": 4,
-                    "orderedSources": 2,
-                    "workUnits": 100,
-                    "randomizeWork": true,
-                    "totalRequiredExecutions": 1000000,
-                    "invocationTimeoutMillis": 60000,
-                    "decisionWeightProfile": "weights-a",
-                    "rawSampleLimit": 1024,
-                    "observeCycleStart": false,
-                    "observeBatchProgress": false,
-                    "observeBatchComplete": false,
-                    "observeRawBodyCost": false,
-                    "observeIdleDecision": false,
-                    "observeExecDecision": false
-                  }
-                }
-              ]
-            }
-            """;
-
-        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
-        assertEquals(1, config.trials().size());
-        TrialConfig trial = config.trials().getFirst();
-        assertNotNull(trial.calibrationConfig());
-        assertEquals("weights-a", trial.calibrationConfig().decisionWeightProfile());
-        assertNull(trial.calibrationConfig().decisionWeights());
-
-        HarnessConfig resolved = config.resolveCalibrationProfiles();
-        assertEquals(1, resolved.trials().size());
-        TrialConfig resolvedTrial = resolved.trials().getFirst();
-        assertNotNull(resolvedTrial.calibrationConfig());
-        assertEquals("weights-a", resolvedTrial.calibrationConfig().decisionWeightProfile());
-        assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
-        assertEquals(
-                50,
-                resolvedTrial
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleBodyCostWeights()
-                        .xs());
-
-        String reSerialized = mapper.writeValueAsString(config);
-        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
-        assertEquals(config, roundTrip);
-    }
-
-    /// Verifies calibrationProfile referencing decisionWeightProfile resolves chained profiles correctly.
-    @Test
-    void parseCalibrationProfileReferencingDecisionWeightProfileAndResolve() throws Exception {
-        String json = """
-            {
-              "decisionWeightProfiles": {
-                "weights-nested": {
-                  "idleBodyCostWeights": { "xs": 77, "s": 77, "m": 77, "h": 77 },
-                  "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
-                }
-              },
-              "calibrationProfiles": {
-                "profile-chained": {
-                  "cpuSet": [1, 2],
-                  "parallelSources": 8,
-                  "orderedSources": 1,
-                  "workUnits": 50,
-                  "randomizeWork": false,
-                  "totalRequiredExecutions": 500000,
-                  "invocationTimeoutMillis": 30000,
-                  "decisionWeightProfile": "weights-nested",
-                  "rawSampleLimit": 512,
-                  "observeCycleStart": false,
-                  "observeBatchProgress": false,
-                  "observeBatchComplete": false,
-                  "observeRawBodyCost": false,
-                  "observeIdleDecision": false,
-                  "observeExecDecision": false
-                }
-              },
-              "trials": [
-                {
-                  "id": "trial-chained",
-                  "calibrationProfile": "profile-chained",
-                  "forks": 1,
-                  "warmups": 1,
-                  "iterations": 5
-                }
-              ]
-            }
-            """;
-
-        HarnessConfig config = mapper.readValue(json, HarnessConfig.class);
-        assertEquals(1, config.trials().size());
-        TrialConfig trial = config.trials().getFirst();
-        assertEquals("profile-chained", trial.calibrationProfile());
-        assertNull(trial.calibrationConfig());
-
-        HarnessConfig resolved = config.resolveCalibrationProfiles();
-        assertEquals(1, resolved.trials().size());
-        TrialConfig resolvedTrial = resolved.trials().getFirst();
-        assertNotNull(resolvedTrial.calibrationConfig());
-        assertEquals(8, resolvedTrial.calibrationConfig().parallelSources());
-        assertEquals(50, resolvedTrial.calibrationConfig().workUnits());
-        assertEquals("weights-nested", resolvedTrial.calibrationConfig().decisionWeightProfile());
-        assertNotNull(resolvedTrial.calibrationConfig().decisionWeights());
-        assertEquals(
-                77,
-                resolvedTrial
-                        .calibrationConfig()
-                        .decisionWeights()
-                        .idleBodyCostWeights()
-                        .xs());
-
-        String reSerialized = mapper.writeValueAsString(config);
-        HarnessConfig roundTrip = mapper.readValue(reSerialized, HarnessConfig.class);
-        assertEquals(config, roundTrip);
-    }
-
-    /// Verifies error when trial references a non-existent decisionWeightProfile.
-    @Test
-    void rejectMissingDecisionWeightProfileInTrial() {
-        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                0,
-                100,
-                false,
-                1000,
-                1000,
-                "missing-weights",
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-        TrialConfig trial = new TrialConfig(
-                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null, null,
-                calConfig);
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig(
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        Map.of("weights-1", FragmentDecisionWeights.DEFAULT),
-                        List.of(trial)));
-    }
-
-    /// Verifies error when calibrationProfile references a non-existent decisionWeightProfile.
-    @Test
-    void rejectMissingDecisionWeightProfileInCalibrationProfile() {
-        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                0,
-                100,
-                false,
-                1000,
-                1000,
-                "missing-weights",
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-        TrialConfig trial =
-                new TrialConfig("trial-1", "name", "group", null, null, null, null, true, 1, 1, 1, null, "profile-1");
-
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new HarnessConfig(
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        null,
-                        Map.of("profile-1", calConfig),
-                        Map.of("weights-1", FragmentDecisionWeights.DEFAULT),
-                        List.of(trial)));
-    }
-
-    /// Verifies error when trial references a decisionWeightProfile but decisionWeightProfiles is null.
-    @Test
-    void rejectDecisionWeightProfileReferenceWhenProfilesNull() {
-        CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                0,
-                100,
-                false,
-                1000,
-                1000,
-                "weights-1",
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-        TrialConfig trial = new TrialConfig(
-                "trial-1", "name", "group", null, null, null, null, null, true, null, 1, 1, 1, null, null, null, null,
-                calConfig);
-
-        assertThrows(IllegalArgumentException.class, () -> new HarnessConfig(List.of(trial)));
-    }
-
-    /// Verifies blank decisionWeightProfile names in CalibrationBenchmarkConfig are rejected.
-    @Test
-    void rejectBlankDecisionWeightProfileInCalibrationBenchmarkConfig() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        4,
-                        0,
-                        100,
-                        false,
-                        1000,
-                        1000,
-                        "   ",
-                        1024,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false));
-    }
-
-    /// Verifies CalibrationBenchmarkConfig without decisionWeights or decisionWeightProfile is rejected.
-    @Test
-    void rejectCalibrationBenchmarkConfigWithoutWeightsOrProfile() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        4,
-                        0,
-                        100,
-                        false,
-                        1000,
-                        1000,
-                        (String) null,
-                        (FragmentDecisionWeights) null,
-                        1024,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false,
-                        false));
-    }
-
-    /// Verifies CalibrationBenchmarkConfig withDecisionWeights and withDecisionWeightProfile copy helpers.
-    @Test
-    void testCalibrationBenchmarkConfigWithDecisionWeightsAndProfile() {
-        CalibrationBenchmarkConfig config = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                0,
-                100,
-                false,
-                1000,
-                1000,
-                "profile-a",
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
-
-        assertEquals("profile-a", config.decisionWeightProfile());
-        assertNull(config.decisionWeights());
-
-        CalibrationBenchmarkConfig withWeights = config.withDecisionWeights(FragmentDecisionWeights.DEFAULT);
-        assertEquals("profile-a", withWeights.decisionWeightProfile());
-        assertEquals(FragmentDecisionWeights.DEFAULT, withWeights.decisionWeights());
-
-        CalibrationBenchmarkConfig withNewProfile = withWeights.withDecisionWeightProfile("profile-b");
-        assertEquals("profile-b", withNewProfile.decisionWeightProfile());
-        assertEquals(FragmentDecisionWeights.DEFAULT, withNewProfile.decisionWeights());
     }
 
     @Test

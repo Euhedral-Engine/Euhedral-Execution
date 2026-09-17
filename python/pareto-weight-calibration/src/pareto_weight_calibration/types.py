@@ -215,8 +215,6 @@ class TrialCalibrationConfig:
     cache_park_ns: int
     cache_actuator_version: str
     lifecycle_mode: str
-    decision_weights: Optional[Dict[str, Any]] = None
-    decision_weight_profile: Optional[str] = None
     contention_half_life_nanos: int = 1_000_000
     contention_half_life_explicit: bool = False
 
