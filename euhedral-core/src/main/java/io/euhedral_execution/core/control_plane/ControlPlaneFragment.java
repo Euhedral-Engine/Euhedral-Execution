@@ -384,7 +384,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 this.state.completed += processed;
                 recordProgress(executionElapsedNs, executionFrames, processed, contention);
-                this.controlPolicy.recordProgress();
                 Thread.onSpinWait();
             }
         } catch (Exception e) {

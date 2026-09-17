@@ -33,7 +33,7 @@ class IdleTimingFunctionTest {
                 assertEquals(1_000_000, model.halfLifeNanos(c, p, 200, 7));
             }
         }
-        assertNull(new IdlePolicy(15_000, 1_000_000).function());
+        assertNotNull(new IdlePolicy(15_000, 1_000_000).function());
     }
 
     @Test

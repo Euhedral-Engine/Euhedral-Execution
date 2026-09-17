@@ -19,7 +19,8 @@ public record IdleTimingFunction(
         long parkMinNanos,
         long parkMaxNanos,
         long halfLifeMinNanos,
-        long halfLifeMaxNanos) {
+        long halfLifeMaxNanos)
+        implements TimingProvider {
     public IdleTimingFunction {
         if (Objects.requireNonNull(normalizationVersion).isBlank()) {
             throw new IllegalArgumentException("normalizationVersion must be named");
@@ -99,11 +100,13 @@ public record IdleTimingFunction(
         }
     }
 
+    @Override
     public long parkNanos(double contention, double phr, double bodyNanos, long fallback) {
         return output(
                 contention, phr, bodyNanos, parkCoefficients, parkReferenceNanos, parkMinNanos, parkMaxNanos, fallback);
     }
 
+    @Override
     public long halfLifeNanos(double contention, double phr, double bodyNanos, long fallback) {
         return output(
                 contention,

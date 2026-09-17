@@ -61,7 +61,7 @@ class ProductionIdlePolicyTest {
         assertSame(suppliedFunction, config.idlePolicy().function());
         assertSame(
                 supplied, config.clone(new CloneConfig("test", 0, new BitSet())).idlePolicy());
-        assertNull(new IdlePolicy(32000, 6000000).function());
+        assertNotNull(new IdlePolicy(32000, 6000000).function());
         assertNull(new IdlePolicy(32000, 6000000, null).function());
     }
 }

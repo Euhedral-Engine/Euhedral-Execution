@@ -59,7 +59,8 @@ class IdlePolicyTest {
                 .resolveCalibrationProfiles();
         TrialConfig resolved = harness.trials().getFirst();
         assertEquals(
-                new IdlePolicy(43000L, 7000000L), resolved.calibrationConfig().toCacheTimingConfig());
+                new IdlePolicy(43000L, 7000000L, null),
+                resolved.calibrationConfig().toCacheTimingConfig());
         assertEquals(
                 FragmentDecisionWeights.DEFAULT, resolved.calibrationConfig().decisionWeights());
         ObjectNode persisted = mapper.valueToTree(resolved);
@@ -73,7 +74,7 @@ class IdlePolicyTest {
     @Test
     void omittedHistoricalValuesAndRoundTrip() throws Exception {
         CalibrationBenchmarkConfig defaults = mapper.treeToValue(input(), CalibrationBenchmarkConfig.class);
-        assertEquals(new IdlePolicy(15000L, 1000000L), defaults.toCacheTimingConfig());
+        assertEquals(new IdlePolicy(15000L, 1000000L, null), defaults.toCacheTimingConfig());
         ObjectNode json = mapper.valueToTree(defaults);
         assertEquals(1000000L, json.get("contentionHalfLifeNanos").longValue());
         assertFalse(json.has("toCacheTimingConfig"));
@@ -86,7 +87,7 @@ class IdlePolicyTest {
                 custom.withDecisionWeightProfile("other"),
                 custom.withLifecycleMode(CalibrationLifecycleMode.CONTINUOUS),
                 custom.withCurrentCacheActuatorIdentity())) {
-            assertEquals(new IdlePolicy(43000L, 7000000L), copy.toCacheTimingConfig());
+            assertEquals(new IdlePolicy(43000L, 7000000L, null), copy.toCacheTimingConfig());
         }
     }
 

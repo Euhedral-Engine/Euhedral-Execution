@@ -87,10 +87,10 @@ class TrialSweepExpanderTest {
         }
         assertEquals(
                 java.util.Set.of(
-                        new IdlePolicy(0L, 29_000L),
-                        new IdlePolicy(0L, 7_000_000L),
-                        new IdlePolicy(43_000L, 29_000L),
-                        new IdlePolicy(43_000L, 7_000_000L)),
+                        new IdlePolicy(0L, 29_000L, null),
+                        new IdlePolicy(0L, 7_000_000L, null),
+                        new IdlePolicy(43_000L, 29_000L, null),
+                        new IdlePolicy(43_000L, 7_000_000L, null)),
                 actual);
     }
 

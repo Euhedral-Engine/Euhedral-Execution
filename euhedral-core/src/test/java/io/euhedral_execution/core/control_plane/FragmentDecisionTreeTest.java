@@ -225,30 +225,6 @@ class FragmentDecisionTreeTest {
     }
 
     @Test
-    void missRequiresPark_andRecordProgress_behavior() {
-        FragmentDecisionTree tree = createDefaultTree(null);
-
-        // 1 to 64 consecutive misses return false
-        for (int i = 1; i <= FragmentDecisionTree.SPIN_MISSES; i++) {
-            assertFalse(tree.missRequiresPark(), "Miss " + i + " should not require park");
-        }
-
-        // 65th miss returns true
-        assertTrue(tree.missRequiresPark(), "65th miss should require park");
-
-        // Subsequent misses continue to return true without overflow
-        assertTrue(tree.missRequiresPark());
-        assertTrue(tree.missRequiresPark());
-
-        // recordProgress resets the miss streak
-        tree.recordProgress();
-        for (int i = 1; i <= FragmentDecisionTree.SPIN_MISSES; i++) {
-            assertFalse(tree.missRequiresPark(), "Miss " + i + " after progress should not require park");
-        }
-        assertTrue(tree.missRequiresPark());
-    }
-
-    @Test
     void completeBatch_scalesWithDirectWorkTarget() {
         FragmentDecisionTree tree = createDefaultTree(null);
 
@@ -370,19 +346,14 @@ class FragmentDecisionTreeTest {
         // Mutate state
         tree.recordExecution(10_000L, 10L);
         populateBodyCosts(tree, 32, 200L);
-        for (int i = 0; i < 70; i++) {
-            tree.missRequiresPark();
-        }
         tree.completeBatch(16L);
 
         assertTrue(tree.serviceTimeNs() > 0.0);
-        assertTrue(tree.missRequiresPark());
 
         // Reset
         tree.reset();
 
         assertEquals(0.0, tree.serviceTimeNs());
-        assertFalse(tree.missRequiresPark());
         assertEquals(2L, tree.completeBatch(16L));
     }
 

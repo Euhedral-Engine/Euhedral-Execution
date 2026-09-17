@@ -1,16 +1,39 @@
 package io.euhedral_execution.core.config;
 
 import java.util.List;
-import org.jspecify.annotations.Nullable;
+import org.jspecify.annotations.NonNull;
 
 public record IdlePolicy(
         long idleParkNs,
         long contentionHalfLifeNanos,
-        @Nullable IdleTimingFunction function) {
+        @NonNull TimingProvider function) {
 
-    /// Explicit fixed timing, including legacy callers and benchmark POLICY_OFF.
+    /// Explicit fixed timing.
     public IdlePolicy(long idleParkNs, long contentionHalfLifeNanos) {
-        this(idleParkNs, contentionHalfLifeNanos, null);
+        this(idleParkNs, contentionHalfLifeNanos, new TimingProvider() {
+            @Override
+            public long parkNanos(double contention, double phr, double bodyNanos, long fallback) {
+                return idleParkNs;
+            }
+
+            @Override
+            public long halfLifeNanos(double contention, double phr, double bodyNanos, long fallback) {
+                return contentionHalfLifeNanos;
+            }
+
+            @Override
+            public boolean equals(Object obj) {
+                return obj != null
+                        && obj.getClass() == getClass()
+                        && ((TimingProvider) obj).parkNanos(0, 0, 0, 0) == idleParkNs
+                        && ((TimingProvider) obj).halfLifeNanos(0, 0, 0, 0) == contentionHalfLifeNanos;
+            }
+
+            @Override
+            public int hashCode() {
+                return Long.hashCode(idleParkNs) * 31 + Long.hashCode(contentionHalfLifeNanos);
+            }
+        });
     }
 
     public static final long DEFAULT_IDLE_PARK_NS = 15_000L;
@@ -45,8 +68,15 @@ public record IdlePolicy(
             814375L,
             250000L,
             2000000L);
-    public static final IdlePolicy DEFAULT =
-            new IdlePolicy(DEFAULT_IDLE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION);
+    public static final IdlePolicy DEFAULT;
+
+    static {
+        if (System.getProperty("euhedral.fixed.idle.policy") != null) {
+            DEFAULT = new IdlePolicy(DEFAULT_IDLE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS);
+        } else {
+            DEFAULT = new IdlePolicy(DEFAULT_IDLE_PARK_NS, DEFAULT_CONTENTION_HALF_LIFE_NANOS, DEFAULT_FUNCTION);
+        }
+    }
 
     public IdlePolicy {
         if (idleParkNs < 0L) {

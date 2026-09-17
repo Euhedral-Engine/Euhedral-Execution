@@ -28,7 +28,6 @@ final class FragmentDecisionTree {
     static final int BODY_COST_WINDOW_MASK = BODY_COST_WINDOW_SAMPLES - 1;
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
-    static final int SPIN_MISSES = 64;
 
     private final int core;
     private final int socket;
@@ -46,7 +45,6 @@ final class FragmentDecisionTree {
     private int bodyCostHistoryCount;
     private int bodyCostWindowIndex;
     private int expensiveConfirmationWindows;
-    private int activeMissStreak;
 
     FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket) {
         this(observer, core, socket, IdlePolicy.DEFAULT);
@@ -91,18 +89,15 @@ final class FragmentDecisionTree {
 
     void idle(UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
         var function = this.idlePolicy.function();
-        if (function == null) {
-            simpleIdle();
-        } else {
-            long contention = upstream.getAdaptiveContention(now, contentionHalfLifeNanos());
-            double c = contention / 1_000_000.0;
-            double p = registeredWorkers > 0 ? (double) productiveHandleCount / registeredWorkers : Double.NaN;
-            double body = this.smoothedBodyCostNs;
-            long park = function.parkNanos(c, p, body, idleParkNs());
-            long halfLife = function.halfLifeNanos(c, p, body, contentionHalfLifeNanos());
-            upstream.installContentionHalfLife(now, halfLife, contentionHalfLifeNanos());
-            LockSupport.parkNanos(park);
-        }
+
+        long contention = upstream.getAdaptiveContention(now, contentionHalfLifeNanos());
+        double c = contention / 1_000_000.0;
+        double p = registeredWorkers > 0 ? (double) productiveHandleCount / registeredWorkers : Double.NaN;
+        double body = this.smoothedBodyCostNs;
+        long park = function.parkNanos(c, p, body, idleParkNs());
+        long halfLife = function.halfLifeNanos(c, p, body, contentionHalfLifeNanos());
+        upstream.installContentionHalfLife(now, halfLife, contentionHalfLifeNanos());
+        LockSupport.parkNanos(park);
     }
 
     ExecutionPath executionPath(
@@ -123,11 +118,11 @@ final class FragmentDecisionTree {
 
         if (isPlentiful(productiveHandles, registeredWorkers)
                 || (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold)) {
-            recordExecDecision(cycleEpoch, batchEpoch, 0, 0, contention);
+            recordExecDecision(cycleEpoch, batchEpoch, 0, contention);
             this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;
         }
-        recordExecDecision(cycleEpoch, batchEpoch, 1, 0, contention);
+        recordExecDecision(cycleEpoch, batchEpoch, 1, contention);
         this.executionPath = ExecutionPath.STAGED;
         return ExecutionPath.STAGED;
     }
@@ -136,8 +131,7 @@ final class FragmentDecisionTree {
         return registeredWorkers > 0 && productiveHandles >= registeredWorkers;
     }
 
-    private void recordExecDecision(
-            long cycleEpoch, long batchEpoch, int contentionPolicy, int bodyPolicy, long contention) {
+    private void recordExecDecision(long cycleEpoch, long batchEpoch, int contentionPolicy, long contention) {
         if (this.observer != null) {
             this.observer.execBranchDecision(
                     this.core,
@@ -145,7 +139,7 @@ final class FragmentDecisionTree {
                     cycleEpoch,
                     batchEpoch,
                     contentionPolicy,
-                    bodyPolicy,
+                    0,
                     contention,
                     this.smoothedBodyCostNs);
         }
@@ -191,11 +185,6 @@ final class FragmentDecisionTree {
         }
     }
 
-    /// Clears the active miss streak after any productive execution cycle.
-    void recordProgress() {
-        this.activeMissStreak = 0;
-    }
-
     /// Completes a productive batch and returns the next batch within `eligibleCap`.
     long completeBatch(long eligibleCap) {
         long cap = Math.max(2L, eligibleCap);
@@ -217,14 +206,6 @@ final class FragmentDecisionTree {
         return this.batchSize;
     }
 
-    /// Records an active-source/cache miss and reports when bounded parking should replace spinning.
-    boolean missRequiresPark() {
-        if (this.activeMissStreak <= SPIN_MISSES) {
-            this.activeMissStreak++;
-        }
-        return this.activeMissStreak > SPIN_MISSES;
-    }
-
     /// Restores the captured initial mode, batch two, and empty timing and hysteresis state.
     void reset() {
         this.executionPath = ExecutionPath.DIRECT;
@@ -234,7 +215,6 @@ final class FragmentDecisionTree {
         this.bodyCostHistoryCount = 0;
         this.bodyCostWindowIndex = 0;
         this.expensiveConfirmationWindows = 0;
-        this.activeMissStreak = 0;
     }
 
     /// Returns the current EWMA service estimate in nanoseconds per frame, or zero before sampling.
@@ -247,11 +227,7 @@ final class FragmentDecisionTree {
         return this.bodyCostHistoryCount >= BODY_COST_MIN_HISTORY;
     }
 
-    void simpleIdle() {
-        LockSupport.parkNanos(idleParkNs());
-    }
-
-    /// Returns the configured CACHE miss park duration for this actuator fixture.
+    /// Returns the configured default IDLE park duration.
     long idleParkNs() {
         return this.idlePolicy.idleParkNs();
     }
