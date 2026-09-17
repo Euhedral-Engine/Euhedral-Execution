@@ -10,7 +10,6 @@ public record RunIdentity(
         @Nullable String trialName,
         @Nullable String trialGroup,
         int repeatIndex,
-        @Nullable Integer forkIndex,
         @NonNull String sourcePath) {
 
     public RunIdentity {

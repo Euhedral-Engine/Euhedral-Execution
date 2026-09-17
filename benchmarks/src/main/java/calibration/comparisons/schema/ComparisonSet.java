@@ -9,26 +9,21 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
-/// Represents a named or anonymous set of completed calibration runs.
+/// Represents a set of completed calibration runs.
 @JsonDeserialize(using = ComparisonSet.Deserializer.class)
-public record ComparisonSet(@Nullable String id, @NonNull List<RunReference> runs) {
+public record ComparisonSet(@NonNull List<RunReference> runs) {
 
     public ComparisonSet {
         runs = runs != null ? List.copyOf(runs) : List.of();
     }
 
     public static ComparisonSet ofRuns(@NonNull List<RunReference> runs) {
-        return new ComparisonSet(null, runs);
+        return new ComparisonSet(runs);
     }
 
     public static ComparisonSet ofSingle(@NonNull RunReference run) {
-        return new ComparisonSet(null, List.of(run));
-    }
-
-    public static ComparisonSet of(@Nullable String id, @NonNull List<RunReference> runs) {
-        return new ComparisonSet(id, runs);
+        return new ComparisonSet(List.of(run));
     }
 
     public static final class Deserializer extends JsonDeserializer<ComparisonSet> {
@@ -56,7 +51,6 @@ public record ComparisonSet(@Nullable String id, @NonNull List<RunReference> run
             }
 
             if (node.isObject()) {
-                String id = node.hasNonNull("id") ? node.get("id").asText() : null;
                 if (node.has("runs")) {
                     JsonNode runsNode = node.get("runs");
                     List<RunReference> runs = new ArrayList<>();
@@ -69,7 +63,7 @@ public record ComparisonSet(@Nullable String id, @NonNull List<RunReference> run
                             }
                         }
                     }
-                    return new ComparisonSet(id, runs);
+                    return new ComparisonSet(runs);
                 } else if (node.has("path")) {
                     RunReference ref = p.getCodec().treeToValue(node, RunReference.class);
                     return ComparisonSet.ofSingle(ref);

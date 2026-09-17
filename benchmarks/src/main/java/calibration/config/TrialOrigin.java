@@ -10,20 +10,11 @@ import org.jspecify.annotations.Nullable;
 public record TrialOrigin(
         @NonNull OriginType type,
         @Nullable String sourceId,
-        @Nullable Long seed,
         @Nullable Integer candidateIndex,
         @Nullable Integer sampleIndex) {
 
     public TrialOrigin(@NonNull OriginType type) {
-        this(type, null, 1738L, 0);
-    }
-    /// Convenience constructor for TrialOrigin without sampleIndex.
-    public TrialOrigin(
-            @NonNull OriginType type,
-            @Nullable String sourceId,
-            @Nullable Long seed,
-            @Nullable Integer candidateIndex) {
-        this(type, sourceId, seed, candidateIndex, null);
+        this(type, null, null, null);
     }
 
     /// Creates and validates a TrialOrigin instance.
@@ -35,7 +26,6 @@ public record TrialOrigin(
     public TrialOrigin(
             @JsonProperty("type") @NonNull OriginType type,
             @JsonProperty("sourceId") @Nullable String sourceId,
-            @JsonProperty("seed") @Nullable Long seed,
             @JsonProperty("candidateIndex") @Nullable Integer candidateIndex,
             @JsonProperty("sampleIndex") @Nullable Integer sampleIndex) {
         Objects.requireNonNull(type, "TrialOrigin type cannot be null");
@@ -53,7 +43,6 @@ public record TrialOrigin(
         }
         this.type = type;
         this.sourceId = sourceId;
-        this.seed = seed;
         this.candidateIndex = candidateIndex;
         this.sampleIndex = sampleIndex;
     }

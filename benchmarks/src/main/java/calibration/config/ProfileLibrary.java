@@ -12,11 +12,6 @@ import org.jspecify.annotations.Nullable;
 public record ProfileLibrary(
         @Nullable List<ProfileImport> imports, @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles) {
 
-    /// Convenience constructor for profile library without imports.
-    public ProfileLibrary(@Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles) {
-        this(null, calibrationProfiles);
-    }
-
     /// Creates and validates a ProfileLibrary instance.
     ///
     /// @throws IllegalArgumentException if namespace is invalid/duplicate or profile names are blank

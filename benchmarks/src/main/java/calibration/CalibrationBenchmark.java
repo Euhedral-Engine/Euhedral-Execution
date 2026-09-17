@@ -1,10 +1,6 @@
 package calibration;
 
 import calibration.config.CalibrationBenchmarkConfig;
-import calibration.config.CalibrationLifecycleMode;
-import calibration.config.DynamicPhaseSchedule;
-import calibration.config.ParticipationDynamicScenario;
-import calibration.config.PullBucketTreatment;
 import calibration.config.TrialConfig;
 import calibration.infra.BenchmarkObserver;
 import calibration.infra.BenchmarkObserver.HighSpeedMetrics;
@@ -17,13 +13,11 @@ import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.CoreIterationResult;
 import calibration.statistics.iteration.IterationResult;
 import calibration.statistics.iteration.SystemIterationResult;
-import calibration.statistics.iteration.TrajectoryWindow;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.euhedral_execution.benchmarks.frames.NoOpFrame;
 import io.euhedral_execution.benchmarks.utils.RepeatingSink;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import io.euhedral_execution.core.utils.SpinWait;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
 import io.euhedral_execution.data_structures.atomics.PaddedLongAdder;
@@ -65,47 +59,17 @@ public class CalibrationBenchmark {
     private final PaddedLongAdder executionCounter = new PaddedLongAdder(SystemInfo.CPU_COUNT);
 
     private final long configId = System.currentTimeMillis();
-    private final long jvmId = ProcessHandle.current().pid();
     private final TrialConfig trialConfig = getConfig();
     private final CalibrationBenchmarkConfig calibrationConfig = trialConfig.calibrationConfig();
-    private final CalibrationIterationLifecycle iterationLifecycle =
-            new CalibrationIterationLifecycle(this.calibrationConfig.lifecycleMode());
-    private final boolean throughputOnly =
-            Boolean.parseBoolean(System.getProperty(Constants.THROUGHPUT_ONLY_PROP, "false"));
-    private final ParticipationDynamicScenario dynamicScenario = ParticipationDynamicScenario.valueOf(
-            System.getProperty(Constants.DYNAMIC_SCENARIO_PROP, ParticipationDynamicScenario.NONE.name()));
-    private final DynamicPhaseSchedule dynamicSchedule = loadDynamicSchedule();
-
-    private DynamicPhaseSchedule loadDynamicSchedule() {
-        String json = System.getProperty(Constants.DYNAMIC_SCHEDULE_PROP);
-        if (json == null) return null;
-        if (this.dynamicScenario != ParticipationDynamicScenario.NONE || !this.throughputOnly) {
-            throw new IllegalArgumentException(
-                    "explicit schedule requires throughput-only mode and no legacy scenario");
-        }
-        var schedule = DynamicPhaseSchedule.parse(json);
-        schedule.validate(
-                this.trialConfig.iterations(),
-                this.calibrationConfig.parallelSources() + this.calibrationConfig.orderedSources(),
-                this.calibrationConfig.lifecycleMode());
-        return schedule;
-    }
-
     private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> measurementObservations = new ArrayList<>();
-    private final List<PaddedAtomicReferenceArray<HighSpeedMetrics>> warmupObservations = new ArrayList<>();
     private final List<IterationResult> calculationResults = new ArrayList<>();
-    private final List<TrajectoryWindow> trajectoryWindows = new ArrayList<>();
     private ForkCalculationResult forkCalculationResult;
     private BenchmarkObserver observer;
     private CalibrationExecutor executor;
     private ControlPlaneLattice controlPlane;
     private RepeatingSink[] sinks;
-    private final List<PullBucketTreatment> measurementTreatments = new ArrayList<>();
-    private long trajectoryStartNanos;
-    private long windowStartNanos;
-    private long windowStartExecutions;
-    private int throughputOnlyWarmupIndex;
-    private int throughputOnlyMeasurementIndex;
+    private int warmupIndex;
+    private int measurementIndex;
 
     private static TrialConfig getConfig() {
         String configPath = getRequiredPropertyValue(Constants.TRIAL_CONFIG_PROP);
@@ -131,30 +95,6 @@ public class CalibrationBenchmark {
             surrogate.set(c);
         }
         return UnmodifiableBitSet.wrap(surrogate);
-    }
-
-    private static void validateForcedActiveParticipantCount(
-            UnmodifiableBitSet workerCpus, Integer forcedActiveParticipantCount) {
-        if (forcedActiveParticipantCount == null) {
-            return;
-        }
-        BitSet workerCores = new BitSet();
-        for (int workerCpu = workerCpus.nextSetBit(0);
-                workerCpu >= 0;
-                workerCpu = workerCpus.nextSetBit(workerCpu + 1)) {
-            SystemInfo.CpuInfo workerInfo = SystemInfo.getCpuInfo(workerCpu);
-            if (workerInfo == null) {
-                throw new IllegalArgumentException("Unknown calibration worker CPU: " + workerCpu);
-            }
-            workerCores.set(workerInfo.core());
-        }
-        int registeredWorkers = workerCores.cardinality();
-        if (forcedActiveParticipantCount > registeredWorkers) {
-            throw new IllegalArgumentException("forcedActiveParticipantCount "
-                    + forcedActiveParticipantCount
-                    + " exceeds resolved registered worker count "
-                    + registeredWorkers);
-        }
     }
 
     private static void pinHarnessThread(UnmodifiableBitSet workerCpus) {
@@ -213,20 +153,8 @@ public class CalibrationBenchmark {
         if (cpuSet.isEmpty()) {
             throw new IllegalArgumentException("Cpu set cannot be empty");
         }
-        validateForcedActiveParticipantCount(cpuSet, this.calibrationConfig.forcedActiveParticipantCount());
         pinHarnessThread(cpuSet);
-        if (this.calibrationConfig.forcedActiveParticipantCount() != null) {
-            System.setProperty(
-                    FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT,
-                    this.calibrationConfig.forcedActiveParticipantCount().toString());
-        } else {
-            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
-        }
         this.observer = new BenchmarkObserver(this.calibrationConfig);
-        if (this.calibrationConfig.observePullConvoy()
-                && this.calibrationConfig.pullBucketTreatments().size() != this.trialConfig.iterations()) {
-            throw new IllegalArgumentException("Pull-bucket treatment count must equal measurement iteration count");
-        }
         this.sinks =
                 new RepeatingSink[this.calibrationConfig.parallelSources() + this.calibrationConfig.orderedSources()];
 
@@ -243,69 +171,24 @@ public class CalibrationBenchmark {
 
         this.executor =
                 new CalibrationExecutor(this.calibrationConfig.workUnits(), this.calibrationConfig.randomizeWork());
-        LatticeConfig latticeConfig = LatticeConfig.ofBenchmark(
-                cpuSet, this.observer, this.executor, this.calibrationConfig.toCacheTimingConfig());
+        LatticeConfig latticeConfig =
+                LatticeConfig.ofBenchmark(cpuSet, this.observer, this.executor, this.calibrationConfig.toIdlePolicy());
         this.controlPlane = ControlPlaneLattice.getOrCreate(latticeConfig);
         this.controlPlane.start();
         for (RepeatingSink s : this.sinks) {
             this.controlPlane.addUpstream(s);
         }
-        this.trajectoryStartNanos = System.nanoTime();
     }
 
     @Setup(Level.Iteration)
     public void iterationSetup(IterationParams iterationParams) {
         IterationType type = iterationParams != null ? iterationParams.getType() : IterationType.MEASUREMENT;
-        int index = type == IterationType.WARMUP
-                ? this.throughputOnly ? this.throughputOnlyWarmupIndex++ : this.warmupObservations.size()
-                : this.throughputOnly ? this.throughputOnlyMeasurementIndex++ : this.measurementObservations.size();
+        int index = type == IterationType.WARMUP ? this.warmupIndex++ : this.measurementIndex++;
         int count = type == IterationType.WARMUP ? this.trialConfig.warmups() : this.trialConfig.iterations();
-        PullBucketTreatment treatment = type == IterationType.WARMUP
-                ? PullBucketTreatment.BASELINE
-                : this.calibrationConfig.pullBucketTreatments().isEmpty()
-                        ? PullBucketTreatment.BASELINE
-                        : this.calibrationConfig.pullBucketTreatments().get(index);
-        this.observer.setPullBucketTreatment(treatment);
-        if (!this.throughputOnly && type == IterationType.MEASUREMENT) {
-            this.measurementTreatments.add(treatment);
-        }
-        applyDynamicPhase(index, count, type == IterationType.WARMUP);
-        if (!this.throughputOnly) {
-            LOGGER.info(
-                    "Iteration start: type={}, index={}, count={}, pullBucketTreatment={}",
-                    type,
-                    index,
-                    count,
-                    treatment.id());
-        }
-        this.iterationLifecycle.beforeWindow(this::resetPhysicalState, () -> {
-            if (!this.throughputOnly) {
-                this.observer.startObserving();
-            }
-            if (!this.throughputOnly
-                    && type == IterationType.MEASUREMENT
-                    && this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
-                this.windowStartExecutions = this.executionCounter.sum();
-                this.windowStartNanos = System.nanoTime();
-            }
-        });
-    }
-
-    private void applyDynamicPhase(int iteration, int iterationCount, boolean warmup) {
-        if (this.dynamicSchedule == null && this.dynamicScenario == ParticipationDynamicScenario.NONE) {
-            return;
-        }
-        ParticipationDynamicScenario.Phase phase;
-        if (this.dynamicSchedule != null) {
-            var scheduled = this.dynamicSchedule.phase(iteration, warmup);
-            phase = new ParticipationDynamicScenario.Phase(scheduled.workUnits(), scheduled.enabledSources());
-        } else {
-            phase = this.dynamicScenario.phase(iteration, iterationCount);
-        }
-        this.executor.setWorkUnitLimit(phase.workUnits());
-        int enabledSources = phase.enabledSources() < 0 ? this.sinks.length : phase.enabledSources();
-        for (int source = 0; source < this.sinks.length; source++) {
-            this.sinks[source].setEnabled(source < enabledSources);
+        LOGGER.info("Iteration start: type={}, index={}, count={}", type, index, count);
+        resetPhysicalState();
+        if (this.calibrationConfig.observes()) {
+            this.observer.startObserving();
         }
     }
 
@@ -323,76 +206,20 @@ public class CalibrationBenchmark {
 
     @TearDown(Level.Iteration)
     public void iterationTeardown(IterationParams iterationParams) {
-        long windowEndExecutions = 0L;
-        long windowEndNanos = 0L;
         IterationType type = iterationParams != null ? iterationParams.getType() : IterationType.MEASUREMENT;
-        if (!this.throughputOnly
-                && type == IterationType.MEASUREMENT
-                && this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
-            windowEndExecutions = this.executionCounter.sum();
-            windowEndNanos = System.nanoTime();
-        }
-        PaddedAtomicReferenceArray<HighSpeedMetrics> obs = this.throughputOnly ? null : this.observer.stopObserving();
-        int index = type == IterationType.WARMUP ? this.warmupObservations.size() : this.measurementObservations.size();
+        PaddedAtomicReferenceArray<HighSpeedMetrics> observations =
+                this.calibrationConfig.observes() ? this.observer.stopObserving() : null;
+        int index = type == IterationType.WARMUP ? this.warmupIndex - 1 : this.measurementObservations.size();
         int count = type == IterationType.WARMUP ? this.trialConfig.warmups() : this.trialConfig.iterations();
-        if (!this.throughputOnly) {
-            LOGGER.info("Iteration stop: type={}, index={}, count={}", type, index, count);
+        LOGGER.info("Iteration stop: type={}, index={}, count={}", type, index, count);
+        if (this.calibrationConfig.observes() && type == IterationType.MEASUREMENT) {
+            this.measurementObservations.add(observations);
         }
-        if (!this.throughputOnly) {
-            if (type == IterationType.WARMUP) {
-                this.warmupObservations.add(obs);
-            } else {
-                this.measurementObservations.add(obs);
-                if (this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
-                    recordTrajectoryWindow(index, windowEndExecutions, windowEndNanos);
-                }
-            }
-        }
-        this.iterationLifecycle.afterWindow(this::resetPhysicalState);
+        resetPhysicalState();
     }
 
     private void resetPhysicalState() {
         this.controlPlane.clear(Duration.ofSeconds(1), this::resetBenchmarkSources);
-    }
-
-    private void recordTrajectoryWindow(int index, long windowEndExecutions, long windowEndNanos) {
-        this.trajectoryWindows.add(createTrajectoryWindow(
-                this.jvmId,
-                index,
-                this.trajectoryStartNanos,
-                this.windowStartNanos,
-                windowEndNanos,
-                this.windowStartExecutions,
-                windowEndExecutions,
-                this.calibrationConfig.totalRequiredExecutions()));
-    }
-
-    static TrajectoryWindow createTrajectoryWindow(
-            long jvmId,
-            int index,
-            long trajectoryStartNanos,
-            long windowStartNanos,
-            long windowEndNanos,
-            long windowStartExecutions,
-            long windowEndExecutions,
-            long minimumRequiredExecutions) {
-        long completedExecutions = windowEndExecutions - windowStartExecutions;
-        long elapsedNanos = windowEndNanos - windowStartNanos;
-        boolean continuouslyFed = completedExecutions >= minimumRequiredExecutions;
-        if (!continuouslyFed) {
-            throw new IllegalStateException("Continuous measurement window " + index + " did not remain fed: completed "
-                    + completedExecutions + " executions, expected at least "
-                    + minimumRequiredExecutions);
-        }
-        double throughput = completedExecutions * 1_000_000_000.0 / elapsedNanos;
-        return new TrajectoryWindow(
-                jvmId,
-                index,
-                windowEndNanos - trajectoryStartNanos,
-                elapsedNanos,
-                completedExecutions,
-                throughput,
-                true);
     }
 
     private void resetBenchmarkSources() {
@@ -414,7 +241,7 @@ public class CalibrationBenchmark {
         // This fence is purely for redundancy.
         VarHandle.fullFence();
 
-        if (this.throughputOnly) {
+        if (!this.calibrationConfig.observes()) {
             return;
         }
 
@@ -464,25 +291,6 @@ public class CalibrationBenchmark {
             throw new RuntimeException("Failed to create output directory: " + targetPath);
         }
         TrialExport.exportAll(targetPath, this.forkCalculationResult, retainPerIteration);
-        if (this.calibrationConfig.lifecycleMode() == CalibrationLifecycleMode.CONTINUOUS) {
-            TrialExport.exportTrajectoryTsv(
-                    targetPath,
-                    this.calibrationConfig.lifecycleMode(),
-                    this.trajectoryWindows,
-                    this.forkCalculationResult,
-                    forkMeasurementMetrics);
-        }
-        if (this.calibrationConfig.observeContentionStaleness()) {
-            TrialExport.exportContentionStalenessTsv(targetPath, forkMeasurementMetrics);
-        }
-        if (this.calibrationConfig.observePullConvoy()) {
-            TrialExport.exportPullConvoyTsv(
-                    targetPath,
-                    this.calibrationConfig.pullBucketFork(),
-                    this.measurementTreatments,
-                    forkMeasurementMetrics);
-        }
-        System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
     }
 
     @State(Scope.Thread)

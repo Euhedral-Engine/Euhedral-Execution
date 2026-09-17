@@ -4,19 +4,17 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /// Identifies one completed calibration run invocation.
-public record RunReference(@NonNull String path, @Nullable String label) {
+public record RunReference(@NonNull String path) {
 
     @JsonCreator
-    public RunReference(@JsonProperty("path") @NonNull String path, @JsonProperty("label") @Nullable String label) {
+    public RunReference(@JsonProperty("path") @NonNull String path) {
         Objects.requireNonNull(path, "path must not be null");
         if (path.isBlank()) {
             throw new IllegalArgumentException("path must not be blank");
         }
         this.path = path;
-        this.label = label;
     }
 
     @JsonCreator
@@ -25,10 +23,6 @@ public record RunReference(@NonNull String path, @Nullable String label) {
     }
 
     public static RunReference of(@NonNull String path) {
-        return new RunReference(path, null);
-    }
-
-    public static RunReference of(@NonNull String path, @Nullable String label) {
-        return new RunReference(path, label);
+        return new RunReference(path);
     }
 }

@@ -17,7 +17,7 @@ public record ComparisonManifest(
         @NonNull List<String> unmatchedCandidateKeys,
         @NonNull List<String> exportedArtifacts) {
 
-    public static final int CURRENT_SCHEMA_VERSION = 2;
+    public static final int CURRENT_SCHEMA_VERSION = 3;
 
     public ComparisonManifest {
         Objects.requireNonNull(strategy, "strategy must not be null");
@@ -33,23 +33,11 @@ public record ComparisonManifest(
             int pairIndex,
             @Nullable String key,
             @NonNull RunIdentity baselineIdentity,
-            @NonNull String baselineSourcePath,
-            @NonNull RunArtifacts baselineArtifacts,
-            @NonNull RunIdentity candidateIdentity,
-            @NonNull String candidateSourcePath,
-            @NonNull RunArtifacts candidateArtifacts,
-            @NonNull CompatibilityStatus compatibilityStatus,
-            @NonNull List<String> compatibilityReasons) {
+            @NonNull RunIdentity candidateIdentity) {
 
         public ComparisonPairManifestEntry {
             Objects.requireNonNull(baselineIdentity, "baselineIdentity must not be null");
-            Objects.requireNonNull(baselineSourcePath, "baselineSourcePath must not be null");
-            Objects.requireNonNull(baselineArtifacts, "baselineArtifacts must not be null");
             Objects.requireNonNull(candidateIdentity, "candidateIdentity must not be null");
-            Objects.requireNonNull(candidateSourcePath, "candidateSourcePath must not be null");
-            Objects.requireNonNull(candidateArtifacts, "candidateArtifacts must not be null");
-            Objects.requireNonNull(compatibilityStatus, "compatibilityStatus must not be null");
-            compatibilityReasons = compatibilityReasons == null ? List.of() : List.copyOf(compatibilityReasons);
         }
     }
 }

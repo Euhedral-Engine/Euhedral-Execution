@@ -32,19 +32,4 @@ public record ComparisonResult(
         unmatchedBaselineKeys = unmatchedBaselineKeys != null ? List.copyOf(unmatchedBaselineKeys) : List.of();
         unmatchedCandidateKeys = unmatchedCandidateKeys != null ? List.copyOf(unmatchedCandidateKeys) : List.of();
     }
-
-    public ComparisonResult(@NonNull ComparisonStrategy strategy, @NonNull List<CandidateComparison> comparisons) {
-        this(strategy, comparisons, null, List.of(), List.of());
-    }
-
-    public ComparisonResult(@NonNull List<CandidateComparison> comparisons) {
-        this(ComparisonStrategy.BASELINE, comparisons, null, List.of(), List.of());
-    }
-
-    public ComparisonResult(
-            @NonNull CompletedRun baseline,
-            @NonNull List<CompletedRun> candidates,
-            @NonNull List<CandidateComparison> comparisons) {
-        this(ComparisonStrategy.BASELINE, comparisons, null, List.of(), List.of());
-    }
 }

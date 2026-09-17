@@ -81,7 +81,6 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final FragmentConfig config;
 
     private final FragmentObserver observer;
-    private final boolean observeContentionStaleness;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
     private final AtomicLong resetRequested = new AtomicLong();
@@ -140,7 +139,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.socket = -1;
             this.core = -1;
             this.observer = null;
-            this.observeContentionStaleness = false;
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(ControlPlaneFragment.class));
             this.controlPolicy = null;
             this.state = null;
@@ -164,7 +162,6 @@ public final class ControlPlaneFragment extends WorkRequester {
             } else {
                 this.observer = null;
             }
-            this.observeContentionStaleness = this.observer != null && this.observer.observesContentionStaleness();
             this.state = new CycleState();
 
             this.mainExecutor = PinnedThreadExecutor.getOrSetIfAbsent(
@@ -180,10 +177,6 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long elapsed = stopWatch.stop();
                 if (elapsed > 0) {
                     this.controlPolicy.recordBodyCost(elapsed);
-                    if (config.benchmarkMode()) {
-                        this.observer.rawBodyCost(
-                                this.core, this.socket, this.state.cycleEpoch, this.state.batchEpoch, elapsed);
-                    }
                 }
             });
 
@@ -279,10 +272,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             FlowThread.FlowContext context = FlowThread.initializeContext();
             context.upstream = getThreadUpstreamQueue();
             this.upstreamQueue = context.upstream;
-            applyPullBucketTreatment();
-            if (this.observeContentionStaleness) {
-                this.upstreamQueue.setAcquireDiagnosticsEnabled(true);
-            }
+
             this.initialized = true;
             while (keepRunning()) {
                 this.state.cycleEpoch++;
@@ -561,18 +551,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         long quota = super.getFrameQuota();
         ADAPTIVE_BATCH_CAP.setRelease(this, Math.max(2L, Math.min(maxBatch, quota)));
         LAST_ACCEPTED_TIMESTAMP_NS.setRelease(this, 0L);
-        applyPullBucketTreatment();
         this.resetCleared.setRelease(cleared);
         this.resetCompleted.setRelease(requested);
-    }
-
-    private void applyPullBucketTreatment() {
-        if (this.upstreamQueue == null || this.observer == null) {
-            return;
-        }
-        this.upstreamQueue.setPullBucketTreatment(
-                this.observer.pullBucketTarget(), this.observer.pullBucketDivisionMode());
-        this.upstreamQueue.setPullConvoyObserver(this.observer.observesPullConvoy() ? this.observer : null);
     }
 
     @Override

@@ -49,16 +49,4 @@ public record ComparisonKeyConfig(@NonNull List<String> paths, boolean requireCo
 
         return new ComparisonKeyConfig(resolvedPaths, requireCompleteMatch != null ? requireCompleteMatch : true);
     }
-
-    public ComparisonKeyConfig(@NonNull List<String> paths) {
-        this(paths, true);
-    }
-
-    public static ComparisonKeyConfig ofPath(@NonNull String path) {
-        return new ComparisonKeyConfig(List.of(path), true);
-    }
-
-    public static ComparisonKeyConfig ofPaths(@NonNull List<String> paths) {
-        return new ComparisonKeyConfig(paths, true);
-    }
 }

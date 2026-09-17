@@ -52,9 +52,7 @@ class JmhOutputParserTest {
         ThroughputResult result = JmhOutputParser.parse(tempDir, logPath);
         assertNotNull(result);
         assertEquals(418189.300, result.score(), 1e-6);
-        assertEquals(1234.567, result.scoreError(), 1e-6);
         assertEquals("ops/ms", result.scoreUnit());
-        assertEquals(List.of(412345.678, 423456.789, 418765.432), result.iterationScores());
         assertEquals(List.of((412345.678 + 423456.789 + 418765.432) / 3.0), result.forkScores());
     }
 
@@ -77,9 +75,7 @@ class JmhOutputParserTest {
         ThroughputResult result = JmhOutputParser.parse(tempDir, logPath);
         assertNotNull(result);
         assertEquals(12456.786, result.score(), 1e-6);
-        assertEquals(123.456, result.scoreError(), 1e-6);
         assertEquals("ops/s", result.scoreUnit());
-        assertEquals(List.of(12345.678, 12456.789, 12567.890), result.iterationScores());
     }
 
     @Test
@@ -97,7 +93,6 @@ class JmhOutputParserTest {
         assertNotNull(result);
         assertEquals(150000.0, result.score(), 1e-6);
         assertEquals("ops/ms", result.scoreUnit());
-        assertEquals(List.of(100000.0, 200000.0), result.iterationScores());
     }
 
     @Test
@@ -128,33 +123,6 @@ class JmhOutputParserTest {
         ThroughputResult result = JmhOutputParser.parse(tempDir, logPath);
 
         assertEquals(List.of(1100.0, 1500.0), result.forkScores());
-        assertEquals(List.of(1000.0, 1200.0, 1400.0, 1600.0), result.iterationScores());
-    }
-
-    @Test
-    void testSelectsOneIndependentForkAndItsIterations(@TempDir Path tempDir) throws Exception {
-        Path logPath = tempDir.resolve("benchmark_output.log");
-        String logContent = """
-                # Fork: 1 of 2
-                Iteration   1: 1.0 ops/s
-                                 executions: 1000.0 ops/s
-                Iteration   2: 1.0 ops/s
-                                 executions: 1200.0 ops/s
-                # Fork: 2 of 2
-                Iteration   1: 1.0 ops/s
-                                 executions: 1400.0 ops/s
-                Iteration   2: 1.0 ops/s
-                                 executions: 1600.0 ops/s
-                Secondary result "calibration.CalibrationBenchmark.calibrate:executions":
-                  1300.0 +/- 100.0 ops/s [Average]
-                """;
-        Files.writeString(logPath, logContent);
-
-        ThroughputResult result = JmhOutputParser.parse(tempDir, logPath, 1);
-
-        assertEquals(1500.0, result.score(), 1e-6);
-        assertEquals(List.of(1500.0), result.forkScores());
-        assertEquals(List.of(1400.0, 1600.0), result.iterationScores());
     }
 
     @Test
