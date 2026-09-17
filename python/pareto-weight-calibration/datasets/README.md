@@ -21,5 +21,3 @@ Dynamic phase/window measurements are validation artifacts with a distinct
 `recordType`; the static store and training panel builders reject them. They
 must never become static surrogate response rows. SQLite WAL/SHM sidecars are
 not source artifacts.
-
-See [the frozen-policy workflow](../CACHE_FROZEN_POLICY.md).

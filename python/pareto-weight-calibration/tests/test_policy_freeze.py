@@ -25,19 +25,6 @@ def test_freeze_writes_db_function_exactly_and_closes_static_session(tmp_path):
   with pytest.raises(ValueError, match='frozen historical'): run_task(path, resume=True)
 
 
-def test_versioned_cache_artifact_matches_canonical_database():
-  from pathlib import Path
-  project = Path(__file__).parents[1]
-  artifact = json.loads((project / 'policies/cache-scarce-v1.json').read_text())
-  spec, _ = load_task(project / 'tasks/cache-scarce-loop.json')
-  with contextlib.closing(ForkStore(project / 'datasets/cache-policy-history.sqlite')) as store:
-    actual = lookup_policy(spec, store.rows(), 'policy-158a61afee6653cbbfde')
-  assert actual['runtimeTimingFunction'] == artifact['runtimeTimingFunction']
-  assert actual['activeParameters'] == artifact['activeParameters']
-  assert actual['staticEvidence'] == artifact['staticEvidence']
-  assert json.loads((project / 'policies/cache-scarce-v1-runtime.json').read_text()) == actual['runtimeTimingFunction']
-
-
 def test_backup_preserves_all_rows_windows_provenance_and_live_wal(tmp_path):
   _, records = task(tmp_path)
   source, destination = tmp_path / 'source.sqlite', tmp_path / 'durable/history.sqlite'

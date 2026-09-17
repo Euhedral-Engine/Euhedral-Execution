@@ -20,7 +20,6 @@ from .tuning_spec import TuningSpec
 from . import parameter_tuning as tuner
 
 PARENT = ROOT / 'benchmarks/src/test/resources/cache-timing'
-DEFAULT_SPEC = ROOT / 'python/pareto-weight-calibration/tasks/live25-tuning.json'
 
 
 def read(path): return json.loads(path.read_text())
@@ -391,7 +390,7 @@ def main():
   parser.add_argument('command',
                       choices=['prepare', 'freeze', 'check', 'run', 'collect',
                                'propose'])
-  parser.add_argument('--spec', type=Path, default=DEFAULT_SPEC)
+  parser.add_argument('--spec', type=Path, required=True)
   parser.add_argument('--handoff', type=Path, required=True)
   parser.add_argument('--fit-dir', type=Path);
   parser.add_argument('--output-dir', type=Path)
