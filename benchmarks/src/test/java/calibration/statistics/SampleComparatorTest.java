@@ -123,17 +123,4 @@ class SampleComparatorTest {
         SampleComparison zeroCount = SampleComparator.compare(100.0, 1.0, 0L, 100.0, 1.0, 0L);
         assertEquals(ComparisonOutcome.INCONCLUSIVE, zeroCount.outcome());
     }
-
-    @Test
-    void testComparisonWithWelfordAccumulators() {
-        WelfordAccumulator accA = new WelfordAccumulator();
-        accA.recordAll(99.0, 100.0, 101.0);
-
-        WelfordAccumulator accB = new WelfordAccumulator();
-        accB.recordAll(199.0, 200.0, 201.0);
-
-        SampleComparison comparison = SampleComparator.compare(accA, accB);
-        assertEquals(ComparisonOutcome.B_BETTER, comparison.outcome());
-        assertEquals(100.0, comparison.delta(), EPSILON);
-    }
 }

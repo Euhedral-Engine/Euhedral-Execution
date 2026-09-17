@@ -24,11 +24,6 @@ public class TrialSweepExpander {
     private final ObjectMapper mapper;
     private final int maxGeneratedTrials;
 
-    /// Creates a TrialSweepExpander using a default ObjectMapper and max generated trials limit.
-    public TrialSweepExpander() {
-        this(new ObjectMapper(), DEFAULT_MAX_GENERATED_TRIALS);
-    }
-
     /// Creates a TrialSweepExpander with the given ObjectMapper and default max generated trials limit.
     public TrialSweepExpander(@NonNull ObjectMapper mapper) {
         this(mapper, DEFAULT_MAX_GENERATED_TRIALS);
@@ -44,59 +39,6 @@ public class TrialSweepExpander {
             throw new IllegalArgumentException("maxGeneratedTrials must be positive: " + maxGeneratedTrials);
         }
         this.maxGeneratedTrials = maxGeneratedTrials;
-    }
-
-    /// Static convenience method to expand sweeps within a HarnessConfig using defaults.
-    public static HarnessConfig expandHarnessConfig(@NonNull HarnessConfig harnessConfig) {
-        return new TrialSweepExpander().expand(harnessConfig);
-    }
-
-    /// Expands all enabled sweeps declared in the given HarnessConfig.
-    /// Returns a new HarnessConfig containing original trials plus all expanded sweep candidates.
-    ///
-    /// @throws IllegalArgumentException if sweep references non-existent baseTrialId, invalid pointer,
-    ///                                  missing target, incompatible value type, or exceeds max generated limit
-    public HarnessConfig expand(@NonNull HarnessConfig harnessConfig) {
-        Objects.requireNonNull(harnessConfig, "harnessConfig cannot be null");
-        HarnessConfig resolvedConfig = harnessConfig.resolveCalibrationProfiles();
-        if (resolvedConfig.sweeps() == null || resolvedConfig.sweeps().isEmpty()) {
-            return resolvedConfig;
-        }
-
-        List<TrialConfig> allTrials = new ArrayList<>(resolvedConfig.trials());
-        Map<String, TrialConfig> baseTrialMap = new HashMap<>();
-        for (TrialConfig trial : resolvedConfig.trials()) {
-            if (trial.id() != null) {
-                baseTrialMap.put(trial.id(), trial);
-            }
-        }
-
-        for (SweepConfig sweep : resolvedConfig.sweeps()) {
-            if (!sweep.isEnabled()) {
-                continue;
-            }
-            TrialConfig baseTrial = baseTrialMap.get(sweep.baseTrialId());
-            if (baseTrial == null) {
-                throw new IllegalArgumentException("Referenced baseTrialId '" + sweep.baseTrialId() + "' in sweep '"
-                        + sweep.id() + "' was not found in trials");
-            }
-            List<TrialConfig> generated = expandSweep(baseTrial, sweep);
-            allTrials.addAll(generated);
-        }
-
-        return new HarnessConfig(
-                resolvedConfig.schemaVersion(),
-                resolvedConfig.id(),
-                resolvedConfig.name(),
-                resolvedConfig.description(),
-                resolvedConfig.labels(),
-                resolvedConfig.imports(),
-                resolvedConfig.runOptions(),
-                resolvedConfig.artifacts(),
-                resolvedConfig.calibrationProfiles(),
-                resolvedConfig.sweeps(),
-                resolvedConfig.searches(),
-                allTrials);
     }
 
     /// Performs Cartesian product expansion of a single SweepConfig against a base TrialConfig.
@@ -202,7 +144,7 @@ public class TrialSweepExpander {
                         : null;
                 Integer originSampleIndex = (repetitions > 1) ? sampleIndex : null;
                 TrialOrigin generatedOrigin =
-                        new TrialOrigin(OriginType.SWEEP, sweep.id(), null, candidateIndex, originSampleIndex);
+                        new TrialOrigin(OriginType.SWEEP, sweep.id(), candidateIndex, originSampleIndex);
 
                 TrialConfig finalTrial = new TrialConfig(
                         generatedId,
@@ -210,7 +152,6 @@ public class TrialSweepExpander {
                         effectiveGroup,
                         candidateTrial.description(),
                         candidateTrial.hypothesis(),
-                        candidateTrial.comparison(),
                         candidateTrial.tags(),
                         mergedLabels,
                         Boolean.TRUE,

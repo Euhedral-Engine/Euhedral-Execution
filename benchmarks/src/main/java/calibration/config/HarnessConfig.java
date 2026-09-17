@@ -12,10 +12,7 @@ import java.util.Set;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 
-/// Configuration for benchmark calibration harness execution.
-/// Holds optional metadata, external profile imports, run options, artifact retention settings,
-/// reusable calibration profiles, parameter sweeps, search configurations,
-/// and non-empty trial specifications.
+/// Configuration for executing and retaining a set of calibration trials.
 public record HarnessConfig(
         @Nullable Integer schemaVersion,
         @Nullable String id,
@@ -27,325 +24,142 @@ public record HarnessConfig(
         @Nullable ArtifactConfig artifacts,
         @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
         @Nullable List<SweepConfig> sweeps,
-        @Nullable List<SearchConfig> searches,
         @NonNull List<TrialConfig> trials) {
 
     public static final int CURRENT_SCHEMA_VERSION = 1;
 
-    /// Convenience constructor for harness configs containing only trials.
-    public HarnessConfig(@NonNull List<TrialConfig> trials) {
-        this(null, null, null, null, null, null, null, null, null, null, null, trials);
-    }
-
-    /// Convenience constructor for harness configs without runOptions, artifacts, profiles, sweeps, and searches.
-    public HarnessConfig(
-            @Nullable Integer schemaVersion,
-            @Nullable String id,
-            @Nullable String name,
-            @Nullable String description,
-            @Nullable Map<String, String> labels,
-            @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, null, null, null, null, null, trials);
-    }
-
-    /// Convenience constructor for harness configs without profiles, sweeps, and searches.
-    public HarnessConfig(
-            @Nullable Integer schemaVersion,
-            @Nullable String id,
-            @Nullable String name,
-            @Nullable String description,
-            @Nullable Map<String, String> labels,
-            @Nullable HarnessRunOptions runOptions,
-            @Nullable ArtifactConfig artifacts,
-            @NonNull List<TrialConfig> trials) {
-        this(schemaVersion, id, name, description, labels, null, runOptions, artifacts, null, null, null, trials);
-    }
-
-    /// Convenience constructor for harness configs without sweeps and searches.
-    public HarnessConfig(
-            @Nullable Integer schemaVersion,
-            @Nullable String id,
-            @Nullable String name,
-            @Nullable String description,
-            @Nullable Map<String, String> labels,
-            @Nullable HarnessRunOptions runOptions,
-            @Nullable ArtifactConfig artifacts,
-            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @NonNull List<TrialConfig> trials) {
-        this(
-                schemaVersion,
-                id,
-                name,
-                description,
-                labels,
-                null,
-                runOptions,
-                artifacts,
-                calibrationProfiles,
-                null,
-                null,
-                trials);
-    }
-
-    /// Convenience constructor for harness configs without searches.
-    public HarnessConfig(
-            @Nullable Integer schemaVersion,
-            @Nullable String id,
-            @Nullable String name,
-            @Nullable String description,
-            @Nullable Map<String, String> labels,
-            @Nullable HarnessRunOptions runOptions,
-            @Nullable ArtifactConfig artifacts,
-            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @Nullable List<SweepConfig> sweeps,
-            @NonNull List<TrialConfig> trials) {
-        this(
-                schemaVersion,
-                id,
-                name,
-                description,
-                labels,
-                null,
-                runOptions,
-                artifacts,
-                calibrationProfiles,
-                sweeps,
-                null,
-                trials);
-    }
-
-    /// Convenience constructor matching configuration without explicit imports list.
-    public HarnessConfig(
-            @Nullable Integer schemaVersion,
-            @Nullable String id,
-            @Nullable String name,
-            @Nullable String description,
-            @Nullable Map<String, String> labels,
-            @Nullable HarnessRunOptions runOptions,
-            @Nullable ArtifactConfig artifacts,
-            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @Nullable List<SweepConfig> sweeps,
-            @Nullable List<SearchConfig> searches,
-            @NonNull List<TrialConfig> trials) {
-        this(
-                schemaVersion,
-                id,
-                name,
-                description,
-                labels,
-                null,
-                runOptions,
-                artifacts,
-                calibrationProfiles,
-                sweeps,
-                searches,
-                trials);
-    }
-
-    /// Creates and validates a HarnessConfig instance.
-    ///
-    /// @throws IllegalArgumentException if schemaVersion is non-positive, id/name/description is blank,
-    ///                                  trials is empty, non-null trial IDs are duplicated,
-    ///                                  referenced baselineTrialIds are invalid/self-referential,
-    ///                                  profile keys or label keys/values are blank,
-    ///                                  duplicate import namespaces are found,
-    ///                                  referenced calibrationProfile does not exist,
-    ///                                  sweep/search IDs are duplicated, or referenced sweepIds do not exist
-    /// @throws NullPointerException     if trials is null or imports/profiles/sweeps/searches contain null values
     @JsonCreator
     public HarnessConfig {
         if (schemaVersion != null && schemaVersion <= 0) {
-            throw new IllegalArgumentException(
-                    "HarnessConfig schemaVersion must be positive if present: " + schemaVersion);
+            throw new IllegalArgumentException("HarnessConfig schemaVersion must be positive");
         }
-        if (id != null && id.isBlank()) {
-            throw new IllegalArgumentException("HarnessConfig id cannot be blank if present");
-        }
-        if (name != null && name.isBlank()) {
-            throw new IllegalArgumentException("HarnessConfig name cannot be blank if present");
-        }
-        if (description != null && description.isBlank()) {
-            throw new IllegalArgumentException("HarnessConfig description cannot be blank if present");
-        }
+        validateText(id, "id");
+        validateText(name, "name");
+        validateText(description, "description");
+
         if (labels != null) {
             for (Map.Entry<String, String> entry : labels.entrySet()) {
-                String key = entry.getKey();
-                String val = entry.getValue();
-                if (key == null || key.isBlank()) {
-                    throw new IllegalArgumentException("HarnessConfig label key cannot be blank");
-                }
-                if (val == null || val.isBlank()) {
-                    throw new IllegalArgumentException("HarnessConfig label value cannot be blank for key: " + key);
-                }
+                validateText(entry.getKey(), "label key");
+                validateText(entry.getValue(), "label value");
             }
             labels = Map.copyOf(labels);
         }
+
         if (imports != null) {
-            Set<String> declaredNamespaces = new HashSet<>();
-            for (ProfileImport imp : imports) {
-                Objects.requireNonNull(imp, "HarnessConfig import element cannot be null");
-                if (!declaredNamespaces.add(imp.namespace())) {
-                    throw new IllegalArgumentException(
-                            "HarnessConfig duplicate import namespace found: " + imp.namespace());
+            Set<String> namespaces = new HashSet<>();
+            for (ProfileImport declaration : imports) {
+                Objects.requireNonNull(declaration, "HarnessConfig import element cannot be null");
+                if (!namespaces.add(declaration.namespace())) {
+                    throw new IllegalArgumentException("Duplicate import namespace: " + declaration.namespace());
                 }
             }
             imports = List.copyOf(imports);
         }
+
         if (calibrationProfiles != null) {
             for (Map.Entry<String, CalibrationBenchmarkConfig> entry : calibrationProfiles.entrySet()) {
-                String profileName = entry.getKey();
-                if (profileName == null || profileName.isBlank()) {
-                    throw new IllegalArgumentException("HarnessConfig calibrationProfiles key cannot be blank");
-                }
-                Objects.requireNonNull(
-                        entry.getValue(),
-                        "HarnessConfig calibrationProfiles value cannot be null for key: " + profileName);
+                validateText(entry.getKey(), "calibration profile name");
+                Objects.requireNonNull(entry.getValue(), "Calibration profile cannot be null");
             }
             calibrationProfiles = Map.copyOf(calibrationProfiles);
         }
-        Set<String> declaredSweepIds = new HashSet<>();
+
+        Set<String> sweepIds = new HashSet<>();
         if (sweeps != null) {
             for (SweepConfig sweep : sweeps) {
                 Objects.requireNonNull(sweep, "HarnessConfig sweep element cannot be null");
-                if (!declaredSweepIds.add(sweep.id())) {
-                    throw new IllegalArgumentException("HarnessConfig duplicate sweep id found: " + sweep.id());
+                if (!sweepIds.add(sweep.id())) {
+                    throw new IllegalArgumentException("Duplicate sweep id: " + sweep.id());
                 }
             }
             sweeps = List.copyOf(sweeps);
         }
-        if (searches != null) {
-            Set<String> searchIds = new HashSet<>();
-            for (SearchConfig search : searches) {
-                Objects.requireNonNull(search, "HarnessConfig search element cannot be null");
-                if (!searchIds.add(search.id())) {
-                    throw new IllegalArgumentException("HarnessConfig duplicate search id found: " + search.id());
-                }
-                if (search.sweepIds() != null) {
-                    for (String sweepId : search.sweepIds()) {
-                        if (!declaredSweepIds.contains(sweepId)) {
-                            throw new IllegalArgumentException("Referenced sweepId '" + sweepId + "' in SearchConfig '"
-                                    + search.id() + "' was not found in declared sweeps");
-                        }
-                    }
-                }
-            }
-            searches = List.copyOf(searches);
-        }
+
         Objects.requireNonNull(trials, "HarnessConfig trials cannot be null");
         if (trials.isEmpty()) {
             throw new IllegalArgumentException("HarnessConfig trial configurations cannot be empty");
         }
-
         Set<String> trialIds = new HashSet<>();
         for (TrialConfig trial : trials) {
             Objects.requireNonNull(trial, "HarnessConfig trial element cannot be null");
-            if (trial.id() != null) {
-                if (!trialIds.add(trial.id())) {
-                    throw new IllegalArgumentException("HarnessConfig duplicate trial id found: " + trial.id());
-                }
+            if (trial.id() != null && !trialIds.add(trial.id())) {
+                throw new IllegalArgumentException("Duplicate trial id: " + trial.id());
             }
         }
+        trials = List.copyOf(trials);
 
         if (sweeps != null) {
             for (SweepConfig sweep : sweeps) {
                 if (!trialIds.contains(sweep.baseTrialId())) {
-                    throw new IllegalArgumentException("Referenced baseTrialId '" + sweep.baseTrialId()
-                            + "' in SweepConfig '" + sweep.id() + "' was not found in trials");
+                    throw new IllegalArgumentException("Sweep base trial not found: " + sweep.baseTrialId());
                 }
             }
         }
-
         for (TrialConfig trial : trials) {
-            if (trial.calibrationProfile() != null) {
-                if (calibrationProfiles == null || !calibrationProfiles.containsKey(trial.calibrationProfile())) {
-                    String ref = trial.calibrationProfile();
-                    if (imports == null || imports.isEmpty() || !ref.contains(".")) {
-                        throw new IllegalArgumentException(
-                                "Referenced calibrationProfile '" + ref + "' was not found in calibrationProfiles");
-                    }
-                    String rootNs = ref.substring(0, ref.indexOf('.'));
-                    boolean nsDeclared = false;
-                    for (ProfileImport imp : imports) {
-                        if (imp.namespace().equals(rootNs)) {
-                            nsDeclared = true;
-                            break;
-                        }
-                    }
-                    if (!nsDeclared) {
-                        throw new IllegalArgumentException("Referenced calibrationProfile '" + ref
-                                + "' was not found in calibrationProfiles or declared imports");
-                    }
-                }
-            }
-            if (trial.comparison() != null && trial.comparison().baselineTrialId() != null) {
-                String baselineId = trial.comparison().baselineTrialId();
-                if (trial.id() != null && trial.id().equals(baselineId)) {
-                    throw new IllegalArgumentException(
-                            "TrialConfig cannot reference itself as baseline: " + trial.id());
-                }
-                if (!trialIds.contains(baselineId)) {
-                    throw new IllegalArgumentException("Referenced baselineTrialId not found in trials: " + baselineId);
-                }
+            validateProfileReference(trial, calibrationProfiles, imports);
+        }
+    }
+
+    private static void validateText(@Nullable String value, String field) {
+        if (value == null || value.isBlank()) {
+            if (value != null) {
+                throw new IllegalArgumentException("HarnessConfig " + field + " cannot be blank");
             }
         }
-        trials = List.copyOf(trials);
     }
 
-    /// Resolves external profile imports declared in this configuration relative to the provided base directory or
-    /// file.
-    public HarnessConfig resolveImports(@NonNull File rootConfigFileOrBaseDir, @NonNull ObjectMapper mapper) {
-        return new ProfileLibraryLoader(mapper).resolveImports(this, rootConfigFileOrBaseDir);
+    private static void validateProfileReference(
+            TrialConfig trial,
+            @Nullable Map<String, CalibrationBenchmarkConfig> profiles,
+            @Nullable List<ProfileImport> imports) {
+        String reference = trial.calibrationProfile();
+        if (reference == null || (profiles != null && profiles.containsKey(reference))) {
+            return;
+        }
+        if (imports == null || !reference.contains(".")) {
+            throw new IllegalArgumentException("Calibration profile not found: " + reference);
+        }
+        String namespace = reference.substring(0, reference.indexOf('.'));
+        if (imports.stream().noneMatch(declaration -> declaration.namespace().equals(namespace))) {
+            throw new IllegalArgumentException("Calibration profile namespace not imported: " + reference);
+        }
     }
 
-    /// Resolves external profile imports declared in this configuration relative to the provided base directory or file
-    /// using a default ObjectMapper.
-    public HarnessConfig resolveImports(@NonNull File rootConfigFileOrBaseDir) {
-        return new ProfileLibraryLoader(new ObjectMapper()).resolveImports(this, rootConfigFileOrBaseDir);
-    }
-
-    /// Loads a HarnessConfig from the specified file and resolves all external profile imports.
     public static HarnessConfig load(@NonNull File rootConfigFile, @NonNull ObjectMapper mapper) throws Exception {
         return ProfileLibraryLoader.loadAndResolve(rootConfigFile, mapper);
     }
 
-    /// Resolves calibrationProfiles references across all trials, populating calibrationConfig where needed.
-    ///
-    /// @return a new HarnessConfig with all profiles resolved, or this instance if no resolution was needed
     public HarnessConfig resolveCalibrationProfiles() {
-        if (calibrationProfiles == null || calibrationProfiles.isEmpty()) {
+        if (this.calibrationProfiles == null || this.calibrationProfiles.isEmpty()) {
             return this;
         }
-
-        boolean modified = false;
-        List<TrialConfig> resolvedTrials = new ArrayList<>(trials.size());
-        for (TrialConfig trial : trials) {
+        boolean changed = false;
+        List<TrialConfig> resolved = new ArrayList<>(this.trials.size());
+        for (TrialConfig trial : this.trials) {
             if (trial.calibrationProfile() != null && trial.calibrationConfig() == null) {
-                CalibrationBenchmarkConfig profileConfig = calibrationProfiles.get(trial.calibrationProfile());
-                if (profileConfig == null) {
-                    throw new IllegalArgumentException("Referenced calibrationProfile '" + trial.calibrationProfile()
-                            + "' was not found in calibrationProfiles");
+                CalibrationBenchmarkConfig profile = this.calibrationProfiles.get(trial.calibrationProfile());
+                if (profile == null) {
+                    throw new IllegalArgumentException("Calibration profile not found: " + trial.calibrationProfile());
                 }
-                resolvedTrials.add(trial.withCalibrationConfig(profileConfig));
-                modified = true;
+                resolved.add(trial.withCalibrationConfig(profile));
+                changed = true;
             } else {
-                resolvedTrials.add(trial);
+                resolved.add(trial);
             }
         }
-        if (!modified) {
-            return this;
-        }
-        return new HarnessConfig(
-                schemaVersion,
-                id,
-                name,
-                description,
-                labels,
-                imports,
-                runOptions,
-                artifacts,
-                calibrationProfiles,
-                sweeps,
-                searches,
-                resolvedTrials);
+        return changed
+                ? new HarnessConfig(
+                        this.schemaVersion,
+                        this.id,
+                        this.name,
+                        this.description,
+                        this.labels,
+                        this.imports,
+                        this.runOptions,
+                        this.artifacts,
+                        this.calibrationProfiles,
+                        this.sweeps,
+                        resolved)
+                : this;
     }
 }

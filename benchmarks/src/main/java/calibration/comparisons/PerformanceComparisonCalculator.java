@@ -1,7 +1,5 @@
 package calibration.comparisons;
 
-import calibration.comparisons.schema.ComparisonCompatibility;
-import calibration.comparisons.schema.CompatibilityStatus;
 import calibration.comparisons.schema.CompletedRun;
 import calibration.comparisons.schema.PerformanceComparison;
 import calibration.comparisons.schema.ThroughputResult;
@@ -12,35 +10,17 @@ import calibration.statistics.iteration.ScalarSummary;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /// Calculates authoritative throughput comparison results from completed calibration runs.
 public final class PerformanceComparisonCalculator {
 
     private PerformanceComparisonCalculator() {}
 
-    /// Compares throughput between baseline and candidate runs, performing compatibility analysis first.
-    public static @Nullable PerformanceComparison compare(
+    /// Compares the independent JMH fork samples from two completed runs.
+    public static @NonNull PerformanceComparison compare(
             @NonNull CompletedRun baseline, @NonNull CompletedRun candidate) {
         Objects.requireNonNull(baseline, "baseline must not be null");
         Objects.requireNonNull(candidate, "candidate must not be null");
-        ComparisonCompatibility compatibility = ComparisonCompatibilityAnalyzer.analyze(baseline, candidate);
-        return compare(baseline, candidate, compatibility);
-    }
-
-    /// Compares throughput between baseline and candidate runs under the given compatibility verdict.
-    public static @Nullable PerformanceComparison compare(
-            @NonNull CompletedRun baseline,
-            @NonNull CompletedRun candidate,
-            @NonNull ComparisonCompatibility compatibility) {
-
-        Objects.requireNonNull(baseline, "baseline must not be null");
-        Objects.requireNonNull(candidate, "candidate must not be null");
-        Objects.requireNonNull(compatibility, "compatibility must not be null");
-
-        if (!compatibility.isComparable() || compatibility.status() == CompatibilityStatus.INCOMPATIBLE) {
-            return null;
-        }
 
         ThroughputResult baseThroughput = baseline.throughput();
         ThroughputResult candThroughput = candidate.throughput();

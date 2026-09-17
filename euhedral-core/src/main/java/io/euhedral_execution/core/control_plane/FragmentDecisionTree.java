@@ -118,31 +118,15 @@ final class FragmentDecisionTree {
 
         if (isPlentiful(productiveHandles, registeredWorkers)
                 || (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold)) {
-            recordExecDecision(cycleEpoch, batchEpoch, 0, contention);
             this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;
         }
-        recordExecDecision(cycleEpoch, batchEpoch, 1, contention);
         this.executionPath = ExecutionPath.STAGED;
         return ExecutionPath.STAGED;
     }
 
     boolean isPlentiful(long productiveHandles, int registeredWorkers) {
         return registeredWorkers > 0 && productiveHandles >= registeredWorkers;
-    }
-
-    private void recordExecDecision(long cycleEpoch, long batchEpoch, int contentionPolicy, long contention) {
-        if (this.observer != null) {
-            this.observer.execBranchDecision(
-                    this.core,
-                    this.socket,
-                    cycleEpoch,
-                    batchEpoch,
-                    contentionPolicy,
-                    0,
-                    contention,
-                    this.smoothedBodyCostNs);
-        }
     }
 
     /// Records one aggregate execution sample in nanoseconds across `frames` completed frames.

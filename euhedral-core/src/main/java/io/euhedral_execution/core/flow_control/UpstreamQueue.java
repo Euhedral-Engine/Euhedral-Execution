@@ -1,6 +1,5 @@
 package io.euhedral_execution.core.flow_control;
 
-import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeInterceptor;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -84,7 +83,6 @@ public class UpstreamQueue {
 
     private long pullBucketTarget = 2_048L;
     private PullBucketDivisionMode pullBucketDivisionMode = PullBucketDivisionMode.FLOOR;
-    private FragmentObserver pullConvoyObserver;
 
     private long seed = ThreadLocalRandom.current().nextLong();
     private int bufferIndex = 0;
@@ -297,11 +295,6 @@ public class UpstreamQueue {
         this.pullBucketDivisionMode = java.util.Objects.requireNonNull(divisionMode);
     }
 
-    /// Enables bounded calibration-only source-handle observations.
-    public void setPullConvoyObserver(FragmentObserver observer) {
-        this.pullConvoyObserver = observer;
-    }
-
     public void request(long demand) {
         pull(null, null, demand);
     }
@@ -354,7 +347,6 @@ public class UpstreamQueue {
             attempts++;
             if (!handle.acquireLock()) {
                 failedAcquires++;
-                recordPullConvoy(handle, -1, demand, Math.min(limit, bucketSize), 0L, false, 0L);
                 if (!preferredRequest) {
                     bufferHandle(handle);
                 }
@@ -362,9 +354,7 @@ public class UpstreamQueue {
                 continue;
             }
 
-            long holdStartNs = this.pullConvoyObserver == null ? 0L : System.nanoTime();
             long request = 0L;
-            long producedFrameCount = 0L;
             try {
                 long requestBefore = context == null || consumer != null ? 0L : context.satisfiedRequest;
                 request = Math.min(limit, bucketSize);
@@ -374,9 +364,6 @@ public class UpstreamQueue {
                 if (consumer != null && handle.wasPullStopped()) {
                     this.pendingRequest = handle;
                 }
-                producedFrameCount = consumer != null
-                        ? drainCount
-                        : context == null ? 0L : Math.max(0L, context.satisfiedRequest - requestBefore);
                 totalPull += drainCount;
                 if (context != null) {
                     context.satisfiedPull += drainCount;
@@ -402,9 +389,6 @@ public class UpstreamQueue {
                 }
             } finally {
                 handle.releaseLock();
-                long holdDurationNs =
-                        this.pullConvoyObserver == null ? 0L : Math.max(0L, System.nanoTime() - holdStartNs);
-                recordPullConvoy(handle, this.cpu, demand, request, producedFrameCount, true, holdDurationNs);
                 if (!preferredRequest) {
                     bufferHandle(handle);
                 }
@@ -434,30 +418,6 @@ public class UpstreamQueue {
             fillQueue();
         }
         this.buffer[this.bufferIndex++] = handle;
-    }
-
-    private void recordPullConvoy(
-            UpstreamHandle handle,
-            int ownerCore,
-            long requestedDemand,
-            long calculatedPullSize,
-            long producedFrameCount,
-            boolean acquired,
-            long lockHoldDurationNs) {
-        FragmentObserver observer = this.pullConvoyObserver;
-        if (observer == null) {
-            return;
-        }
-        observer.pullConvoyState(
-                System.nanoTime(),
-                handle.getId(),
-                this.cpu,
-                ownerCore,
-                requestedDemand,
-                calculatedPullSize,
-                producedFrameCount,
-                acquired,
-                lockHoldDurationNs);
     }
 
     void fillQueue() {

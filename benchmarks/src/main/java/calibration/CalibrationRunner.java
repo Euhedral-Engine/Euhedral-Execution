@@ -2,19 +2,14 @@ package calibration;
 
 import static calibration.infra.Constants.BENCHMARK_OUTPUT_LOG;
 import static calibration.infra.Constants.OUTPUT_DIRECTORY_PROP;
-import static calibration.infra.Constants.REPEAT_INDEX_PROP;
 import static calibration.infra.Constants.RETAIN_OBSERVER_DATA_PROP;
 import static calibration.infra.Constants.RETAIN_PER_FORK_RESULTS_PROP;
 import static calibration.infra.Constants.RETAIN_PER_ITERATION_RESULTS_PROP;
 import static calibration.infra.Constants.TRIAL_CONFIG_PROP;
-import static calibration.infra.Constants.TRIAL_ID_PROP;
-import static calibration.infra.Constants.TRIAL_INDEX_PROP;
-import static calibration.infra.Constants.TRIAL_NAME_PROP;
 
 import calibration.config.ArtifactConfig;
 import calibration.config.HarnessConfig;
 import calibration.config.HarnessRunOptions;
-import calibration.config.LegacyCacheTimingInput;
 import calibration.config.OriginType;
 import calibration.config.ProfileLibraryLoader;
 import calibration.config.SweepConfig;
@@ -22,7 +17,6 @@ import calibration.config.TrialConfig;
 import calibration.config.TrialOrigin;
 import calibration.config.TrialSweepExpander;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -105,9 +99,7 @@ public class CalibrationRunner {
     static HarnessConfig loadConfig(String path, ObjectMapper mapper) throws Exception {
         //noinspection JvmTaintAnalysis
         File configFile = new File(path).getCanonicalFile();
-        return ProfileLibraryLoader.loadAndResolve(
-                configFile,
-                LegacyCacheTimingInput.harnessMapper(mapper, System.getProperty(FragmentControlConfig.CACHE_PARK_NS)));
+        return ProfileLibraryLoader.loadAndResolve(configFile, mapper);
     }
 
     static List<TrialConfig> resolveTrials(HarnessConfig harnessConfig, ObjectMapper mapper) {
@@ -173,7 +165,6 @@ public class CalibrationRunner {
 
         Set<String> seenIds = new HashSet<>();
         for (TrialConfig trial : resolvedTrials) {
-            LegacyCacheTimingInput.validateTrialArguments(trial);
             if (trial.id() != null && !trial.id().isBlank()) {
                 if (!seenIds.add(trial.id())) {
                     throw new IllegalArgumentException("Duplicate trial ID found in resolved trials: " + trial.id());
@@ -200,11 +191,6 @@ public class CalibrationRunner {
             LOGGER.info("Randomized trial order with seed: {}", seed);
             Collections.shuffle(resolvedTrials, new Random(seed));
         }
-
-        resolvedTrials = resolvedTrials.stream()
-                .map(trial ->
-                        trial.withCalibrationConfig(trial.calibrationConfig().withCurrentCacheActuatorIdentity()))
-                .toList();
 
         return resolvedTrials;
     }
@@ -289,12 +275,6 @@ public class CalibrationRunner {
     }
 
     static void runHarness(
-            HarnessConfig harnessConfig, List<TrialConfig> activeTrials, File baseOutputDir, ObjectMapper mapper)
-            throws Exception {
-        runHarness(harnessConfig, activeTrials, baseOutputDir, mapper, CalibrationBenchmark.class);
-    }
-
-    static void runHarness(
             HarnessConfig harnessConfig,
             List<TrialConfig> activeTrials,
             File baseOutputDir,
@@ -336,17 +316,6 @@ public class CalibrationRunner {
             int repeatIndex,
             ObjectMapper mapper,
             ArtifactConfig artifacts,
-            File baseOutputDir)
-            throws Exception {
-        runTrial(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir, CalibrationBenchmark.class);
-    }
-
-    static void runTrial(
-            TrialConfig trial,
-            int trialIndex,
-            int repeatIndex,
-            ObjectMapper mapper,
-            ArtifactConfig artifacts,
             File baseOutputDir,
             Class<?> benchmarkClass)
             throws Exception {
@@ -359,8 +328,7 @@ public class CalibrationRunner {
 
             File invocationDir =
                     prepareInvocationDirectory(trial, trialIndex, repeatIndex, mapper, artifacts, baseOutputDir);
-            List<String> jvmArgs = buildJvmArgs(
-                    trial, trialIndex, repeatIndex, tempConfigFile.getCanonicalPath(), invocationDir, artifacts);
+            List<String> jvmArgs = buildJvmArgs(trial, tempConfigFile.getCanonicalPath(), invocationDir, artifacts);
 
             Options options = buildOptions(trial, jvmArgs, artifacts, invocationDir, benchmarkClass);
             new Runner(options).run();
@@ -370,10 +338,6 @@ public class CalibrationRunner {
             //noinspection ResultOfMethodCallIgnored
             tempConfigFile.delete();
         }
-    }
-
-    static Options buildOptions(TrialConfig trial, List<String> jvmArgs, ArtifactConfig artifacts, File invocationDir) {
-        return buildOptions(trial, jvmArgs, artifacts, invocationDir, CalibrationBenchmark.class);
     }
 
     static Options buildOptions(
@@ -434,36 +398,9 @@ public class CalibrationRunner {
     }
 
     static List<String> buildJvmArgs(
-            TrialConfig trial, int trialIndex, int repeatIndex, String canonicalConfigPath, File invocationDir) {
-        return buildJvmArgs(trial, trialIndex, repeatIndex, canonicalConfigPath, invocationDir, null);
-    }
-
-    static List<String> buildJvmArgs(
-            TrialConfig trial,
-            int trialIndex,
-            int repeatIndex,
-            String canonicalConfigPath,
-            File invocationDir,
-            ArtifactConfig artifacts) {
+            TrialConfig trial, String canonicalConfigPath, File invocationDir, ArtifactConfig artifacts) {
         List<String> jvmArgs = new ArrayList<>(DEFAULT_FLAGS);
         addJVMProperty(jvmArgs, TRIAL_CONFIG_PROP, canonicalConfigPath);
-        addJVMProperty(jvmArgs, TRIAL_INDEX_PROP, Integer.toString(trialIndex));
-        addJVMProperty(jvmArgs, REPEAT_INDEX_PROP, Integer.toString(repeatIndex));
-        addJVMProperty(jvmArgs, TRIAL_ID_PROP, trial.id());
-        addJVMProperty(jvmArgs, TRIAL_NAME_PROP, trial.name());
-        Integer productivityThresholdWeight = trial.calibrationConfig().productivityThresholdWeight();
-        if (productivityThresholdWeight != null) {
-            addJVMProperty(
-                    jvmArgs,
-                    FragmentControlConfig.PRODUCTIVITY_THRESHOLD_WEIGHT,
-                    productivityThresholdWeight.toString());
-        }
-        if (trial.calibrationConfig().productivityGateMode() != calibration.config.ProductivityGateMode.AUTO) {
-            addJVMProperty(
-                    jvmArgs,
-                    FragmentControlConfig.PRODUCTIVITY_GATE_MODE,
-                    trial.calibrationConfig().productivityGateMode().name());
-        }
         if (invocationDir != null) {
             try {
                 addJVMProperty(jvmArgs, OUTPUT_DIRECTORY_PROP, invocationDir.getCanonicalPath());
@@ -495,19 +432,6 @@ public class CalibrationRunner {
 
         if (trial.jvmArgs() != null) {
             jvmArgs.addAll(trial.jvmArgs());
-        }
-
-        // These values define the persisted treatment/actuator identity. Do not allow an
-        // untracked custom JVM argument to override the completed trial configuration.
-        removeJVMProperty(jvmArgs, FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
-        LegacyCacheTimingInput.validateTrialArguments(trial);
-        removeJVMProperty(jvmArgs, FragmentControlConfig.CACHE_PARK_NS);
-        Integer forcedActiveParticipantCount = trial.calibrationConfig().forcedActiveParticipantCount();
-        if (forcedActiveParticipantCount != null) {
-            addJVMProperty(
-                    jvmArgs,
-                    FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT,
-                    forcedActiveParticipantCount.toString());
         }
 
         return jvmArgs;

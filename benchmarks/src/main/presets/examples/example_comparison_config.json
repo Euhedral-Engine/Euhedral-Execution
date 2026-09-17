@@ -1,9 +1,5 @@
 {
   "experimentDirectory": "experiments/00-xs-execution-boundary",
   "baseline": "xs-direct_repeat_0",
-  "options": {
-    "includeDiagnostics": true,
-    "failFast": false
-  },
   "outputDirectory": "experiments/00-xs-execution-boundary/comparisons"
 }

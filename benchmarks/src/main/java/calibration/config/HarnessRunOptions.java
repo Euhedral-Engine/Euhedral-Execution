@@ -13,15 +13,6 @@ public record HarnessRunOptions(
         @Nullable Boolean failFast,
         @Nullable Integer repeatCount) {
 
-    /// Compatibility constructor for configurations that predate balanced sweep ordering.
-    public HarnessRunOptions(
-            @Nullable Boolean randomizeTrialOrder,
-            @Nullable Long randomSeed,
-            @Nullable Boolean failFast,
-            @Nullable Integer repeatCount) {
-        this(randomizeTrialOrder, null, randomSeed, failFast, repeatCount);
-    }
-
     /// Creates and validates a HarnessRunOptions instance.
     ///
     /// @throws IllegalArgumentException if repeatCount is present and less than 1

@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -93,19 +92,7 @@ public final class TrialConfigDiffer {
             return;
         }
 
-        differences.add(new ConfigurationDifference(currentPath, base, cand, categorize(currentPath, base, cand)));
-    }
-
-    private static DifferenceCategory categorize(String path, JsonNode baseline, JsonNode candidate) {
-        String policyPrefix = "-D" + FragmentControlConfig.PARTICIPATION_POLICY_MODE + "=";
-        if (path.startsWith("/jvmArgs/")
-                && baseline.isTextual()
-                && candidate.isTextual()
-                && baseline.textValue().startsWith(policyPrefix)
-                && candidate.textValue().startsWith(policyPrefix)) {
-            return DifferenceCategory.POLICY;
-        }
-        return categorize(path);
+        differences.add(new ConfigurationDifference(currentPath, base, cand, categorize(currentPath)));
     }
 
     private static boolean isNullOrMissing(@Nullable JsonNode node) {
@@ -119,18 +106,10 @@ public final class TrialConfigDiffer {
             normalized = normalized.substring("calibrationConfig/".length());
         }
 
-        if (normalized.startsWith("productivityThresholdWeight")
-                || normalized.startsWith("productivityGateMode")
-                || normalized.startsWith("forcedActiveParticipantCount")) {
-            return DifferenceCategory.POLICY;
-        }
         if (normalized.startsWith("idleParkNs")
                 || normalized.startsWith("contentionHalfLifeNanos")
-                || normalized.startsWith("cacheActuatorVersion")) {
+                || normalized.startsWith("idleTimingFunction")) {
             return DifferenceCategory.ACTUATOR;
-        }
-        if (normalized.startsWith("lifecycleMode")) {
-            return DifferenceCategory.LIFECYCLE;
         }
         if (normalized.startsWith("rawSampleLimit") || normalized.startsWith("observe")) {
             return DifferenceCategory.OBSERVATION;
@@ -159,7 +138,6 @@ public final class TrialConfigDiffer {
                 || normalized.startsWith("group")
                 || normalized.startsWith("description")
                 || normalized.startsWith("hypothesis")
-                || normalized.startsWith("comparison")
                 || normalized.startsWith("tags")
                 || normalized.startsWith("labels")
                 || normalized.startsWith("origin")

@@ -9,12 +9,10 @@
       "totalRequiredExecutions": 8000000,
       "invocationTimeoutMillis": 30000,
       "rawSampleLimit": 4096,
-      "observeCycleStart": false,
       "observeBatchProgress": false,
       "observeBatchComplete": false,
-      "observeRawBodyCost": true,
-      "observeIdleDecision": false,
-      "observeExecDecision": true
+      "idleParkNs": 15000,
+      "contentionHalfLifeNanos": 1000000
     }
-  },
+  }
 }

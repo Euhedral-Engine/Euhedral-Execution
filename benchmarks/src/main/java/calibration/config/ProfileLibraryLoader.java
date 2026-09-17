@@ -31,15 +31,6 @@ public class ProfileLibraryLoader {
         return new ProfileLibraryLoader(mapper).resolveImports(rawConfig, canonicalRoot);
     }
 
-    /// Resolves all external profile imports declared in rootConfig, using rootConfigFile as base for relative paths.
-    public static HarnessConfig loadAndResolve(
-            @NonNull HarnessConfig rootConfig, @NonNull File rootConfigFile, @NonNull ObjectMapper mapper) {
-        Objects.requireNonNull(rootConfig, "rootConfig cannot be null");
-        Objects.requireNonNull(rootConfigFile, "rootConfigFile cannot be null");
-        Objects.requireNonNull(mapper, "mapper cannot be null");
-        return new ProfileLibraryLoader(mapper).resolveImports(rootConfig, rootConfigFile);
-    }
-
     /// Resolves all external profile imports declared in rootConfig, using rootConfigFileOrBaseDir as reference base.
     public HarnessConfig resolveImports(@NonNull HarnessConfig rootConfig, @NonNull File rootConfigFileOrBaseDir) {
         Objects.requireNonNull(rootConfig, "rootConfig cannot be null");
@@ -89,7 +80,6 @@ public class ProfileLibraryLoader {
                 rootConfig.artifacts(),
                 accumulatedCalProfiles.isEmpty() ? null : Map.copyOf(accumulatedCalProfiles),
                 rootConfig.sweeps(),
-                rootConfig.searches(),
                 rootConfig.trials());
     }
 

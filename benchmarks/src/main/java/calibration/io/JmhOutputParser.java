@@ -36,11 +36,6 @@ final class JmhOutputParser {
     private JmhOutputParser() {}
 
     public static @NonNull ThroughputResult parse(@NonNull Path runPath, @NonNull Path logPath) {
-        return parse(runPath, logPath, null);
-    }
-
-    public static @NonNull ThroughputResult parse(
-            @NonNull Path runPath, @NonNull Path logPath, Integer selectedForkIndex) {
         Objects.requireNonNull(runPath, "runPath must not be null");
         Objects.requireNonNull(logPath, "logPath must not be null");
 
@@ -59,14 +54,12 @@ final class JmhOutputParser {
         List<List<Double>> primaryForkIterationScores = new ArrayList<>();
         String primaryDetectedUnit = null;
         Double primarySummaryScore = null;
-        double primarySummaryError = 0.0;
         String primarySummaryUnit = null;
 
         List<Double> auxIterationScores = new ArrayList<>();
         List<List<Double>> auxForkIterationScores = new ArrayList<>();
         String auxDetectedUnit = null;
         Double auxSummaryScore = null;
-        double auxSummaryError = 0.0;
         String auxSummaryUnit = null;
 
         boolean inWarmup = false;
@@ -137,13 +130,6 @@ final class JmhOutputParser {
                     Matcher resultValMatcher = RESULT_VALUE_PATTERN.matcher(line);
                     if (resultValMatcher.find()) {
                         auxSummaryScore = Double.parseDouble(resultValMatcher.group(1));
-                        String errStr = resultValMatcher.group(2);
-                        if (errStr != null
-                                && !errStr.isBlank()
-                                && !errStr.equalsIgnoreCase("N/A")
-                                && !errStr.equals("?")) {
-                            auxSummaryError = Double.parseDouble(errStr);
-                        }
                         auxSummaryUnit = resultValMatcher.group(3);
                         inAuxResultBlock = false;
                     } else if (trimmed.startsWith("#") || trimmed.isEmpty()) {
@@ -153,13 +139,6 @@ final class JmhOutputParser {
                     Matcher resultValMatcher = RESULT_VALUE_PATTERN.matcher(line);
                     if (resultValMatcher.find()) {
                         primarySummaryScore = Double.parseDouble(resultValMatcher.group(1));
-                        String errStr = resultValMatcher.group(2);
-                        if (errStr != null
-                                && !errStr.isBlank()
-                                && !errStr.equalsIgnoreCase("N/A")
-                                && !errStr.equals("?")) {
-                            primarySummaryError = Double.parseDouble(errStr);
-                        }
                         primarySummaryUnit = resultValMatcher.group(3);
                         inPrimaryResultBlock = false;
                     } else if (trimmed.startsWith("#") || trimmed.isEmpty()) {
@@ -172,23 +151,13 @@ final class JmhOutputParser {
                     if (summaryMatcher.matches()) {
                         String benchmarkName = summaryMatcher.group(1);
                         double score = Double.parseDouble(summaryMatcher.group(4));
-                        double error = 0.0;
-                        String errStr = summaryMatcher.group(5);
-                        if (errStr != null
-                                && !errStr.isBlank()
-                                && !errStr.equalsIgnoreCase("N/A")
-                                && !errStr.equals("?")) {
-                            error = Double.parseDouble(errStr);
-                        }
                         String unit = summaryMatcher.group(6);
 
                         if (benchmarkName.contains("executions") || benchmarkName.contains(":")) {
                             auxSummaryScore = score;
-                            auxSummaryError = error;
                             auxSummaryUnit = unit;
                         } else {
                             primarySummaryScore = score;
-                            primarySummaryError = error;
                             primarySummaryUnit = unit;
                         }
                     }
@@ -202,16 +171,13 @@ final class JmhOutputParser {
                 || (!auxIterationScores.isEmpty() && auxDetectedUnit != null);
 
         double finalScore;
-        double finalError;
         String finalUnit;
-        List<Double> iterationScores;
         List<List<Double>> forkIterationScores;
 
         if (hasAux) {
             if (auxSummaryScore != null && auxSummaryUnit != null && !auxSummaryUnit.isBlank()) {
                 finalScore = auxSummaryScore;
                 finalUnit = auxSummaryUnit;
-                finalError = auxSummaryError;
             } else {
                 double sum = 0.0;
                 for (double s : auxIterationScores) {
@@ -219,15 +185,11 @@ final class JmhOutputParser {
                 }
                 finalScore = sum / auxIterationScores.size();
                 finalUnit = auxDetectedUnit;
-                finalError = 0.0;
             }
-            iterationScores = auxIterationScores;
             forkIterationScores = auxForkIterationScores;
         } else if (primarySummaryScore != null && primarySummaryUnit != null && !primarySummaryUnit.isBlank()) {
             finalScore = primarySummaryScore;
             finalUnit = primarySummaryUnit;
-            finalError = primarySummaryError;
-            iterationScores = primaryIterationScores;
             forkIterationScores = primaryForkIterationScores;
         } else if (!primaryIterationScores.isEmpty() && primaryDetectedUnit != null) {
             double sum = 0.0;
@@ -236,8 +198,6 @@ final class JmhOutputParser {
             }
             finalScore = sum / primaryIterationScores.size();
             finalUnit = primaryDetectedUnit;
-            finalError = 0.0;
-            iterationScores = primaryIterationScores;
             forkIterationScores = primaryForkIterationScores;
         } else {
             throw new MalformedArtifactException(
@@ -247,43 +207,12 @@ final class JmhOutputParser {
         if (!Double.isFinite(finalScore)) {
             throw new MalformedArtifactException(runPath, logPath, "JMH throughput score is not finite: " + finalScore);
         }
-        if (!Double.isFinite(finalError)) {
-            finalError = 0.0;
-        }
-
         List<Double> forkScores = averageForkScores(forkIterationScores);
         if (forkScores.isEmpty()) {
             forkScores = List.of(finalScore);
         }
 
-        if (selectedForkIndex != null) {
-            if (selectedForkIndex < 0 || selectedForkIndex >= forkIterationScores.size()) {
-                throw new MalformedArtifactException(
-                        runPath,
-                        logPath,
-                        "Selected JMH fork index " + selectedForkIndex + " is outside the parsed fork range 0.."
-                                + (forkIterationScores.size() - 1));
-            }
-            List<Double> selectedIterationScores = List.copyOf(forkIterationScores.get(selectedForkIndex));
-            if (selectedIterationScores.isEmpty()) {
-                throw new MalformedArtifactException(
-                        runPath,
-                        logPath,
-                        "Selected JMH fork " + (selectedForkIndex + 1) + " has no measurement scores");
-            }
-            double selectedScore = average(selectedIterationScores);
-            return new ThroughputResult(selectedScore, 0.0, finalUnit, List.of(selectedScore), selectedIterationScores);
-        }
-
-        return new ThroughputResult(finalScore, finalError, finalUnit, forkScores, iterationScores);
-    }
-
-    private static double average(@NonNull List<Double> scores) {
-        double sum = 0.0;
-        for (double score : scores) {
-            sum += score;
-        }
-        return sum / scores.size();
+        return new ThroughputResult(finalScore, finalUnit, forkScores);
     }
 
     private static @NonNull List<Double> averageForkScores(@NonNull List<List<Double>> forkIterationScores) {

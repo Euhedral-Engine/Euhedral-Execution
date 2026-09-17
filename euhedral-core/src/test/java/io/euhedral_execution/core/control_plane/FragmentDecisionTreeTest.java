@@ -3,14 +3,7 @@ package io.euhedral_execution.core.control_plane;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyDouble;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.verify;
 
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import java.lang.reflect.Field;
@@ -86,118 +79,6 @@ class FragmentDecisionTreeTest {
 
         // Less than 32 samples will keep execution path returning DIRECT
         assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L));
-    }
-
-    @Test
-    void recordBodyCost_doesNotUpdateEstimateBefore32Samples() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-
-        // Provide 31 samples
-        populateBodyCosts(tree, 31, 500L);
-        assertFalse(tree.hasBodyCostHistory());
-
-        // With history count 31 < 32 (BODY_COST_MIN_HISTORY), executionPath returns DIRECT early without calling
-        // observer
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L));
-        verify(observer, never())
-                .execBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void recordBodyCost_updatesEstimateAt32SamplesWithSecondMinimum() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-
-        // Provide 32 samples: sample 0 is 100ns, sample 1 is 200ns, rest are 500ns
-        tree.recordBodyCost(100L);
-        tree.recordBodyCost(200L);
-        for (int i = 2; i < 32; i++) {
-            tree.recordBodyCost(500L);
-        }
-        assertTrue(tree.hasBodyCostHistory());
-        assertEquals(200.0, tree.smoothedBodyCostNs());
-
-        // Now history count is 32 >= BODY_COST_MIN_HISTORY. Second minimum (200.0) should be active.
-        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE),
-                        eq(TEST_SOCKET),
-                        eq(1L),
-                        eq(1L),
-                        eq(0), // contention <= xsContention (650_000)
-                        anyInt(),
-                        eq(100L),
-                        eq(200.0));
-    }
-
-    @Test
-    void recordBodyCost_withMultipleIdenticalMinimums() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-
-        // All 32 samples are 75ns: minimum = 75.0, secondMinimum = 75.0
-        populateBodyCosts(tree, 32, 75L);
-
-        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(75.0));
-    }
-
-    @Test
-    void recordBodyCost_expensiveWorkRequiresTwoConsecutiveWindows() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-
-        // 32 samples of very expensive work (e.g. 50_000_000 ns) exceeding maxBodyCostThreshold
-        populateBodyCosts(tree, 32, 50_000_000L);
-
-        // Window 1: expensiveConfirmationWindows = 1 < 2, smoothedBodyCostNs remains 0.0
-        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(0.0));
-
-        reset(observer);
-
-        // Window 2: Provide another 32 samples of expensive work
-        populateBodyCosts(tree, 32, 50_000_000L);
-
-        // expensiveConfirmationWindows reaches 2, smoothedBodyCostNs updates to 50_000_000.0
-        tree.executionPath(2L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(2L), eq(1L), anyInt(), anyInt(), eq(100L), eq(50_000_000.0));
-
-        reset(observer);
-
-        // Window 3: Provide a 3rd window of expensive work (covers expensiveConfirmationWindows >= 2 branch)
-        populateBodyCosts(tree, 32, 50_000_000L);
-        tree.executionPath(3L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(3L), eq(1L), anyInt(), anyInt(), eq(100L), eq(50_000_000.0));
-    }
-
-    @Test
-    void recordBodyCost_inexpensiveWindowResetsExpensiveConfirmationCount() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-
-        // Window 1: expensive work (expensiveConfirmationWindows becomes 1)
-        populateBodyCosts(tree, 32, 50_000_000L);
-
-        // Window 2: inexpensive work (resets expensiveConfirmationWindows to 0 and updates smoothedBodyCostNs
-        // immediately)
-        populateBodyCosts(tree, 32, 150L);
-
-        tree.executionPath(1L, 1L, 2L, 2L, 4, 100L);
-        verify(observer)
-                .execBranchDecision(
-                        eq(TEST_CORE), eq(TEST_SOCKET), eq(1L), eq(1L), anyInt(), anyInt(), eq(100L), eq(150.0));
     }
 
     @Test
@@ -355,44 +236,6 @@ class FragmentDecisionTreeTest {
 
         assertEquals(0.0, tree.serviceTimeNs());
         assertEquals(2L, tree.completeBatch(16L));
-    }
-
-    @Test
-    void executionPath_earlyExitsWhenRegisteredWorkersIsOneOrZero() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 32, 100L);
-
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 1, 100L));
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 0, 100L));
-        verify(observer, never())
-                .execBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void executionPath_earlyExitsWhenBodyCostHistoryBelowMin() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 31, 100L);
-
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 100L));
-        verify(observer, never())
-                .execBranchDecision(
-                        anyInt(), anyInt(), anyLong(), anyLong(), anyInt(), anyInt(), anyLong(), anyDouble());
-    }
-
-    @Test
-    void executionPath_evaluatesBothContentionBranchesAndNotifiesObserver() {
-        FragmentObserver observer = mock(FragmentObserver.class);
-        FragmentDecisionTree tree = createDefaultTree(observer);
-        populateBodyCosts(tree, 32, 1L);
-
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 2L, 2L, 4, 850_000L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 1L, 1L, 0, 0, 850_000L, 1.0);
-
-        assertEquals(ExecutionPath.STAGED, tree.executionPath(2L, 1L, 2L, 2L, 4, 850_001L));
-        verify(observer).execBranchDecision(TEST_CORE, TEST_SOCKET, 2L, 1L, 1, 0, 850_001L, 1.0);
     }
 
     @Test

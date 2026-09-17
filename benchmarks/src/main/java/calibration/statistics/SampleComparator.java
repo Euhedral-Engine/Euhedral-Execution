@@ -1,19 +1,9 @@
 package calibration.statistics;
 
-import java.util.Objects;
-import org.jspecify.annotations.NonNull;
-
-/// Lower-confidence-bound comparison for two completed Welford samples.
+/// Lower-confidence-bound comparison for two completed samples.
 public final class SampleComparator {
 
     private SampleComparator() {}
-
-    /// Compares two completed Welford accumulators A and B.
-    public static SampleComparison compare(@NonNull WelfordAccumulator a, @NonNull WelfordAccumulator b) {
-        Objects.requireNonNull(a, "Accumulator A must not be null");
-        Objects.requireNonNull(b, "Accumulator B must not be null");
-        return compare(a.mean(), a.sampleVariance(), a.count(), b.mean(), b.sampleVariance(), b.count());
-    }
 
     /// Compares two samples with given mean, sample variance, and count.
     public static SampleComparison compare(

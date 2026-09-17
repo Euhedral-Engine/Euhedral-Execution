@@ -6,8 +6,6 @@ public enum DifferenceCategory {
     HARNESS,
     WORKLOAD,
     ACTUATOR,
-    LIFECYCLE,
-    POLICY,
     OBSERVATION,
     JMH,
     JVM

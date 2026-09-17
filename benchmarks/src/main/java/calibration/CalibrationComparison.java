@@ -1,23 +1,17 @@
 package calibration;
 
-import calibration.comparisons.ComparisonCompatibilityAnalyzer;
 import calibration.comparisons.ComparisonPair;
 import calibration.comparisons.ComparisonPairPlan;
 import calibration.comparisons.ComparisonPairPlanner;
 import calibration.comparisons.PerformanceComparisonCalculator;
-import calibration.comparisons.StateComparabilityCalculator;
-import calibration.comparisons.SystemTelemetryComparisonCalculator;
-import calibration.comparisons.schema.AggregateComparison;
+import calibration.comparisons.TrialConfigDiffer;
 import calibration.comparisons.schema.CandidateComparison;
-import calibration.comparisons.schema.ComparisonCompatibility;
 import calibration.comparisons.schema.ComparisonResult;
 import calibration.comparisons.schema.ComparisonSet;
 import calibration.comparisons.schema.CompletedRun;
 import calibration.comparisons.schema.PerformanceComparison;
 import calibration.comparisons.schema.RunReference;
-import calibration.comparisons.schema.StateComparabilityComparison;
 import calibration.config.ComparisonConfig;
-import calibration.config.ComparisonScope;
 import calibration.io.ComparisonExport;
 import calibration.io.CompletedRunLoader;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -68,7 +62,7 @@ public final class CalibrationComparison {
 
         List<CompletedRun> baselineRuns = selectBaselineRuns(allRuns, config != null ? config.baseline() : null);
         List<CompletedRun> candidateRuns =
-                selectCandidateRuns(allRuns, baselineRuns, config != null ? config.candidate() : null);
+                selectCandidateRuns(allRuns, baselineRuns, config != null ? config.candidates() : null);
 
         ComparisonConfig effectiveConfig =
                 config != null ? config : ComparisonConfig.ofExperimentDirectory(resolvedExperimentDir.toString());
@@ -78,27 +72,19 @@ public final class CalibrationComparison {
 
     static void runExplicitComparison(@NonNull ComparisonConfig comparisonConfig) throws Exception {
         Objects.requireNonNull(comparisonConfig.baseline(), "baseline must not be null");
-        Objects.requireNonNull(comparisonConfig.candidate(), "candidate must not be null");
+        Objects.requireNonNull(comparisonConfig.candidates(), "candidates must not be null");
 
         List<CompletedRun> baselineRuns = new ArrayList<>();
         for (RunReference ref : comparisonConfig.baseline().runs()) {
-            loadReference(baselineRuns, ref, comparisonConfig.options().scope());
+            baselineRuns.add(CompletedRunLoader.load(ref.path()));
         }
 
         List<CompletedRun> candidateRuns = new ArrayList<>();
-        for (RunReference ref : comparisonConfig.candidate().runs()) {
-            loadReference(candidateRuns, ref, comparisonConfig.options().scope());
+        for (RunReference ref : comparisonConfig.candidates().runs()) {
+            candidateRuns.add(CompletedRunLoader.load(ref.path()));
         }
 
         executeComparisonPipeline(comparisonConfig, baselineRuns, candidateRuns, null);
-    }
-
-    private static void loadReference(List<CompletedRun> destination, RunReference reference, ComparisonScope scope) {
-        if (scope == ComparisonScope.FORK) {
-            destination.addAll(CompletedRunLoader.loadForks(reference.path()));
-        } else {
-            destination.add(CompletedRunLoader.load(reference.path()));
-        }
     }
 
     private static void executeComparisonPipeline(
@@ -124,35 +110,20 @@ public final class CalibrationComparison {
             CompletedRun baselineRun = pair.baseline();
             CompletedRun candidateRun = pair.candidate();
 
-            ComparisonCompatibility compatibility = ComparisonCompatibilityAnalyzer.analyze(baselineRun, candidateRun);
             LOGGER.info(
-                    "Pair #{}: {} vs {} -> compatibility={}",
+                    "Pair #{}: {} vs {}",
                     pair.pairIndex(),
                     baselineRun.identity().trialId(),
-                    candidateRun.identity().trialId(),
-                    compatibility.status());
+                    candidateRun.identity().trialId());
 
-            PerformanceComparison performance =
-                    PerformanceComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
-            AggregateComparison aggregate =
-                    SystemTelemetryComparisonCalculator.compare(baselineRun, candidateRun, compatibility);
-            StateComparabilityComparison stateComparability = compatibility.isComparable()
-                            && baselineRun.throughput().forkScores().size() == 1
-                            && candidateRun.throughput().forkScores().size() == 1
-                    ? StateComparabilityCalculator.compare(baselineRun.system(), candidateRun.system())
-                    : null;
-
+            PerformanceComparison performance = PerformanceComparisonCalculator.compare(baselineRun, candidateRun);
             CandidateComparison candidateComparison = new CandidateComparison(
                     pair.pairIndex(),
                     baselineRun.identity(),
                     candidateRun.identity(),
                     pair.key(),
-                    compatibility,
-                    compatibility.differences(),
-                    performance,
-                    List.of(),
-                    aggregate,
-                    stateComparability);
+                    TrialConfigDiffer.diff(baselineRun.trialConfig(), candidateRun.trialConfig()),
+                    performance);
 
             candidateComparisons.add(candidateComparison);
         }

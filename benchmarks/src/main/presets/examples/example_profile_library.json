@@ -1,28 +1,19 @@
 {
-  // Optional: External profile library imports
   "imports": [],
-  // Reusable calibration benchmark profiles
   "calibrationProfiles": {
     "imported-calibration": {
-      "cpuSet": [1, 2, 3, 4],
-      "parallelSources": 8,
+      "cpuSet": [2, 4],
+      "parallelSources": 4,
       "orderedSources": 1,
       "workUnits": 50,
       "randomizeWork": true,
       "totalRequiredExecutions": 500000,
       "invocationTimeoutMillis": 30000,
-      "forcedActiveParticipantCount": null,
-      "cacheParkNs": 15000,
-      "contentionHalfLifeNanos": 1000000,
-      "cacheActuatorVersion": "cache-v1",
       "rawSampleLimit": 1024,
-      "observeCycleStart": false,
       "observeBatchProgress": false,
       "observeBatchComplete": false,
-      "observeRawBodyCost": false,
-      "observeIdleDecision": false,
-      "observeExecDecision": false,
-      "observeContentionStaleness": false
+      "idleParkNs": 15000,
+      "contentionHalfLifeNanos": 1000000
     }
   }
 }

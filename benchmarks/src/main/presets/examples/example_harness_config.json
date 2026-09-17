@@ -1,235 +1,78 @@
 {
-  // Optional: Schema version (positive integer)
   "schemaVersion": 1,
-  // Optional: Harness unique identifier
   "id": "example-harness-config",
-  // Optional: Display name
   "name": "Example Calibration Harness Configuration",
-  // Optional: Detailed description of harness configuration
-  "description": "Comprehensive example harness configuration demonstrating all schema features",
-  // Optional: Key-value metadata labels
-  "labels": {
-    "preset": "example",
-    "environment": "benchmark"
-  },
-  // Optional: Execution run-control options
   "runOptions": {
-    // Optional: Whether trial execution order is randomized
-    "randomizeTrialOrder": true,
-    // Optional: balance repeated sweep treatments in forward/reverse execution pairs
+    "randomizeTrialOrder": false,
     "balancedTrialOrder": false,
-    // Optional: Seed for random number generation
-    "randomSeed": 42,
-    // Optional: Stop execution on first trial failure
-    "failFast": false,
-    // Optional: Number of times to repeat the trial set
+    "failFast": true,
     "repeatCount": 1
   },
-  // Optional: Artifact retention configuration
   "artifacts": {
-    // Optional: Output directory path for benchmark results
     "outputDirectory": "build/reports/benchmarks",
-    // Optional: Retain expanded configuration files
     "retainExpandedConfig": true,
-    // Optional: Retain raw console output from benchmarks
-    "retainRawBenchmarkOutput": false,
-    // Optional: Retain observer events data
+    "retainRawBenchmarkOutput": true,
     "retainObserverData": true,
-    // Optional: Retain per-fork results
     "retainPerForkResults": false,
-    // Optional: Retain per-iteration results
-    "retainPerIterationResults": true
+    "retainPerIterationResults": false
   },
-  // Optional: External profile library imports
   "imports": [
     {
       "path": "example_profile_library.json",
       "namespace": "common"
     }
   ],
-  // Optional: Reusable calibration benchmark profiles
   "calibrationProfiles": {
-    "standard-calibration": {
-      "cpuSet": [1, 2, 3, 4],
-      "parallelSources": 4,
-      "orderedSources": 2,
+    "observed": {
+      "cpuSet": [2, 4],
+      "parallelSources": 2,
+      "orderedSources": 0,
       "workUnits": 100,
       "randomizeWork": true,
       "totalRequiredExecutions": 1000000,
       "invocationTimeoutMillis": 60000,
-      // Optional: RESET (default) or CONTINUOUS persistent scheduler trajectory
-      "lifecycleMode": "RESET",
-      // Optional benchmark-only cutoff; ranks above this value use CACHE while remaining registered
-      "forcedActiveParticipantCount": null,
-      // CACHE miss park duration and semantic actuator identity retained in completed fixtures
-      "cacheParkNs": 15000,
-      "contentionHalfLifeNanos": 1000000,
-      "cacheActuatorVersion": "cache-v1",
       "rawSampleLimit": 1024,
-      "observeCycleStart": false,
-      "observeBatchProgress": false,
-      "observeBatchComplete": false,
-      "observeRawBodyCost": false,
-      "observeIdleDecision": false,
-      "observeExecDecision": false,
-      "observeContentionStaleness": false
-    },
-    "high-contention-calibration": {
-      "cpuSet": [1, 2, 3, 4],
-      "parallelSources": 11,
-      "orderedSources": 0,
-      "workUnits": 24,
-      "randomizeWork": false,
-      "totalRequiredExecutions": 32000000,
-      "invocationTimeoutMillis": 6000,
-      "lifecycleMode": "CONTINUOUS",
-      "forcedActiveParticipantCount": null,
-      "cacheParkNs": 15000,
-      "contentionHalfLifeNanos": 1000000,
-      "cacheActuatorVersion": "cache-v1",
-      "rawSampleLimit": 1024,
-      "observeCycleStart": true,
-      "observeBatchProgress": false,
-      "observeBatchComplete": false,
-      "observeRawBodyCost": false,
-      "observeIdleDecision": true,
-      "observeExecDecision": true,
-      "observeContentionStaleness": true
+      "observeBatchProgress": true,
+      "observeBatchComplete": true,
+      "idleParkNs": 15000,
+      "contentionHalfLifeNanos": 1000000
     }
   },
-  // Optional: Parameter sweep declarations
   "sweeps": [
     {
-      "id": "sweep-001",
-      "baseTrialId": "trial-001",
-      // Optional: Description of parameter sweep
-      "description": "Parallel sources parameter variation sweep",
+      "id": "source-count",
+      "baseTrialId": "baseline",
       "parameters": [
         {
           "path": "/calibrationConfig/parallelSources",
-          "values": [2, 4, 8]
+          "values": [2, 4]
         }
       ]
     }
   ],
-  // Optional: Candidate search generation descriptors [NOT YET IMPLEMENTED: schema only, search generation is not yet implemented]
-  "searches": [
-    {
-      "id": "search-grid-001",
-      "strategy": "GRID",
-      "maxTrials": 10,
-      // Optional: Search random seed [NOT YET IMPLEMENTED]
-      "seed": 42,
-      // Optional: Search optimization objective [NOT YET IMPLEMENTED]
-      "objective": "maximize_throughput",
-      // Optional: Referenced sweep IDs [NOT YET IMPLEMENTED]
-      "sweepIds": ["sweep-001"],
-      // Optional: Search metadata [NOT YET IMPLEMENTED]
-      "metadata": {
-        "optimizer": "grid-search"
-      }
-    }
-  ],
-  // Required: Non-empty array of trial configurations
   "trials": [
     {
-      // Optional: Trial unique identifier
-      "id": "trial-001",
-      // Optional: Trial display name
-      "name": "Default Calibration Trial",
-      // Optional: Trial group identifier
-      "group": "baseline-calibration",
-      // Optional: Trial description
-      "description": "Baseline calibration trial run with the standard runtime policy",
-      // Optional: Trial hypothesis
-      "hypothesis": "Standard weights perform well under low contention",
-      // Optional: Trial comparison relationship metadata [NOT YET IMPLEMENTED: parsed and validated in schema, post-run comparison is not yet implemented]
-      "comparison": {
-        // Optional: Reference to baseline trial ID [NOT YET IMPLEMENTED]
-        "baselineTrialId": null,
-        // Optional: Group name for comparison aggregating [NOT YET IMPLEMENTED]
-        "comparisonGroup": "baseline-calibration",
-        // Optional: Purpose of comparison [NOT YET IMPLEMENTED]
-        "purpose": "Baseline benchmark comparison"
-      },
-      // Optional: Trial tags
-      "tags": [
-        "example",
-        "baseline"
-      ],
-      // Optional: Whether trial is enabled for execution
+      "id": "baseline",
+      "name": "Baseline calibration trial",
       "enabled": true,
-      // Optional: Trial provenance origin metadata
-      "origin": {
-        "type": "MANUAL",
-        // Optional: Source ID (must be null for MANUAL)
-        "sourceId": null,
-        // Optional: Generation seed
-        "seed": null,
-        // Optional: Candidate index (>= 0)
-        "candidateIndex": 0
-      },
-      "forks": 1,
-      "warmups": 1,
+      "forks": 3,
+      "warmups": 2,
+      "warmupTime": "2s",
       "iterations": 5,
-      // Optional: JVM flags for benchmarks appended to JMH fork args
+      "measurementTime": "5s",
       "jvmArgs": [
         "-XX:+UseThreadPriorities",
         "--enable-native-access=ALL-UNNAMED"
       ],
-      // Optional: Reusable calibration profile reference
-      // "calibrationProfile": "standard-calibration",
-      // Optional: Inline calibration benchmark configuration
-      "calibrationConfig": {
-        "cpuSet": [1, 2, 3, 4],
-        "parallelSources": 4,
-        "orderedSources": 2,
-        "workUnits": 100,
-        "randomizeWork": true,
-        "totalRequiredExecutions": 1000000,
-        "invocationTimeoutMillis": 60000,
-        // Optional: RESET (default) or CONTINUOUS persistent scheduler trajectory
-        "lifecycleMode": "RESET",
-        "rawSampleLimit": 1024,
-        "observeCycleStart": false,
-        "observeBatchProgress": false,
-        "observeBatchComplete": false,
-        "observeRawBodyCost": false,
-        "observeIdleDecision": false,
-        "observeExecDecision": false,
-        "observeContentionStaleness": false
-      }
+      "calibrationProfile": "observed"
     },
     {
-      "id": "trial-002",
-      "name": "Comparing Calibration Trial",
-      "group": "baseline-calibration",
-      "description": "Comparison trial run referencing trial-001 as baseline",
-      "hypothesis": "High contention calibration yields different execution policy transitions",
-      "comparison": {
-        "baselineTrialId": "trial-001",
-        "comparisonGroup": "baseline-calibration",
-        "purpose": "Evaluate performance delta against trial-001"
-      },
-      "tags": [
-        "example",
-        "comparison"
-      ],
+      "id": "imported",
+      "name": "Imported profile trial",
       "enabled": true,
-      "origin": {
-        "type": "MANUAL",
-        "sourceId": null,
-        "seed": null,
-        "candidateIndex": 1
-      },
-      "forks": 1,
-      "warmups": 1,
+      "forks": 3,
+      "warmups": 2,
       "iterations": 5,
-      "jvmArgs": [
-        "-XX:+UseThreadPriorities",
-        "--enable-native-access=ALL-UNNAMED"
-      ],
-      // Optional: Reusable calibration profile reference
       "calibrationProfile": "common.imported-calibration"
     }
   ]

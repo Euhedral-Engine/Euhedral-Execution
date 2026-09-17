@@ -19,14 +19,6 @@ public record ComparisonKey(@NonNull List<ComparisonKeyValue> values) implements
         values = List.copyOf(values);
     }
 
-    public static ComparisonKey of(@NonNull ComparisonKeyValue value) {
-        return new ComparisonKey(List.of(value));
-    }
-
-    public static ComparisonKey of(@NonNull List<ComparisonKeyValue> values) {
-        return new ComparisonKey(values);
-    }
-
     /// Formats the key into a deterministic string representation.
     /// Single keys return the raw scalar format (e.g. "0", "24", "direct").
     /// Compound keys return bracketed comma-separated values (e.g. "[24, 2]").
