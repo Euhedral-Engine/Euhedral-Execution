@@ -63,3 +63,6 @@ benchmarks/experiments/*/
 
 # Generated editable-install metadata, not tuner source.
 *.egg-info/
+
+# Local Hermes state.
+/.hermes/
