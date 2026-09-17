@@ -12,7 +12,7 @@ import org.jspecify.annotations.Nullable;
 /// @param cloneConfig  See [CloneConfig]
 /// @param cacheConfig  See [CacheConfig]
 /// @param maxBatchSize The maximum size of the batches the fragment can scale up to
-/// @param cacheTimingConfig CACHE park duration and acquisition-contention half-life
+/// @param idlePolicy CACHE park duration and acquisition-contention half-life
 /// @param metricPrefix Prefix string to prepend to exported metrics.
 /// @param registry     Registry for reporting collected metrics.
 @SuppressWarnings("unused")
@@ -23,13 +23,13 @@ public record FragmentConfig(
         @Nullable FragmentObserver observer,
         long maxBatchSize,
         boolean smtEnabled,
-        @NonNull CacheTimingConfig cacheTimingConfig,
+        @NonNull IdlePolicy idlePolicy,
         boolean benchmarkMode,
         @Nullable String metricPrefix,
         @Nullable MeterRegistry registry)
         implements CloneableObject {
 
-    public static final long DEFAULT_CONTENTION_HALF_LIFE_NANOS = CacheTimingConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS;
+    public static final long DEFAULT_CONTENTION_HALF_LIFE_NANOS = IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS;
 
     public FragmentConfig {
         Objects.requireNonNull(cacheConfig);
@@ -37,7 +37,7 @@ public record FragmentConfig(
         if (maxBatchSize <= 0) {
             throw new IllegalArgumentException("maxBatchSize must be greater than 0. Provided: " + maxBatchSize);
         }
-        Objects.requireNonNull(cacheTimingConfig);
+        Objects.requireNonNull(idlePolicy);
         if (benchmarkMode && observer == null) {
             throw new IllegalArgumentException("FragmentObserver cannot be null in benchmark mode");
         }
@@ -62,14 +62,14 @@ public record FragmentConfig(
                 observer,
                 maxBatchSize,
                 smtEnabled,
-                new CacheTimingConfig(CacheTimingConfig.DEFAULT_CACHE_PARK_NS, contentionHalfLifeNanos),
+                new IdlePolicy(IdlePolicy.DEFAULT_IDLE_PARK_NS, contentionHalfLifeNanos),
                 benchmarkMode,
                 metricPrefix,
                 registry);
     }
 
     public long contentionHalfLifeNanos() {
-        return cacheTimingConfig.contentionHalfLifeNanos();
+        return idlePolicy.contentionHalfLifeNanos();
     }
 
     public static FragmentConfig ofDefaults() {
@@ -84,7 +84,7 @@ public record FragmentConfig(
                 null,
                 4_096,
                 true,
-                CacheTimingConfig.DEFAULT,
+                IdlePolicy.DEFAULT,
                 false,
                 metricPrefix,
                 meterRegistry);
@@ -92,25 +92,16 @@ public record FragmentConfig(
 
     public static FragmentConfig ofBenchmark(
             @NonNull FragmentObserver observer, @NonNull FragmentDecisionWeights decisionWeights) {
-        return ofBenchmark(observer, decisionWeights, CacheTimingConfig.DEFAULT);
+        return ofBenchmark(observer, decisionWeights, IdlePolicy.DEFAULT);
     }
 
     public static FragmentConfig ofBenchmark(
             @NonNull FragmentObserver observer,
             @NonNull FragmentDecisionWeights decisionWeights,
-            @NonNull CacheTimingConfig cacheTimingConfig) {
+            @NonNull IdlePolicy idlePolicy) {
         Objects.requireNonNull(observer);
         return new FragmentConfig(
-                null,
-                CacheConfig.ofDefaults(),
-                decisionWeights,
-                observer,
-                4_096,
-                true,
-                cacheTimingConfig,
-                true,
-                null,
-                null);
+                null, CacheConfig.ofDefaults(), decisionWeights, observer, 4_096, true, idlePolicy, true, null, null);
     }
 
     @Override
@@ -122,7 +113,7 @@ public record FragmentConfig(
                 this.observer,
                 this.maxBatchSize,
                 this.smtEnabled,
-                this.cacheTimingConfig,
+                this.idlePolicy,
                 this.benchmarkMode,
                 this.metricPrefix,
                 this.registry);

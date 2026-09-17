@@ -99,7 +99,7 @@ public record LatticeConfig(
             @NonNull FragmentObserver observer,
             @NonNull FragmentDecisionWeights decisionWeights,
             @NonNull AbstractExecutor executor) {
-        return ofBenchmark(allowedCpus, observer, decisionWeights, executor, CacheTimingConfig.DEFAULT);
+        return ofBenchmark(allowedCpus, observer, decisionWeights, executor, IdlePolicy.DEFAULT);
     }
 
     public static LatticeConfig ofBenchmark(
@@ -107,12 +107,12 @@ public record LatticeConfig(
             @NonNull FragmentObserver observer,
             @NonNull FragmentDecisionWeights decisionWeights,
             @NonNull AbstractExecutor executor,
-            @NonNull CacheTimingConfig cacheTimingConfig) {
+            @NonNull IdlePolicy idlePolicy) {
         return new LatticeConfig(
                 DEFAULT_NAME,
                 allowedCpus,
                 Duration.ofMinutes(1),
                 ControlPlaneShard.createBaseShard(new BaseCloneableObject(
-                        FragmentConfig.ofBenchmark(observer, decisionWeights, cacheTimingConfig), executor)));
+                        FragmentConfig.ofBenchmark(observer, decisionWeights, idlePolicy), executor)));
     }
 }

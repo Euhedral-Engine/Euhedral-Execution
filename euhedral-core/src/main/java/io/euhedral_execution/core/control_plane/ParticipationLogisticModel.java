@@ -16,7 +16,7 @@ final class ParticipationLogisticModel {
 
     private ParticipationLogisticModel() {}
 
-    static boolean shouldCache(
+    static boolean shouldIdle(
             int k, long productiveHandles, int registeredWorkers, double bodyCostNs, double contention) {
         return score(k, productiveHandles, registeredWorkers, bodyCostNs, contention) >= LOGIT_THRESHOLD;
     }

@@ -3,9 +3,9 @@ package calibration.config;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.euhedral_execution.core.config.CacheTimingConfig;
-import io.euhedral_execution.core.config.CacheTimingFunctionConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.IdlePolicy;
+import io.euhedral_execution.core.config.IdleTimingFunction;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.util.List;
 import java.util.Objects;
@@ -38,7 +38,7 @@ public record CalibrationBenchmarkConfig(
         @Nullable Integer forcedActiveParticipantCount,
         @NonNull Long cacheParkNs,
         @NonNull Long contentionHalfLifeNanos,
-        @Nullable CacheTimingFunctionConfig cacheTimingFunction,
+        @Nullable IdleTimingFunction cacheTimingFunction,
         @NonNull String cacheActuatorVersion,
         CalibrationLifecycleMode lifecycleMode,
         boolean cacheScarcityGateEnabled) {
@@ -47,9 +47,8 @@ public record CalibrationBenchmarkConfig(
     private static final long HISTORICAL_CONTENTION_HALF_LIFE_NANOS = 1_000_000L;
 
     @JsonIgnore
-    public CacheTimingConfig toCacheTimingConfig() {
-        return new CacheTimingConfig(
-                cacheParkNs, contentionHalfLifeNanos, cacheTimingFunction, cacheScarcityGateEnabled);
+    public IdlePolicy toCacheTimingConfig() {
+        return new IdlePolicy(cacheParkNs, contentionHalfLifeNanos, cacheTimingFunction);
     }
 
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
@@ -438,7 +437,7 @@ public record CalibrationBenchmarkConfig(
                 productivityGateMode,
                 forcedActiveParticipantCount,
                 cacheParkNs,
-                CacheTimingConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
+                IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
                 cacheActuatorVersion,
                 lifecycleMode);
     }
@@ -528,7 +527,7 @@ public record CalibrationBenchmarkConfig(
             @Nullable Integer forcedActiveParticipantCount,
             @Nullable Long cacheParkNs,
             @Nullable Long contentionHalfLifeNanos,
-            @Nullable CacheTimingFunctionConfig cacheTimingFunction,
+            @Nullable IdleTimingFunction cacheTimingFunction,
             @Nullable String cacheActuatorVersion,
             @Nullable CalibrationLifecycleMode lifecycleMode) {
         this(
@@ -590,7 +589,7 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("forcedActiveParticipantCount") @Nullable Integer forcedActiveParticipantCount,
             @JsonProperty("idleParkNs") @Nullable Long cacheParkNs,
             @JsonProperty("contentionHalfLifeNanos") @Nullable Long contentionHalfLifeNanos,
-            @JsonProperty("cacheTimingFunction") @Nullable CacheTimingFunctionConfig cacheTimingFunction,
+            @JsonProperty("cacheTimingFunction") @Nullable IdleTimingFunction cacheTimingFunction,
             @JsonProperty("cacheActuatorVersion") @Nullable String cacheActuatorVersion,
             @JsonProperty("lifecycleMode") @Nullable CalibrationLifecycleMode lifecycleMode,
             @JsonProperty("cacheScarcityGateEnabled") boolean cacheScarcityGateEnabled) {

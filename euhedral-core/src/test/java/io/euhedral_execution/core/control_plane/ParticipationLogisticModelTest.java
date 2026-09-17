@@ -2,11 +2,8 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -42,7 +39,7 @@ class ParticipationLogisticModelTest {
                 assertEquals(pythonScore, javaScore, 2e-12, fields[0]);
                 assertEquals(
                         pythonCache,
-                        ParticipationLogisticModel.shouldCache(k, productive, workers, bodyCost, contention),
+                        ParticipationLogisticModel.shouldIdle(k, productive, workers, bodyCost, contention),
                         fields[0]);
 
                 double[] z = new double[5];
@@ -78,47 +75,18 @@ class ParticipationLogisticModelTest {
                         / (1.0 - ParticipationLogisticModel.PROBABILITY_THRESHOLD)),
                 ParticipationLogisticModel.LOGIT_THRESHOLD,
                 0.0);
-        assertFalse(ParticipationLogisticModel.shouldCache(2, 1L, 7, 1.0, 0.431856));
-        assertTrue(ParticipationLogisticModel.shouldCache(2, 1L, 7, 1.0, 0.431857));
+        assertFalse(ParticipationLogisticModel.shouldIdle(2, 1L, 7, 1.0, 0.431856));
+        assertTrue(ParticipationLogisticModel.shouldIdle(2, 1L, 7, 1.0, 0.431857));
     }
 
     @Test
-    void policyModeOverrideIsRestrictedToTheBenchmarkHarness() {
-        assertTrue(ControlPlaneFragment.resolveParticipationPolicyEnabled(false, "POLICY_ON"));
-        assertFalse(ControlPlaneFragment.resolveParticipationPolicyEnabled(true, "POLICY_OFF"));
-        assertThrows(
-                IllegalStateException.class,
-                () -> ControlPlaneFragment.resolveParticipationPolicyEnabled(false, "POLICY_OFF"));
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> ControlPlaneFragment.resolveParticipationPolicyEnabled(true, "FORCE_CACHE"));
-    }
-
-    @Test
-    void benchmarkPolicyOffBypassesOnlyTheLearnedCacheDecision() {
-        FragmentDecisionTree policyOn =
-                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, 0, 0, null, 15_000L, true);
-        FragmentDecisionTree policyOff =
-                new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, 0, 0, null, 15_000L, false);
-        for (int index = 0; index < 32; index++) {
-            policyOn.recordBodyCost(1L);
-            policyOff.recordBodyCost(1L);
-        }
-
-        assertTrue(policyOn.shouldCacheExecute(0.431857, 1L, 7, 2));
-        assertFalse(policyOff.shouldCacheExecute(0.431857, 1L, 7, 2));
-        assertTrue(policyOff.shouldCacheExecute(0.431857, 0L, 7, 2));
-        assertFalse(policyOff.shouldCacheExecute(0.431857, 1L, 7, 1));
-    }
-
-    @Test
-    void modelOnlyOverridesTheCacheBranch() {
-        FragmentDecisionTree tree = new FragmentDecisionTree(FragmentDecisionWeights.DEFAULT, null, 0, 0);
+    void modelOnlyOverridesTheIdleBranch() {
+        FragmentDecisionTree tree = new FragmentDecisionTree(null, 0, 0);
         for (int index = 0; index < 32; index++) {
             tree.recordBodyCost(1L);
         }
 
-        assertEquals(ExecutionPath.DIRECT, tree.executionPath(1L, 1L, 1L, 1L, 7, 431_856L, 2));
-        assertEquals(ExecutionPath.IDLE, tree.executionPath(2L, 1L, 1L, 1L, 7, 431_857L, 2));
+        assertFalse(tree.shouldIdle(431_856L, 1L, 7, 2));
+        assertTrue(tree.shouldIdle(431_857L, 1L, 7, 2));
     }
 }

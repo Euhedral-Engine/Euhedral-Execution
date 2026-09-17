@@ -6,7 +6,7 @@ import java.util.Objects;
 /// Fixed affine or pairwise-interaction coefficients in the declared coordinate system.
 /// Inputs are contention, productive handles / registered workers, and log1p(body nanoseconds).
 /// Lists are made immutable at initialization; primitive inference allocates nothing.
-public record CacheTimingFunctionConfig(
+public record IdleTimingFunction(
         String normalizationVersion,
         List<Double> means,
         List<Double> scales,
@@ -19,8 +19,9 @@ public record CacheTimingFunctionConfig(
         long parkMinNanos,
         long parkMaxNanos,
         long halfLifeMinNanos,
-        long halfLifeMaxNanos) {
-    public CacheTimingFunctionConfig {
+        long halfLifeMaxNanos)
+        implements TimingProvider {
+    public IdleTimingFunction {
         if (Objects.requireNonNull(normalizationVersion).isBlank()) {
             throw new IllegalArgumentException("normalizationVersion must be named");
         }
@@ -99,11 +100,13 @@ public record CacheTimingFunctionConfig(
         }
     }
 
+    @Override
     public long parkNanos(double contention, double phr, double bodyNanos, long fallback) {
         return output(
                 contention, phr, bodyNanos, parkCoefficients, parkReferenceNanos, parkMinNanos, parkMaxNanos, fallback);
     }
 
+    @Override
     public long halfLifeNanos(double contention, double phr, double bodyNanos, long fallback) {
         return output(
                 contention,

@@ -176,12 +176,6 @@ based on the 5x5 contention and body-cost matrix:
   The fragment worker decouples demand signaling from execution. It issues an asynchronous upstream
   `request`, drains its local MPSC cache first, and then executes remaining work. Staging isolates
   upstream contention from the hot execution path and prevents queue thrashing under high concurrency.
-- **`SKIP_THEN_DIRECT`**:
-  A transitory state that skips the current cycle's execution attempt and transitions to `DIRECT` for
-  the subsequent cycle. Also used when no upstream handles are available or during fragment initialization.
-- **`SKIP_THEN_STAGED`**:
-  A transitory state that skips the current cycle's execution attempt and transitions to `STAGED` for
-  the subsequent cycle.
 
 In trial configurations, `decisionWeights.executionPolicies` specifies a 5x5 grid of `ExecutionPath`
 values across all contention bands (`XS`..`XH`) and body-cost bands (`xsBody`..`xhBody`). Calibration

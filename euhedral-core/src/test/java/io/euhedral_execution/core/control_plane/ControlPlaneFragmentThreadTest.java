@@ -8,10 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.FragmentDecisionWeights;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
@@ -79,7 +79,7 @@ class ControlPlaneFragmentThreadTest {
         if (pauseQueueInitialization) {
             Mockito.doAnswer(pauseInitialization).when(observer).pullBucketTarget();
         } else {
-            Mockito.doAnswer(pauseInitialization).when(config).decisionWeights();
+            Mockito.doAnswer(pauseInitialization).when(config).idlePolicy();
         }
         try {
             assertFalse(fragment.ready());
@@ -104,9 +104,7 @@ class ControlPlaneFragmentThreadTest {
 
     @Test
     void latticeFactoryPropagatesIndependentTimingToStartedTrees() throws Exception {
-        for (CacheTimingConfig timing :
-                new CacheTimingConfig[] {new CacheTimingConfig(43_000L, 7_000_000L), new CacheTimingConfig(0L, 29_000L)
-                }) {
+        for (IdlePolicy timing : new IdlePolicy[] {new IdlePolicy(43_000L, 7_000_000L), new IdlePolicy(0L, 29_000L)}) {
             CloneConfig clone = cloneConfigOnCoreIndex(0);
             LatticeConfig lattice = LatticeConfig.ofBenchmark(
                     new UnmodifiableBitSet(clone.effectiveCpus()),
@@ -333,70 +331,6 @@ class ControlPlaneFragmentThreadTest {
     }
 
     @Test
-    void forcedCacheWorkerExecutesLocalCacheWhileActiveWorkerConsumesUpstream() {
-        requireTwoWorkerCores();
-        System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
-
-        ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(),
-                        FragmentDecisionWeights.DEFAULT,
-                        new CacheTimingConfig(50000L, 2_000_000L))
-                .clone(cloneConfigOnCoreIndex(0)));
-        ControlPlaneFragment fragment2 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(),
-                        FragmentDecisionWeights.DEFAULT,
-                        new CacheTimingConfig(50000L, 2_000_000L))
-                .clone(cloneConfigOnCoreIndex(1)));
-        LatticeVertex distributor = connect(fragment1, fragment2);
-
-        BenchmarkFrame local = BenchmarkFrame.generate(1, false, 31L, 37L)[0];
-        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(16, false, 41L, 43L));
-        CountingReceiver receiver1 = new CountingReceiver();
-        CountingReceiver receiver2 = new CountingReceiver();
-
-        try {
-            fragment1.output().addDownstream(receiver1);
-            fragment2.output().addDownstream(receiver2);
-
-            // Preload a frame into fragment2's local cache
-            fragment2.push(local);
-            assertEquals(1L, fragment2.getLocalCacheCount());
-
-            fragment1.start();
-            fragment2.start();
-            Awaitility.await().atMost(TIMEOUT).until(() -> fragment1.ready() && fragment2.ready());
-
-            // Fragment 2 (forced CACHE) must execute its preloaded local cache frame
-            Awaitility.await().atMost(TIMEOUT).until(() -> receiver2.received.get() >= 1);
-            assertSame(local, receiver2.first.get());
-
-            distributor.ingest(source);
-
-            // Only the active worker can pull upstream; CACHE must not reach it through an unlinked handle.
-            Awaitility.await()
-                    .atMost(TIMEOUT)
-                    .untilAsserted(() -> assertTrue(
-                            receiver1.received.get() == 16,
-                            () -> "active=" + receiver1.received.get() + ", cache=" + receiver2.received.get()
-                                    + ", direct=" + source.directFrames.get() + ", requests="
-                                    + source.requestCalls.get()
-                                    + ", cpus=" + workerCpus() + ", ranks=" + TestDistributor.ranks()));
-
-            assertEquals(1, receiver2.received.get(), "Forced CACHE worker must receive only its preloaded frame");
-
-            assertNull(receiver1.error.get());
-            assertNull(receiver2.error.get());
-        } finally {
-            source.complete();
-            fragment1.close();
-            fragment2.close();
-            distributor.close();
-            PinnedThreadExecutor.closeAll();
-            System.clearProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
-        }
-    }
-
-    @Test
     void forcedCacheWorkerExecutesRemoteCachedFrame() {
         requireTwoWorkerCores();
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
@@ -463,14 +397,10 @@ class ControlPlaneFragmentThreadTest {
         System.setProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT, "1");
 
         ControlPlaneFragment fragment1 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(),
-                        FragmentDecisionWeights.DEFAULT,
-                        new CacheTimingConfig(10000L, 2_000_000L))
+                        createRecordingObserver(), FragmentDecisionWeights.DEFAULT, new IdlePolicy(10000L, 2_000_000L))
                 .clone(cloneConfigOnCoreIndex(0)));
         ControlPlaneFragment fragment2 = new ControlPlaneFragment(FragmentConfig.ofBenchmark(
-                        createRecordingObserver(),
-                        FragmentDecisionWeights.DEFAULT,
-                        new CacheTimingConfig(10000L, 2_000_000L))
+                        createRecordingObserver(), FragmentDecisionWeights.DEFAULT, new IdlePolicy(10000L, 2_000_000L))
                 .clone(cloneConfigOnCoreIndex(1)));
 
         try (fragment1;

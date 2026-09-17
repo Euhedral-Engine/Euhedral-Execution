@@ -29,7 +29,7 @@ No production default or winning coefficient is installed by this command.
 
 ## Runtime boundary
 
-`CacheTimingConfig.DEFAULT` enables `scarcityGateEnabled` and the exact frozen
+`CacheTimingConfig.DEFAULT` uses the exact frozen
 timing function. Historical constructors preserve their false gate default.
 The calibration JSON switch is
 `cacheScarcityGateEnabled`. With it enabled, the local gate is:
@@ -138,7 +138,7 @@ available before that point.
 round summaries and exact arm/proposal definitions expose the accepted result.
 The config file contains the timing function; using the new regime behavior also
 requires `cacheScarcityGateEnabled: true` in calibration or the corresponding
-runtime `CacheTimingConfig` flag.
+runtime `IdlePolicy` flag.
 
 Successful raw attempts are cleaned only after every fork is parsed, committed to
 SQLite, summarized and UPDATE is durably committed. Failed/interrupted logs remain.

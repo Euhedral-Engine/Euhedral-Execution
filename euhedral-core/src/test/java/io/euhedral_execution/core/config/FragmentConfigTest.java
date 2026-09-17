@@ -20,14 +20,12 @@ class FragmentConfigTest {
 
     @Test
     void cacheTimingDefaultsValidationAndCompatibility() {
-        assertEquals(
-                new CacheTimingConfig(15_000L, 1_000_000L, CacheTimingConfig.DEFAULT_FUNCTION, true),
-                CacheTimingConfig.DEFAULT);
-        assertEquals(CacheTimingConfig.DEFAULT, FragmentConfig.ofDefaults().cacheTimingConfig());
-        assertEquals(0L, new CacheTimingConfig(0L, 1L).idleParkNs());
-        assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(-1L, 1L));
-        assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(1L, 0L));
-        assertThrows(IllegalArgumentException.class, () -> new CacheTimingConfig(1L, -1L));
+        assertEquals(new IdlePolicy(15_000L, 1_000_000L, IdlePolicy.DEFAULT_FUNCTION), IdlePolicy.DEFAULT);
+        assertEquals(IdlePolicy.DEFAULT, FragmentConfig.ofDefaults().idlePolicy());
+        assertEquals(0L, new IdlePolicy(0L, 1L).idleParkNs());
+        assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(-1L, 1L));
+        assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(1L, 0L));
+        assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(1L, -1L));
         FragmentConfig legacy = new FragmentConfig(
                 null,
                 CacheConfig.ofDefaults(),
@@ -39,7 +37,7 @@ class FragmentConfigTest {
                 false,
                 null,
                 null);
-        assertEquals(new CacheTimingConfig(15_000L, 7_000_000L), legacy.cacheTimingConfig());
+        assertEquals(new IdlePolicy(15_000L, 7_000_000L), legacy.idlePolicy());
         assertThrows(
                 NullPointerException.class,
                 () -> new FragmentConfig(
@@ -57,12 +55,12 @@ class FragmentConfigTest {
 
     @Test
     void benchmarkClonePreservesBothTimingValues() {
-        CacheTimingConfig timing = new CacheTimingConfig(43_000L, 7_000_000L);
+        IdlePolicy timing = new IdlePolicy(43_000L, 7_000_000L);
         FragmentConfig config = FragmentConfig.ofBenchmark(
                 Mockito.mock(FragmentObserver.class), FragmentDecisionWeights.DEFAULT, timing);
         BitSet cpus = new BitSet();
         cpus.set(3);
-        assertSame(timing, config.clone(new CloneConfig("timing", 3, cpus)).cacheTimingConfig());
+        assertSame(timing, config.clone(new CloneConfig("timing", 3, cpus)).idlePolicy());
     }
 
     @Test

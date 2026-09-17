@@ -1,8 +1,8 @@
 package io.euhedral_execution.core.control_plane;
 
-import io.euhedral_execution.core.config.CacheTimingConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
+import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
@@ -255,14 +255,8 @@ public final class ControlPlaneFragment extends WorkRequester {
                 ThreadTools.setTimerResolution(1);
                 super.register();
                 this.mainThread = Thread.currentThread();
-                this.controlPolicy = new FragmentDecisionTree(
-                        this.config.decisionWeights(),
-                        this.observer,
-                        this.core,
-                        this.socket,
-                        resolveForcedActiveParticipantCount(),
-                        this.config.cacheTimingConfig(),
-                        resolveParticipationPolicyEnabled());
+                this.controlPolicy =
+                        new FragmentDecisionTree(this.observer, this.core, this.socket, this.config.idlePolicy());
 
                 try {
                     this.state.neighborCursor = this.cpu + 1;
@@ -292,10 +286,10 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.initialized = true;
             while (keepRunning()) {
                 this.state.cycleEpoch++;
-                serviceResetRequest();
+                handleResetRequest();
 
                 long contention = cacheContention(
-                        this.config.cacheTimingConfig(), this.controlPolicy, this.upstreamQueue, this.state.nowNs);
+                        this.config.idlePolicy(), this.controlPolicy, this.upstreamQueue, this.state.nowNs);
                 long newUpCount = this.upstreamQueue.getCachedUpCount();
                 if (this.state.upstreamCount != newUpCount) {
                     this.state.upstreamCount = newUpCount;
@@ -331,14 +325,18 @@ public final class ControlPlaneFragment extends WorkRequester {
                 long upstreamHandleCount = this.upstreamQueue.getCachedUpCount();
                 int registeredWorkers = this.state.registeredWorkers;
                 int workerRank = super.getThreadRank(this.cpu);
-                ExecutionPath path = this.controlPolicy.executionPath(
-                        this.state.cycleEpoch,
-                        this.state.batchEpoch,
-                        productiveHandleCount,
-                        upstreamHandleCount,
-                        registeredWorkers,
-                        contention,
-                        workerRank);
+                ExecutionPath path;
+                if (this.controlPolicy.shouldIdle(contention, productiveHandleCount, registeredWorkers, workerRank)) {
+                    path = ExecutionPath.IDLE;
+                } else {
+                    path = this.controlPolicy.executionPath(
+                            this.state.cycleEpoch,
+                            this.state.batchEpoch,
+                            productiveHandleCount,
+                            upstreamHandleCount,
+                            registeredWorkers,
+                            contention);
+                }
 
                 if (path == ExecutionPath.DIRECT) {
                     if (limit > 0L) {
@@ -386,7 +384,6 @@ public final class ControlPlaneFragment extends WorkRequester {
 
                 this.state.completed += processed;
                 recordProgress(executionElapsedNs, executionFrames, processed, contention);
-                this.controlPolicy.recordProgress();
                 Thread.onSpinWait();
             }
         } catch (Exception e) {
@@ -406,8 +403,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     // Owner-thread helpers preserve the fixed production bypass. CACHE remains the hybrid mode;
     // this policy only chooses the local idle interval and prospective evidence decay.
-    static long cacheContention(
-            CacheTimingConfig timing, FragmentDecisionTree policy, UpstreamQueue upstream, long now) {
+    static long cacheContention(IdlePolicy timing, FragmentDecisionTree policy, UpstreamQueue upstream, long now) {
         return timing.function() == null
                 ? upstream.getEffectiveContention(now, policy.contentionHalfLifeNanos())
                 : upstream.getAdaptiveContention(now, policy.contentionHalfLifeNanos());
@@ -496,44 +492,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         return cap;
     }
 
-    private boolean resolveParticipationPolicyEnabled() {
-        String configuredMode = System.getProperty(FragmentControlConfig.PARTICIPATION_POLICY_MODE, "POLICY_ON");
-        return resolveParticipationPolicyEnabled(this.config.benchmarkMode(), configuredMode);
-    }
-
-    static boolean resolveParticipationPolicyEnabled(boolean benchmarkMode, String configuredMode) {
-        return switch (configuredMode) {
-            case "POLICY_ON" -> true;
-            case "POLICY_OFF" -> {
-                if (!benchmarkMode) {
-                    throw new IllegalStateException("POLICY_OFF is only valid in benchmark mode");
-                }
-                yield false;
-            }
-            default -> throw new IllegalArgumentException("Unknown participation policy mode: " + configuredMode);
-        };
-    }
-
-    private Integer resolveForcedActiveParticipantCount() {
-        String configuredCount = System.getProperty(FragmentControlConfig.FORCED_ACTIVE_PARTICIPANT_COUNT);
-        if (configuredCount == null || configuredCount.isBlank()) {
-            return null;
-        }
-        if (!this.config.benchmarkMode()) {
-            throw new IllegalStateException("Forced active participant count is only valid in benchmark mode");
-        }
-        int count;
-        try {
-            count = Integer.parseInt(configuredCount);
-        } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("Forced active participant count must be an integer", e);
-        }
-        if (count <= 0) {
-            throw new IllegalArgumentException("Forced active participant count must be positive");
-        }
-        return count;
-    }
-
     long getAdaptiveBatchCap() {
         return (long) ADAPTIVE_BATCH_CAP.getOpaque(this);
     }
@@ -586,7 +544,7 @@ public final class ControlPlaneFragment extends WorkRequester {
         return this.running.getOpaque() && !Thread.currentThread().isInterrupted();
     }
 
-    private void serviceResetRequest() {
+    private void handleResetRequest() {
         long requested = this.resetRequested.getAcquire();
         if (this.state == null || requested <= this.resetCompleted.getOpaque()) {
             return;

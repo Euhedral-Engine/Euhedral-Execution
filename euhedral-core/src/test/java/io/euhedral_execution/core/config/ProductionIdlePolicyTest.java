@@ -10,20 +10,19 @@ import java.util.BitSet;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class ProductionCacheTimingConfigTest {
+class ProductionIdlePolicyTest {
     @Test
     void productionDefinitionMatchesEveryFrozenFieldExactly() throws Exception {
         var mapper = new ObjectMapper();
         var artifact = mapper.readTree(new File(System.getProperty("euhedral.test.frozenCachePolicy")));
         assertEquals("policy-158a61afee6653cbbfde", artifact.get("policyId").asText());
-        var frozen = mapper.treeToValue(artifact.get("runtimeTimingFunction"), CacheTimingFunctionConfig.class);
+        var frozen = mapper.treeToValue(artifact.get("runtimeTimingFunction"), IdleTimingFunction.class);
         var runtimeOnly = mapper.readValue(
-                new File(System.getProperty("euhedral.test.frozenCacheRuntime")), CacheTimingFunctionConfig.class);
+                new File(System.getProperty("euhedral.test.frozenCacheRuntime")), IdleTimingFunction.class);
         // Record equality compares every bound/reference/normalizer and every exact Double value.
         assertEquals(frozen, runtimeOnly);
-        assertEquals(frozen, CacheTimingConfig.DEFAULT_FUNCTION);
-        assertSame(CacheTimingConfig.DEFAULT_FUNCTION, CacheTimingConfig.DEFAULT.function());
-        assertTrue(CacheTimingConfig.DEFAULT.scarcityGateEnabled());
+        assertEquals(frozen, IdlePolicy.DEFAULT_FUNCTION);
+        assertSame(IdlePolicy.DEFAULT_FUNCTION, IdlePolicy.DEFAULT.function());
         for (var values : List.of(frozen.parkCoefficients(), frozen.halfLifeCoefficients())) {
             assertThrows(UnsupportedOperationException.class, () -> values.set(0, 0.0));
         }
@@ -31,7 +30,7 @@ class ProductionCacheTimingConfigTest {
 
     @Test
     void representativeEvaluatorOutputsMatchFrozenFunction() {
-        var function = CacheTimingConfig.DEFAULT_FUNCTION;
+        var function = IdlePolicy.DEFAULT_FUNCTION;
         // Expected values evaluated independently from the full frozen artifact.
         double[][] inputs = {
             {0, 1.0 / 7, 0}, {.8, 1.0 / 15, 96}, {1, 1.0 / 23, 576}, {.5, 1, 200}, {1, 4, Math.expm1(16)}
@@ -48,24 +47,21 @@ class ProductionCacheTimingConfigTest {
     @Test
     void defaultsAndClonesShareProductionDefinitionWhileExplicitTimingRemainsConfigurable() {
         var defaults = FragmentConfig.ofDefaults();
-        assertSame(CacheTimingConfig.DEFAULT, defaults.cacheTimingConfig());
+        assertSame(IdlePolicy.DEFAULT, defaults.idlePolicy());
+        assertSame(IdlePolicy.DEFAULT, FragmentConfig.ofDefaults("test", null).idlePolicy());
         assertSame(
-                CacheTimingConfig.DEFAULT,
-                FragmentConfig.ofDefaults("test", null).cacheTimingConfig());
-        assertSame(
-                CacheTimingConfig.DEFAULT,
-                defaults.clone(new CloneConfig("test", 0, new BitSet())).cacheTimingConfig());
+                IdlePolicy.DEFAULT,
+                defaults.clone(new CloneConfig("test", 0, new BitSet())).idlePolicy());
         var suppliedFunction =
-                CacheTimingFunctionConfigTest.function(List.of(0.0, 0.0, 0.0, 0.0), List.of(0.0, 0.0, 0.0, 0.0));
-        var supplied = new CacheTimingConfig(32000, 6000000, suppliedFunction, true);
+                IdleTimingFunctionTest.function(List.of(0.0, 0.0, 0.0, 0.0), List.of(0.0, 0.0, 0.0, 0.0));
+        var supplied = new IdlePolicy(32000, 6000000, suppliedFunction);
         var config =
                 FragmentConfig.ofBenchmark(mock(FragmentObserver.class), FragmentDecisionWeights.DEFAULT, supplied);
-        assertSame(supplied, config.cacheTimingConfig());
-        assertSame(suppliedFunction, config.cacheTimingConfig().function());
+        assertSame(supplied, config.idlePolicy());
+        assertSame(suppliedFunction, config.idlePolicy().function());
         assertSame(
-                supplied, config.clone(new CloneConfig("test", 0, new BitSet())).cacheTimingConfig());
-        assertNull(new CacheTimingConfig(32000, 6000000).function());
-        assertNull(new CacheTimingConfig(32000, 6000000, null, true).function());
-        assertFalse(new CacheTimingConfig(32000, 6000000, suppliedFunction, false).scarcityGateEnabled());
+                supplied, config.clone(new CloneConfig("test", 0, new BitSet())).idlePolicy());
+        assertNotNull(new IdlePolicy(32000, 6000000).function());
+        assertNull(new IdlePolicy(32000, 6000000, null).function());
     }
 }
