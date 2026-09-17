@@ -21,7 +21,6 @@ import calibration.statistics.ComparisonOutcome;
 import calibration.statistics.fork.SystemForkResult;
 import calibration.statistics.iteration.ScalarSummary;
 import com.fasterxml.jackson.databind.node.TextNode;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -31,21 +30,7 @@ class PerformanceComparisonCalculatorTest {
 
     private static TrialConfig baseTrialConfig() {
         CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                2,
-                10,
-                false,
-                1000L,
-                5000L,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                true,
-                true,
-                true,
-                true,
-                true,
-                true);
+                List.of(1, 2), 4, 2, 10, false, 1000L, 5000L, 1024, true, true, true, true, true, true);
         return new TrialConfig(
                 "trial_1",
                 "Trial One",

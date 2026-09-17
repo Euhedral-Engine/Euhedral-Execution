@@ -451,14 +451,11 @@ Worker loops make scheduling choices by evaluating calibrated thresholds alongsi
 offline models:
 
 - [
-  `FragmentDecisionWeights`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/FragmentDecisionWeights.java)
-  holds body-cost thresholds and idle configurations (the current owner loop bypasses the tree's
-  idle-band method).
-- [
   `MicroCalibrator`](../euhedral-core/src/main/java/io/euhedral_execution/core/utils/MicroCalibrator.java)
-  runs during initialization to convert machine-independent synthetic-work weights into precise,
-  nanosecond-calibrated limits tailored to the host CPU. For example, the default DIRECT threshold
-  weight of 272 represents a synthetic work weight rather than a literal 272 nanoseconds.
+  runs during decision-tree initialization to convert its machine-independent synthetic-work
+  constants into precise, nanosecond-calibrated limits tailored to the host CPU.
+- [`IdlePolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/IdlePolicy.java)
+  carries CACHE park and acquisition-contention timing independently of decision-tree thresholds.
 - Model coefficients (such as the default `logistic-05-sqrt` model in [
   `ParticipationLogisticModel`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ParticipationLogisticModel.java)
   and cache timing curves in [
@@ -468,8 +465,7 @@ offline models:
   calibration runs.
 
 Production workers evaluate these static, pre-fitted parameters without running complex machine
-learning code in the hot loop. The legacy `paretoWeights` configuration field remains purely for
-backward compatibility.
+learning code in the hot loop.
 
 The independent [`benchmarks`](../benchmarks/) module houses extensive JMH performance suites
 evaluating end-to-end latency, queue scalability, and synthetic irregular workloads.

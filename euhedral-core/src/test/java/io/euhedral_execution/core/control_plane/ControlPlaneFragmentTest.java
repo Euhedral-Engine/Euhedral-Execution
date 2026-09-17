@@ -3,7 +3,6 @@ package io.euhedral_execution.core.control_plane;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -13,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
 import io.euhedral_execution.core.frames.DummyFrame;
@@ -34,14 +32,6 @@ import org.mockito.Mockito;
 
 @Isolated
 class ControlPlaneFragmentTest {
-
-    @Test
-    void defaultProductivityThresholdUsesDedicatedCalibratedWeight() {
-        assertEquals(40, FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT);
-        assertNotEquals(
-                FragmentDecisionWeights.BodyCostWeights.DEFAULTS.m(),
-                FragmentControlConfig.DEFAULT_PRODUCTIVITY_THRESHOLD_WEIGHT);
-    }
 
     private final List<ControlPlaneFragment> fragments = new ArrayList<>();
 
@@ -141,7 +131,6 @@ class ControlPlaneFragmentTest {
         var config = new FragmentConfig(
                 base.cloneConfig(),
                 base.cacheConfig(),
-                base.decisionWeights(),
                 base.observer(),
                 base.maxBatchSize(),
                 base.smtEnabled(),

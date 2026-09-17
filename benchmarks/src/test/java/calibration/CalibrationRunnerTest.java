@@ -35,7 +35,6 @@ import calibration.statistics.iteration.IterationResult;
 import calibration.statistics.iteration.SystemIterationResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -55,21 +54,7 @@ class CalibrationRunnerTest {
 
     private static CalibrationBenchmarkConfig dummyCalibrationConfig() {
         return new CalibrationBenchmarkConfig(
-                List.of(1, 2, 3, 4),
-                4,
-                2,
-                100,
-                true,
-                1000000,
-                60000,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                false,
-                false,
-                false,
-                false,
-                false,
-                false);
+                List.of(1, 2, 3, 4), 4, 2, 100, true, 1000000, 60000, 1024, false, false, false, false, false, false);
     }
 
     private static TrialConfig dummyTrialConfig(String id, boolean enabled) {
@@ -203,8 +188,8 @@ class CalibrationRunnerTest {
         TrialConfig t3 = dummyTrialConfig("t3", true);
 
         HarnessRunOptions options = new HarnessRunOptions(true, 42L, true, 1);
-        HarnessConfig harnessConfig = new HarnessConfig(
-                null, null, null, null, null, options, null, null, null, null, null, List.of(t1, t2, t3));
+        HarnessConfig harnessConfig =
+                new HarnessConfig(null, null, null, null, null, options, null, null, null, null, List.of(t1, t2, t3));
 
         List<TrialConfig> activeTrials = CalibrationRunner.resolveTrials(harnessConfig, mapper);
 
@@ -308,7 +293,7 @@ class CalibrationRunnerTest {
 
         HarnessRunOptions options = new HarnessRunOptions(true, 12345L, true, 1);
         HarnessConfig harnessConfig = new HarnessConfig(
-                null, null, null, null, null, options, null, null, null, List.of(sweep), null, List.of(e1, e2));
+                null, null, null, null, null, options, null, null, List.of(sweep), null, List.of(e1, e2));
 
         List<TrialConfig> resolved = CalibrationRunner.resolveTrials(harnessConfig, mapper);
 
@@ -326,7 +311,7 @@ class CalibrationRunnerTest {
 
         HarnessRunOptions options = new HarnessRunOptions(false, null, true, 2);
         HarnessConfig harnessConfig = new HarnessConfig(
-                null, null, null, null, null, options, null, null, null, List.of(sweep), null, List.of(base));
+                null, null, null, null, null, options, null, null, List.of(sweep), null, List.of(base));
 
         List<TrialConfig> resolvedOnce = CalibrationRunner.resolveTrials(harnessConfig, mapper);
 
@@ -344,7 +329,7 @@ class CalibrationRunnerTest {
 
         HarnessRunOptions options = new HarnessRunOptions(false, null, true, 2);
         HarnessConfig harnessConfig = new HarnessConfig(
-                null, null, null, null, null, options, null, null, null, List.of(sweep), null, List.of(baseDisabled));
+                null, null, null, null, null, options, null, null, List.of(sweep), null, List.of(baseDisabled));
 
         List<TrialConfig> resolvedTrials = CalibrationRunner.resolveTrials(harnessConfig, mapper);
 
@@ -367,7 +352,7 @@ class CalibrationRunnerTest {
         SweepConfig sweep = new SweepConfig("s1", "base1", "desc", true, 4, null, null, List.of(param));
         HarnessRunOptions options = new HarnessRunOptions(false, true, null, true, 1);
         HarnessConfig harnessConfig = new HarnessConfig(
-                null, null, null, null, null, options, null, null, null, List.of(sweep), null, List.of(baseDisabled));
+                null, null, null, null, null, options, null, null, List.of(sweep), null, List.of(baseDisabled));
 
         List<TrialConfig> resolved = CalibrationRunner.resolveTrials(harnessConfig, mapper);
 
@@ -386,7 +371,6 @@ class CalibrationRunnerTest {
                 null,
                 null,
                 options,
-                null,
                 null,
                 null,
                 null,
@@ -504,8 +488,6 @@ class CalibrationRunnerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeightProfile(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -610,7 +592,6 @@ class CalibrationRunnerTest {
                 null,
                 null,
                 Map.of("profile-alpha", dummyCalibrationConfig()),
-                null,
                 null,
                 null,
                 List.of(trial1, trial2));
@@ -911,7 +892,6 @@ class CalibrationRunnerTest {
                 true,
                 1000000,
                 60000,
-                FragmentDecisionWeights.DEFAULT,
                 1024,
                 true, // observeCycleStart differs
                 false,
@@ -943,7 +923,6 @@ class CalibrationRunnerTest {
                 true,
                 1000000,
                 60000,
-                FragmentDecisionWeights.DEFAULT,
                 1024,
                 false,
                 false,
@@ -1139,22 +1118,7 @@ class CalibrationRunnerTest {
                 List.of(),
                 null,
                 new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        2,
-                        1,
-                        24,
-                        false,
-                        1000L,
-                        5000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        1024,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true));
+                        List.of(1, 2), 2, 1, 24, false, 1000L, 5000L, 1024, true, true, true, true, true, true));
         TrialConfig dir1Config = new TrialConfig(
                 "direct-1",
                 "Direct 48",
@@ -1174,22 +1138,7 @@ class CalibrationRunnerTest {
                 List.of(),
                 null,
                 new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        2,
-                        1,
-                        48,
-                        false,
-                        1000L,
-                        5000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        1024,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true));
+                        List.of(1, 2), 2, 1, 48, false, 1000L, 5000L, 1024, true, true, true, true, true, true));
         TrialConfig dir2Config = new TrialConfig(
                 "direct-2",
                 "Direct 96",
@@ -1209,22 +1158,7 @@ class CalibrationRunnerTest {
                 List.of(),
                 null,
                 new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        2,
-                        1,
-                        96,
-                        false,
-                        1000L,
-                        5000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        1024,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true));
+                        List.of(1, 2), 2, 1, 96, false, 1000L, 5000L, 1024, true, true, true, true, true, true));
 
         TrialConfig stg0Config = new TrialConfig(
                 "staged-0",
@@ -1245,22 +1179,7 @@ class CalibrationRunnerTest {
                 List.of(),
                 null,
                 new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        2,
-                        1,
-                        24,
-                        false,
-                        1000L,
-                        5000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        1024,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true));
+                        List.of(1, 2), 2, 1, 24, false, 1000L, 5000L, 1024, true, true, true, true, true, true));
         TrialConfig stg1Config = new TrialConfig(
                 "staged-1",
                 "Staged 48",
@@ -1280,22 +1199,7 @@ class CalibrationRunnerTest {
                 List.of(),
                 null,
                 new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        2,
-                        1,
-                        48,
-                        false,
-                        1000L,
-                        5000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        1024,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true));
+                        List.of(1, 2), 2, 1, 48, false, 1000L, 5000L, 1024, true, true, true, true, true, true));
         TrialConfig stg2Config = new TrialConfig(
                 "staged-2",
                 "Staged 96",
@@ -1315,22 +1219,7 @@ class CalibrationRunnerTest {
                 List.of(),
                 null,
                 new CalibrationBenchmarkConfig(
-                        List.of(1, 2),
-                        2,
-                        1,
-                        96,
-                        false,
-                        1000L,
-                        5000L,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        1024,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true,
-                        true));
+                        List.of(1, 2), 2, 1, 96, false, 1000L, 5000L, 1024, true, true, true, true, true, true));
 
         setupCompletedRunOnDisk(direct0Dir, dir0Config, 1000.0, 0);
         setupCompletedRunOnDisk(direct1Dir, dir1Config, 2000.0, 5);

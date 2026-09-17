@@ -1,66 +1,16 @@
-"""Mathematical model, marginal prediction, optimization, serialization, and Java export."""
+"""Mathematical model, marginal prediction, optimization, and serialization."""
 
 from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import numpy as np
 from scipy.optimize import minimize
 
 from pareto_weight_calibration.types import ActiveStateFeatures, PairRecord
-
-
-@dataclass(frozen=True)
-class JavaParetoWeights:
-    """Java-compatible ParetoWeights record matching io.euhedral_execution.core.config.FragmentDecisionWeights$ParetoWeights."""
-    phrWeight: float                     # w0
-    contentionPhrWeight: float           # w1
-    bodyPhrWeight: float                 # w2
-    registeredWorkersPhrWeight: float    # w3
-    activeWorkersWeight: float           # w4
-    contentionWorkersWeight: float       # w5
-    bodyWorkersWeight: float             # w6
-    registeredActiveWorkersWeight: float # w7
-
-    def to_dict(self) -> Dict[str, float]:
-        return {
-            "activeWorkersWeight": self.activeWorkersWeight,
-            "contentionPhrWeight": self.contentionPhrWeight,
-            "contentionWorkersWeight": self.contentionWorkersWeight,
-            "phrWeight": self.phrWeight,
-            "bodyPhrWeight": self.bodyPhrWeight,
-            "bodyWorkersWeight": self.bodyWorkersWeight,
-            "registeredWorkersPhrWeight": self.registeredWorkersPhrWeight,
-            "registeredActiveWorkersWeight": self.registeredActiveWorkersWeight,
-        }
-
-    @classmethod
-    def from_dict(cls, d: Dict[str, float]) -> JavaParetoWeights:
-        return cls(
-            phrWeight=float(d["phrWeight"]),
-            contentionPhrWeight=float(d["contentionPhrWeight"]),
-            bodyPhrWeight=float(d["bodyPhrWeight"]),
-            registeredWorkersPhrWeight=float(d["registeredWorkersPhrWeight"]),
-            activeWorkersWeight=float(d["activeWorkersWeight"]),
-            contentionWorkersWeight=float(d["contentionWorkersWeight"]),
-            bodyWorkersWeight=float(d["bodyWorkersWeight"]),
-            registeredActiveWorkersWeight=float(d["registeredActiveWorkersWeight"]),
-        )
-
-    def to_logical_weights(self) -> LogicalWeights:
-        return LogicalWeights(
-            w0=self.phrWeight,
-            w1=self.contentionPhrWeight,
-            w2=self.bodyPhrWeight,
-            w3=self.registeredWorkersPhrWeight,
-            w4=self.activeWorkersWeight,
-            w5=self.contentionWorkersWeight,
-            w6=self.bodyWorkersWeight,
-            w7=self.registeredActiveWorkersWeight,
-        )
 
 
 @dataclass(frozen=True)
@@ -109,32 +59,11 @@ class LogicalWeights:
             w4=float(d["w4"]), w5=float(d["w5"]), w6=float(d["w6"]), w7=float(d["w7"]),
         )
 
-    def to_java_pareto_weights(self) -> JavaParetoWeights:
-        return JavaParetoWeights(
-            phrWeight=self.w0,
-            contentionPhrWeight=self.w1,
-            bodyPhrWeight=self.w2,
-            registeredWorkersPhrWeight=self.w3,
-            activeWorkersWeight=self.w4,
-            contentionWorkersWeight=self.w5,
-            bodyWorkersWeight=self.w6,
-            registeredActiveWorkersWeight=self.w7,
-        )
-
-    @classmethod
-    def from_java_pareto_weights(cls, jw: JavaParetoWeights) -> LogicalWeights:
-        return jw.to_logical_weights()
-
-
 @dataclass
 class MarginalModel:
     """Predictive model evaluating the participation marginal and action choice."""
     logical_weights: LogicalWeights
     metadata: Dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def java_pareto_weights(self) -> JavaParetoWeights:
-        return self.logical_weights.to_java_pareto_weights()
 
     def predict_marginal(self, features: Union[ActiveStateFeatures, np.ndarray]) -> float:
         """Evaluates marginal(K) = dot(x, w). Positive implies CACHE; non-positive implies DIRECT/STAGED."""
@@ -150,7 +79,7 @@ class MarginalModel:
         marginal = self.predict_marginal(features)
         return "CACHE" if marginal > 0.0 else "DIRECT_OR_STAGED"
 
-    def evaluate_java_marginal(
+    def evaluate_runtime_marginal(
         self,
         c: float,
         smoothed_body_cost_ns: float,
@@ -158,22 +87,22 @@ class MarginalModel:
         R: int,
         K: int,
     ) -> float:
-        """Evaluates marginal using the exact unrolled Java formula in FragmentDecisionTree."""
+      """Evaluates the marginal using the runtime's unrolled coefficient formula."""
         if K <= 1:
             return 0.0
         b = math.log1p(smoothed_body_cost_ns)
-        jw = self.java_pareto_weights
+      weights = self.logical_weights
         phr_factor = (
-            jw.phrWeight
-            + jw.contentionPhrWeight * c
-            + jw.bodyPhrWeight * b
-            + jw.registeredWorkersPhrWeight * float(R)
+            weights.w0
+            + weights.w1 * c
+            + weights.w2 * b
+            + weights.w3 * float(R)
         )
         worker_factor = (
-            jw.activeWorkersWeight
-            + jw.contentionWorkersWeight * c
-            + jw.bodyWorkersWeight * b
-            + jw.registeredActiveWorkersWeight * float(R)
+            weights.w4
+            + weights.w5 * c
+            + weights.w6 * b
+            + weights.w7 * float(R)
         )
         phr = P / float(K * (K - 1))
         return phr_factor * phr - worker_factor
@@ -187,7 +116,7 @@ class MarginalModel:
         K: int,
         tolerance: float = 1e-12,
     ) -> bool:
-        """Verifies that vector dot-product prediction exactly matches the Java unrolled evaluation."""
+      """Verifies that vector dot-product prediction matches the runtime's unrolled evaluation."""
         features = ActiveStateFeatures(
             c=c,
             smoothed_body_cost_ns=smoothed_body_cost_ns,
@@ -197,11 +126,13 @@ class MarginalModel:
             K=K,
         )
         vec_marginal = self.predict_marginal(features)
-        java_marginal = self.evaluate_java_marginal(c, smoothed_body_cost_ns, P, R, K)
-        diff = abs(vec_marginal - java_marginal)
+      runtime_marginal = self.evaluate_runtime_marginal(c,
+                                                        smoothed_body_cost_ns,
+                                                        P, R, K)
+      diff = abs(vec_marginal - runtime_marginal)
         if diff > tolerance:
             raise ValueError(
-                f"Evaluator parity violation: dot(x,w)={vec_marginal:.14e}, java={java_marginal:.14e}, diff={diff:.14e}"
+                f"Evaluator parity violation: dot(x,w)={vec_marginal:.14e}, runtime={runtime_marginal:.14e}, diff={diff:.14e}"
             )
         return True
 
@@ -273,7 +204,6 @@ class MarginalModel:
             "trainingConfigSha256": self.metadata.get("trainingConfigSha256", ""),
             "sourceArtifacts": self.metadata.get("sourceArtifacts", []),
             "logicalWeights": self.logical_weights.to_dict(),
-            "javaParetoWeights": self.java_pareto_weights.to_dict(),
             "splitGroups": self.metadata.get("splitGroups", {}),
             "validationMetrics": self.metadata.get("validationMetrics", {}),
             "testMetrics": self.metadata.get("testMetrics", {}),
@@ -286,23 +216,11 @@ class MarginalModel:
         text = path.read_text(encoding="utf-8")
         data = json.loads(text)
 
-        if "logicalWeights" in data:
-            lw = LogicalWeights.from_dict(data["logicalWeights"])
-        elif "javaParetoWeights" in data:
-            jw = JavaParetoWeights.from_dict(data["javaParetoWeights"])
-            lw = jw.to_logical_weights()
-        else:
-            raise ValueError("Model artifact lacks 'logicalWeights' or 'javaParetoWeights'")
+        if "logicalWeights" not in data:
+          raise ValueError("Model artifact lacks 'logicalWeights'")
+        lw = LogicalWeights.from_dict(data["logicalWeights"])
 
         model = cls(logical_weights=lw, metadata=data)
         # Verify internal parity on test coordinates
         model.verify_evaluator_parity(c=0.5, smoothed_body_cost_ns=500.0, P=4.0, R=8, K=4)
         return model
-
-    def export_java_weights(self, output_path: Optional[Path] = None) -> Dict[str, float]:
-        """Returns the eight named Java fields and optionally writes them to a JSON file."""
-        jw_dict = self.java_pareto_weights.to_dict()
-        if output_path is not None:
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            output_path.write_text(json.dumps(jw_dict, indent=2), encoding="utf-8")
-        return jw_dict

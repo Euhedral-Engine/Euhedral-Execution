@@ -103,7 +103,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8], "parallelSources": 2, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -122,7 +122,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14], "parallelSources": 3, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -141,7 +141,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19], "parallelSources": 5, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -160,7 +160,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23], "parallelSources": 7, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -179,7 +179,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], "parallelSources": 9, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -198,7 +198,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30], "parallelSources": 11, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -217,7 +217,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 20, 24, 28], "parallelSources": 5, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -236,7 +236,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 20, 21, 24, 25, 28, 29], "parallelSources": 7, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -255,7 +255,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 20, 21, 22, 24, 25, 26, 28, 29, 30], "parallelSources": 9, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -274,7 +274,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19], "parallelSources": 11, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -293,7 +293,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23], "parallelSources": 11, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false
@@ -312,7 +312,7 @@
       "calibrationConfig": {
         "cpuSet": [2, 4, 6, 8, 10, 12, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], "parallelSources": 11, "orderedSources": 0,
         "workUnits": 0, "randomizeWork": false, "totalRequiredExecutions": 8000000,
-        "invocationTimeoutMillis": 30000, "decisionWeightProfile": "threshold.default-weights",
+        "invocationTimeoutMillis": 30000,
         "productivityThresholdWeight": 0, "rawSampleLimit": 1024,
         "observeCycleStart": false, "observeBatchProgress": false, "observeBatchComplete": false,
         "observeRawBodyCost": false, "observeIdleDecision": false, "observeExecDecision": false

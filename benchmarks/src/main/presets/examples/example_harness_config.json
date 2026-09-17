@@ -65,13 +65,6 @@
       "cacheParkNs": 15000,
       "contentionHalfLifeNanos": 1000000,
       "cacheActuatorVersion": "cache-v1",
-      // Optional: Reusable decision weights profile reference
-      // "decisionWeightProfile": "default-weights",
-      // Optional: Inline decision weights configuration
-      "decisionWeights": {
-        "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
-        "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
-      },
       "rawSampleLimit": 1024,
       "observeCycleStart": false,
       "observeBatchProgress": false,
@@ -94,8 +87,6 @@
       "cacheParkNs": 15000,
       "contentionHalfLifeNanos": 1000000,
       "cacheActuatorVersion": "cache-v1",
-      // Optional: Reusable decision weights profile reference
-      "decisionWeightProfile": "common.imported-weights",
       "rawSampleLimit": 1024,
       "observeCycleStart": true,
       "observeBatchProgress": false,
@@ -104,17 +95,6 @@
       "observeIdleDecision": true,
       "observeExecDecision": true,
       "observeContentionStaleness": true
-    }
-  },
-  // Optional: Reusable fragment decision weights profiles
-  "decisionWeightProfiles": {
-    "default-weights": {
-      "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
-      "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
-    },
-    "aggressive-weights": {
-      "idleBodyCostWeights": { "xs": 0, "s": 0, "m": 0, "h": 0 },
-      "idleTimeNs": { "xsPark": 0, "sPark": 0, "mPark": 0, "hPark": 0, "xhPark": 0 }
     }
   },
   // Optional: Parameter sweep declarations
@@ -160,7 +140,7 @@
       // Optional: Trial group identifier
       "group": "baseline-calibration",
       // Optional: Trial description
-      "description": "Baseline calibration trial run with standard decision weights",
+      "description": "Baseline calibration trial run with the standard runtime policy",
       // Optional: Trial hypothesis
       "hypothesis": "Standard weights perform well under low contention",
       // Optional: Trial comparison relationship metadata [NOT YET IMPLEMENTED: parsed and validated in schema, post-run comparison is not yet implemented]
@@ -210,13 +190,6 @@
         "invocationTimeoutMillis": 60000,
         // Optional: RESET (default) or CONTINUOUS persistent scheduler trajectory
         "lifecycleMode": "RESET",
-        // Optional: Reusable decision weights profile reference
-        // "decisionWeightProfile": "default-weights",
-        // Optional: Inline decision weights configuration
-        "decisionWeights": {
-          "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
-          "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
-        },
         "rawSampleLimit": 1024,
         "observeCycleStart": false,
         "observeBatchProgress": false,

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.IdlePolicy;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -15,7 +14,7 @@ class IdlePolicyTest {
     private ObjectNode input() throws Exception {
         return (ObjectNode) mapper.readTree("""
             {"cpuSet":[2,4],"parallelSources":2,"totalRequiredExecutions":100,
-             "invocationTimeoutMillis":1000,"decisionWeightProfile":"default"}
+             "invocationTimeoutMillis":1000}
             """);
     }
 
@@ -33,8 +32,6 @@ class IdlePolicyTest {
         assertNotNull(config.toCacheTimingConfig().function());
         assertEquals(config, mapper.readValue(mapper.writeValueAsString(config), CalibrationBenchmarkConfig.class));
         for (var copy : List.of(
-                config.withDecisionWeights(FragmentDecisionWeights.DEFAULT),
-                config.withDecisionWeightProfile("other"),
                 config.withLifecycleMode(CalibrationLifecycleMode.CONTINUOUS),
                 config.withCurrentCacheActuatorIdentity())) {
             assertEquals(
@@ -48,7 +45,6 @@ class IdlePolicyTest {
         ObjectNode library = mapper.createObjectNode();
         library.putObject("calibrationProfiles")
                 .set("timed", input().put("idleParkNs", 43000L).put("contentionHalfLifeNanos", 7000000L));
-        library.putObject("decisionWeightProfiles").set("default", mapper.valueToTree(FragmentDecisionWeights.DEFAULT));
         mapper.writeValue(dir.resolve("library.json").toFile(), library);
         java.nio.file.Files.writeString(dir.resolve("harness.json"), """
             {"imports":[{"path":"library.json","namespace":"local"}],
@@ -61,8 +57,6 @@ class IdlePolicyTest {
         assertEquals(
                 new IdlePolicy(43000L, 7000000L, null),
                 resolved.calibrationConfig().toCacheTimingConfig());
-        assertEquals(
-                FragmentDecisionWeights.DEFAULT, resolved.calibrationConfig().decisionWeights());
         ObjectNode persisted = mapper.valueToTree(resolved);
         assertEquals(43000L, persisted.at("/calibrationConfig/idleParkNs").longValue());
         assertEquals(
@@ -83,8 +77,6 @@ class IdlePolicyTest {
         CalibrationBenchmarkConfig custom = mapper.treeToValue(json, CalibrationBenchmarkConfig.class);
         assertEquals(custom, mapper.readValue(mapper.writeValueAsString(custom), CalibrationBenchmarkConfig.class));
         for (CalibrationBenchmarkConfig copy : List.of(
-                custom.withDecisionWeights(FragmentDecisionWeights.DEFAULT),
-                custom.withDecisionWeightProfile("other"),
                 custom.withLifecycleMode(CalibrationLifecycleMode.CONTINUOUS),
                 custom.withCurrentCacheActuatorIdentity())) {
             assertEquals(new IdlePolicy(43000L, 7000000L, null), copy.toCacheTimingConfig());

@@ -3,7 +3,6 @@ package calibration.config;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.config.IdleTimingFunction;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig;
@@ -20,8 +19,6 @@ public record CalibrationBenchmarkConfig(
         boolean randomizeWork,
         long totalRequiredExecutions,
         long invocationTimeoutMillis,
-        @Nullable String decisionWeightProfile,
-        @Nullable FragmentDecisionWeights decisionWeights,
         int rawSampleLimit,
         boolean observeCycleStart,
         boolean observeBatchProgress,
@@ -54,7 +51,7 @@ public record CalibrationBenchmarkConfig(
     public static final int DEFAULT_RAW_SAMPLE_LIMIT = 1024;
     public static final String LEGACY_CACHE_ACTUATOR_VERSION = "legacy-unspecified";
 
-    /// Convenience constructor with inline decisionWeights and without decisionWeightProfile.
+    /// Convenience constructor for the common fixed-fixture calibration shape.
     public CalibrationBenchmarkConfig(
             List<Integer> cpuSet,
             int parallelSources,
@@ -63,7 +60,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -79,8 +75,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                null,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -91,97 +85,7 @@ public record CalibrationBenchmarkConfig(
                 false,
                 0,
                 List.of(),
-                false,
-                null,
-                ProductivityGateMode.AUTO,
-                CalibrationLifecycleMode.RESET);
-    }
-
-    /// Convenience constructor with decisionWeightProfile reference and without inline decisionWeights.
-    public CalibrationBenchmarkConfig(
-            List<Integer> cpuSet,
-            int parallelSources,
-            int orderedSources,
-            int workUnits,
-            boolean randomizeWork,
-            long totalRequiredExecutions,
-            long invocationTimeoutMillis,
-            String decisionWeightProfile,
-            int rawSampleLimit,
-            boolean observeCycleStart,
-            boolean observeBatchProgress,
-            boolean observeBatchComplete,
-            boolean observeRawBodyCost,
-            boolean observeIdleDecision,
-            boolean observeExecDecision) {
-        this(
-                cpuSet,
-                parallelSources,
-                orderedSources,
-                workUnits,
-                randomizeWork,
-                totalRequiredExecutions,
-                invocationTimeoutMillis,
-                decisionWeightProfile,
-                null,
-                rawSampleLimit,
-                observeCycleStart,
-                observeBatchProgress,
-                observeBatchComplete,
-                observeRawBodyCost,
-                observeIdleDecision,
-                observeExecDecision,
-                false,
-                0,
-                List.of(),
-                false,
-                null,
-                ProductivityGateMode.AUTO,
-                CalibrationLifecycleMode.RESET);
-    }
-
-    /// Backwards-compatible constructor for callers that specify both profile and inline decision weights.
-    public CalibrationBenchmarkConfig(
-            List<Integer> cpuSet,
-            int parallelSources,
-            int orderedSources,
-            int workUnits,
-            boolean randomizeWork,
-            long totalRequiredExecutions,
-            long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
-            int rawSampleLimit,
-            boolean observeCycleStart,
-            boolean observeBatchProgress,
-            boolean observeBatchComplete,
-            boolean observeRawBodyCost,
-            boolean observeIdleDecision,
-            boolean observeExecDecision) {
-        this(
-                cpuSet,
-                parallelSources,
-                orderedSources,
-                workUnits,
-                randomizeWork,
-                totalRequiredExecutions,
-                invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
-                rawSampleLimit,
-                observeCycleStart,
-                observeBatchProgress,
-                observeBatchComplete,
-                observeRawBodyCost,
-                observeIdleDecision,
-                observeExecDecision,
-                false,
-                0,
-                List.of(),
-                false,
-                null,
-                ProductivityGateMode.AUTO,
-                CalibrationLifecycleMode.RESET);
+                false);
     }
 
     /// Backwards-compatible constructor without a productivity threshold override.
@@ -193,8 +97,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -214,8 +116,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -241,8 +141,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -263,8 +161,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -290,8 +186,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -313,8 +207,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -340,8 +232,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -364,8 +254,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -393,8 +281,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -420,8 +306,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -450,8 +334,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -478,8 +360,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -509,8 +389,6 @@ public record CalibrationBenchmarkConfig(
             boolean randomizeWork,
             long totalRequiredExecutions,
             long invocationTimeoutMillis,
-            @Nullable String decisionWeightProfile,
-            @Nullable FragmentDecisionWeights decisionWeights,
             int rawSampleLimit,
             boolean observeCycleStart,
             boolean observeBatchProgress,
@@ -538,8 +416,6 @@ public record CalibrationBenchmarkConfig(
                 randomizeWork,
                 totalRequiredExecutions,
                 invocationTimeoutMillis,
-                decisionWeightProfile,
-                decisionWeights,
                 rawSampleLimit,
                 observeCycleStart,
                 observeBatchProgress,
@@ -571,8 +447,6 @@ public record CalibrationBenchmarkConfig(
             @JsonProperty("randomizeWork") boolean randomizeWork,
             @JsonProperty("totalRequiredExecutions") long totalRequiredExecutions,
             @JsonProperty("invocationTimeoutMillis") long invocationTimeoutMillis,
-            @JsonProperty("decisionWeightProfile") @Nullable String decisionWeightProfile,
-            @JsonProperty("decisionWeights") @Nullable FragmentDecisionWeights decisionWeights,
             @JsonProperty("rawSampleLimit") int rawSampleLimit,
             @JsonProperty("observeCycleStart") boolean observeCycleStart,
             @JsonProperty("observeBatchProgress") boolean observeBatchProgress,
@@ -601,8 +475,6 @@ public record CalibrationBenchmarkConfig(
         this.randomizeWork = randomizeWork;
         this.totalRequiredExecutions = totalRequiredExecutions;
         this.invocationTimeoutMillis = invocationTimeoutMillis;
-        this.decisionWeightProfile = decisionWeightProfile;
-        this.decisionWeights = decisionWeights;
         this.rawSampleLimit = rawSampleLimit <= 0 ? DEFAULT_RAW_SAMPLE_LIMIT : rawSampleLimit;
         this.observeCycleStart = observeCycleStart;
         this.observeBatchProgress = observeBatchProgress;
@@ -636,14 +508,6 @@ public record CalibrationBenchmarkConfig(
         }
         if (this.invocationTimeoutMillis <= 0) {
             throw new IllegalArgumentException("invocationTimeoutMillis must be greater than 0.");
-        }
-        if (this.decisionWeightProfile != null && this.decisionWeightProfile.isBlank()) {
-            throw new IllegalArgumentException(
-                    "CalibrationBenchmarkConfig decisionWeightProfile cannot be blank if present");
-        }
-        if (this.decisionWeights == null && this.decisionWeightProfile == null) {
-            throw new IllegalArgumentException(
-                    "CalibrationBenchmarkConfig must specify either decisionWeights or decisionWeightProfile");
         }
         if (this.pullBucketFork < 0) {
             throw new IllegalArgumentException("pullBucketFork must not be negative");
@@ -690,75 +554,6 @@ public record CalibrationBenchmarkConfig(
         }
     }
 
-    /// Returns a copy of this CalibrationBenchmarkConfig with the given decisionWeights set.
-    public CalibrationBenchmarkConfig withDecisionWeights(@NonNull FragmentDecisionWeights decisionWeights) {
-        Objects.requireNonNull(decisionWeights, "CalibrationBenchmarkConfig decisionWeights cannot be null");
-        return new CalibrationBenchmarkConfig(
-                this.cpuSet,
-                this.parallelSources,
-                this.orderedSources,
-                this.workUnits,
-                this.randomizeWork,
-                this.totalRequiredExecutions,
-                this.invocationTimeoutMillis,
-                this.decisionWeightProfile,
-                decisionWeights,
-                this.rawSampleLimit,
-                this.observeCycleStart,
-                this.observeBatchProgress,
-                this.observeBatchComplete,
-                this.observeRawBodyCost,
-                this.observeIdleDecision,
-                this.observeExecDecision,
-                this.observeContentionStaleness,
-                this.pullBucketFork,
-                this.pullBucketTreatments,
-                this.observePullConvoy,
-                this.productivityThresholdWeight,
-                this.productivityGateMode,
-                this.forcedActiveParticipantCount,
-                this.cacheParkNs,
-                this.contentionHalfLifeNanos,
-                this.cacheTimingFunction,
-                this.cacheActuatorVersion,
-                this.lifecycleMode,
-                this.cacheScarcityGateEnabled);
-    }
-
-    /// Returns a copy of this CalibrationBenchmarkConfig with the given decisionWeightProfile reference set.
-    public CalibrationBenchmarkConfig withDecisionWeightProfile(@Nullable String decisionWeightProfile) {
-        return new CalibrationBenchmarkConfig(
-                this.cpuSet,
-                this.parallelSources,
-                this.orderedSources,
-                this.workUnits,
-                this.randomizeWork,
-                this.totalRequiredExecutions,
-                this.invocationTimeoutMillis,
-                decisionWeightProfile,
-                this.decisionWeights,
-                this.rawSampleLimit,
-                this.observeCycleStart,
-                this.observeBatchProgress,
-                this.observeBatchComplete,
-                this.observeRawBodyCost,
-                this.observeIdleDecision,
-                this.observeExecDecision,
-                this.observeContentionStaleness,
-                this.pullBucketFork,
-                this.pullBucketTreatments,
-                this.observePullConvoy,
-                this.productivityThresholdWeight,
-                this.productivityGateMode,
-                this.forcedActiveParticipantCount,
-                this.cacheParkNs,
-                this.contentionHalfLifeNanos,
-                this.cacheTimingFunction,
-                this.cacheActuatorVersion,
-                this.lifecycleMode,
-                this.cacheScarcityGateEnabled);
-    }
-
     /// Returns a copy with an explicit measurement lifecycle while preserving the scheduler fixture configuration.
     public CalibrationBenchmarkConfig withLifecycleMode(@NonNull CalibrationLifecycleMode lifecycleMode) {
         Objects.requireNonNull(lifecycleMode, "lifecycleMode must not be null");
@@ -770,8 +565,6 @@ public record CalibrationBenchmarkConfig(
                 this.randomizeWork,
                 this.totalRequiredExecutions,
                 this.invocationTimeoutMillis,
-                this.decisionWeightProfile,
-                this.decisionWeights,
                 this.rawSampleLimit,
                 this.observeCycleStart,
                 this.observeBatchProgress,
@@ -811,8 +604,6 @@ public record CalibrationBenchmarkConfig(
                 this.randomizeWork,
                 this.totalRequiredExecutions,
                 this.invocationTimeoutMillis,
-                this.decisionWeightProfile,
-                this.decisionWeights,
                 this.rawSampleLimit,
                 this.observeCycleStart,
                 this.observeBatchProgress,

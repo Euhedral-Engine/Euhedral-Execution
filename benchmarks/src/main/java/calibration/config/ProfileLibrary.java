@@ -1,7 +1,6 @@
 package calibration.config;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -9,18 +8,13 @@ import java.util.Objects;
 import java.util.Set;
 import org.jspecify.annotations.Nullable;
 
-/// Dedicated container for reusable external calibration profiles and decision weight profiles.
-/// Profile libraries contain only imports, calibrationProfiles, and decisionWeightProfiles.
+/// Dedicated container for reusable external calibration profiles.
 public record ProfileLibrary(
-        @Nullable List<ProfileImport> imports,
-        @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-        @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles) {
+        @Nullable List<ProfileImport> imports, @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles) {
 
     /// Convenience constructor for profile library without imports.
-    public ProfileLibrary(
-            @Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles,
-            @Nullable Map<String, FragmentDecisionWeights> decisionWeightProfiles) {
-        this(null, calibrationProfiles, decisionWeightProfiles);
+    public ProfileLibrary(@Nullable Map<String, CalibrationBenchmarkConfig> calibrationProfiles) {
+        this(null, calibrationProfiles);
     }
 
     /// Creates and validates a ProfileLibrary instance.
@@ -51,18 +45,6 @@ public record ProfileLibrary(
                         "ProfileLibrary calibrationProfiles value cannot be null for key: " + profileName);
             }
             calibrationProfiles = Map.copyOf(calibrationProfiles);
-        }
-        if (decisionWeightProfiles != null) {
-            for (Map.Entry<String, FragmentDecisionWeights> entry : decisionWeightProfiles.entrySet()) {
-                String profileName = entry.getKey();
-                if (profileName == null || profileName.isBlank()) {
-                    throw new IllegalArgumentException("ProfileLibrary decisionWeightProfiles key cannot be blank");
-                }
-                Objects.requireNonNull(
-                        entry.getValue(),
-                        "ProfileLibrary decisionWeightProfiles value cannot be null for key: " + profileName);
-            }
-            decisionWeightProfiles = Map.copyOf(decisionWeightProfiles);
         }
     }
 }

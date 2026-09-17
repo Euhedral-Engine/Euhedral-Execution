@@ -26,10 +26,6 @@ class CalibrationLifecycleConfigTest {
             "randomizeWork": false,
             "totalRequiredExecutions": 1000,
             "invocationTimeoutMillis": 10000,
-            "decisionWeights": {
-              "idleBodyCostWeights": { "xs": 96, "s": 128, "m": 216, "h": 288 },
-              "idleTimeNs": { "xsPark": 1000, "sPark": 0, "mPark": 5000, "hPark": 5000, "xhPark": 5000 }
-            },
             "observeCycleStart": true,
             "observeIdleDecision": true,
             "observeExecDecision": true,

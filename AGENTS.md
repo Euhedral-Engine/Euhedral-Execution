@@ -195,14 +195,12 @@ Decisions occur per cycle; batch sizing updates at completed batches using measu
 Local MPSC caches are growable; their soft capacity factor reduces demand targets rather than
 imposing a hard memory bound. Batch pressure caps are separate.
 
-`FragmentDecisionWeights` holds configured thresholds. `MicroCalibrator` converts synthetic-work
-weights to worker-local nanoseconds; a weight is not a literal duration. Participation coefficients
+`FragmentDecisionTree` owns its synthetic-work threshold constants, and `MicroCalibrator` converts
+them to worker-local nanoseconds; a weight is not a literal duration. Participation coefficients
 come from the generated `ParticipationLogisticModel`, and default CACHE timing coefficients trace
 to [cache-scarce-v1.json](python/pareto-weight-calibration/policies/cache-scarce-v1.json).
-`CacheTimingConfig.DEFAULT` includes a bounded adaptive timing function and scarcity gate; the
-fixed-timing constructor is a separate configuration. The retained `paretoWeights` field does not
-supply the live participation coefficients, and the ordinary idle-band helper has no active-loop
-caller.
+`IdlePolicy.DEFAULT` includes a bounded adaptive timing function and scarcity gate; fixed timing is
+configured separately through `IdlePolicy`.
 
 Keep fitting and candidate search in the offline tools. Regenerate learned model code through its
 exporter and preserve model/dataset provenance. When changing policy, inspect the tree tests,

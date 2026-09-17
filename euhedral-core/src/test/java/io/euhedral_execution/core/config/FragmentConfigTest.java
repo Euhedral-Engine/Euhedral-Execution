@@ -26,38 +26,18 @@ class FragmentConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(-1L, 1L));
         assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(1L, 0L));
         assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(1L, -1L));
-        FragmentConfig legacy = new FragmentConfig(
-                null,
-                CacheConfig.ofDefaults(),
-                FragmentDecisionWeights.DEFAULT,
-                null,
-                100,
-                false,
-                7_000_000L,
-                false,
-                null,
-                null);
+        FragmentConfig legacy =
+                new FragmentConfig(null, CacheConfig.ofDefaults(), null, 100, false, 7_000_000L, false, null, null);
         assertEquals(new IdlePolicy(15_000L, 7_000_000L), legacy.idlePolicy());
         assertThrows(
                 NullPointerException.class,
-                () -> new FragmentConfig(
-                        null,
-                        CacheConfig.ofDefaults(),
-                        FragmentDecisionWeights.DEFAULT,
-                        null,
-                        100,
-                        false,
-                        null,
-                        false,
-                        null,
-                        null));
+                () -> new FragmentConfig(null, CacheConfig.ofDefaults(), null, 100, false, null, false, null, null));
     }
 
     @Test
     void benchmarkClonePreservesBothTimingValues() {
         IdlePolicy timing = new IdlePolicy(43_000L, 7_000_000L);
-        FragmentConfig config = FragmentConfig.ofBenchmark(
-                Mockito.mock(FragmentObserver.class), FragmentDecisionWeights.DEFAULT, timing);
+        FragmentConfig config = FragmentConfig.ofBenchmark(Mockito.mock(FragmentObserver.class), timing);
         BitSet cpus = new BitSet();
         cpus.set(3);
         assertSame(timing, config.clone(new CloneConfig("timing", 3, cpus)).idlePolicy());
@@ -69,7 +49,6 @@ class FragmentConfigTest {
 
         assertNull(config.cloneConfig());
         assertNotNull(config.cacheConfig());
-        assertEquals(FragmentDecisionWeights.DEFAULT, config.decisionWeights());
         assertNull(config.observer());
         assertEquals(4_096L, config.maxBatchSize());
         assertEquals(FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS, config.contentionHalfLifeNanos());
@@ -95,23 +74,21 @@ class FragmentConfigTest {
     void ofBenchmark_withValidArguments_createsBenchmarkConfig() {
         FragmentObserver observer = Mockito.mock(FragmentObserver.class);
 
-        FragmentConfig config = FragmentConfig.ofBenchmark(observer, FragmentDecisionWeights.DEFAULT);
+        FragmentConfig config = FragmentConfig.ofBenchmark(observer);
 
         assertTrue(config.benchmarkMode());
         assertSame(observer, config.observer());
-        assertEquals(FragmentDecisionWeights.DEFAULT, config.decisionWeights());
         assertEquals(4_096L, config.maxBatchSize());
         assertNull(config.cloneConfig());
     }
 
     @Test
     void ofBenchmark_withNullObserver_throwsNullPointerException() {
-        assertThrows(
-                NullPointerException.class, () -> FragmentConfig.ofBenchmark(null, FragmentDecisionWeights.DEFAULT));
+        assertThrows(NullPointerException.class, () -> FragmentConfig.ofBenchmark(null));
     }
 
     @Test
-    void ofBenchmark_withNullDecisionWeights_throwsNullPointerException() {
+    void ofBenchmark_withNullIdlePolicy_throwsNullPointerException() {
         FragmentObserver observer = Mockito.mock(FragmentObserver.class);
         assertThrows(NullPointerException.class, () -> FragmentConfig.ofBenchmark(observer, null));
     }
@@ -122,24 +99,6 @@ class FragmentConfigTest {
                 NullPointerException.class,
                 () -> new FragmentConfig(
                         null,
-                        null,
-                        FragmentDecisionWeights.DEFAULT,
-                        null,
-                        100,
-                        false,
-                        FragmentConfig.DEFAULT_CONTENTION_HALF_LIFE_NANOS,
-                        false,
-                        null,
-                        null));
-    }
-
-    @Test
-    void constructor_withNullDecisionWeights_throwsNullPointerException() {
-        assertThrows(
-                NullPointerException.class,
-                () -> new FragmentConfig(
-                        null,
-                        CacheConfig.ofDefaults(),
                         null,
                         null,
                         100,
@@ -157,7 +116,6 @@ class FragmentConfigTest {
                 () -> new FragmentConfig(
                         null,
                         CacheConfig.ofDefaults(),
-                        FragmentDecisionWeights.DEFAULT,
                         null,
                         0,
                         false,
@@ -171,7 +129,6 @@ class FragmentConfigTest {
                 () -> new FragmentConfig(
                         null,
                         CacheConfig.ofDefaults(),
-                        FragmentDecisionWeights.DEFAULT,
                         null,
                         -1,
                         false,
@@ -185,7 +142,6 @@ class FragmentConfigTest {
                 () -> new FragmentConfig(
                         null,
                         CacheConfig.ofDefaults(),
-                        FragmentDecisionWeights.DEFAULT,
                         null,
                         -100,
                         false,
@@ -199,17 +155,7 @@ class FragmentConfigTest {
     void constructor_withInvalidContentionHalfLife_throwsIllegalArgumentException() {
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new FragmentConfig(
-                        null,
-                        CacheConfig.ofDefaults(),
-                        FragmentDecisionWeights.DEFAULT,
-                        null,
-                        100,
-                        false,
-                        0L,
-                        false,
-                        null,
-                        null));
+                () -> new FragmentConfig(null, CacheConfig.ofDefaults(), null, 100, false, 0L, false, null, null));
     }
 
     @Test
@@ -219,7 +165,6 @@ class FragmentConfigTest {
                 () -> new FragmentConfig(
                         null,
                         CacheConfig.ofDefaults(),
-                        FragmentDecisionWeights.DEFAULT,
                         null,
                         100,
                         false,
@@ -243,7 +188,6 @@ class FragmentConfigTest {
         assertNotNull(cloned.cacheConfig());
         assertEquals(original.maxBatchSize(), cloned.maxBatchSize());
         assertEquals(original.contentionHalfLifeNanos(), cloned.contentionHalfLifeNanos());
-        assertEquals(original.decisionWeights(), cloned.decisionWeights());
     }
 
     @Test
@@ -261,7 +205,6 @@ class FragmentConfigTest {
         FragmentConfig config3 = new FragmentConfig(
                 new CloneConfig("shard-0", 1, bitSet),
                 CacheConfig.ofDefaults(),
-                FragmentDecisionWeights.DEFAULT,
                 null,
                 1_024,
                 false,

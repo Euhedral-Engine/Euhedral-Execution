@@ -94,7 +94,6 @@ public class TrialSweepExpander {
                 resolvedConfig.runOptions(),
                 resolvedConfig.artifacts(),
                 resolvedConfig.calibrationProfiles(),
-                resolvedConfig.decisionWeightProfiles(),
                 resolvedConfig.sweeps(),
                 resolvedConfig.searches(),
                 allTrials);

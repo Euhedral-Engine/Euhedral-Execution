@@ -7,7 +7,7 @@ import pytest
 from pareto_weight_calibration.checksum import ChecksumVerifier
 from pareto_weight_calibration.loader import DataLoader
 from pareto_weight_calibration.manifest import load_manifest
-from pareto_weight_calibration.model import JavaParetoWeights, MarginalModel
+from pareto_weight_calibration.model import LogicalWeights, MarginalModel
 from pareto_weight_calibration.types import Outcome, TrajectoryStatus
 
 
@@ -67,11 +67,8 @@ def test_vertical_slice_end_to_end():
     assert record.withdrawn_diagnostics.execution_path == "CACHE"
     assert record.withdrawn_diagnostics.acquisitions_attempted == 0
 
-    # 4. Java evaluator parity on the active feature coordinates
-    model = MarginalModel(logical_weights=JavaParetoWeights(
-        phrWeight=1.0, contentionPhrWeight=1.0, bodyPhrWeight=1.0, registeredWorkersPhrWeight=1.0,
-        activeWorkersWeight=1.0, contentionWorkersWeight=1.0, bodyWorkersWeight=1.0, registeredActiveWorkersWeight=1.0
-    ).to_logical_weights())
+    # 4. Runtime evaluator parity on the active feature coordinates
+    model = MarginalModel(logical_weights=LogicalWeights.from_array([1.0] * 8))
 
     assert model.verify_evaluator_parity(
         c=record.features.c,
@@ -81,15 +78,10 @@ def test_vertical_slice_end_to_end():
         K=record.features.K,
     )
 
-    # 5. Model save/load and Java ParetoWeights export round-trip
+    # 5. Model save/load round-trip
     tmp_model_file = experiment_dir / "vertical_slice_model.json"
     model.save(tmp_model_file)
     assert tmp_model_file.exists()
 
     loaded_model = MarginalModel.load(tmp_model_file)
     assert loaded_model.logical_weights == model.logical_weights
-
-    exported_weights = loaded_model.export_java_weights()
-    assert len(exported_weights) == 8
-    assert "phrWeight" in exported_weights
-    assert "activeWorkersWeight" in exported_weights

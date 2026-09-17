@@ -1,4 +1,4 @@
-"""Unit tests for MarginalModel, LogicalWeights, JavaParetoWeights, and evaluator parity."""
+"""Unit tests for MarginalModel, LogicalWeights, and evaluator parity."""
 
 import json
 import math
@@ -6,7 +6,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from pareto_weight_calibration.model import JavaParetoWeights, LogicalWeights, MarginalModel
+from pareto_weight_calibration.model import LogicalWeights, MarginalModel
 from pareto_weight_calibration.types import (
     ActiveStateFeatures,
     ArmPerformance,
@@ -32,40 +32,8 @@ def test_logical_weights_array_roundtrip():
     assert w == w_from_dict
 
 
-def test_java_pareto_weights_roundtrip():
-    lw = LogicalWeights(w0=0.5, w1=1.5, w2=2.5, w3=3.5, w4=4.5, w5=5.5, w6=6.5, w7=7.5)
-    jw = lw.to_java_pareto_weights()
-
-    assert jw.phrWeight == 0.5
-    assert jw.contentionPhrWeight == 1.5
-    assert jw.bodyPhrWeight == 2.5
-    assert jw.registeredWorkersPhrWeight == 3.5
-    assert jw.activeWorkersWeight == 4.5
-    assert jw.contentionWorkersWeight == 5.5
-    assert jw.bodyWorkersWeight == 6.5
-    assert jw.registeredActiveWorkersWeight == 7.5
-
-    lw_restored = jw.to_logical_weights()
-    assert lw == lw_restored
-
-    d = jw.to_dict()
-    jw_from_dict = JavaParetoWeights.from_dict(d)
-    assert jw == jw_from_dict
-
-
-def test_marginal_evaluation_and_java_parity():
-    # Set default weights matching Java ParetoWeights.DEFAULT (all 1.0)
-    jw = JavaParetoWeights(
-        phrWeight=1.0,
-        contentionPhrWeight=1.0,
-        bodyPhrWeight=1.0,
-        registeredWorkersPhrWeight=1.0,
-        activeWorkersWeight=1.0,
-        contentionWorkersWeight=1.0,
-        bodyWorkersWeight=1.0,
-        registeredActiveWorkersWeight=1.0,
-    )
-    model = MarginalModel(logical_weights=jw.to_logical_weights())
+def test_marginal_evaluation_and_runtime_parity():
+  model = MarginalModel(logical_weights=LogicalWeights.from_array([1.0] * 8))
 
     test_cases = [
         # (c, smoothedBodyCostNs, P, R, K)
@@ -115,13 +83,6 @@ def test_model_save_load_roundtrip(tmp_path: Path):
     assert loaded_model.logical_weights == model.logical_weights
     assert loaded_model.metadata["modelVersion"] == "productivity-participation-v1"
     assert loaded_model.metadata["runtimeCommit"] == "test-commit-sha"
-
-    # Export Java weights
-    java_export_file = tmp_path / "pareto_weights.json"
-    jw_dict = model.export_java_weights(java_export_file)
-    assert java_export_file.exists()
-    assert jw_dict["phrWeight"] == 1.1
-
 
 def test_model_fit_synthetic_dataset():
     # Generate synthetic separable records

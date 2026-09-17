@@ -8,11 +8,6 @@ import calibration.comparisons.schema.DifferenceCategory;
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.TrialConfig;
 import com.fasterxml.jackson.databind.node.IntNode;
-import com.fasterxml.jackson.databind.node.LongNode;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -20,21 +15,7 @@ class TrialConfigDifferTest {
 
     private static TrialConfig baseConfig() {
         CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                2,
-                10,
-                false,
-                1000L,
-                5000L,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                true,
-                true,
-                true,
-                true,
-                true,
-                true);
+                List.of(1, 2), 4, 2, 10, false, 1000L, 5000L, 1024, true, true, true, true, true, true);
         return new TrialConfig(
                 "trial_1",
                 "Trial One",
@@ -95,46 +76,6 @@ class TrialConfigDifferTest {
     }
 
     @Test
-    void testIdlePolicyChangeProducesPolicyDifference() {
-        TrialConfig base = baseConfig();
-
-        FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                new IdlePolicy(51_000L, 0L, 0L, 0L, 0L),
-                ParetoWeights.DEFAULT);
-
-        TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
-
-        List<ConfigurationDifference> diffs = TrialConfigDiffer.diff(base, cand);
-        assertEquals(1, diffs.size());
-
-        ConfigurationDifference diff = diffs.getFirst();
-        assertEquals("/calibrationConfig/decisionWeights/idleTimeNs/xsPark", diff.path());
-        assertEquals(DifferenceCategory.POLICY, diff.category());
-        assertEquals(LongNode.valueOf(50_000), diff.baselineValue());
-        assertEquals(LongNode.valueOf(51_000), diff.candidateValue());
-    }
-
-    @Test
-    void testBodyCostThresholdChangeIsPolicy() {
-        TrialConfig base = baseConfig();
-
-        FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                new BodyCostWeights(100, 140, 220, 300),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                ParetoWeights.DEFAULT);
-
-        TrialConfig cand = base.withCalibrationConfig(base.calibrationConfig().withDecisionWeights(modifiedWeights));
-
-        List<ConfigurationDifference> diffs = TrialConfigDiffer.diff(base, cand);
-        assertTrue(!diffs.isEmpty());
-        for (ConfigurationDifference diff : diffs) {
-            assertEquals(DifferenceCategory.POLICY, diff.category());
-            assertTrue(diff.path().startsWith("/calibrationConfig/decisionWeights/idleBodyCostWeights"));
-        }
-    }
-
-    @Test
     void testWorkUnitsChangeIsWorkload() {
         TrialConfig base = baseConfig();
         CalibrationBenchmarkConfig cal = base.calibrationConfig();
@@ -146,7 +87,6 @@ class TrialConfigDifferTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -176,7 +116,6 @@ class TrialConfigDifferTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -204,7 +143,6 @@ class TrialConfigDifferTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 2048, // modified rawSampleLimit from 1024 to 2048
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -232,7 +170,6 @@ class TrialConfigDifferTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 false, // observeCycleStart modified to false
                 cal.observeBatchProgress(),
@@ -350,7 +287,6 @@ class TrialConfigDifferTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 2048, // rawSampleLimit (OBSERVATION)
                 false, // observeCycleStart (OBSERVATION)
                 cal.observeBatchProgress(),

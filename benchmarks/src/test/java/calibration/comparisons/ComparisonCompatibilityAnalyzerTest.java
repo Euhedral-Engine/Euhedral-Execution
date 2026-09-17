@@ -13,10 +13,6 @@ import calibration.comparisons.schema.ThroughputResult;
 import calibration.config.CalibrationBenchmarkConfig;
 import calibration.config.TrialConfig;
 import calibration.statistics.fork.SystemForkResult;
-import io.euhedral_execution.core.config.FragmentDecisionWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.BodyCostWeights;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.IdlePolicy;
-import io.euhedral_execution.core.config.FragmentDecisionWeights.ParetoWeights;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -24,21 +20,7 @@ class ComparisonCompatibilityAnalyzerTest {
 
     private static TrialConfig baseTrialConfig() {
         CalibrationBenchmarkConfig calConfig = new CalibrationBenchmarkConfig(
-                List.of(1, 2),
-                4,
-                2,
-                10,
-                false,
-                1000L,
-                5000L,
-                FragmentDecisionWeights.DEFAULT,
-                1024,
-                true,
-                true,
-                true,
-                true,
-                true,
-                true);
+                List.of(1, 2), 4, 2, 10, false, 1000L, 5000L, 1024, true, true, true, true, true, true);
         return new TrialConfig(
                 "trial_1",
                 "Trial One",
@@ -86,28 +68,6 @@ class ComparisonCompatibilityAnalyzerTest {
     }
 
     @Test
-    void testPolicyOnlyChangeIsCompatible() {
-        TrialConfig baseConfig = baseTrialConfig();
-
-        FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                FragmentDecisionWeights.DEFAULT.idleBodyCostWeights(),
-                new IdlePolicy(2_000L, 0L, 5_000L, 5_000L, 5_000L),
-                ParetoWeights.DEFAULT);
-
-        TrialConfig candConfig =
-                baseConfig.withCalibrationConfig(baseConfig.calibrationConfig().withDecisionWeights(modifiedWeights));
-
-        CompletedRun base = createCompletedRun(baseConfig, "ops/s");
-        CompletedRun cand = createCompletedRun(candConfig, "ops/s");
-
-        ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.COMPATIBLE, compat.status());
-        assertTrue(compat.isComparable());
-        assertFalse(compat.differences().isEmpty());
-        assertTrue(compat.reasons().isEmpty());
-    }
-
-    @Test
     void testCacheParkDifferenceIsIncompatible() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
@@ -119,8 +79,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeightProfile(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -160,8 +118,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeightProfile(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -202,8 +158,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeightProfile(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -232,44 +186,6 @@ class ComparisonCompatibilityAnalyzerTest {
     }
 
     @Test
-    void testPolicyPlusIdentityChangesRemainCompatible() {
-        TrialConfig baseConfig = baseTrialConfig();
-
-        FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                new BodyCostWeights(100, 140, 220, 300),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                ParetoWeights.DEFAULT);
-
-        TrialConfig candConfig = new TrialConfig(
-                "trial_2",
-                "New Name",
-                "group_b",
-                "new desc",
-                "new hyp",
-                null,
-                List.of("tag2"),
-                null,
-                true,
-                null,
-                baseConfig.forks(),
-                baseConfig.warmups(),
-                baseConfig.iterations(),
-                baseConfig.warmupTime(),
-                baseConfig.measurementTime(),
-                baseConfig.jvmArgs(),
-                baseConfig.calibrationProfile(),
-                baseConfig.calibrationConfig().withDecisionWeights(modifiedWeights));
-
-        CompletedRun base = createCompletedRun(baseConfig, "ops/s");
-        CompletedRun cand = createCompletedRun(candConfig, "ops/s");
-
-        ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.COMPATIBLE, compat.status());
-        assertTrue(compat.isComparable());
-        assertTrue(compat.reasons().isEmpty());
-    }
-
-    @Test
     void testObservationOnlyDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
@@ -281,7 +197,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 2048, // rawSampleLimit modified
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -304,45 +219,6 @@ class ComparisonCompatibilityAnalyzerTest {
     }
 
     @Test
-    void testPolicyPlusObservationDifferenceIsPartial() {
-        TrialConfig baseConfig = baseTrialConfig();
-
-        FragmentDecisionWeights modifiedWeights = new FragmentDecisionWeights(
-                new BodyCostWeights(100, 140, 220, 300),
-                FragmentDecisionWeights.DEFAULT.idleTimeNs(),
-                ParetoWeights.DEFAULT);
-
-        CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
-        CalibrationBenchmarkConfig candCal = new CalibrationBenchmarkConfig(
-                cal.cpuSet(),
-                cal.parallelSources(),
-                cal.orderedSources(),
-                cal.workUnits(),
-                cal.randomizeWork(),
-                cal.totalRequiredExecutions(),
-                cal.invocationTimeoutMillis(),
-                modifiedWeights, // policy change
-                2048, // observation change
-                cal.observeCycleStart(),
-                cal.observeBatchProgress(),
-                cal.observeBatchComplete(),
-                cal.observeRawBodyCost(),
-                cal.observeIdleDecision(),
-                cal.observeExecDecision());
-
-        TrialConfig candConfig = baseConfig.withCalibrationConfig(candCal);
-
-        CompletedRun base = createCompletedRun(baseConfig, "ops/s");
-        CompletedRun cand = createCompletedRun(candConfig, "ops/s");
-
-        ComparisonCompatibility compat = ComparisonCompatibilityAnalyzer.analyze(base, cand);
-        assertEquals(CompatibilityStatus.PARTIAL, compat.status());
-        assertTrue(compat.isComparable());
-        assertEquals(1, compat.reasons().size());
-        assertTrue(compat.reasons().getFirst().contains("rawSampleLimit"));
-    }
-
-    @Test
     void testCpuSetDifferenceIsPartial() {
         TrialConfig baseConfig = baseTrialConfig();
         CalibrationBenchmarkConfig cal = baseConfig.calibrationConfig();
@@ -354,7 +230,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -386,7 +261,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -418,7 +292,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -450,7 +323,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 true, // randomizeWork changed from false to true
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -482,7 +354,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 50000L, // totalRequiredExecutions changed
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),
@@ -590,7 +461,6 @@ class ComparisonCompatibilityAnalyzerTest {
                 cal.randomizeWork(),
                 cal.totalRequiredExecutions(),
                 cal.invocationTimeoutMillis(),
-                cal.decisionWeights(),
                 cal.rawSampleLimit(),
                 cal.observeCycleStart(),
                 cal.observeBatchProgress(),

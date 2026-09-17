@@ -7,5 +7,9 @@ if [[ ! -x "$python" ]]; then
   echo 'Create .venv-cache-tuner and install python/pareto-weight-calibration[tournament,dev], or set CACHE_TUNER_PYTHON.' >&2
   exit 1
 fi
+if [[ -z "${CACHE_TUNER_TASK:-}" ]]; then
+  echo 'Set CACHE_TUNER_TASK to an explicit parameter-loop task file.' >&2
+  exit 1
+fi
 exec mise exec -- "$python" -m pareto_weight_calibration.training_runner \
-  --task "${CACHE_TUNER_TASK:-python/pareto-weight-calibration/tasks/cache-idle-loop.json}" "$@"
+  --task "$CACHE_TUNER_TASK" "$@"

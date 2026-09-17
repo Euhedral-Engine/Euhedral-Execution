@@ -15,8 +15,6 @@
       "cacheParkNs": 15000,
       "contentionHalfLifeNanos": 1000000,
       "cacheActuatorVersion": "cache-v1",
-      // References decision weight profile within this library
-      "decisionWeightProfile": "imported-weights",
       "rawSampleLimit": 1024,
       "observeCycleStart": false,
       "observeBatchProgress": false,
@@ -25,13 +23,6 @@
       "observeIdleDecision": false,
       "observeExecDecision": false,
       "observeContentionStaleness": false
-    }
-  },
-  // Reusable fragment decision weights profiles
-  "decisionWeightProfiles": {
-    "imported-weights": {
-      "idleBodyCostWeights": { "xs": 0, "s": 24, "m": 96, "h": 256 },
-      "idleTimeNs": { "xsPark": 15000, "sPark": 15000, "mPark": 0, "hPark": 0, "xhPark": 0 }
     }
   }
 }

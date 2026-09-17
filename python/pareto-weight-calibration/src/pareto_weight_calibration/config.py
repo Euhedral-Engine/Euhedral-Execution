@@ -62,8 +62,6 @@ def load_trial_config(config_path: Path) -> TrialConfig:
         contention_half_life_explicit="contentionHalfLifeNanos" in cal_raw,
         cache_actuator_version=str(cal_raw.get("cacheActuatorVersion", "legacy-unspecified")),
         lifecycle_mode=str(cal_raw.get("lifecycleMode", "RESET")),
-        decision_weights=cal_raw.get("decisionWeights"),
-        decision_weight_profile=cal_raw.get("decisionWeightProfile"),
     )
 
     return TrialConfig(
@@ -173,11 +171,5 @@ class CompatibilityAnalyzer:
             reasons.append(f"Mismatched iterations: A={config_a.iterations}, B={config_b.iterations}")
         if config_a.warmups != config_b.warmups:
             reasons.append(f"Mismatched warmups: A={config_a.warmups}, B={config_b.warmups}")
-
-        # 9. Decision weights (ordinary idle and body cost weights must match)
-        if cal_a.decision_weight_profile != cal_b.decision_weight_profile:
-            reasons.append(
-                f"Mismatched decisionWeightProfile: A={cal_a.decision_weight_profile}, B={cal_b.decision_weight_profile}"
-            )
 
         return (len(reasons) == 0, reasons)

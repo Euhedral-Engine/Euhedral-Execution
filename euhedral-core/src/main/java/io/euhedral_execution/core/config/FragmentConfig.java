@@ -19,7 +19,6 @@ import org.jspecify.annotations.Nullable;
 public record FragmentConfig(
         @Nullable CloneConfig cloneConfig,
         @NonNull CacheConfig cacheConfig,
-        @NonNull FragmentDecisionWeights decisionWeights,
         @Nullable FragmentObserver observer,
         long maxBatchSize,
         boolean smtEnabled,
@@ -33,7 +32,6 @@ public record FragmentConfig(
 
     public FragmentConfig {
         Objects.requireNonNull(cacheConfig);
-        Objects.requireNonNull(decisionWeights);
         if (maxBatchSize <= 0) {
             throw new IllegalArgumentException("maxBatchSize must be greater than 0. Provided: " + maxBatchSize);
         }
@@ -47,7 +45,6 @@ public record FragmentConfig(
     public FragmentConfig(
             @Nullable CloneConfig cloneConfig,
             @NonNull CacheConfig cacheConfig,
-            @NonNull FragmentDecisionWeights decisionWeights,
             @Nullable FragmentObserver observer,
             long maxBatchSize,
             boolean smtEnabled,
@@ -58,7 +55,6 @@ public record FragmentConfig(
         this(
                 cloneConfig,
                 cacheConfig,
-                decisionWeights,
                 observer,
                 maxBatchSize,
                 smtEnabled,
@@ -80,7 +76,6 @@ public record FragmentConfig(
         return new FragmentConfig(
                 null,
                 CacheConfig.ofDefaults(metricPrefix, meterRegistry),
-                FragmentDecisionWeights.DEFAULT,
                 null,
                 4_096,
                 true,
@@ -90,18 +85,13 @@ public record FragmentConfig(
                 meterRegistry);
     }
 
-    public static FragmentConfig ofBenchmark(
-            @NonNull FragmentObserver observer, @NonNull FragmentDecisionWeights decisionWeights) {
-        return ofBenchmark(observer, decisionWeights, IdlePolicy.DEFAULT);
+    public static FragmentConfig ofBenchmark(@NonNull FragmentObserver observer) {
+        return ofBenchmark(observer, IdlePolicy.DEFAULT);
     }
 
-    public static FragmentConfig ofBenchmark(
-            @NonNull FragmentObserver observer,
-            @NonNull FragmentDecisionWeights decisionWeights,
-            @NonNull IdlePolicy idlePolicy) {
+    public static FragmentConfig ofBenchmark(@NonNull FragmentObserver observer, @NonNull IdlePolicy idlePolicy) {
         Objects.requireNonNull(observer);
-        return new FragmentConfig(
-                null, CacheConfig.ofDefaults(), decisionWeights, observer, 4_096, true, idlePolicy, true, null, null);
+        return new FragmentConfig(null, CacheConfig.ofDefaults(), observer, 4_096, true, idlePolicy, true, null, null);
     }
 
     @Override
@@ -109,7 +99,6 @@ public record FragmentConfig(
         return new FragmentConfig(
                 cloneConfig,
                 this.cacheConfig.clone(cloneConfig),
-                this.decisionWeights,
                 this.observer,
                 this.maxBatchSize,
                 this.smtEnabled,

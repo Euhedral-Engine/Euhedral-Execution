@@ -3,7 +3,11 @@
 Implementation and experiment execution are separate. No production model, benchmark evidence,
 frozen participation artifact, or runtime Java source is replaced by this pipeline. The checked-in
 timing manifest contains **synthetic mechanical fixtures only**. It must be replaced with reviewed
-fork evidence before an actual timing experiment. Document 03 owns that evidence acquisition.
+fork evidence supplied by an external handoff before an actual timing experiment.
+
+Only reusable configuration templates are checked in under `tasks/`: the participation and
+synthetic timing training tasks, plus the nested benchmark harness templates. Concrete campaign,
+tuning, study, lock, anchor, and provenance configurations belong in external experiment handoffs.
 
 ## Install and inspect
 

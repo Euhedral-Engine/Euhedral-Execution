@@ -77,7 +77,6 @@ from pareto_weight_calibration.loss import (
     weighted_regularized_loss,
 )
 from pareto_weight_calibration.model import (
-    JavaParetoWeights,
     LogicalWeights,
     MarginalModel,
 )
@@ -143,7 +142,6 @@ __all__ = [
     "FoldResult",
     "ForkThroughput",
     "IdentifiabilityAuditResult",
-    "JavaParetoWeights",
     "LOFOGridResult",
     "LOFOResult",
     "LabelEvidenceBasis",
