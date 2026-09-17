@@ -1,49 +1,56 @@
 # High-scale scheduler comparison
 
-In the 8K Mandelbrot workload, **Reactor Parallel took 4.7x to 5.8x as much time per operation as
-Euhedral Core**, while **Reactor BoundedElastic took 6.5x to 7.4x as much**, across the three tested
-systems.
+In the 8K Mandelbrot workload across the three high-scale systems:
 
-These are results for one CPU-heavy, fine-grained workload, not a claim that one scheduler will have
-the same advantage everywhere. The comparison, scheduling setup, and known limitations are
-documented below.
+- **AMD EPYC 9R45 (Dual-socket NUMA, 192 cores):** Euhedral Core is **10.92x faster** than Reactor
+  Parallel (82.2 ns vs 897.3 ns) and **12.97x faster** than Reactor BoundedElastic (1,066.1 ns).
+  Unpinned Reactor scheduling incurs severe cross-socket synchronization overhead and cache
+  degradation, while Euhedral's topology-aware pinned worker shards keep execution localized.
+- **Intel Xeon 6 (Single-socket, 96 physical cores / 192 vCPUs):** Euhedral Core is **1.10x faster**
+  than Reactor Parallel (73.1 ns vs 80.6 ns) and **1.60x faster** than Reactor BoundedElastic (116.6
+  ns).
+- **AWS Graviton5 (Single-socket, 192 cores):** All three schedulers run with high efficiency within
+  **0.94x – 1.07x** of each other (45.3 – 51.5 ns/op), with Graviton5 delivering the lowest
+  execution latency and highest overall throughput.
 
-[Jump to methodology](#methodology) | [Detailed results](#detailed-results) |
-[Reproduce the benchmark](#reproducing-the-benchmark)
+These results reflect a CPU-heavy, fine-grained workload measuring scheduling, coordination, and
+execution paths.
+
+[Jump to methodology](#methodology) | [Detailed results](#detailed-results) | [Reproduce the benchmark](#reproducing-the-benchmark)
 
 ## Results at a glance
-
-Lower `ns/op` is better. The relative column divides each Reactor result by the Euhedral result on
-the same machine.
-
-| Processor     | Physical cores | Euhedral Core | Reactor Parallel | Relative | Reactor BoundedElastic | Relative |
-|---------------|---------------:|--------------:|-----------------:|---------:|-----------------------:|---------:|
-| Intel Xeon 6  |             96 |  82.838 ns/op |    401.638 ns/op |    4.85x |          600.406 ns/op |    7.25x |
-| AMD EPYC 9R45 |             96 |  86.208 ns/op |    403.559 ns/op |    4.68x |          559.905 ns/op |    6.49x |
-| AWS Graviton5 |            192 |  83.792 ns/op |    483.897 ns/op |    5.78x |          618.313 ns/op |    7.38x |
-
-Euhedral also allocated about 24 bytes per operation on each system. Reactor Parallel allocated
-81-90 bytes per operation, while Reactor BoundedElastic allocated 151-179 bytes per operation.
 
 ![Average time per operation across the three systems](../data/high_scale_mandelbrot_ns_op.png)
 
 ![Allocation rate across the three systems](../data/high_scale_mandelbrot_allocations.png)
 
+Lower `ns/op` is better.
+
+| Processor     | Instance           | Sockets | Physical Cores | Euhedral Core | Reactor Parallel | Reactor BoundedElastic |
+|:--------------|:-------------------|--------:|---------------:|--------------:|-----------------:|-----------------------:|
+| Intel Xeon 6  | AWS c8i.metal-48xl |       1 |             96 |  73.105 ns/op |     80.636 ns/op |          116.613 ns/op |
+| AMD EPYC 9R45 | AWS c8a.metal-24xl |       2 |            192 |  82.175 ns/op |    897.263 ns/op |        1,066.103 ns/op |
+| AWS Graviton5 | AWS c9g.metal-48xl |       1 |            192 |  48.132 ns/op |     51.507 ns/op |           45.339 ns/op |
+
+Euhedral Core maintained a consistent 24.2 – 25.2 bytes per operation across all systems. Reactor
+matched this on Graviton5 (24.0 – 24.5 bytes/op) and Intel (26.1 – 28.4 bytes/op), but increased to
+64.0 bytes/op on AMD EPYC.
+
 ## What the benchmark does
 
 The benchmark renders a randomized region of the Mandelbrot set at 8K resolution:
 
-- 7,680 by 4,320 pixels
-- 33,177,600 pre-allocated work items
-- four measured operations per work item, or 132,710,400 operations per invocation
-- up to 5,000 iterations per pixel
-- randomized pixel order to create an irregular CPU workload
+- 7,680 by 4,320 pixels (33,177,600 pre-allocated `MandelbrotPixel` work items)
+- 2X SSAA (four measured subpixel evaluations per pixel, yielding 132,710,400 operations per
+  invocation)
+- Up to 5,000 iterations per subpixel sample, with a bailout radius squared of 1,000,000.0
+- Randomized pixel order using a fixed seed (`HasherApi.BASE_SEED`) to eliminate spatial cache
+  locality and create highly irregular execution times
 
-All work items are created before measurement so the results focus on scheduling, routing, and
-execution overhead. Reactor's `Mono` tasks are also pre-allocated.
+All pixel work items and pipelines are constructed during trial setup so measurement focuses
+strictly on scheduling, routing, and execution overhead rather than allocation.
 
-The benchmark source is
-[
+The benchmark source is [
 `MandelbrotBenchmark.java`](./src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/MandelbrotBenchmark.java).
 
 ## Test systems
@@ -54,8 +61,9 @@ The benchmark source is
 | Operating system | Amazon Linux                  | Amazon Linux       | Amazon Linux       |
 | Processor        | Intel Xeon 6 (Granite Rapids) | AMD EPYC 9R45      | AWS Graviton5      |
 | Architecture     | x86_64                        | x86_64             | arm64              |
-| vCPUs            | 192                           | 96                 | 192                |
-| Physical cores   | 96                            | 96                 | 192                |
+| vCPUs            | 192                           | 192                | 192                |
+| Physical cores   | 96                            | 192                | 192                |
+| Sockets          | 1                             | 2                  | 1                  |
 
 The benchmark JVM used:
 
@@ -69,39 +77,71 @@ The benchmark JVM used:
 
 ## Methodology
 
-JMH runs the benchmark in average-time mode and reports nanoseconds per operation. The benchmark
-configuration uses one 10-second warmup iteration, one 40-second measurement iteration, and one
-fork. GC profiling supplies the allocation and collection figures.
+JMH runs the benchmark in average-time mode (`Mode.AverageTime`) and reports nanoseconds per
+operation (`@OperationsPerInvocation(132_710_400)`). The benchmark configuration uses one 10-second
+warmup iteration, one 40-second measurement iteration, and one fork. GC profiling supplies the
+allocation and collection figures.
 
-Euhedral receives the pre-allocated frames through a subscribed `EuhedralSubscriber`, then adds that
-source to the control plane:
+#### Euhedral Core pipeline
 
-```java
-Flux.fromArray(pixels).subscribe(subscriber);
-controlPlane.addUpstream(subscriber);
-```
-
-A direct Reactor pipeline using `parallel().runOn(...)` did not fully use the available cores when
-fed in the same shape. It also introduced more allocation and produced results above two
-microseconds per operation in preliminary runs.
-
-For the recorded comparison, each pre-allocated Reactor task is scheduled independently and the
-`flatMap` concurrency matches the JVM's available processor count:
+Euhedral partitions the 33,177,600 pre-allocated `MandelbrotPixel` items evenly across
+`sourceCount = Runtime.getRuntime().availableProcessors()` (96 or 192) independent `Flux` streams,
+one per CPU core. Each stream is subscribed to by a dedicated `EuhedralSubscriber` and added
+upstream to the `ControlPlaneLattice`:
 
 ```java
-Flux.fromArray(monos)
-        .flatMap(
-                task -> task.subscribeOn(Schedulers.parallel()),
-                Runtime.getRuntime().availableProcessors())
-        .subscribe();
+for (int i = 0; i < this.sourceCount; i++) {
+    this.sources[i].subscribe(this.subscribers[i]);
+}
+for (EuhedralSubscriber subscriber : this.subscribers) {
+    this.controlPlane.addUpstream(subscriber);
+}
+
+waitOnRender(this.counters);
 ```
 
-The BoundedElastic measurement uses the same structure with `Schedulers.boundedElastic()`.
+The `ControlPlaneLattice` coordinates work across its core-pinned shards until all 132,710,400
+operations finish.
 
-This makes all cores available to the Reactor workloads, but it does not make the execution models
-identical. Euhedral routes reusable frames through persistent pinned workers. Reactor schedules
-pre-created `Mono` tasks through its native scheduler. The results therefore compare the complete
-scheduling paths needed by this workload, not isolated queue primitives.
+#### Reactor pipelines
+
+Reactor constructs parallel pipelines during trial setup using `Flux.parallel(parallelism)` where
+`parallelism` matches available processors:
+
+```java
+int parallelism = Runtime.getRuntime().availableProcessors();
+this.parallelPipeline = Flux.fromArray(this.pixels)
+        .parallel(parallelism)
+        .runOn(Schedulers.parallel())
+        .doOnNext(frame -> execute(frame, blackhole))
+        .then();
+
+this.boundedElasticPipeline = Flux.fromArray(this.pixels)
+        .parallel(parallelism)
+        .runOn(Schedulers.boundedElastic())
+        .doOnNext(frame -> execute(frame, blackhole))
+        .then();
+```
+
+During measurement, each invocation blocks on the pipeline and verifies completion against the
+monotonic operation counter:
+
+```java
+this.parallelPipeline.block();
+MandelbrotCompletion.verify(this.counters, EXPECTED_OPERATIONS);
+```
+
+#### Execution models
+
+Both frameworks execute the identical 132,710,400 pre-allocated subpixel operations with concurrency
+matching the host processor count:
+
+- **Euhedral Core** assigns dedicated, core-pinned worker shards with private queue structures,
+  avoiding cross-core and cross-socket synchronization.
+- **Reactor** schedules tasks across its parallel rails via `Schedulers.parallel()` or
+  `Schedulers.boundedElastic()`. On single-socket systems (Intel and Graviton5), Reactor maintains
+  high cache efficiency. On multi-socket NUMA systems (AMD EPYC), thread migration and shared queue
+  synchronization between sockets cause severe latency degradation.
 
 ### Known limitations
 
@@ -114,70 +154,91 @@ scheduling paths needed by this workload, not isolated queue primitives.
 
 ## Detailed results
 
-### Time, allocation, and GC
+Lower time and bytes per operation are better. Allocation rate (MB/s) represents throughput
+multiplied by per-operation allocation.
 
-Lower time and bytes per operation are better. Allocation rate is workload throughput multiplied by
-allocation per operation, so a faster implementation can show a high MB/s rate while allocating
-fewer bytes for each operation.
+### Intel Xeon 6 (AWS c8i.metal-48xl)
 
-| Processor     | Scheduler              |   ns/op | Allocation (MB/s) | Bytes/op | GC count | GC time (ms) |
-|---------------|------------------------|--------:|------------------:|---------:|---------:|-------------:|
-| Intel Xeon 6  | Euhedral Core          |  82.838 |           270.985 |   24.049 |        1 |           24 |
-| Intel Xeon 6  | Reactor Parallel       | 401.638 |           192.680 |   81.148 |        5 |           42 |
-| Intel Xeon 6  | Reactor BoundedElastic | 600.406 |           284.855 |  179.338 |        5 |           55 |
-| AMD EPYC 9R45 | Euhedral Core          |  86.208 |           261.732 |   24.030 |        2 |           49 |
-| AMD EPYC 9R45 | Reactor Parallel       | 403.559 |           212.683 |   90.000 |       10 |           20 |
-| AMD EPYC 9R45 | Reactor BoundedElastic | 559.905 |           262.778 |  154.279 |        5 |            8 |
-| AWS Graviton5 | Euhedral Core          |  83.792 |           268.057 |   24.057 |       14 |           64 |
-| AWS Graviton5 | Reactor Parallel       | 483.897 |           177.372 |   90.000 |        5 |           31 |
-| AWS Graviton5 | Reactor BoundedElastic | 618.313 |           233.101 |  151.132 |        8 |           59 |
+- **Architecture:** x86_64 · 1 socket · 96 physical cores · 192 vCPUs
 
-### CPU time
+#### Performance, allocation, and GC
 
-Times are in seconds.
+| Scheduler              |   ns/op | Relative | Alloc (MB/s) | Bytes/op | GC count | GC time (ms) |
+|:-----------------------|--------:|---------:|-------------:|---------:|---------:|-------------:|
+| Euhedral Core          |  73.105 |    1.00x |      323.626 |   25.230 |        3 |           41 |
+| Reactor Parallel       |  80.636 |    1.10x |      308.329 |   26.071 |        1 |           13 |
+| Reactor BoundedElastic | 116.613 |    1.60x |      232.379 |   28.415 |        2 |           12 |
 
-| Processor     | Scheduler              | Wall clock |      User |  System |
-|---------------|------------------------|-----------:|----------:|--------:|
-| Intel Xeon 6  | Euhedral Core          |     57.394 | 5,579.035 | 141.775 |
-| Intel Xeon 6  | Reactor Parallel       |    104.231 | 2,920.635 | 644.114 |
-| Intel Xeon 6  | Reactor BoundedElastic |    158.336 | 3,228.513 | 380.155 |
-| AMD EPYC 9R45 | Euhedral Core          |     53.618 | 5,606.848 |  23.558 |
-| AMD EPYC 9R45 | Reactor Parallel       |     95.132 | 2,191.680 | 318.022 |
-| AMD EPYC 9R45 | Reactor BoundedElastic |    140.763 | 2,364.622 | 289.495 |
-| AWS Graviton5 | Euhedral Core          |     58.610 | 8,316.135 | 815.434 |
-| AWS Graviton5 | Reactor Parallel       |    112.914 | 2,753.357 | 291.640 |
-| AWS Graviton5 | Reactor BoundedElastic |    152.547 | 3,015.122 | 309.997 |
+#### CPU time and profiling
 
-### Hardware-counter summary
+| Scheduler              | Wall clock (s) |   User (s) | System (s) |  IPC | L1 D-cache miss | L1 I-cache miss | dTLB miss | iTLB miss | Branch miss |
+|:-----------------------|---------------:|-----------:|-----------:|-----:|----------------:|----------------:|----------:|----------:|------------:|
+| Euhedral Core          |         74.988 | 13,287.247 |  1,196.694 | 1.76 |           0.14% |             N/A |     0.01% |       N/A |   0.010506% |
+| Reactor Parallel       |         61.786 |  8,276.441 |    216.424 | 2.35 |           0.04% |             N/A |     0.00% |       N/A |   0.009193% |
+| Reactor BoundedElastic |         72.122 |  7,769.529 |    220.613 | 2.64 |           0.04% |             N/A |     0.00% |       N/A |   0.008302% |
 
-`N/A` indicates that the host did not expose the event.
+---
 
-| Processor     | Scheduler              |  IPC | L1 D-cache miss | L1 I-cache miss | dTLB miss | iTLB miss | Branch miss |
-|---------------|------------------------|-----:|----------------:|----------------:|----------:|----------:|------------:|
-| Intel Xeon 6  | Euhedral Core          | 2.93 |             N/A |             N/A |       N/A |       N/A |         N/A |
-| Intel Xeon 6  | Reactor Parallel       | 2.13 |             N/A |             N/A |       N/A |       N/A |         N/A |
-| Intel Xeon 6  | Reactor BoundedElastic | 2.25 |             N/A |             N/A |       N/A |       N/A |         N/A |
-| AMD EPYC 9R45 | Euhedral Core          | 2.89 |           0.05% |           6.87% |    57.08% |     3.56% |   0.000101% |
-| AMD EPYC 9R45 | Reactor Parallel       | 2.44 |           0.41% |          12.95% |    19.72% |     1.16% |   0.000567% |
-| AMD EPYC 9R45 | Reactor BoundedElastic | 2.33 |           0.48% |           7.70% |    11.67% |     0.04% |   0.000588% |
-| AWS Graviton5 | Euhedral Core          | 2.43 |           0.75% |           0.18% |     0.47% |     0.02% |   0.000304% |
-| AWS Graviton5 | Reactor Parallel       | 2.68 |           0.42% |           0.38% |     0.26% |     0.05% |   0.000553% |
-| AWS Graviton5 | Reactor BoundedElastic | 2.44 |           0.42% |           0.56% |     0.29% |     0.07% |   0.000323% |
+### AMD EPYC 9R45 (AWS c8a.metal-24xl)
+
+- **Architecture:** x86_64 · 2 sockets · 192 physical cores · 192 vCPUs
+
+#### Performance, allocation, and GC
+
+| Scheduler              |     ns/op | Relative | Alloc (MB/s) | Bytes/op | GC count | GC time (ms) |
+|:-----------------------|----------:|---------:|-------------:|---------:|---------:|-------------:|
+| Euhedral Core          |    82.175 |    1.00x |      287.687 |   25.234 |        2 |           26 |
+| Reactor Parallel       |   897.263 |   10.92x |       68.025 |   64.002 |        1 |            9 |
+| Reactor BoundedElastic | 1,066.103 |   12.97x |       57.257 |   64.007 |        1 |            8 |
+
+#### CPU time and profiling
+
+| Scheduler              | Wall clock (s) |   User (s) | System (s) |  IPC | L1 D-cache miss | L1 I-cache miss | dTLB miss | iTLB miss | Branch miss |
+|:-----------------------|---------------:|-----------:|-----------:|-----:|----------------:|----------------:|----------:|----------:|------------:|
+| Euhedral Core          |         69.010 | 10,822.828 |  1,733.885 | 1.50 |           0.32% |          10.54% |    24.57% |     2.70% |   0.027304% |
+| Reactor Parallel       |        236.524 |  2,228.218 |  1,849.992 | 2.58 |           0.37% |          11.05% |    10.06% |     9.18% |   0.032825% |
+| Reactor BoundedElastic |        251.580 |  2,231.230 |  1,843.499 | 2.73 |           0.37% |          14.93% |    10.55% |     2.59% |   0.034119% |
+
+---
+
+### AWS Graviton5 (AWS c9g.metal-48xl)
+
+- **Architecture:** arm64 · 1 socket · 192 physical cores · 192 vCPUs
+
+#### Performance, allocation, and GC
+
+| Scheduler              |  ns/op | Relative | Alloc (MB/s) | Bytes/op | GC count | GC time (ms) |
+|:-----------------------|-------:|---------:|-------------:|---------:|---------:|-------------:|
+| Euhedral Core          | 48.132 |    1.00x |      480.106 |   24.254 |        4 |           19 |
+| Reactor Parallel       | 51.507 |    1.07x |      444.418 |   24.003 |        4 |           32 |
+| Reactor BoundedElastic | 45.339 |    0.94x |      514.478 |   24.459 |        4 |           12 |
+
+#### CPU time and profiling
+
+| Scheduler              | Wall clock (s) |   User (s) | System (s) |  IPC | L1 D-cache miss | L1 I-cache miss | dTLB miss | iTLB miss | Branch miss |
+|:-----------------------|---------------:|-----------:|-----------:|-----:|----------------:|----------------:|----------:|----------:|------------:|
+| Euhedral Core          |         57.224 | 10,857.675 |    295.376 | 2.93 |           0.05% |           0.00% |     0.03% |     0.00% |   0.010169% |
+| Reactor Parallel       |         53.359 |  9,285.544 |     38.338 | 3.22 |           0.02% |           0.00% |     0.01% |     0.00% |   0.008550% |
+| Reactor BoundedElastic |         53.715 | 10,308.269 |     43.746 | 3.06 |           0.01% |           0.00% |     0.01% |     0.00% |   0.008106% |
+
+---
+
+### Raw hardware counters
 
 <details>
-<summary>Raw hardware counters</summary>
+<summary>View raw hardware counters across all systems</summary>
 
-| Processor     | Scheduler              |             Cycles |       Instructions |   Cache misses |       Branch loads | Branch misses |
-|---------------|------------------------|-------------------:|-------------------:|---------------:|-------------------:|--------------:|
-| Intel Xeon 6  | Euhedral Core          | 20,625,266,011,737 | 60,353,132,304,660 |  4,148,144,539 |                N/A |   823,916,196 |
-| Intel Xeon 6  | Reactor Parallel       | 11,326,830,843,340 | 24,128,366,443,003 | 30,766,280,575 |                N/A | 6,140,131,887 |
-| Intel Xeon 6  | Reactor BoundedElastic | 11,087,824,431,848 | 24,945,324,094,678 | 13,451,026,332 |                N/A | 1,847,667,259 |
-| AMD EPYC 9R45 | Euhedral Core          | 18,829,091,755,720 | 54,343,556,258,338 |  2,600,888,370 |  9,984,062,395,403 | 1,012,646,708 |
-| AMD EPYC 9R45 | Reactor Parallel       |  9,484,597,705,145 | 23,109,727,897,133 |  7,753,919,138 |  4,257,709,312,958 | 2,425,579,777 |
-| AMD EPYC 9R45 | Reactor BoundedElastic | 10,302,281,428,853 | 23,956,975,516,816 |  8,230,497,977 |  4,408,035,293,741 | 2,590,251,618 |
-| AWS Graviton5 | Euhedral Core          | 27,429,847,872,535 | 66,649,183,214,364 | 81,970,475,585 | 12,648,339,885,278 | 3,840,342,402 |
-| AWS Graviton5 | Reactor Parallel       |  8,518,881,468,865 | 22,840,422,013,665 | 13,402,537,594 |  4,282,035,677,859 | 2,369,065,003 |
-| AWS Graviton5 | Reactor BoundedElastic |  9,669,934,328,418 | 23,571,013,534,443 | 14,458,504,329 |  4,433,174,053,585 | 1,430,985,887 |
+| Processor     | Scheduler              |             Cycles |        Instructions |   Cache misses |       Branch loads | Branch misses |
+|:--------------|:-----------------------|-------------------:|--------------------:|---------------:|-------------------:|--------------:|
+| Intel Xeon 6  | Euhedral Core          | 48,133,967,955,213 |  84,927,335,988,322 | 16,260,895,701 | 15,284,935,069,349 | 1,605,883,006 |
+| Intel Xeon 6  | Reactor Parallel       | 26,406,857,367,000 |  62,141,649,319,708 |  5,120,097,377 | 11,401,867,160,225 | 1,048,138,834 |
+| Intel Xeon 6  | Reactor BoundedElastic | 25,891,195,697,924 |  68,341,823,038,428 |  5,338,689,561 | 11,831,979,143,531 |   982,263,823 |
+| AMD EPYC 9R45 | Euhedral Core          | 41,590,452,118,571 |  62,256,596,693,633 | 20,167,262,424 | 11,019,573,537,581 | 3,008,767,975 |
+| AMD EPYC 9R45 | Reactor Parallel       |  8,862,488,297,968 |  22,895,118,648,542 |  3,235,380,322 |  4,228,909,143,961 | 1,388,122,070 |
+| AMD EPYC 9R45 | Reactor BoundedElastic |  8,902,443,560,497 |  24,326,003,400,325 |  3,242,371,680 |  4,233,896,651,569 | 1,444,562,537 |
+| AWS Graviton5 | Euhedral Core          | 34,710,581,589,533 | 101,569,077,357,680 |  6,054,639,234 | 19,495,383,907,321 | 1,982,442,395 |
+| AWS Graviton5 | Reactor Parallel       | 29,314,957,885,380 |  94,477,495,609,726 |  2,348,678,771 | 16,693,651,630,229 | 1,427,352,342 |
+| AWS Graviton5 | Reactor BoundedElastic | 32,797,099,852,975 | 100,520,568,212,065 |  1,681,392,658 | 18,880,118,433,728 | 1,530,363,103 |
 
 </details>
 

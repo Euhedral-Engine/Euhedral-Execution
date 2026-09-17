@@ -1,4 +1,4 @@
-# Benchmarks in Amazon ECS using Graviton4
+# Benchmarks in Amazon ECS using Graviton5
 
 | Config           | Value           |
 |:-----------------|:----------------|
@@ -29,7 +29,7 @@ JMH was used for all benchmarking.
 <!-- TOC -->
 
 * [Mandelbrot](#mandelbrot)
-    * [Disclaimer](#disclaimer)
+  * [Pipeline Architecture](#pipeline-architecture)
     * [Mandelbrot (1-by-1)](#mandelbrot-1-by-1)
         * [Results](#results)
             * [Perf Counter Comparison](#perf-counter-comparison)
@@ -40,9 +40,8 @@ JMH was used for all benchmarking.
             * [Perf Counter Comparison](#perf-counter-comparison-1)
             * [Raw Hardware Counters](#raw-hardware-counters-1)
             * [CPU Time](#cpu-time-1)
-* [Throughput](#throughput)
+* [High-Contention Throughput](#high-contention-throughput)
     * [Results](#results-2)
-    * [Latency Percentiles (ns/op)](#latency-percentiles-nsop)
     * [Allocations](#allocations)
 * [End-to-End Latency](#end-to-end-latency)
     * [Results](#results-3)
@@ -64,63 +63,132 @@ Render an 8K [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set)
 
 Using:
 
-- 2X SSAA
-- An iteration cap of 5,000 per pixel
-- Randomized pixel ordering
+- 2X SSAA (4 subpixel samples per pixel)
+- An iteration cap of 5,000 per subpixel
+- Randomized pixel ordering using a fixed seed (`HasherApi.BASE_SEED`)
+- Bailout radius squared of 1,000,000.0
 
-Total operations: 132,710,400
+Total operations: 132,710,400 (7,680 x 4,320 x 4 SSAA points)
 
 ---
 
-### Disclaimer
+### Pipeline Architecture
 
-Feeding the Reactor schedulers the exact same way as Euhedral does not make them fully utilize the
-available cores automatically.
+Work items are pre-allocated during trial setup to focus measurement strictly on scheduling,
+coordination, and execution.
 
-Ideally, they would be fed like this:
+#### 1-by-1 Mandelbrot (`MandelbrotBenchmark`)
 
-```java
-Flux.fromArray(this.pixels)
-    .parallel()
-    .runOn(Schedulers.parallel())
-    .subscribe(this.subscriber);
+For the unbatched workload, 33,177,600 `MandelbrotPixel` frames (each computing 4 SSAA points,
+yielding 132,710,400 total operations) are pre-allocated and globally shuffled.
 
-Flux.fromArray(this.pixels)
-    .parallel()
-    .runOn(Schedulers.boundedElastic())
-    .subscribe(this.subscriber);
+- **Reactor (`ReactorMandelbrot`)**:
+  Builds pre-constructed parallel pipelines in trial setup using `parallel(parallelism)` where
+  `parallelism` matches available processors (32 on this instance):
 
-// Euhedral Core
-Flux.fromArray(this.pixels).subscribe(this.subscriber);
-this.controlPlane.ingest(this.subscriber);
-```
+  ```java
+  int parallelism = Runtime.getRuntime().availableProcessors();
+  this.parallelPipeline = Flux.fromArray(this.pixels)
+          .parallel(parallelism)
+          .runOn(Schedulers.parallel())
+          .doOnNext(frame -> execute(frame, blackhole))
+          .then();
 
-Using `.parallel()` lead to higher allocations, significantly lower throughput, and latencies
-exceeding 2 microseconds per operation.
+  this.boundedElasticPipeline = Flux.fromArray(this.pixels)
+          .parallel(parallelism)
+          .runOn(Schedulers.boundedElastic())
+          .doOnNext(frame -> execute(frame, blackhole))
+          .then();
+  ```
 
-To have a fairer comparison, Reactor needs to be forced into using all cores with flatMap and their
-native tasking constructs (Mono). To avoid extra allocations for Reactor, the Mono objects were also
-pre-allocated.
+  Each benchmark invocation calls `.block()` on the pipeline and verifies completion against the
+  operation counter:
 
-How Reactor was fed the tasks:
+  ```java
+  this.parallelPipeline.block();
+  MandelbrotCompletion.verify(this.counters, EXPECTED_OPERATIONS);
+  ```
 
-```java
-Flux.fromArray(this.monos)
-    .flatMap(m ->m.subscribeOn(Schedulers.parallel()), Runtime.getRuntime().availableProcessors())
-    .subscribe(this.subscriber);
-```
+- **Euhedral Core (`EuhedralMandelbrot`)**:
+  Partitions the shuffled pixel canvas evenly across `sourceCount = availableProcessors()` (32)
+  independent `Flux` sources, one per CPU core. Each source is subscribed to with a dedicated
+  `EuhedralSubscriber` and added upstream to the `ControlPlaneLattice`:
+
+  ```java
+  for (int i = 0; i < this.sourceCount; i++) {
+      this.sources[i].subscribe(this.subscribers[i]);
+  }
+  for (EuhedralSubscriber subscriber : this.subscribers) {
+      this.controlPlane.addUpstream(subscriber);
+  }
+
+  waitOnRender(this.counters);
+  ```
+
+#### Batched Mandelbrot (`BatchedMandelbrotBenchmark`)
+
+For the batched workload, the 33,177,600 randomized pixels are bundled into 32,400 `BenchArrayFrame`
+containers of 1,024 pixels each:
+
+- **Reactor Parallel**:
+  Fans out the 32,400 frames across 32 rails using
+  `parallel(parallelism).runOn(Schedulers.parallel())`:
+
+  ```java
+  this.parallelFluxPipeline = Flux.fromArray(this.frames)
+          .parallel(parallelism)
+          .runOn(Schedulers.parallel())
+          .doOnNext(frame -> execute(frame, blackhole))
+          .then();
+  ```
+
+- **Reactor BoundedElastic**:
+  Wraps each batch into a `Mono.fromRunnable(...).subscribeOn(Schedulers.boundedElastic())` and
+  schedules
+  them concurrently via `Flux.flatMap`:
+
+  ```java
+  Flux.fromArray(tasks)
+          .flatMap(Function.identity(), Runtime.getRuntime().availableProcessors())
+          .then();
+  ```
+
+- **Euhedral Core**:
+  Subscribes a single `EuhedralSubscriber` to the 32,400 batched frames and registers it upstream
+  with the
+  control plane lattice, which distributes the batches across worker shards:
+
+  ```java
+  Flux.fromArray(this.frames).subscribe(subscriber);
+  this.controlPlane.addUpstream(this.subscriber);
+  waitOnRender(this.counters);
+  ```
 
 ---
 
 ## Mandelbrot (1-by-1)
 
-Pixels are ingested one at a time. This is to simulate a singular heavy stream of irregular work.
+Source: [
+`MandelbrotBenchmark.java`](./src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/MandelbrotBenchmark.java)
+(selector: `mandelbrot`)
 
-This benchmark intentionally destroys locality and creates highly irregular memory access and
-execution behavior. It also causes massive contention because 1 source is being accessed by 32
-cores.
+Pixels are ingested one at a time as individual `MandelbrotPixel` frames. This benchmark tests
+fine-grained
+scheduling overhead and execution behavior when handling a high volume of small, irregular tasks.
+The
+pixel order is pseudo-randomly shuffled using `HasherApi.BASE_SEED` to eliminate spatial locality
+and
+induce chaotic branch and iteration patterns.
 
-**Total tasks: 132,710,400**
+- For Euhedral Core, the 33,177,600 pixels are partitioned across 32 upstream `Flux` sources (one
+  per core),
+  each fed via a dedicated `EuhedralSubscriber` into the control plane lattice shards.
+- For Reactor, the complete pixel array is parallelized across 32 rails using
+  `Flux.parallel().runOn(...)`.
+
+- **Work items:** 33,177,600 frames
+- **Operations per work item:** 4 (2X SSAA subpixels)
+- **Total operations per invocation:** 132,710,400
 
 ---
 
@@ -131,9 +199,9 @@ cores.
 
 | Scheduler              |   ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
 |:-----------------------|--------:|-------------:|---------:|----------:|--------:|
-| Euhedral Core          | 283.812 |       77.656 |   24.035 |         5 |      19 |
-| Reactor Parallel       | 664.955 |      124.799 |   87.017 |         6 |      14 |
-| Reactor BoundedElastic | 868.591 |      194.548 |  177.191 |         9 |      18 |
+| Euhedral Core          | 278.291 |       81.950 |   24.209 |         4 |      10 |
+| Reactor Parallel       | 275.052 |       83.217 |   24.001 |         4 |      12 |
+| Reactor BoundedElastic | 274.233 |       83.466 |   24.001 |         4 |      13 |
 
 ---
 
@@ -141,19 +209,19 @@ cores.
 
 | Scheduler              | IPC  | L1 D-Cache Miss | L1 I-Cache Miss | dTLB Miss | iTLB Miss % | Branch Miss % |
 |------------------------|------|----------------:|----------------:|----------:|------------:|--------------:|
-| Euhedral Core          | 2.92 |           0.05% |           0.02% |     0.03% |       0.00% |     0.000102% |
-| Reactor Parallel       | 2.82 |           0.47% |           0.52% |     0.24% |       0.06% |     0.000291% |
-| Reactor BoundedElastic | 2.79 |           0.63% |           0.72% |     0.33% |       0.10% |     0.000436% |
+| Euhedral Core          | 2.96 |           0.09% |           0.02% |     0.06% |       0.00% |     0.012654% |
+| Reactor Parallel       | 3.12 |           0.02% |           0.00% |     0.01% |       0.00% |     0.008132% |
+| Reactor BoundedElastic | 3.06 |           0.02% |           0.00% |     0.01% |       0.00% |     0.008270% |
 
 ---
 
 #### Raw Hardware Counters
 
-| Scheduler              |             Cycles |       Instructions |   Cache Misses |      Branch Loads | Branch Misses |
-|------------------------|-------------------:|-------------------:|---------------:|------------------:|--------------:|
-| Euhedral Core          | 11,130,922,893,025 | 32,479,411,801,407 |  2,225,993,935 | 6,236,768,652,083 |   633,301,423 |
-| Reactor Parallel       |  8,011,251,233,288 | 22,614,170,852,422 | 14,993,849,584 | 4,407,051,354,077 | 1,283,987,696 |
-| Reactor BoundedElastic |  7,959,340,583,294 | 22,176,155,589,759 | 21,270,349,800 | 4,556,484,617,144 | 1,987,694,382 |
+| Scheduler              |             Cycles |       Instructions |  Cache Misses |      Branch Loads | Branch Misses |
+|------------------------|-------------------:|-------------------:|--------------:|------------------:|--------------:|
+| Euhedral Core          | 11,490,391,032,597 | 33,959,052,728,843 | 3,946,345,627 | 6,529,102,819,591 |   826,186,868 |
+| Reactor Parallel       | 11,111,260,138,690 | 34,642,328,112,461 |   971,602,309 | 6,388,791,265,005 |   519,523,951 |
+| Reactor BoundedElastic | 11,104,417,504,910 | 34,020,221,711,784 | 1,009,529,444 | 6,403,638,286,663 |   529,564,867 |
 
 ---
 
@@ -161,24 +229,37 @@ cores.
 
 | Runtime                | Wall Clock Runtime | User Seconds | System Time |
 |------------------------|-------------------:|-------------:|------------:|
-| Euhedral Core          |            110.690 |         3630 |          75 |
-| Reactor Parallel       |            168.379 |         2726 |        1423 |
-| Reactor BoundedElastic |            219.246 |         2860 |        2609 |
+| Euhedral Core          |            129.628 |         3580 |         437 |
+| Reactor Parallel       |            107.502 |         3520 |           3 |
+| Reactor BoundedElastic |            107.431 |         3509 |           3 |
 
 ---
 
 ## Batched Mandelbrot
 
-Pixels are ingested in sub-arrays of 1024. This significantly reduces the number of work items while
-increasing the density of them. This is to test execution efficiency and the ability to fan work
-out. Because the pixel order is randomized, the chunks of 1024 have relatively uniform execution
-time.
+Source: [
+`BatchedMandelbrotBenchmark.java`](./src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/BatchedMandelbrotBenchmark.java)
+(selector: `batched-mandelbrot`)
 
-**Work Items: 32,400**
+Pixels are ingested in batches of 1,024 using `BenchArrayFrame` containers. Grouping pixels into
+sub-arrays reduces the total frame count while increasing the work density per dispatched item,
+measuring execution efficiency and batch fan-out capability. Because pixels are randomized before
+batching,
+each chunk of 1,024 pixels exhibits relatively uniform execution times.
 
-**Pixels: 33,177,600**
+- For Euhedral Core, a single upstream `Flux` stream containing the 32,400 batch frames is
+  subscribed to by
+  a `EuhedralSubscriber` and ingested by `ControlPlaneLattice`, which distributes the frames across
+  its shards.
+- For Reactor Parallel, the frames are dispatched using
+  `Flux.fromArray(frames).parallel().runOn(Schedulers.parallel())`.
+- For Reactor BoundedElastic, each frame is wrapped in a `Mono` scheduled on
+  `Schedulers.boundedElastic()` and
+  concurrency-limited via `flatMap`.
 
-**Total operations: 132,710,400**
+- **Work items:** 32,400 batch frames (1,024 pixels each)
+- **Total pixels:** 33,177,600
+- **Total operations per invocation:** 132,710,400
 
 ---
 
@@ -187,11 +268,11 @@ time.
 ![](../data/ec2_batched_mandelbrot_ns_op.png)
 ![](../data/ec2_batched_mandelbrot_allocations.png)
 
-| Scheduler              |    ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
-|:-----------------------|---------:|-------------:|---------:|----------:|--------:|
-| Euhedral Core          |  333.278 |       68.595 |   24.021 |         1 |       4 |
-| Reactor Parallel       | 2260.563 |        5.308 |   12.582 |         4 |      18 |
-| Reactor BoundedElastic | 2260.563 |        5.334 |   12.644 |         3 |       7 |
+| Scheduler              |   ns/op | Alloc mb/sec | bytes/op | GC Counts | GC Time |
+|:-----------------------|--------:|-------------:|---------:|----------:|--------:|
+| Euhedral Core          | 275.753 |       83.666 |   24.193 |         4 |       5 |
+| Reactor Parallel       | 281.244 |       81.383 |   24.001 |         4 |       5 |
+| Reactor BoundedElastic | 277.520 |       82.984 |   24.148 |         3 |       9 |
 
 ---
 
@@ -199,19 +280,19 @@ time.
 
 | Scheduler              | IPC  | L1 D-Cache Miss | L1 I-Cache Miss | dTLB Miss | iTLB Miss % | Branch Miss % |
 |------------------------|------|----------------:|----------------:|----------:|------------:|--------------:|
-| Euhedral Core          | 2.91 |           0.05% |           0.10% |     0.03% |       0.01% |     0.000115% |
-| Reactor Parallel       | 2.29 |           0.03% |           0.00% |     0.01% |       0.00% |     0.000296% |
-| Reactor BoundedElastic | 2.30 |           0.03% |           0.01% |     0.01% |       0.00% |     0.000299% |
+| Euhedral Core          | 2.98 |           0.03% |           0.00% |     0.02% |       0.00% |     0.009055% |
+| Reactor Parallel       | 2.99 |           0.02% |           0.00% |     0.01% |       0.00% |     0.008219% |
+| Reactor BoundedElastic | 2.99 |           0.02% |           0.00% |     0.01% |       0.00% |     0.008892% |
 
 ---
 
 #### Raw Hardware Counters
 
-| Scheduler              |            Cycles |       Instructions |  Cache Misses |      Branch Loads | Branch Misses |
-|------------------------|------------------:|-------------------:|--------------:|------------------:|--------------:|
-| Euhedral Core          | 7,107,328,150,610 | 20,710,163,173,819 | 1,458,884,193 | 3,970,345,393,377 |   457,737,387 |
-| Reactor Parallel       | 4,877,537,924,722 | 11,189,795,111,439 |   622,401,498 | 2,030,715,134,267 |   600,430,908 |
-| Reactor BoundedElastic | 4,889,719,144,445 | 11,243,845,827,464 |   596,484,125 | 2,034,718,702,391 |   607,760,308 |
+| Scheduler              |             Cycles |       Instructions |  Cache Misses |      Branch Loads | Branch Misses |
+|------------------------|-------------------:|-------------------:|--------------:|------------------:|--------------:|
+| Euhedral Core          | 11,183,710,810,951 | 33,369,463,581,220 | 1,330,882,727 | 6,410,646,955,568 |   580,494,811 |
+| Reactor Parallel       | 11,094,601,800,985 | 33,133,501,306,257 |   959,962,406 | 6,363,130,410,595 |   522,989,971 |
+| Reactor BoundedElastic | 11,124,109,477,405 | 33,245,012,969,681 | 1,002,857,115 | 6,382,424,563,911 |   567,498,368 |
 
 ---
 
@@ -219,15 +300,37 @@ time.
 
 | Runtime                | Wall Clock Runtime | User Seconds | System Time |
 |------------------------|-------------------:|-------------:|------------:|
-| Euhedral Core          |                 82 |         2425 |         266 |
-| Reactor Parallel       |                593 |         1507 |          21 |
-| Reactor BoundedElastic |                593 |         1506 |          23 |
+| Euhedral Core          |            108.458 |         3524 |          11 |
+| Reactor Parallel       |            109.614 |         3512 |           3 |
+| Reactor BoundedElastic |            108.892 |         3510 |           6 |
 
 ---
 
-# Throughput
+# High-Contention Throughput
 
-32 million pre-allocated no-op frames per invocation utilizing all cores.
+Source: [
+`HighContentionThroughput.java`](./src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/HighContentionThroughput.java)
+(selector: `core-hc-throughput`)
+
+Measures sustained peak ingest and execution throughput under heavy multi-source contention using
+pre-allocated
+`NoOpFrame` objects:
+
+- **Workload:** 32,000,000 tasks (`TASKS`) per JMH invocation executed via `NoOpExecutor`.
+- **Contention topology:** Work is continuously pushed through
+  `SOURCES = Math.max(1, SystemInfo.getCoreCount() - 1)`
+  (31 concurrent upstream sinks on a 32-core instance) independent `RepeatingSink` sources, each
+  repeatedly supplying
+  batches of 2,048 pre-allocated `NoOpFrame`s.
+- **Harness core isolation:** To prevent JMH harness measurement loop interference,
+  `isolateHarnessCore()` pins the
+  benchmark harness thread to an isolated core (the highest physical core on homogeneous
+  architectures like Graviton).
+  The remaining 31 physical cores (`workerCpuSet`) are dedicated exclusively to the
+  `ControlPlaneLattice` worker shards.
+- **Measurement mode:** JMH `Mode.Throughput` recording operations per nanosecond and operations per
+  second to complete
+  each 32,000,000 task target.
 
 ---
 
@@ -235,17 +338,7 @@ time.
 
 | Scheduler     | ops/ns |     ops/sec | Avg ns/op |
 |---------------|-------:|------------:|----------:|
-| Euhedral Core |  0.140 | 140,000,000 |     7.009 |
-
----
-
-#### Latency Percentiles (ns/op)
-
-These are the average amortized latencies.
-
-| Scheduler     | p0 | p50 | p90 | p95 |  p99 | p999 | p9999 | p100 |
-|---------------|---:|----:|----:|----:|-----:|-----:|------:|-----:|
-| Euhedral Core |  7 |   7 |   7 |   7 | 7.89 |    8 |     8 |    8 |
+| Euhedral Core |  0.720 | 720,000,000 |     1.389 |
 
 ---
 
@@ -253,14 +346,30 @@ These are the average amortized latencies.
 
 | Scheduler     | Alloc mb/sec | bytes/op | GC Count | GC Time ms |
 |---------------|-------------:|---------:|---------:|-----------:|
-| Euhedral Core |        0.197 |    0.001 |        0 |          0 |
+| Euhedral Core |        0.677 |    0.001 |        0 |          0 |
 
 ---
 
 # End-to-End Latency
 
-Each invocation executes **100K** pre-allocated no-op frames. This tests end-to-end latency using
-only one core. Includes routing, scheduling, queue residency, and execution.
+Source: [
+`EndToEndLatencyBenchmark.java`](./src/main/java/io/euhedral_execution/benchmarks/core_benchmarks/EndToEndLatencyBenchmark.java)
+(selector: `core-latency`)
+
+Measures the end-to-end sample time latency distribution for frames passing through the complete
+Euhedral Core
+pipeline: ingestion, routing, scheduling, queue residency, shard dispatch, and execution via
+`NoOpExecutor`.
+
+- **Workload:** 100,000 (`BATCH_SIZE`) pre-allocated `NoOpFrame` objects per invocation.
+- **Topology:** A single upstream `RepeatingSink` feeds frames to the `ControlPlaneLattice`. The
+  lattice is
+  configured across **two physical cores** (`cores.nextSetBit(1)` and its adjacent core from
+  `SystemInfo.getPCoreSet()`),
+  measuring inter-core shard dispatch and coordination without whole-socket interference.
+- **Measurement mode:** JMH `Mode.SampleTime` measuring the sampled latency distribution (average
+  and percentiles)
+  per operation.
 
 ---
 
@@ -268,15 +377,15 @@ only one core. Includes routing, scheduling, queue residency, and execution.
 
 | Scheduler     | Avg ns/op |
 |---------------|----------:|
-| Euhedral Core |   105.774 |
+| Euhedral Core |    41.622 |
 
 ---
 
 #### Percentiles (ns/op)
 
-| Scheduler     | p0 | p50 | p90 | p95 | p99 | p999 | p9999 | p100 |
-|---------------|---:|----:|----:|----:|----:|-----:|------:|-----:|
-| Euhedral Core | 67 | 106 | 133 | 134 | 137 |  137 |   145 |  145 |
+| Scheduler     | p0 | p50 | p90 | p95 | p99 | p999 |   p9999 | p100 |
+|---------------|---:|----:|----:|----:|----:|-----:|--------:|-----:|
+| Euhedral Core | 33 |  40 |  42 |  63 |  81 |   88 | 119.752 |  216 |
 
 ---
 
@@ -284,4 +393,4 @@ only one core. Includes routing, scheduling, queue residency, and execution.
 
 | Scheduler     | Alloc mb/sec | bytes/op | GC Count | GC Time ms |
 |---------------|-------------:|---------:|---------:|-----------:|
-| Euhedral Core |        0.041 |    0.005 |        0 |          0 |
+| Euhedral Core |        0.526 |    0.023 |        0 |          0 |
