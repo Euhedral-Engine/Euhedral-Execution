@@ -29,7 +29,6 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.Consumer;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
@@ -81,7 +80,6 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final AtomicLong resetCleared = new AtomicLong();
     private final PinnedThreadExecutor mainExecutor;
     private final CycleState state;
-    private final Consumer<AbstractFrame> executionConsumer;
 
     @Getter
     private ControlPlaneFragment smtBuddy = null;
@@ -123,7 +121,6 @@ public final class ControlPlaneFragment extends WorkRequester {
         super(config.cacheConfig(), cpu, config.smtEnabled());
         this.config = config;
         this.cpu = cpu;
-        this.executionConsumer = this::accept;
 
         if (config.cloneConfig() == null) {
             this.socket = -1;
@@ -186,12 +183,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     protected void accept(AbstractFrame frame) {
-        this.metrics.addInProgress(1);
-        try {
-            this.outputStream.accept(frame);
-        } finally {
-            this.metrics.addInProgress(-1);
-        }
+        this.outputStream.accept(frame);
     }
 
     @Override
@@ -339,7 +331,7 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         if (processed <= 0L) {
             long start = System.nanoTime();
-            long count = super.workSteal(this.executionConsumer, limit, this.state.neighborCursor++);
+            long count = stealWork(limit);
             long end = System.nanoTime();
             if (count > 0L) {
                 executionFrames += count;
@@ -378,11 +370,30 @@ public final class ControlPlaneFragment extends WorkRequester {
     }
 
     private long drainLocalCache(long limit) {
-        return super.drain(this.executionConsumer, limit);
+        this.metrics.executionStarted();
+        try {
+            return super.drain(this.outputStream, limit);
+        } finally {
+            this.metrics.executionFinished();
+        }
     }
 
     private long pullAvailableUpstream(FlowThread.FlowContext context, long limit) {
-        return super.upstreamPull(context.upstream, this.executionConsumer, limit);
+        this.metrics.executionStarted();
+        try {
+            return super.upstreamPull(context.upstream, this.outputStream, limit);
+        } finally {
+            this.metrics.executionFinished();
+        }
+    }
+
+    private long stealWork(long limit) {
+        this.metrics.executionStarted();
+        try {
+            return super.workSteal(this.outputStream, limit, this.state.neighborCursor++);
+        } finally {
+            this.metrics.executionFinished();
+        }
     }
 
     /// Selects fixed or adaptive contention aging without changing source-service ownership.

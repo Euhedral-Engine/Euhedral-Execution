@@ -58,7 +58,7 @@ public final class ExecutionMetrics implements AutoCloseable {
             this.meters.add(this.throughput);
 
             this.meters.add(Gauge.builder(metricName(prefix, MetricsAggregator.IN_PROGRESS_SUFFIX), this::getInProgress)
-                    .description("Number of frames being executed")
+                    .description("Whether this fragment is executing synchronous work")
                     .tag(CORE_TAG, coreId)
                     .register(this.registry));
         } else {
@@ -70,6 +70,14 @@ public final class ExecutionMetrics implements AutoCloseable {
 
     public void addInProgress(long inProgress) {
         IN_PROGRESS.getAndAddRelease(this, inProgress);
+    }
+
+    public void executionStarted() {
+        IN_PROGRESS.setRelease(this, 1L);
+    }
+
+    public void executionFinished() {
+        IN_PROGRESS.setRelease(this, 0L);
     }
 
     public void reportLatency(long latency) {
@@ -85,7 +93,7 @@ public final class ExecutionMetrics implements AutoCloseable {
     }
 
     public long getInProgress() {
-        return (long) IN_PROGRESS.getOpaque(this);
+        return (long) IN_PROGRESS.getAcquire(this);
     }
 
     @Override
