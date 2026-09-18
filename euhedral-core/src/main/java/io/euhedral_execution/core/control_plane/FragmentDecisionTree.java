@@ -5,9 +5,7 @@ import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionP
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.utils.MicroCalibrator;
 import java.util.Objects;
-import java.util.concurrent.locks.LockSupport;
 import org.jspecify.annotations.NonNull;
-import org.jspecify.annotations.Nullable;
 
 /// Owner-thread policy for choosing direct or staged execution and a bounded batch size.
 ///
@@ -23,15 +21,12 @@ final class FragmentDecisionTree {
     static final long DIRECT_BATCH_WORK_TARGET_NS = 250_000L;
     static final long STAGED_BATCH_WORK_TARGET_NS = 8_000_000L;
 
-    // Measurement Variables
+    // Body-cost estimator
     static final int BODY_COST_WINDOW_SAMPLES = 32;
     static final int BODY_COST_WINDOW_MASK = BODY_COST_WINDOW_SAMPLES - 1;
     static final int BODY_COST_MIN_HISTORY = 32;
     static final int EXPENSIVE_CONFIRMATION_WINDOWS = 2;
 
-    private final int core;
-    private final int socket;
-    private final FragmentObserver observer;
     private final IdlePolicy idlePolicy;
 
     private final long bodyCostDirectThreshold;
@@ -46,25 +41,22 @@ final class FragmentDecisionTree {
     private int bodyCostWindowIndex;
     private int expensiveConfirmationWindows;
 
-    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket) {
-        this(observer, core, socket, IdlePolicy.DEFAULT);
-    }
-
-    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket, long idleParkNs) {
-        this(observer, core, socket, new IdlePolicy(idleParkNs, IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS));
-    }
-
-    FragmentDecisionTree(@Nullable FragmentObserver observer, int core, int socket, @NonNull IdlePolicy idlePolicy) {
-        Objects.requireNonNull(idlePolicy);
-        this.observer = observer;
-        this.core = core;
-        this.socket = socket;
-        this.idlePolicy = idlePolicy;
+    FragmentDecisionTree(@NonNull IdlePolicy idlePolicy) {
+        this.idlePolicy = Objects.requireNonNull(idlePolicy);
 
         MicroCalibrator calibrator = new MicroCalibrator();
         calibrator.warmup();
         this.expensiveBodyCostThreshold = calibrator.benchmark(EXPENSIVE_BODY_WEIGHT);
         this.bodyCostDirectThreshold = calibrator.benchmark(DIRECT_EXECUTION_BODY_WEIGHT);
+        reset();
+    }
+
+    /// Deterministic construction seam for policy-boundary tests; production calibrates per worker.
+    FragmentDecisionTree(
+            @NonNull IdlePolicy idlePolicy, long expensiveBodyCostThreshold, long bodyCostDirectThreshold) {
+        this.idlePolicy = Objects.requireNonNull(idlePolicy);
+        this.expensiveBodyCostThreshold = expensiveBodyCostThreshold;
+        this.bodyCostDirectThreshold = bodyCostDirectThreshold;
         reset();
     }
 
@@ -77,7 +69,7 @@ final class FragmentDecisionTree {
         if (workerRank <= 1
                 || registeredWorkers <= 1
                 || this.bodyCostHistoryCount < BODY_COST_MIN_HISTORY
-                || isPlentiful(productiveHandles, registeredWorkers)) {
+                || hasPlentifulProductiveHandles(productiveHandles, registeredWorkers)) {
             return false;
         }
         if (productiveHandles <= 0) {
@@ -87,7 +79,8 @@ final class FragmentDecisionTree {
                 workerRank, productiveHandles, registeredWorkers, this.smoothedBodyCostNs, contention / 1_000_000.0);
     }
 
-    void idle(UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
+    long updateIdleTimingAndGetParkNanos(
+            UpstreamQueue upstream, long now, long registeredWorkers, long productiveHandleCount) {
         var function = this.idlePolicy.function();
 
         long contention = upstream.getAdaptiveContention(now, contentionHalfLifeNanos());
@@ -97,16 +90,11 @@ final class FragmentDecisionTree {
         long park = function.parkNanos(c, p, body, idleParkNs());
         long halfLife = function.halfLifeNanos(c, p, body, contentionHalfLifeNanos());
         upstream.installContentionHalfLife(now, halfLife, contentionHalfLifeNanos());
-        LockSupport.parkNanos(park);
+        return park;
     }
 
-    ExecutionPath executionPath(
-            long cycleEpoch,
-            long batchEpoch,
-            long productiveHandles,
-            long upstreamHandles,
-            int registeredWorkers,
-            long contention) {
+    ExecutionPath selectExecutionPath(
+            long productiveHandles, long upstreamHandles, int registeredWorkers, long contention) {
         if (upstreamHandles <= 0) {
             this.executionPath = ExecutionPath.DIRECT;
             return this.executionPath;
@@ -116,7 +104,7 @@ final class FragmentDecisionTree {
             return this.executionPath;
         }
 
-        if (isPlentiful(productiveHandles, registeredWorkers)
+        if (hasPlentifulProductiveHandles(productiveHandles, registeredWorkers)
                 || (contention <= CONTENTION_THRESHOLD && this.smoothedBodyCostNs <= this.bodyCostDirectThreshold)) {
             this.executionPath = ExecutionPath.DIRECT;
             return ExecutionPath.DIRECT;
@@ -125,7 +113,7 @@ final class FragmentDecisionTree {
         return ExecutionPath.STAGED;
     }
 
-    boolean isPlentiful(long productiveHandles, int registeredWorkers) {
+    private static boolean hasPlentifulProductiveHandles(long productiveHandles, int registeredWorkers) {
         return registeredWorkers > 0 && productiveHandles >= registeredWorkers;
     }
 
@@ -172,22 +160,26 @@ final class FragmentDecisionTree {
     /// Completes a productive batch and returns the next batch within `eligibleCap`.
     long completeBatch(long eligibleCap) {
         long cap = Math.max(2L, eligibleCap);
-        long desired = this.batchSize;
-        if (this.serviceTimeNs > 0.0) {
-            long workTarget = this.executionPath == ExecutionPath.DIRECT
-                    ? DIRECT_BATCH_WORK_TARGET_NS
-                    : STAGED_BATCH_WORK_TARGET_NS;
-            long raw = (long) Math.floor(workTarget / Math.max(this.serviceTimeNs, 1.0));
-            raw = Math.max(2L, raw);
-            desired = Math.max(2L, Long.highestOneBit(raw));
-        }
-        desired = Math.min(desired, cap);
-
-        long minimum = (this.batchSize >>> 1) + (this.batchSize & 1L);
-        long maximum = saturatingDouble(this.batchSize);
-        long next = Math.max(minimum, Math.min(desired, maximum));
-        this.batchSize = Math.max(2L, Math.min(next, cap));
+        long desired = Math.min(desiredBatchSize(), cap);
+        this.batchSize = applyBatchSlew(this.batchSize, desired, cap);
         return this.batchSize;
+    }
+
+    private long desiredBatchSize() {
+        if (this.serviceTimeNs <= 0.0) {
+            return this.batchSize;
+        }
+        long workTarget =
+                this.executionPath == ExecutionPath.DIRECT ? DIRECT_BATCH_WORK_TARGET_NS : STAGED_BATCH_WORK_TARGET_NS;
+        long raw = (long) Math.floor(workTarget / Math.max(this.serviceTimeNs, 1.0));
+        return Math.max(2L, Long.highestOneBit(Math.max(2L, raw)));
+    }
+
+    private static long applyBatchSlew(long current, long desired, long cap) {
+        long minimum = (current >>> 1) + (current & 1L);
+        long maximum = saturatingDouble(current);
+        long next = Math.max(minimum, Math.min(desired, maximum));
+        return Math.max(2L, Math.min(next, cap));
     }
 
     /// Restores the captured initial mode, batch two, and empty timing and hysteresis state.
@@ -227,6 +219,10 @@ final class FragmentDecisionTree {
 
     /// Updates one non-overlapping second minimum and confirms expensive work across two windows.
     private void updateBodyCostEstimate() {
+        applyBodyCostEstimate(secondMinimumBodyCost());
+    }
+
+    private double secondMinimumBodyCost() {
         double minimum = Double.POSITIVE_INFINITY;
         double secondMinimum = Double.POSITIVE_INFINITY;
         for (double sample : this.bodyCostWindow) {
@@ -237,16 +233,20 @@ final class FragmentDecisionTree {
                 secondMinimum = sample;
             }
         }
-        if (secondMinimum >= this.expensiveBodyCostThreshold) {
+        return secondMinimum;
+    }
+
+    private void applyBodyCostEstimate(double candidate) {
+        if (candidate >= this.expensiveBodyCostThreshold) {
             if (this.expensiveConfirmationWindows < EXPENSIVE_CONFIRMATION_WINDOWS) {
                 this.expensiveConfirmationWindows++;
             }
             if (this.expensiveConfirmationWindows == EXPENSIVE_CONFIRMATION_WINDOWS) {
-                this.smoothedBodyCostNs = secondMinimum;
+                this.smoothedBodyCostNs = candidate;
             }
             return;
         }
         this.expensiveConfirmationWindows = 0;
-        this.smoothedBodyCostNs = secondMinimum;
+        this.smoothedBodyCostNs = candidate;
     }
 }

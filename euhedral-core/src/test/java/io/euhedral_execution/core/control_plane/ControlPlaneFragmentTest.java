@@ -9,17 +9,21 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
+import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.SystemInfo;
 import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
@@ -79,11 +83,46 @@ class ControlPlaneFragmentTest {
     }
 
     @Test
+    void smtRoutingSendsTheSecondLogicalLaneToTheBuddyCache() {
+        BitSet available = SystemInfo.getCpuSet();
+        int primaryCpu = available.nextSetBit(0);
+        int buddyCpu = available.nextSetBit(primaryCpu + 1);
+        assumeTrue(buddyCpu >= 0, "Requires two available logical CPUs");
+
+        BitSet cpus = new BitSet();
+        cpus.set(primaryCpu);
+        cpus.set(buddyCpu);
+        CloneConfig clone = new CloneConfig(
+                "smt-routing-test", SystemInfo.getCpuInfo(primaryCpu).core(), cpus);
+        FragmentConfig base = FragmentConfig.ofDefaults().clone(clone);
+        FragmentConfig config = new FragmentConfig(
+                base.cloneConfig(),
+                base.cacheConfig(),
+                base.observer(),
+                base.maxBatchSize(),
+                true,
+                base.idlePolicy(),
+                base.benchmarkMode(),
+                base.metricPrefix(),
+                base.registry());
+
+        try (ControlPlaneFragment fragment = create(config)) {
+            AbstractFrame frame = Mockito.mock(AbstractFrame.class);
+            Mockito.when(frame.getRoutingHash()).thenReturn(1L);
+
+            fragment.push(frame);
+
+            assertEquals(0L, fragment.getLocalCacheCount());
+            assertEquals(1L, fragment.getSmtBuddy().getLocalCacheCount());
+        }
+    }
+
+    @Test
     void drainModeIsPropagatedToTheWorkerCache() {
         try (ControlPlaneFragment fragment = create(workerConfig())) {
             fragment.setDrainMode(true);
 
-            assertTrue(fragment.drainMode);
+            assertTrue(fragment.getDrainFlag().getAcquire());
         }
     }
 
@@ -169,6 +208,42 @@ class ControlPlaneFragmentTest {
     }
 
     @Test
+    void closeCompletesLatticeCleanupWhenMetricsCleanupFails() {
+        SimpleMeterRegistry registry = Mockito.spy(new SimpleMeterRegistry());
+        FragmentConfig base = workerConfig();
+        FragmentConfig config = new FragmentConfig(
+                base.cloneConfig(),
+                base.cacheConfig(),
+                base.observer(),
+                base.maxBatchSize(),
+                base.smtEnabled(),
+                base.idlePolicy(),
+                base.benchmarkMode(),
+                base.metricPrefix(),
+                registry);
+        ControlPlaneFragment fragment = create(config);
+        Mockito.doThrow(new IllegalStateException("metrics close failure"))
+                .when(registry)
+                .remove(Mockito.any(Meter.class));
+
+        assertThrows(IllegalStateException.class, fragment::close);
+        assertTrue(fragment.isClosed());
+
+        Mockito.doCallRealMethod().when(registry).remove(Mockito.any(Meter.class));
+        assertDoesNotThrow(fragment::close);
+        assertTrue(registry.getMeters().isEmpty());
+    }
+
+    @Test
+    void closedFragmentCannotBeStarted() {
+        ControlPlaneFragment fragment = create(workerConfig());
+        fragment.close();
+
+        assertThrows(IllegalStateException.class, fragment::start);
+        assertFalse(fragment.isStarted());
+    }
+
+    @Test
     void shouldUpdateAdaptiveBatchCapFromValidSnapshot() {
         try (ControlPlaneFragment fragment = create(workerConfig())) {
             int cpu = fragment.cpu;
@@ -207,6 +282,28 @@ class ControlPlaneFragmentTest {
             fragment.update(snapshot);
 
             assertEquals(2L, fragment.getAdaptiveBatchCap());
+        }
+    }
+
+    @Test
+    void stoppedResetRestoresTheInitialAdaptiveBatchCap() {
+        try (ControlPlaneFragment fragment = create(workerConfig())) {
+            int cpu = fragment.cpu;
+            SystemUtilization.CpuSnapshot cpuSnap = Mockito.mock(SystemUtilization.CpuSnapshot.class);
+            Mockito.when(cpuSnap.pressure()).thenReturn(1.0);
+            Mockito.when(cpuSnap.lastUsageNs()).thenReturn(250L);
+            SystemUtilization.CpuSnapshot[] cpus = new SystemUtilization.CpuSnapshot[cpu + 1];
+            cpus[cpu] = cpuSnap;
+            SystemUtilization.CoreSnapshot snapshot = Mockito.mock(SystemUtilization.CoreSnapshot.class);
+            Mockito.when(snapshot.cpuSnapshots()).thenReturn(cpus);
+
+            fragment.update(snapshot);
+            assertEquals(2L, fragment.getAdaptiveBatchCap());
+
+            fragment.reset(System.nanoTime());
+
+            long initialCap = Math.max(2L, Math.min(fragment.getConfig().maxBatchSize(), fragment.getFrameQuota()));
+            assertEquals(initialCap, fragment.getAdaptiveBatchCap());
         }
     }
 

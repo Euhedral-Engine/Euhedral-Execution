@@ -248,7 +248,14 @@ public class UpstreamQueue {
     public void resetForNextTrial() {
         resetAcquireContention();
         this.pendingRequest = null;
-        fillQueue();
+        restoreLiveHandlesInRegistrationOrder();
+        this.cachedUpCount = this.upstreamCount.getAcquire();
+        this.nonproductiveCount = 0L;
+    }
+
+    /// Restores live queue membership to stable source-registration order while drained.
+    private void restoreLiveHandlesInRegistrationOrder() {
+        flushBufferedHandles();
         long queued = this.upstreams.sizeLong();
         if (queued > Integer.MAX_VALUE) {
             throw new IllegalStateException("Too many upstream handles to reset");
@@ -266,8 +273,6 @@ public class UpstreamQueue {
         for (int i = 0; i < live; i++) {
             this.upstreams.offer(handles[i]);
         }
-        this.cachedUpCount = this.upstreamCount.getAcquire();
-        this.nonproductiveCount = 0L;
     }
 
     /// Enables owner-local acquisition diagnostics for calibration runs.
@@ -328,7 +333,7 @@ public class UpstreamQueue {
             }
 
             if (handle == null && this.bufferIndex > 0) {
-                fillQueue();
+                flushBufferedHandles();
                 continue;
             }
 
@@ -348,7 +353,7 @@ public class UpstreamQueue {
             if (!handle.acquireLock()) {
                 failedAcquires++;
                 if (!preferredRequest) {
-                    bufferHandle(handle);
+                    bufferForRequeue(handle);
                 }
                 cycles++;
                 continue;
@@ -359,68 +364,88 @@ public class UpstreamQueue {
                 long requestBefore = context == null || consumer != null ? 0L : context.satisfiedRequest;
                 request = Math.min(limit, bucketSize);
                 limit -= request;
-
-                long drainCount = drain(handle, consumer, stopCondition, request);
-                if (consumer != null && handle.wasPullStopped()) {
-                    this.pendingRequest = handle;
-                }
-                totalPull += drainCount;
-                if (context != null) {
-                    context.satisfiedPull += drainCount;
-                }
-
-                if (consumer == null) {
-                    if (context != null && context.satisfiedRequest != requestBefore) {
-                        handle.setProductivity(true);
-                    } else if (!handle.isProductive()) {
-                        // Request has no empty-source result. Without a synchronous push, it
-                        // supplies no new evidence and retains the worker's prior observation.
-                        handle.setProductivity(wasProductive);
-                    }
-                }
-
-                boolean produced = handle.isProductive();
-                if (!wasProductive && produced) {
-                    if (this.nonproductiveCount > 0L) {
-                        this.nonproductiveCount--;
-                    }
-                } else if (wasProductive && !produced) {
-                    this.nonproductiveCount++;
-                }
+                totalPull += serviceAcquiredHandle(
+                        handle, consumer, stopCondition, request, context, requestBefore, wasProductive);
             } finally {
                 handle.releaseLock();
                 if (!preferredRequest) {
-                    bufferHandle(handle);
+                    bufferForRequeue(handle);
                 }
             }
             cycles = 0;
         }
-        if (attempts > 0L) {
-            long rawContention = scaleAcquireContentionUnchecked(failedAcquires, attempts);
-            this.acquireContention.record(rawContention);
-            this.contentionEvidenceCount++;
-            if (this.acquireDiagnosticsEnabled) {
-                this.contentionObservationCount++;
-                this.lastRawContention = rawContention;
-                this.lastContentionObservationNs = System.nanoTime();
-                this.successfulAcquisitionCount += attempts - failedAcquires;
-                this.failedAcquisitionCount += failedAcquires;
-                this.totalAcquisitionAttempts += attempts;
-            }
-        }
-        fillQueue();
+        recordAcquisitionCycle(attempts, failedAcquires);
+        flushBufferedHandles();
         return totalPull;
     }
 
+    private long serviceAcquiredHandle(
+            UpstreamHandle handle,
+            Consumer<AbstractFrame> consumer,
+            Function<AbstractFrame, Boolean> stopCondition,
+            long request,
+            FlowThread.FlowContext context,
+            long requestBefore,
+            boolean wasProductive) {
+        long drainCount = drain(handle, consumer, stopCondition, request);
+        if (consumer != null && handle.wasPullStopped()) {
+            this.pendingRequest = handle;
+        }
+        if (context != null) {
+            context.satisfiedPull += drainCount;
+        }
+
+        if (consumer == null) {
+            if (context != null && context.satisfiedRequest != requestBefore) {
+                handle.setProductivity(true);
+            } else if (!handle.isProductive()) {
+                // Request has no empty-source result. Without a synchronous push, it supplies no
+                // new evidence and retains the worker's prior observation.
+                handle.setProductivity(wasProductive);
+            }
+        }
+        reconcileProductivity(handle, wasProductive);
+        return drainCount;
+    }
+
+    private void reconcileProductivity(UpstreamHandle handle, boolean wasProductive) {
+        boolean isProductive = handle.isProductive();
+        if (!wasProductive && isProductive) {
+            if (this.nonproductiveCount > 0L) {
+                this.nonproductiveCount--;
+            }
+        } else if (wasProductive && !isProductive) {
+            this.nonproductiveCount++;
+        }
+    }
+
+    private void recordAcquisitionCycle(long attempts, long failedAcquires) {
+        if (attempts <= 0L) {
+            return;
+        }
+        long rawContention = scaleAcquireContentionUnchecked(failedAcquires, attempts);
+        this.acquireContention.record(rawContention);
+        this.contentionEvidenceCount++;
+        if (!this.acquireDiagnosticsEnabled) {
+            return;
+        }
+        this.contentionObservationCount++;
+        this.lastRawContention = rawContention;
+        this.lastContentionObservationNs = System.nanoTime();
+        this.successfulAcquisitionCount += attempts - failedAcquires;
+        this.failedAcquisitionCount += failedAcquires;
+        this.totalAcquisitionAttempts += attempts;
+    }
+
     /// Returns every dequeued live handle through the owner-local shuffle buffer.
-    private void bufferHandle(UpstreamHandle handle) {
+    private void bufferForRequeue(UpstreamHandle handle) {
         if (this.bufferIndex == this.buffer.length) {
-            fillQueue();
+            flushBufferedHandles();
         }
         this.buffer[this.bufferIndex++] = handle;
     }
 
-    void fillQueue() {
+    private void flushBufferedHandles() {
         while (this.bufferIndex > 1) {
             this.seed = HasherApi.mix(this.seed + 1);
 
@@ -484,7 +509,7 @@ public class UpstreamQueue {
 
     /// Removes completed queue entries when lifecycle changes occur without another pull.
     private void removeCompletedHandles() {
-        fillQueue();
+        flushBufferedHandles();
         long queued = this.upstreams.sizeLong();
         long surplus = queued - this.cachedUpCount;
         while (queued > 0L && surplus > 0L) {

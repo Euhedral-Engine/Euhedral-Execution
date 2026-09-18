@@ -312,6 +312,46 @@ class UpstreamQueueTest {
     }
 
     @Test
+    void serviceFailureReleasesTheHandleAndRetainsItForTheNextPull() {
+        TestUpstreamHandle upstream = addHandle();
+        upstream.pullFailure = new IllegalStateException("pull failed");
+
+        assertThrows(IllegalStateException.class, () -> queue.pull(frame -> {}, frame -> false, 1L));
+        assertFalse(upstream.locked);
+        assertEquals(1L, upstream.releaseCount);
+
+        upstream.pullFailure = null;
+
+        assertEquals(1L, queue.pull(frame -> {}, frame -> false, 1L));
+        assertEquals(2L, upstream.acquisitionAttempts);
+        assertEquals(2L, upstream.releaseCount);
+        assertEquals(1L, handles.sizeLong());
+    }
+
+    @Test
+    void successfulEmptyServiceConsumesDemandButFailedAcquisitionDoesNot() {
+        TestUpstreamHandle empty = addHandle();
+        empty.pullResult = 0L;
+        TestUpstreamHandle productive = addHandle();
+
+        assertEquals(0L, queue.pull(frame -> {}, frame -> false, 1L));
+        assertEquals(1L, empty.acquisitionAttempts);
+        assertEquals(0L, productive.acquisitionAttempts);
+
+        MpscQueue<UpstreamHandle> retryHandles = new MpscQueue<>(64);
+        TestUpstreamHandle unavailable = new TestUpstreamHandle();
+        unavailable.available = false;
+        TestUpstreamHandle fallback = new TestUpstreamHandle();
+        retryHandles.offer(unavailable);
+        retryHandles.offer(fallback);
+        UpstreamQueue retryQueue = new UpstreamQueue(0, retryHandles, new PaddedAtomicLong(2L));
+
+        assertEquals(1L, retryQueue.pull(frame -> {}, frame -> false, 1L));
+        assertEquals(1L, unavailable.acquisitionAttempts);
+        assertEquals(1L, fallback.acquisitionAttempts);
+    }
+
+    @Test
     void shouldRecordAllSuccessfulAcquisitionsAsZeroContention() {
         addHandle();
 
@@ -806,13 +846,17 @@ class UpstreamQueueTest {
         boolean complete;
         boolean available = true;
         boolean productive = true;
+        boolean locked;
         long pullResult = -1L;
+        long releaseCount;
+        RuntimeException pullFailure;
 
         /// Returns the configured availability while retaining the number of bounded attempts.
         @Override
         public boolean acquireLock() {
             this.acquisitionAttempts++;
             if (this.available) {
+                this.locked = true;
                 this.productive = false;
                 return true;
             }
@@ -820,8 +864,17 @@ class UpstreamQueueTest {
         }
 
         @Override
+        public void releaseLock() {
+            this.locked = false;
+            this.releaseCount++;
+        }
+
+        @Override
         public long pull(
                 Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            if (this.pullFailure != null) {
+                throw this.pullFailure;
+            }
             this.pullCalls++;
             this.pulled += demand;
             long result = this.pullResult < 0L ? demand : Math.min(this.pullResult, demand);

@@ -118,7 +118,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             terminal[0].addDownstream(this.cacheTerminal);
 
             setDrain(true);
-            super.setDownstreamMapping(mappings, terminal);
+            installInternalDownstreamMapping(mappings, terminal);
             setDrain(false);
 
             String chunkSize = NumberFormat.getNumberInstance().format(this.chunkSize);
@@ -319,6 +319,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     @Override
     public final boolean setDownstreamMapping(BitSet active, LatticeEdge[] edges) {
         return false;
+    }
+
+    /// Installs this cache's private logical-lane mapping while public topology remapping stays disabled.
+    protected final boolean installInternalDownstreamMapping(BitSet active, LatticeEdge[] edges) {
+        return super.setDownstreamMapping(active, edges);
     }
 
     @Override

@@ -123,7 +123,7 @@ class ControlPlaneFragmentThreadTest {
     }
 
     @Test
-    void shouldLinearizeConcurrentSnapshotUpdatesLockFree() throws Exception {
+    void newestConcurrentSnapshotDeterminesTheAdaptiveBatchCap() throws Exception {
         int cpu = SystemInfo.getCpuSet().nextSetBit(0);
         int core = SystemInfo.getCpuInfo(cpu).core();
 
@@ -164,7 +164,9 @@ class ControlPlaneFragmentThreadTest {
 
             latch.countDown();
             assertTrue(done.await(5, TimeUnit.SECONDS));
-            assertTrue(fragment.getAdaptiveBatchCap() >= 2L);
+            long eligibleMax = Math.max(2L, Math.min(fragment.getConfig().maxBatchSize(), fragment.getFrameQuota()));
+            long expected = Math.round(eligibleMax - 0.4 * (eligibleMax - 2L));
+            assertEquals(expected, fragment.getAdaptiveBatchCap());
             executor.close();
         }
     }
@@ -219,6 +221,34 @@ class ControlPlaneFragmentThreadTest {
             assertEquals(0, source.requestCalls.get());
             assertNull(receiver.error.get());
         } finally {
+            source.complete();
+            fragment.close();
+            distributor.close();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    @Test
+    void directExecutionKeepsFragmentUndrainedUntilTheTerminalReturns() throws Exception {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        TrackingSource source = new TrackingSource(BenchmarkFrame.generate(1, false, 83L, 89L));
+        BlockingReceiver receiver = new BlockingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(source);
+
+            assertTrue(receiver.entered.await(5, TimeUnit.SECONDS));
+            assertFalse(fragment.isDrained());
+            receiver.release.countDown();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::isDrained);
+            assertNull(receiver.error.get());
+        } finally {
+            receiver.release.countDown();
             source.complete();
             fragment.close();
             distributor.close();
@@ -566,6 +596,37 @@ class ControlPlaneFragmentThreadTest {
             }
             this.first.compareAndSet(null, frame);
             this.received.incrementAndGet();
+        }
+
+        @Override
+        public void onComplete() {}
+
+        @Override
+        public void onError(Throwable throwable) {
+            this.error.set(throwable);
+        }
+
+        @Override
+        public void addUpstream(LatticeSource upstream) {}
+    }
+
+    private static final class BlockingReceiver implements LatticeReceiver {
+
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+        private final AtomicReference<Throwable> error = new AtomicReference<>();
+
+        @Override
+        public void push(AbstractFrame frame) {
+            this.entered.countDown();
+            try {
+                if (!this.release.await(5, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("terminal release timed out");
+                }
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("terminal interrupted", failure);
+            }
         }
 
         @Override
