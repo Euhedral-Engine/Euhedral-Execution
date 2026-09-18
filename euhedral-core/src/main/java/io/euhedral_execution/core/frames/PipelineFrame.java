@@ -6,6 +6,7 @@ import io.euhedral_execution.core.ingest.QueueIngestSink;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -30,10 +31,40 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     private PipelineFrame<T> rootFrame;
     private @Nullable PipelineFrame<?> nextFrame;
-    private Object data;
+    private @Nullable Object data;
     private @Nullable AtomicBoolean activeKillSwitch;
 
     private boolean filtered = false;
+    private boolean cancelled;
+
+    public enum Status {
+        SUCCESS,
+        FILTERED,
+        CANCELLED,
+        FAILED
+    }
+
+    public record Outcome(Status status, @Nullable Throwable failure) {}
+
+    private static final Outcome SUCCESS = new Outcome(Status.SUCCESS, null);
+    private static final Outcome FILTERED = new Outcome(Status.FILTERED, null);
+    private static final Outcome CANCELLED = new Outcome(Status.CANCELLED, null);
+    private @Nullable CompletableFuture<Outcome> outcome;
+    private @Nullable Runnable completion;
+
+    /// Optional observation, installed by the submission owner before publication. Published after
+    /// clearing payloads and recycling, but before the owner notification. Dependent callbacks may
+    /// run inline on the finalizer: they must not block awaiting pipeline progress or graceful close,
+    /// and any submission must respect the single checkout owner.
+    public void observe(CompletableFuture<Outcome> outcome) {
+        this.rootFrame.outcome = Objects.requireNonNull(outcome);
+    }
+
+    /// Registers an owner notification before publication. Invoked after payload clearing, recycling,
+    /// and outcome publication (including inline dependent callbacks). Must not block the finalizer.
+    public void onCompletion(Runnable completion) {
+        this.rootFrame.completion = Objects.requireNonNull(completion);
+    }
 
     private PipelineFrame(
             QueueIngestSink sink,
@@ -76,6 +107,15 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     @Override
     public void execute() {
+        try {
+            executeStage();
+        } catch (CancelSignal signal) {
+            this.cancelled = true;
+            throw signal;
+        }
+    }
+
+    private void executeStage() {
         Object result = this.function == null ? this.data : this.function.apply(this.data);
 
         if (this.filter != null && !this.filter.test(result)) {
@@ -93,19 +133,44 @@ public final class PipelineFrame<T> extends AbstractFrame {
 
     @Override
     public void doFinally() {
-        if (!isAlive() || this.nextFrame == null || this.filtered) {
-            this.filtered = false;
-            this.rootFrame.recycle();
+        if (!isAlive() || this.cancelled || this.nextFrame == null || this.filtered) {
+            this.rootFrame.finish(!isAlive() || this.cancelled ? CANCELLED : this.filtered ? FILTERED : SUCCESS);
         } else if (!this.sink.offer(this.nextFrame)) {
-            this.rootFrame.recycle();
-            throw new IllegalStateException("Could not enqueue the next pipeline stage");
+            if (!isAlive()) {
+                this.rootFrame.finish(CANCELLED);
+                return;
+            }
+            var failure = new IllegalStateException("Could not enqueue the next pipeline stage");
+            doFinallyWithError(failure);
+            throw failure;
         }
     }
 
     @Override
     public void doFinallyWithError(Throwable throwable) {
-        this.filtered = false;
-        this.rootFrame.recycle();
+        this.rootFrame.finish(throwable instanceof CancelSignal ? CANCELLED : new Outcome(Status.FAILED, throwable));
+    }
+
+    private void finish(Outcome result) {
+        Runnable notification = this.completion;
+        CompletableFuture<Outcome> observer = this.outcome;
+        this.completion = null;
+        this.outcome = null;
+        for (PipelineFrame<?> stage = this; stage != null; stage = stage.nextFrame) {
+            stage.data = null;
+            stage.filtered = false;
+            stage.cancelled = false;
+        }
+        // No chain state may be read or written after publication to the recycler: the owner
+        // may immediately reuse it, including reentrant submission from the detached observer.
+        recycle();
+        try {
+            if (observer != null) observer.complete(result);
+        } finally {
+            // Every chain publishes its outcome before decrementing the runner's in-flight count.
+            // Thus even concurrent finalizers cannot signal graceful completion ahead of an outcome.
+            if (notification != null) notification.run();
+        }
     }
 
     @Override
@@ -166,13 +231,14 @@ public final class PipelineFrame<T> extends AbstractFrame {
         public Builder<I, O> filterOutput(Predicate<? super O> predicate) {
             Objects.requireNonNull(predicate);
             if (this.stages.isEmpty()) {
-                return new Builder<>(List.of(), cast(predicate));
+                return new Builder<>(
+                        List.of(), this.filter == null ? cast(predicate) : this.filter.and(cast(predicate)));
             }
 
             List<Stage> nextStages = new ArrayList<>(this.stages);
             Stage last = nextStages.getLast().copy();
             nextStages.set(nextStages.size() - 1, last);
-            last.filter = cast(predicate);
+            last.filter = last.filter == null ? cast(predicate) : last.filter.and(cast(predicate));
             return new Builder<>(List.copyOf(nextStages));
         }
 
@@ -189,8 +255,11 @@ public final class PipelineFrame<T> extends AbstractFrame {
         private <N> Builder<I, N> append(Function<? super O, ? extends N> function, boolean ordered) {
             Objects.requireNonNull(function);
             List<Stage> nextStages = new ArrayList<>(this.stages);
+            if (this.filter != null) {
+                nextStages.add(new Stage(Function.identity(), ordered, this.filter));
+            }
             nextStages.add(new Stage(value -> function.apply(cast(value)), ordered));
-            return new Builder<>(List.copyOf(nextStages), this.filter);
+            return new Builder<>(List.copyOf(nextStages));
         }
 
         /// Composes a pipeline with a parallel consumer.
@@ -318,7 +387,7 @@ public final class PipelineFrame<T> extends AbstractFrame {
             }
 
             Stage copy() {
-                return new Stage(this.function, this.ordered);
+                return new Stage(this.function, this.ordered, this.filter);
             }
         }
     }

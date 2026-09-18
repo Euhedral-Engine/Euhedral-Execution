@@ -608,6 +608,158 @@ class PipelineFrameTest {
         assertThat(results).containsExactly(true);
     }
 
+    @Test
+    void prefixFilterStaysBeforeTypeChangingStageAndLaterFilter() {
+        QueueIngestSink sink = new QueueIngestSink();
+        sink.getDelegate().addDownstream(new TestReceiver());
+        List<String> results = new ArrayList<>();
+        var manager = PipelineFrame.<Integer>builder()
+                .filterOutput(v -> v > 0)
+                .fanOut(Object::toString)
+                .filterOutput(v -> !v.isEmpty())
+                .composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
+        executePipeline(manager.getOrCreate(-1, 0L), sink);
+        executePipeline(manager.getOrCreate(2, 0L), sink);
+        assertThat(results).containsExactly("2");
+    }
+
+    @Test
+    void repeatedFiltersComposeWithAndAtInputAndStageOutput() {
+        for (boolean withStage : new boolean[] {false, true}) {
+            QueueIngestSink sink = new QueueIngestSink();
+            sink.getDelegate().addDownstream(new TestReceiver());
+            List<Integer> results = new ArrayList<>();
+            var builder = PipelineFrame.<Integer>builder();
+            if (withStage) builder = builder.fanOut(v -> v);
+            var manager = builder.filterOutput(v -> v > 0)
+                    .filterOutput(v -> v < 10)
+                    .composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
+            for (int input : new int[] {-1, 5, 11}) executePipeline(manager.getOrCreate(input, 0L), sink);
+            assertThat(results).containsExactly(5);
+        }
+    }
+
+    @Test
+    void cancelSignalThroughRealExecutorNeverPublishesSuccessor() {
+        for (boolean fromFilter : new boolean[] {false, true}) {
+            QueueIngestSink sink = new QueueIngestSink();
+            var source = sink.getDelegate();
+            new io.euhedral_execution.core.impl.DefaultExecutor().input(source);
+            List<Integer> results = new ArrayList<>();
+            var builder = PipelineFrame.<Integer>builder().fanOut(v -> {
+                if (!fromFilter) throw AbstractFrame.CANCEL_SIGNAL;
+                return v;
+            });
+            if (fromFilter)
+                builder = builder.filterOutput(v -> {
+                    throw AbstractFrame.CANCEL_SIGNAL;
+                });
+            var manager = builder.composeFannedOut(sink, results::add, 0L, new AtomicBoolean());
+            sink.offer(manager.getOrCreate(1, 0L));
+            source.request(10);
+            assertThat(sink.size()).isZero();
+            assertThat(results).isEmpty();
+            assertThat(manager.getRecycleQueue().sizeLong()).isOne();
+        }
+    }
+
+    @Test
+    void completedSinkRejectsSuccessorWithoutEscapingErrorOrLeakingRoot() {
+        QueueIngestSink sink = new QueueIngestSink();
+        var manager = PipelineFrame.<Integer>builder()
+                .fanOut(v -> v + 1)
+                .composeFannedOut(sink, v -> {}, 0L, new AtomicBoolean());
+        var root = manager.getOrCreate(1, 0L);
+        root.execute();
+        sink.complete();
+        assertThatThrownBy(root::doFinally).isInstanceOf(IllegalStateException.class);
+        assertThat(manager.getRecycleQueue().sizeLong()).isOne();
+        assertThat(sink.offer(root)).isFalse();
+    }
+
+    @Test
+    void recyclingClearsEveryPayloadOnSuccessFilterCancellationAndFailure() throws Exception {
+        var dataField = PipelineFrame.class.getDeclaredField("data");
+        dataField.setAccessible(true);
+        for (int outcome = 0; outcome < 4; outcome++) {
+            QueueIngestSink sink = new QueueIngestSink();
+            sink.getDelegate().addDownstream(new TestReceiver());
+            var manager = PipelineFrame.<Object>builder()
+                    .fanOut(v -> new Object())
+                    .filterOutput(v -> true)
+                    .composeFannedOut(sink, v -> {}, 0L, new AtomicBoolean());
+            var root = manager.getOrCreate(new Object(), 0L);
+            root.execute();
+            if (outcome == 0) {
+                root.doFinally();
+                execute(poll(sink));
+            }
+            if (outcome == 1) {
+                root.doFinallyWithError(new IllegalStateException());
+            }
+            if (outcome == 2) {
+                root.kill();
+                root.doFinally();
+            }
+            if (outcome == 3) {
+                var filtered = PipelineFrame.<Object>builder()
+                        .filterOutput(v -> false)
+                        .composeFannedOut(sink, v -> {}, 0L, new AtomicBoolean())
+                        .getOrCreate(new Object(), 0L);
+                execute(filtered);
+                assertThat(dataField.get(filtered)).isNull();
+                root.doFinallyWithError(new IllegalStateException());
+            }
+            for (PipelineFrame<?> stage = root; stage != null; stage = stage.getNextFrame()) {
+                assertThat(dataField.get(stage)).isNull();
+            }
+        }
+    }
+
+    @Test
+    void rejectedContinuationReportsFailureAndRecyclesBeforeObservation() {
+        @SuppressWarnings("unchecked")
+        var queue = (io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue<AbstractFrame>)
+                org.mockito.Mockito.mock(
+                        io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue.class);
+        var sink = new QueueIngestSink(queue);
+        var manager = PipelineFrame.<Integer>builder()
+                .fanOut(v -> v + 1)
+                .composeFannedOut(sink, v -> {}, 0L, new AtomicBoolean());
+        var root = manager.getOrCreate(1, 0L);
+        var future = new java.util.concurrent.CompletableFuture<PipelineFrame.Outcome>();
+        root.observe(future);
+        root.execute();
+        assertThatThrownBy(root::doFinally).isInstanceOf(IllegalStateException.class);
+        assertThat(future.join().status()).isEqualTo(PipelineFrame.Status.FAILED);
+        assertThat(future.join().failure()).isInstanceOf(IllegalStateException.class);
+        assertThat(manager.getRecycleQueue().sizeLong()).isOne();
+    }
+
+    @Test
+    void cancellationWinningSuccessorPublicationReportsCancelled() {
+        @SuppressWarnings("unchecked")
+        var queue = (io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue<AbstractFrame>)
+                org.mockito.Mockito.mock(
+                        io.euhedral_execution.data_structures.queues.common.ConcurrentPartitionedQueue.class);
+        var killSwitch = new AtomicBoolean();
+        org.mockito.Mockito.when(queue.offer(org.mockito.ArgumentMatchers.any(AbstractFrame.class)))
+                .thenAnswer(call -> {
+                    killSwitch.set(true);
+                    return false;
+                });
+        var manager = PipelineFrame.<Integer>builder()
+                .fanOut(v -> v + 1)
+                .composeFannedOut(new QueueIngestSink(queue), v -> {}, 0L, killSwitch);
+        var root = manager.getOrCreate(1, 0L);
+        var future = new java.util.concurrent.CompletableFuture<PipelineFrame.Outcome>();
+        root.observe(future);
+        root.execute();
+        root.doFinally();
+        assertThat(future.join().status()).isEqualTo(PipelineFrame.Status.CANCELLED);
+        assertThat(manager.getRecycleQueue().sizeLong()).isOne();
+    }
+
     private static List<AbstractFrame> executePipeline(AbstractFrame root, QueueIngestSink sink) {
         List<AbstractFrame> stages = new ArrayList<>();
         AbstractFrame current = root;

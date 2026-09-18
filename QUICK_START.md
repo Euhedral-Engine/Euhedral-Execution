@@ -85,9 +85,60 @@ With `consumeInParallel` set to `false`, the results are emitted in input order:
 `addUpstream` starts the lattice lazily. Calling `lattice.start()` first is also an option when
 explicit startup is a better fit for your application lifecycle.
 
+## Observe completion and close a pipeline
+
+`run` is the allocation-light submission path: it does not create a future per input.
+Use `submit` when each input needs an outcome, including inputs that never reach the consumer:
+
+```java
+var outcome = runner.submit(42);
+runner.completeGracefully(); // closes admission, not in-flight continuations
+var result = outcome.get(10, TimeUnit.SECONDS);
+switch (result.status()) {
+    case SUCCESS -> System.out.println("Consumer returned normally");
+    case FILTERED -> System.out.println("A predicate rejected this input");
+    case CANCELLED -> System.out.println("Execution was cancelled");
+    case FAILED -> result.failure().printStackTrace();
+}
+```
+
+- `completeGracefully()` rejects new inputs and completes the source only after every accepted
+  chain has reached a terminal outcome. An empty queue alone does not mean the pipeline finished.
+- `complete()` closes admission immediately, trips the shared kill switch, and cancels queued work.
+  It does not interrupt a running function. Work already handed to an executor settles when that
+  executor finalizes it; cleanup of a queue being drained is deferred until its consumer releases
+  it.
+  Runtime completion through the source delegate uses this same lifecycle.
+- Admission after either close throws `IllegalStateException`. An input admitted just before an
+  immediate close can report `CANCELLED` even if it was not yet published.
+- Outcomes are published **after** clearing all chain payloads and recycling, but **before**
+  updating
+  chain accounting. Graceful downstream completion can therefore observe/join every accepted
+  outcome,
+  even when chains finalize concurrently. Future callbacks can run inline on the finalizing worker;
+  keep them nonblocking and do not wait for pipeline progress or graceful source completion there.
+  Future cancellation only cancels observation; it does not cancel the pipeline input.
+- Submission (`run` and `submit`) still requires one owner: `FrameManager` checkout is not
+  thread-safe. Do not submit concurrently, including from future callbacks on workers. Marshal
+  those callbacks to the submission owner. Lifecycle close may race that owner safely.
+
+The existing constructor uses one unbounded queue partition. An optional fourth argument configures
+more partitions, for example `new PipelineRunner<>(builder, resultConsumer, true, 3)`.
+`run(partition, input)` and `submit(partition, input)` validate the partition before checkout;
+`run(longSeed, input)` and `submit(longSeed, input)` select a partition from the seed.
+Use `run`/`submit` rather than the inherited raw-frame `offer`/`clear` operations for managed
+chains.
+
+`filterOutput` applies at the builder's current type boundary, including before its first transform.
+Repeated filters at the same boundary compose with short-circuit AND; later transforms or filters
+cannot move or erase an earlier predicate. A `CancelSignal` from a function, predicate, or terminal
+consumer stops that chain without publishing a successor.
+
 ## Choose ordered or distributed execution
 
-The final `PipelineRunner` constructor argument controls the routing of the terminal consumer. Transformations use `fanIn` (ordered/serialized) or `fanOut` (distributed) on the `PipelineFrame.Builder`:
+The `consumeInParallel` boolean constructor argument controls the routing of the terminal consumer.
+Transformations use `fanIn` (ordered/serialized) or `fanOut` (distributed) on the
+`PipelineFrame.Builder`:
 
 ```java
 PipelineFrame.Builder<Integer, String> builder = PipelineFrame.<Integer>builder()

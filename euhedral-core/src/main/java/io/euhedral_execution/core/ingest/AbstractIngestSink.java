@@ -29,21 +29,33 @@ public abstract class AbstractIngestSink {
         protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
         protected boolean complete;
         protected LatticeReceiver downstream;
+        private boolean attached;
 
         protected static long accumulate(long curr, long next) {
+            if (next < 0) return Math.max(0, curr + next);
             long sum = curr + next;
             return sum < 0 ? Long.MAX_VALUE : sum;
         }
 
         @Override
         public void addDownstream(LatticeReceiver terminal) {
-            if (!DOWNSTREAM.compareAndSet(this, null, terminal)) {
-                terminal.onError(new IllegalStateException("Already has a downstream"));
+            java.util.Objects.requireNonNull(terminal);
+            boolean duplicate;
+            boolean completed;
+            synchronized (this) {
+                duplicate = this.attached;
+                completed = isComplete();
+                if (!duplicate) {
+                    this.attached = true;
+                    if (!completed) DOWNSTREAM.setRelease(this, terminal);
+                }
             }
+            if (duplicate) terminal.onError(new IllegalStateException("Already has a downstream"));
+            else if (completed) terminal.onComplete();
         }
 
         protected LatticeReceiver getDownstream() {
-            return (LatticeReceiver) DOWNSTREAM.getOpaque(this);
+            return (LatticeReceiver) DOWNSTREAM.getAcquire(this);
         }
 
         protected long addAndGetDemand(long demand) {
@@ -76,18 +88,19 @@ public abstract class AbstractIngestSink {
 
         @Override
         public void complete() {
-            if (COMPLETE.compareAndSet(this, false, true)) {
-                var t = (LatticeReceiver) DOWNSTREAM.getAndSet(this, null);
+            LatticeReceiver terminal;
+            synchronized (this) {
+                if (isComplete()) return;
+                COMPLETE.setRelease(this, true);
+                terminal = (LatticeReceiver) DOWNSTREAM.getAndSet(this, null);
                 this.demand.lazySet(0);
-                if (t != null) {
-                    t.onComplete();
-                }
             }
+            if (terminal != null) terminal.onComplete();
         }
 
         @Override
         public boolean isComplete() {
-            return (boolean) COMPLETE.getOpaque(this);
+            return (boolean) COMPLETE.getAcquire(this);
         }
     }
 }
