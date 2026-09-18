@@ -1,194 +1,127 @@
 # Euhedral Execution
 
-Euhedral is a pull-driven Java execution engine that builds itself around the machine it runs on.
+**A Java runtime for fine-grained work on multicore and NUMA machines.** Euhedral keeps workers
+close to the CPUs they use, routes frames through socket and core-local lanes, and lets workers pull
+work when they are ready. The normal path does not feed a shared global task queue.
 
-Long-lived workers are pinned to CPUs and request work when they have capacity. Frames are routed
-through a graph mapped to socket, cache, and core boundaries, so the execution model follows the
-hardware instead of hiding it behind one central queue.
+In the included 8K Mandelbrot JMH workload, Euhedral was 10.92x faster than Reactor Parallel on a
+192-core dual-socket AMD EPYC system. On the single-socket Intel and Graviton5 systems, the results
+were much closer. The [full benchmark report](./benchmarks/HIGH_SCALE_BENCHMARKS.md) includes the
+hardware, methodology, raw results, and limitations.
+
+Use Euhedral when scheduling overhead, locality, ordering, or allocation behavior affect the
+workload. A general-purpose executor is often the better choice for ordinary background tasks.
 
 [Core quick start](./QUICK_START.md) |
 [Reactor quick start](./REACTOR_QUICK_START.md) |
 [Architecture](./docs/ARCHITECTURE.md) |
 [Benchmarks](./benchmarks/README.md)
 
-## High-scale results
+## What it does
 
-On the 8K Mandelbrot benchmark, across 96-core Intel and AMD systems and a 192-core Graviton5
-system, **Reactor Parallel took 4.7x to 5.8x as much time per operation as Euhedral Core**, while
-**Reactor BoundedElastic took 6.5x to 7.4x as much**. The benchmark exercises 132.7 million
-pre-allocated operations per invocation and includes allocation, GC, CPU-time, and hardware-counter
-data.
+- **Pull-driven execution.** Workers ask upstream sources for work as capacity becomes available.
+- **Topology-aware placement.** The runtime discovers available CPUs, sockets, NUMA nodes, and
+  cache groups. On Linux and Windows, workers can use hard CPU affinity; macOS uses locality hints.
+- **Lane-scoped ordering.** Related frames can stay on an ordered routing lane while independent
+  frames spread across active cores.
+- **Per-worker control.** Workers respond to local queue state and hardware-pressure signals rather
+  than one central scheduler decision.
+- **Reusable work objects.** Frames and queues support batching and recycling for sustained,
+  allocation-sensitive workloads.
+- **Reactor support.** `EuhedralScheduler` implements Reactor's `Scheduler`, and
+  `EuhedralOperator` provides `flatMap`, `flatMapSequential`, and `concatMap`.
 
-[Read the high-scale benchmark, methodology, and caveats.](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
-
-## Why Euhedral?
-
-- **Pull-driven execution.**
-    - Workers create demand; a central dispatcher does not push tasks at threads.
-- **Topology-aware routing.**
-    - Euhedral discovers the available CPUs, sockets, NUMA nodes, and cache groups, then pins
-      persistent workers to that topology.
-- **Ordering when it matters.**
-    - Related frames can share a stable routing lane. Independent frames can spread across the
-      machine.
-- **Adaptive per-core control.**
-    - Each worker adjusts how it pulls, drains, and executes work from current queue and system
-      pressure.
-- **Low-allocation pipelines.**
-    - Frames and queues are designed for batching, reuse, and predictable ownership.
-
-This is not a general-purpose replacement for every executor. It is aimed at sustained, fine-grained
-workloads where routing, locality, and coordination overhead are part of the problem.
-
-## The execution model
+## How work moves
 
 ```text
 Frames:  Source -> Lattice -> Socket shard -> Core fragment -> Executor -> Frame.execute()
 Demand:  Source <- Lattice <- Socket shard <- Core fragment
 ```
 
-`ControlPlaneLattice` owns the process-wide topology and lifecycle. It creates a shard for each
-active socket and a worker pipeline for each active physical core. Those workers pull frames from
-upstream sources and execute them without a global task queue.
-
-The basic unit of work is an `AbstractFrame`:
-
-```java
-public abstract void execute();
-```
+`ControlPlaneLattice` is the JVM-wide runtime. It owns the active topology, starts workers lazily
+when an upstream source is attached, and manages their lifecycle. A shard represents a socket and
+runs a pipeline on each active physical core.
 
 Every frame has two hashes:
 
-- `idHash` is immutable and identifies the frame's ordered lane.
-- `routingHash` selects an active socket and core.
+| Field         | Purpose                                                |
+|---------------|--------------------------------------------------------|
+| `idHash`      | Immutable frame identity and the default ordered lane. |
+| `routingHash` | Selects the active socket and core for this execution. |
 
-They are equal by default, so frames from the same source with the same hash stay ordered on one
-lane. Call `randomizeHash(seed)` before ingestion when work can run independently and should be
-distributed. Ordering is scoped to a source and routing lane, not the entire JVM.
+A frame starts with matching hashes. Frames from one source that keep the same routing hash stay on
+a stable lane while the topology mapping remains stable. Call `randomizeHash(seed)` before ingestion
+for independent work that can run in parallel. This is lane-scoped ordering, not a JVM-wide ordering
+guarantee.
 
-## A small Core pipeline
+## Start with the right API
 
-The built-in ingest sinks handle frame creation and recycling for common functions and consumers:
-
-```java
-ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
-CountDownLatch finished = new CountDownLatch(4);
-
-FunctionIngestSink<Integer, Integer> squares = new FunctionIngestSink<>(
-        value -> value * value,
-        result -> {
-            System.out.println(result);
-            finished.countDown();
-        },
-        false); // false preserves input order; true distributes the work
-
-try {
-    lattice.addUpstream(squares);
-    squares.push(List.of(2, 4, 8, 16));
-    squares.completeGracefully();
-
-    if (!finished.await(10, TimeUnit.SECONDS)) {
-        throw new IllegalStateException("Timed out waiting for Euhedral");
-    }
-} finally {
-    squares.complete();
-    lattice.close();
-}
-```
-
-See the [Core quick start](./QUICK_START.md) for imports, setup, metrics, direct frame ingestion,
-custom frames, and recycling.
-
-## Reactor integration
-
-`euhedral-reactor-core` implements Reactor's `Scheduler` API and provides Euhedral-backed mapping
-operators:
-
-```java
-EuhedralScheduler scheduler = EuhedralScheduler.getOrCreate(lattice);
-EuhedralOperator operator = new EuhedralOperator(scheduler);
-
-List<String> results = Flux.range(1, 100)
-        .transform(operator.flatMapSequential(value -> "item-" + value))
-        .collectList()
-        .block();
-```
-
-Use the scheduler with `publishOn` or `subscribeOn` when standard Reactor scheduling is the right
-fit. Use `EuhedralOperator` when you want Euhedral's frame routing and recycling with `flatMap`,
-`flatMapSequential`, or `concatMap`.
-
-The [Reactor quick start](./REACTOR_QUICK_START.md) covers setup, operator semantics, cancellation,
-and shutdown.
-
-## Choose an entry point
-
-| If you are building...                                   | Start with...                                            |
+| You are building                                         | Start here                                               |
 |----------------------------------------------------------|----------------------------------------------------------|
-| A direct frame or function pipeline                      | [`euhedral-core`](./QUICK_START.md)                      |
-| A Reactor application                                    | [`euhedral-reactor-core`](./REACTOR_QUICK_START.md)      |
+| A direct frame or function pipeline                      | [Core quick start](./QUICK_START.md)                     |
+| A Reactor application                                    | [Reactor quick start](./REACTOR_QUICK_START.md)          |
 | A Spring Boot service, Kafka consumer, or gRPC transport | [`euhedral-spring-core`](./euhedral-spring-core)         |
 | A custom queue or atomic-heavy component                 | [`euhedral-data-structures`](./euhedral-data-structures) |
 
-## Repository modules
+The Core quick start shows a complete `PipelineRunner` example. It covers ordered versus
+distributed stages, direct frame ingestion, metrics, recycling, and shutdown. The Reactor quick
+start covers operator choice, cancellation, buffers, and lifecycle.
 
-| Module                     | Purpose                                                    |
-|----------------------------|------------------------------------------------------------|
-| `euhedral-hashing`         | xxHash64-based hashing and mixing used by routing          |
-| `euhedral-data-structures` | SPSC, SPMC, MPSC, and MPMC queues plus padded atomics      |
-| `euhedral-hardware-utils`  | Topology discovery, resource monitoring, affinity, and JNI |
-| `euhedral-core`            | Frames, ingest, routing, the control plane, and execution  |
-| `euhedral-reactor-core`    | Reactor scheduler and mapping operators                    |
-| `euhedral-spring-core`     | Spring Boot, Kafka, and gRPC integration                   |
-| `benchmarks`               | JMH workloads and comparison harnesses                     |
+## Modules
 
-The lower-level hashing, data structure, and hardware modules do not depend on the Core runtime.
-Reactor and Spring are integration layers above Core. Benchmarks remain outside the runtime path.
+| Module                     | Purpose                                                                |
+|----------------------------|------------------------------------------------------------------------|
+| `euhedral-core`            | Frames, ingest, routing, the control plane, and execution.             |
+| `euhedral-reactor-core`    | Reactor scheduler and mapping operators.                               |
+| `euhedral-spring-core`     | Spring Boot, Kafka, and gRPC integration.                              |
+| `euhedral-hardware-utils`  | Topology discovery, resource monitoring, affinity, and native support. |
+| `euhedral-data-structures` | SPSC, SPMC, MPSC, and MPMC queues plus padded atomics.                 |
+| `euhedral-hashing`         | Hashing and mixing used by routing.                                    |
+| `benchmarks`               | JMH workloads, calibration harnesses, and the CFD application.         |
+
+The lower-level hashing, data-structure, and hardware modules do not depend on Core. Reactor and
+Spring sit above Core; benchmarks are outside the runtime path.
 
 ## Build from source
 
-Euhedral uses Java 21 for the full repository and [mise](https://mise.jdx.dev/) to pin its build
-tools:
+Build the repository with the pinned JDK 21 toolchain. Install the declared tools, then run Gradle
+from the repository root:
 
 ```bash
-mkdir -p ~/.local/share/mise/installs/macos-sdk
-curl --fail --location \
-  https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
-  | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
 mise install
-gradle build
+gradle build integrationTest
 ```
 
-Run applications with:
+The full build includes native libraries. See [BUILD.md](./BUILD.md) for Zig, LLVM inspection tools,
+and macOS SDK setup. Native libraries target Linux, Windows, and macOS on x64 and arm64.
+
+Applications using the runtime should include:
 
 ```text
 -XX:+UseThreadPriorities
 ```
 
-The hardware module cross-builds native libraries during Gradle initialization. A full build also
-needs Zig, target JNI headers, and a macOS SDK; the setup in
-[`.github/workflows/build.yaml`](./.github/workflows/build.yaml) is the reference configuration.
-Focused Core and Reactor builds are shown in their quick starts.
+Thread-priority and affinity behavior also depend on operating-system support and process
+permissions.
 
-Linux and Windows are supported on x64 and arm64. macOS support is in progress.
+## Benchmark results
 
-## Architecture and benchmarks
+The published comparison uses 132,710,400 pre-allocated Mandelbrot subpixel operations per
+invocation. It measures scheduling, routing, and execution overhead rather than setup allocation.
 
-The [architecture guide](./docs/ARCHITECTURE.md) contains the topology, data-flow, routing, frame
-lifecycle, Reactor, and Spring diagrams.
+| System                                       | Euhedral Core | Reactor Parallel | Reactor BoundedElastic |
+|----------------------------------------------|--------------:|-----------------:|-----------------------:|
+| Intel Xeon 6, 96 physical cores              |  73.105 ns/op |     80.636 ns/op |          116.613 ns/op |
+| AMD EPYC 9R45, 2 sockets, 192 physical cores |  82.175 ns/op |    897.263 ns/op |        1,066.103 ns/op |
+| AWS Graviton5, 192 physical cores            |  48.132 ns/op |     51.507 ns/op |           45.339 ns/op |
 
-Benchmark results and reproduction notes live with the benchmark suite:
+Lower is better. These are focused JMH measurements on specific hosts and settings, not a general
+ranking of schedulers. Read the [high-scale benchmark report](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
+before drawing conclusions or reproducing the workload.
 
-- [High-scale comparison: Intel Xeon 6, AMD EPYC, and AWS Graviton5](./benchmarks/HIGH_SCALE_BENCHMARKS.md)
-- [Benchmark guide](./benchmarks/README.md)
-- [Amazon Graviton5 results](./benchmarks/AMAZON_GRAVITON_5_BENCHMARKS.md)
+## Status and license
 
-Performance numbers are hardware- and workload-specific. Treat the published results as measured
-reference points and use the included JMH workloads to evaluate your own target system.
-
-## Project status
-
-The Core runtime is stable and benchmarked, while the public APIs and integrations are still
-evolving. Current work is focused on real-world workload coverage and integration examples (CFD).
+The Core runtime has benchmark coverage. Public APIs and integrations are still evolving, with
+current work focused on real-world workload coverage and integration examples, including CFD.
 
 Euhedral Execution is licensed under the [Apache License 2.0](./LICENSE).
