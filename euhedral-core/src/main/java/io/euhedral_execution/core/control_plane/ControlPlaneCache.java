@@ -205,19 +205,21 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         long initialCount = (long) TOTAL_COUNT.getOpaque(this);
         if (initialCount > 0) {
             long count = total;
-            for (int i = 0; i < this.localCache.partitions(); i++) {
+            for (int i = 0; i < this.localCache.partitions() && total < limit; i++) {
                 if (this.pLocks != null && !this.pLocks.compareAndSet(i, 0, 1)) {
                     continue;
                 }
 
                 try {
-                    total = this.localCache.drain(i, consumer, stopCondition, limit);
-                    while (total < limit && count > this.cacheConfig.ringWalkResetThreshold()) {
-                        count = this.localCache.drain(i, consumer, stopCondition, limit - total);
-                        total += count;
+                    long remaining = limit - total;
+                    long drained = this.localCache.drain(i, consumer, stopCondition, remaining);
+                    while (drained < remaining && count > this.cacheConfig.ringWalkResetThreshold()) {
+                        count = this.localCache.drain(i, consumer, stopCondition, remaining - drained);
+                        drained += count;
                     }
 
-                    TOTAL_COUNT.getAndAdd(this, -total);
+                    total += drained;
+                    TOTAL_COUNT.getAndAdd(this, -drained);
                 } finally {
                     if (this.pLocks != null) {
                         this.pLocks.setRelease(i, 0);
