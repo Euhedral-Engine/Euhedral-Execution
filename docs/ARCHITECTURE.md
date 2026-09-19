@@ -215,8 +215,12 @@ allows you to guide execution toward the hardware where the data was produced:
 
 If an origin core or socket is missing or marked inactive, the engine falls back to hash routing.
 Locality callbacks translate the physical origin ID into an active routing index using the vertex's
-reverse map. Forward and reverse mappings are published together while drained, so sparse physical
-IDs select the correct downstream and remaps remove inactive origins from locality selection.
+reverse map. Forward and reverse arrays are published together while the drain flag is set, so
+sparse physical IDs select the correct downstream under a stable mapping. This is not an atomic
+snapshot of the mutable downstream handles: a routing callback can read a newer reverse map than
+its caller's forward map. `setDrain(true)` suppresses subsequent request/pull attempts but does not
+wait for an already-running request or push. Concurrent remapping therefore requires an independent
+quiescence boundary; the flag alone does not establish one.
 
 Frames built via `FrameFactory` automatically capture their origin at factory creation time. On
 operating systems without direct per-thread CPU query APIs, this falls back to the worker thread's
@@ -350,21 +354,26 @@ uncaught execution errors still recycle immediately).
 
 ## Dynamic Topology and Draining
 
-Euhedral accommodates CPU hot-plugging, re-allocation, and dynamic core scaling at runtime without
-interrupting un-migrated traffic.
+Euhedral has topology-update paths for CPU hot-plugging, re-allocation, and core scaling.
+Their drain flags are not a general lossless hot-remap barrier for in-flight routing.
 
 When active cores or sockets change:
 
-1. The lattice or shard enters a coordinated **drain mode**.
-2. Routing handles and the new mapping are prepared and published atomically while ingress is
-   drained.
+1. The lattice or shard sets its **drain flag**, preventing new request/pull attempts that observe it.
+2. Routing handles and the paired forward/reverse mapping arrays are prepared and installed.
 3. Fresh worker clones are initialized and attached.
-4. Existing workers finish their buffered queues. Deprecated workers are shut down, while retained
-   workers that stall past the drain deadline are safely replaced.
-5. Ingress resumes across the new topology.
+4. Existing workers are given a deadline to finish buffered and synchronous in-progress work.
+   Removed workers are closed; retained workers that reach the deadline are replaced using fresh
+   input edges rather than reconnecting through a retired edge.
+5. The last shard drain task resumes the current clones and distributor. Retired clones are not
+   resumed.
 
 Socket-level topology updates are handled by the lattice; core-level rebalancing is handled
-internally by each shard.
+internally by each shard. The current remappers install mappings before waiting for clone drain.
+An already-entered source request or push can therefore overlap mapping replacement. Queue-empty
+and clone-drained observations do not revoke a previously captured route, and bounded worker close
+does not prove a noncooperative body has terminated. Do not treat these paths as proof of
+old-generation exclusion or lossless routing across arbitrary concurrent topology changes.
 
 For benchmarking and test isolation, `ControlPlaneLattice.clear(Duration)` provides an explicit
 pipeline flush (with an optional `Runnable` hook executed during the pause). Producers must pause
@@ -380,7 +389,14 @@ Rather than relying on one-size-fits-all queues, [
 `euhedral-data-structures`](../euhedral-data-structures/src/main/java/io/euhedral_execution/data_structures/queues/)
 supplies specialized implementations for specific producer/consumer pairings: SPSC, SPMC, MPSC, and
 MPMC. These come in bounded, chunked, and partitioned layouts, prioritizing high-throughput batch
-drains (`drain` and `fill`) over single-item polling.
+drains (`drain` and `fill`) over single-item polling. MPMC consumption takes an atomic guard
+around the existing single-consumer path; `maxConsumeBatch` limits one guarded batch, not the
+whole queue. Consumer exclusion and producer-payload publication are separate contracts.
+
+Partitioned queue and worker-cache drain limits apply across the visited partitions, not anew to
+each partition. A stopped head remains in its partition while other partitions can still make
+progress; a busy work-steal partition can be skipped. Cache quotas and retained-chunk pool limits
+are scheduling and retention bounds, not hard capacities of the growable work queues.
 
 The [
 `atomics`](../euhedral-data-structures/src/main/java/io/euhedral_execution/data_structures/atomics/)
@@ -477,8 +493,8 @@ When working with or extending the engine, keep these fundamental principles in 
 - **Single Control Plane**: There is only ever one active `ControlPlaneLattice` instance per JVM.
 - **Pull, Don't Push**: Workers pull work. Never place a synchronized central distributor in the hot
   loop.
-- **Safe Routing Updates**: Only update and publish routing tables while the corresponding vertex is
-  safely draining.
+- **Safe Routing Updates**: Establish routing quiescence before replacing a mapping. Setting the
+  drain flag alone does not wait for already-entered work.
 - **Immutable In-Flight Frames**: Once ingested, a frame's routing metadata, origin, and payload
   must remain strictly immutable.
 - **Scoped Ordering**: In-order execution is guaranteed within a specific source and lane rather

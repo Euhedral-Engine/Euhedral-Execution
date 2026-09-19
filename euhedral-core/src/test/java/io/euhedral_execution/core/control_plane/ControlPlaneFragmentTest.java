@@ -1,5 +1,7 @@
 package io.euhedral_execution.core.control_plane;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,12 +27,16 @@ import io.euhedral_execution.hardware_utils.common.SystemUtilization;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.Mockito;
 
@@ -38,6 +44,17 @@ import org.mockito.Mockito;
 class ControlPlaneFragmentTest {
 
     private final List<ControlPlaneFragment> fragments = new ArrayList<>();
+    private final List<PinnedThreadExecutor> executors = new ArrayList<>();
+    private ControlPlaneCache[] workStealRegistry;
+    private ControlPlaneCache[] savedWorkStealRegistry;
+
+    @BeforeEach
+    void saveWorkStealRegistry() throws ReflectiveOperationException {
+        var field = ControlPlaneCache.class.getDeclaredField("WORK_STEAL");
+        field.setAccessible(true);
+        this.workStealRegistry = (ControlPlaneCache[]) field.get(null);
+        this.savedWorkStealRegistry = this.workStealRegistry.clone();
+    }
 
     private static FragmentConfig workerConfig() {
         return FragmentConfig.ofDefaults().clone(cloneConfig());
@@ -56,10 +73,26 @@ class ControlPlaneFragmentTest {
 
     @AfterEach
     void closeFragments() {
+        List<Executable> cleanup = new ArrayList<>();
         for (ControlPlaneFragment fragment : this.fragments) {
-            fragment.close();
+            cleanup.add(fragment::close);
         }
-        PinnedThreadExecutor.closeAll();
+        cleanup.add(PinnedThreadExecutor::closeAll);
+        cleanup.add(() -> {
+            // close() can time out or return interrupted; only task termination permits restoration.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            for (PinnedThreadExecutor executor : this.executors) {
+                assertTrue(
+                        executor.awaitTermination(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS),
+                        "Fixture pinned tasks did not terminate on CPU " + executor.getCpu());
+            }
+            // Closing a cache does not unregister it; leaked buddy work can reach a later test.
+            if (this.savedWorkStealRegistry != null) {
+                System.arraycopy(
+                        this.savedWorkStealRegistry, 0, this.workStealRegistry, 0, this.workStealRegistry.length);
+            }
+        });
+        assertAll("Fixture cleanup", cleanup);
     }
 
     @Test
@@ -79,6 +112,119 @@ class ControlPlaneFragmentTest {
             assertNotNull(fragment.output());
             assertNotNull(fragment.getLocalCache());
             assertNotNull(fragment.outputStream);
+        }
+    }
+
+    @Test
+    void cleanupRestoresWorkStealRegistrations() throws ReflectiveOperationException {
+        var field = ControlPlaneCache.class.getDeclaredField("WORK_STEAL");
+        field.setAccessible(true);
+        ControlPlaneCache[] registry = (ControlPlaneCache[]) field.get(null);
+        ControlPlaneCache[] before = registry.clone();
+        create(workerConfig());
+        assertFalse(Arrays.equals(before, registry), "The fixture must actually replace a registration");
+
+        closeFragments();
+
+        assertArrayEquals(before, registry, "Fixture cleanup must not expose retired caches to another test");
+    }
+
+    @Test
+    void cleanupDoesNotRestoreRegistrationsWhileWorkerIsActive() throws InterruptedException {
+        assertCleanupLeavesActiveRegistrations(false, false);
+    }
+
+    @Test
+    void interruptedCleanupDoesNotRestoreRegistrationsWhileWorkerIsActive() throws InterruptedException {
+        assertCleanupLeavesActiveRegistrations(true, false);
+    }
+
+    @Test
+    void failedCleanupDoesNotRestoreRegistrationsWhileWorkerIsActive() throws InterruptedException {
+        assertCleanupLeavesActiveRegistrations(false, true);
+    }
+
+    private void assertCleanupLeavesActiveRegistrations(boolean interrupted, boolean cleanupFails)
+            throws InterruptedException {
+        ControlPlaneFragment fragment = create(workerConfig());
+        PinnedThreadExecutor executor = PinnedThreadExecutor.get(fragment.cpu);
+        ControlPlaneFragment failedClose = Mockito.mock(ControlPlaneFragment.class);
+        if (cleanupFails) {
+            Mockito.doThrow(new IllegalStateException("fixture close failure"))
+                    .when(failedClose)
+                    .close();
+            this.fragments.addFirst(failedClose);
+        }
+        var entered = new CountDownLatch(1);
+        var release = new CompletableFuture<Void>();
+        var receiver = Mockito.mock(LatticeReceiver.class);
+        Mockito.doAnswer(call -> {
+                    entered.countDown();
+                    release.join(); // Deliberately ignore shutdown interruption until the test releases ownership.
+                    return null;
+                })
+                .when(receiver)
+                .push(Mockito.any());
+        fragment.output().addDownstream(receiver);
+        fragment.push(DummyFrame.INSTANCE);
+        try {
+            fragment.start();
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            ControlPlaneCache[] activeRegistry = this.workStealRegistry.clone();
+            assertFalse(Arrays.equals(this.savedWorkStealRegistry, activeRegistry));
+
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+            AssertionError failure = assertThrows(AssertionError.class, this::closeFragments);
+            assertTrue(failure.getMessage().contains("Fixture pinned tasks did not terminate"));
+            if (cleanupFails) {
+                assertTrue(failure.getMessage().contains("fixture close failure"));
+            }
+
+            assertEquals(interrupted, Thread.currentThread().isInterrupted(), "Preserve caller interruption");
+            assertFalse(executor.isTerminated(), "Shutdown is not task termination");
+            assertArrayEquals(activeRegistry, this.workStealRegistry, "Never restore while a fixture task is active");
+        } finally {
+            this.fragments.remove(failedClose);
+            Thread.interrupted();
+            release.complete(null);
+            executor.close();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS), "Regression worker must terminate");
+        }
+        closeFragments();
+        assertArrayEquals(this.savedWorkStealRegistry, this.workStealRegistry);
+    }
+
+    @Test
+    void cleanupClosesRemainingFragmentsWhenOneCloseFails() {
+        SimpleMeterRegistry registry = Mockito.spy(new SimpleMeterRegistry());
+        FragmentConfig base = workerConfig();
+        FragmentConfig config = new FragmentConfig(
+                base.cloneConfig(),
+                base.cacheConfig(),
+                base.observer(),
+                base.maxBatchSize(),
+                base.smtEnabled(),
+                base.idlePolicy(),
+                base.benchmarkMode(),
+                base.metricPrefix(),
+                registry);
+        create(config);
+        ControlPlaneFragment later = create(workerConfig());
+        assertFalse(Arrays.equals(this.savedWorkStealRegistry, this.workStealRegistry));
+        Mockito.doThrow(new IllegalStateException("fixture metrics close failure"))
+                .when(registry)
+                .remove(Mockito.any(Meter.class));
+        try {
+            AssertionError failure = assertThrows(AssertionError.class, this::closeFragments);
+
+            assertTrue(failure.getMessage().contains("fixture metrics close failure"));
+            assertTrue(later.isClosed(), "A failed close must not skip remaining fixture cleanup");
+            assertTrue(this.executors.stream().allMatch(PinnedThreadExecutor::isTerminated));
+            assertArrayEquals(this.savedWorkStealRegistry, this.workStealRegistry);
+        } finally {
+            Mockito.doCallRealMethod().when(registry).remove(Mockito.any(Meter.class));
         }
     }
 
@@ -139,7 +285,7 @@ class ControlPlaneFragmentTest {
         CloneConfig cloneConfig = cloneConfig();
 
         ControlPlaneFragment cloned = fragment.clone(cloneConfig);
-        this.fragments.add(cloned);
+        track(cloned);
 
         assertNotSame(fragment, cloned);
         assertSame(cloneConfig, cloned.getConfig().cloneConfig());
@@ -358,7 +504,21 @@ class ControlPlaneFragmentTest {
 
     private ControlPlaneFragment create(FragmentConfig config) {
         ControlPlaneFragment fragment = new ControlPlaneFragment(config);
-        this.fragments.add(fragment);
+        track(fragment);
         return fragment;
+    }
+
+    private void track(ControlPlaneFragment fragment) {
+        this.fragments.add(fragment);
+        // Retain the exact primary/buddy identities before close makes registry lookups unavailable.
+        for (ControlPlaneFragment worker = fragment; worker != null; worker = worker.getSmtBuddy()) {
+            if (worker.cpu >= 0) {
+                PinnedThreadExecutor executor = PinnedThreadExecutor.get(worker.cpu);
+                assertNotNull(executor);
+                if (!this.executors.contains(executor)) {
+                    this.executors.add(executor);
+                }
+            }
+        }
     }
 }
