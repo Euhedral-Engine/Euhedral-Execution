@@ -261,15 +261,21 @@ frames.
   barrier
   for pipeline stages or terminal callbacks, because stages can enqueue later work back into the
   same sink.
-- Inherited `completeGracefully()` is unsafe for an active multi-stage `PipelineRunner` unless all
-  producers and in-flight stage chains are quiesced or externally acknowledged. A transiently empty
-  queue can complete the sink; a later stage then attempts to enqueue its successor into a completed
-  sink and receives `IllegalAccessError`. Changes here require a regression for this race.
-- `PipelineRunner.complete()` trips the shared kill switch and disconnects immediately; inherited
-  graceful completion does not trip it.
-- Current `PipelineRunner.run(...)` methods do not expose or handle a failed bounded offer. Any
-  change
-  around saturation requires direct regression coverage for ownership, recycling, and delivery.
+- `PipelineRunner` overrides graceful completion: it closes admission and waits for its accepted-chain
+  count to reach zero before closing publication and disconnecting. Accepted stages can still publish
+  successors after admission closes. The method initiates closure; its return is not a blocking join.
+- `PipelineRunner.complete()` trips the shared kill switch and disconnects immediately. Queued frames
+  are cancelled under single-consumer drain ownership; an executing frame remains owned by its
+  executor until the body returns. Graceful completion does not trip the kill switch.
+- Runner checkout has one submission owner, even though close and finalization may race that owner.
+  `run` and `submit` account accepted chains before checkout and finalize a rejected publication as
+  cancellation. The runner's partitioned delivery queue is growable, not an 8192-frame hard bound.
+- `submit` returns an optional outcome future; `run` avoids that allocation. Root finalization detaches
+  the future and owner callback, clears all stage payloads, recycles, publishes the outcome, then
+  decrements accepted-chain accounting. Detached callbacks must not access recycled frame state or
+  block on progress that depends on the same finalizer. Pooled pipeline definitions remain reusable.
+- Raw inherited `offer` and `clear` do not participate in runner admission/accounting. Use `run` or
+  `submit` for inputs, and runner completion methods for lifecycle management; do not clear live work.
 - `ArrayIngestSink` retains the caller's array by reference. Do not mutate that array or in-flight
   frames after publication.
 
@@ -381,14 +387,16 @@ mise exec -- gradle build integrationTest
 - Core currently has no integration-tagged tests. A successful `:euhedral-core:integrationTest` can
   execute no test bodies.
 - `test` explicitly excludes the same absent runtime-parity class.
-- Several public paths lack dedicated tests, including `PipelineRunner`, `QueueIngestSink`,
-  `FrameFactory`, and parts of metrics. Add focused tests when modifying them.
+- `PipelineRunnerTest`, `PipelineRunnerConcurrencyTest`, and `QueueIngestSinkTest` exercise admission,
+  outcomes, graceful completion, cancellation, and selected deterministic races. Validate the exact
+  interleaving rather than treating their presence as coverage for every lifecycle or publication path.
+  Add focused tests when changing factory or metrics contracts not covered by their nearest tests.
 - Existing cache tests do not establish every multi-partition drain/limit behavior. Add
   multi-partition coverage when changing cache drain or work stealing.
 - Comments and architecture prose that mention `FragmentActionPicker`, a `CACHE` execution path, or
   a `CacheTimingConfig` describe removed behavior. Verify names against current source.
-- `AbstractExecutor` documentation can imply a completion channel, but the current default executor
-  terminal only executes and finalizes frames. Verify implementation before relying on comments.
+- `AbstractExecutor` executes and finalizes frames; it has no separate completion channel. Exactly-once
+  delivery and finalization remain ownership contracts, not duplicate-call protection on every frame.
 
 For documentation-only edits to this file, validate links and `git diff --check`; do not run native
 or behavioral suites solely for the guide. For code changes, finish with the root handoff checklist

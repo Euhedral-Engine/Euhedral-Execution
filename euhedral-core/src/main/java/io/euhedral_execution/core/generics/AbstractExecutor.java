@@ -9,11 +9,11 @@ import org.slf4j.LoggerFactory;
 
 /// ## The terminal execution sink of Euhedral Core
 ///
-/// `AbstractExecutor` is the final execution boundary for frames. It receives, executes, and
-/// forwards completed frames to the completion channel.
+/// `AbstractExecutor` receives a frame, checks liveness, and owns its execution and finalization.
 ///
-/// Execution is intentionally minimal and without side effects. Completed frames are always pushed
-/// into the completion sink, which decouples execution from downstream acknowledgment.
+/// Success and structured cancellation use `doFinally()`; other caught `Exception` values use
+/// `doFinallyWithError(Throwable)`. Frame implementations own recycling and notification. There is
+/// no separate completion channel, and arbitrary JVM `Error` values are outside this boundary.
 public abstract class AbstractExecutor implements CloneableObject {
 
     protected final int cpu;
@@ -57,7 +57,8 @@ public abstract class AbstractExecutor implements CloneableObject {
             try {
                 execute(frame);
             } catch (Exception e) {
-                logger.error("Uncaught exception while running doFinally() on frame. {}", frame, e);
+                // A throwing finalizer may already have transferred the frame to its next owner.
+                logger.error("Uncaught exception while running frame finalization", e);
             }
         }
 
@@ -78,7 +79,7 @@ public abstract class AbstractExecutor implements CloneableObject {
             try {
                 frame.doFinally();
             } catch (Exception e) {
-                logger.error("Uncaught exception while running doFinally. {}", frame);
+                logger.error("Uncaught exception while running doFinally", e);
             }
         }
 
