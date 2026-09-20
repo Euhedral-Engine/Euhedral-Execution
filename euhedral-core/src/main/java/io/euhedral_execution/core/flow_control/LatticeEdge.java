@@ -15,6 +15,7 @@ import io.euhedral_execution.hashing.HasherApi;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.lang.invoke.VarHandle;
 import java.util.BitSet;
+import java.util.Objects;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -198,6 +199,19 @@ public class LatticeEdge extends UpstreamHandle {
     /// Sets the parent LatticeEdge.
     public void setParent(LatticeEdge parent) {
         PARENT.setRelease(this, parent);
+    }
+
+    /// Defers receiver-owner retirement until no published routing generation can select this edge.
+    public void deferRetirement(Runnable action) {
+        Objects.requireNonNull(action);
+        LatticeEdge parent = (LatticeEdge) PARENT.getAcquire(this);
+        if (parent instanceof LatticeVertex vertex) {
+            vertex.deferHandleRetirement(this, action);
+        } else if (parent != null) {
+            parent.deferRetirement(action);
+        } else {
+            action.run();
+        }
     }
 
     /// Sends work downstream.

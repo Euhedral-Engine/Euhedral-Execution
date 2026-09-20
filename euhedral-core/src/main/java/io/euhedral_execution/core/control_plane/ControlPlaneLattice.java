@@ -27,8 +27,11 @@ import java.time.Duration;
 import java.util.BitSet;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -228,25 +231,36 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             this.logger.info("Created ControlPlaneShard on socket: {}", i);
         }
 
-        LatticeVertex controller =
-                new LatticeVertex(this.name + "-GlobalDistributor", SystemInfo.getMaxSocketId() + 1, this::route);
+        LatticeVertex controller = new LatticeVertex(
+                this.name + "-GlobalDistributor",
+                SystemInfo.getMaxSocketId() + 1,
+                (frame, mapSize, state) -> this.route(frame, mapSize, state));
         this.ingestController.set(controller);
     }
 
     /// Routes work based on their policy level or uses default global routing.
     private int route(AbstractFrame frame, int mapSize) {
+        return route(frame, mapSize, null);
+    }
+
+    private int route(AbstractFrame frame, int mapSize, LatticeVertex.RoutingState routeState) {
         CpuInfo location = frame.getOrigin();
         RoutingPolicy policy = frame.getRoutingPolicy();
         if (policy.level > RoutingPolicy.ANYWHERE.level && location != null) {
             int socket = location.socket();
-            LatticeEdge edge = socket >= 0 && socket < this.shardHandles.length
-                    ? (LatticeEdge) HANDLES.getAcquire(this.shardHandles, socket)
-                    : null;
-            if (edge != null) {
-                int index = this.ingestController.get().getActiveDownstreamIndex(socket);
-                if (index >= 0) {
-                    return index;
-                }
+            LatticeEdge edge;
+            int index;
+            if (routeState != null) {
+                edge = routeState.getDownstream(socket);
+                index = routeState.getActiveDownstreamIndex(socket);
+            } else {
+                edge = socket >= 0 && socket < this.shardHandles.length
+                        ? (LatticeEdge) HANDLES.getAcquire(this.shardHandles, socket)
+                        : null;
+                index = this.ingestController.get().getActiveDownstreamIndex(socket);
+            }
+            if (edge != null && index >= 0) {
+                return index;
             }
         }
 
@@ -309,6 +323,7 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         this.currentGlobalVersion = this.topology.getGlobalVersion();
 
         LatticeVertex controller = this.ingestController.get();
+        controller.setDrain(true);
 
         BitSet newShards = this.effectiveTopology.effectiveSockets();
         for (int socket = newShards.nextSetBit(0); socket >= 0; socket = newShards.nextSetBit(socket + 1)) {
@@ -324,8 +339,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
             }
         }
         AtomicInteger shutDown = new AtomicInteger(retiredShards.cardinality());
-
-        remapIngestController();
 
         // Divide the quota proportionally based on cpu count
         double quotaPool = utilization.quotaCpus();
@@ -348,6 +361,8 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 this.shards[socket].update(snapshot, topology);
             }
         }
+
+        remapIngestController();
 
         int idx = 0;
         int[] nextSockets = new int[newShards.cardinality()];
@@ -510,17 +525,62 @@ public final class ControlPlaneLattice implements LatticeTerminal {
         }
         logger.info("Closing.");
         LatticeVertex controller = this.ingestController.getAndSet(null);
+        this.resourceMonitor.close();
+        this.activeShardIds.set(null);
+
+        AtomicBoolean closeScheduled = new AtomicBoolean();
+        CountDownLatch closedResources = new CountDownLatch(1);
+        Runnable closeResources = () -> {
+            try {
+                closeShards();
+                PinnedThreadExecutor.closeAll();
+            } finally {
+                this.controlPlaneExecutor.shutdownNow();
+                INSTANCE.compareAndSet(this, null);
+                closedResources.countDown();
+                this.logger.info("Closed.");
+            }
+        };
+        Runnable scheduleClose = () -> {
+            if (!closeScheduled.compareAndSet(false, true)) {
+                return;
+            }
+            try {
+                this.controlPlaneExecutor.execute(closeResources);
+            } catch (RejectedExecutionException rejected) {
+                closeResources.run();
+            }
+        };
 
         try {
-            if (controller != null) {
-                controller.close();
+            if (controller == null) {
+                scheduleClose.run();
+            } else {
+                controller.closeAfterRoutesRetire(scheduleClose);
             }
         } catch (Exception e) {
             this.logger.error("Error closing ControlPlaneIngestController.", e);
+            scheduleClose.run();
         }
 
-        this.resourceMonitor.close();
-        PinnedThreadExecutor.closeAll();
+        try {
+            long timeoutNanos = this.config.shutdownTimeout().toNanos();
+            if (timeoutNanos > 0 && !closedResources.await(timeoutNanos, TimeUnit.NANOSECONDS)) {
+                this.logger.warn("Close is waiting for admitted routes to retire asynchronously.");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+            this.logger.warn("Interrupted while waiting for admitted routes to retire.");
+        }
+
+        try {
+            Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
+        } catch (Exception ignored) {
+            // Shutdown-hook removal is best effort during process termination.
+        }
+    }
+
+    private void closeShards() {
         for (int i = 0; i < this.shards.length; i++) {
             if (this.shards[i] != null) {
                 try {
@@ -533,17 +593,6 @@ public final class ControlPlaneLattice implements LatticeTerminal {
                 }
             }
         }
-        this.activeShardIds.set(null);
-
-        INSTANCE.set(null);
-
-        try {
-            this.controlPlaneExecutor.shutdownNow();
-            Runtime.getRuntime().removeShutdownHook(this.shutdownHook);
-        } catch (Exception ignored) {
-            // Executor pool errors can be ignored on shutdown.
-        }
-        this.logger.info("Closed.");
     }
 
     /// Whether all queues are empty and all in-progress work is completed for all CPUs managed by

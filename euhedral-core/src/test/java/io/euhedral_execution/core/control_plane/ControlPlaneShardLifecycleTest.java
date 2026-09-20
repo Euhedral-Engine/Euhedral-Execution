@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
@@ -110,6 +111,70 @@ class ControlPlaneShardLifecycleTest {
         assertTrue(old.received.isEmpty());
         assertEquals(1, replacement.received.size());
         assertFalse(replacement.receiver.isClosed());
+    }
+
+    @Test
+    void sourceServiceAdmittedBeforeTimeoutReachesReplacementBeforeRestart() throws Exception {
+        start(Duration.ZERO, 0);
+        RecordingClone old = cloneAt(0);
+        old.drained = false;
+
+        CountDownLatch replacementInputEntered = new CountDownLatch(1);
+        CountDownLatch allowReplacementInput = new CountDownLatch(1);
+        factory.inputEntered = replacementInputEntered;
+        factory.allowInput = allowReplacementInput;
+
+        LatticeVertex distributor = shard.coreDistributor.get();
+        LatticeVertex.UpstreamInterceptor interceptor = distributor.new UpstreamInterceptor();
+        SourceGate source = new SourceGate();
+        AbstractFrame frame = new AbstractFrame(0) {};
+        source.frame = frame;
+        source.addDownstream(interceptor);
+        interceptor.addUpstream(source);
+        assertTrue(interceptor.acquireLock());
+
+        var sourceExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        var replacementExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            var request = sourceExecutor.submit(() -> interceptor.request(1));
+            assertTrue(source.requestEntered.await(5, TimeUnit.SECONDS));
+
+            update(1, 0);
+            executor.tasks.removeFirst().run(); // Retained clone's utilization update.
+            var drainTask = executor.tasks.removeFirst();
+            var drain = replacementExecutor.submit(drainTask);
+
+            assertTrue(replacementInputEntered.await(5, TimeUnit.SECONDS));
+            RecordingClone replacement = cloneAt(0);
+            boolean oldClosedBeforeRelease = old.input.isClosed() || old.receiver.isClosed();
+            assertTrue(shard.isRebalancing(), "The replacement must still be before final restart");
+
+            source.allowRequest.countDown();
+            request.get(5, TimeUnit.SECONDS);
+
+            allowReplacementInput.countDown();
+            drain.get(5, TimeUnit.SECONDS);
+            assertAll(
+                    () -> assertFalse(
+                            oldClosedBeforeRelease,
+                            "The old receiver must remain live until replacement publication retires its route"),
+                    () -> assertEquals(1, old.received.size() + replacement.received.size()),
+                    () -> assertTrue(old.received.contains(frame) || replacement.received.contains(frame)),
+                    () -> assertTrue(old.input.isClosed()),
+                    () -> assertTrue(old.receiver.isClosed()),
+                    () -> assertFalse(shard.isRebalancing()));
+        } finally {
+            source.allowRequest.countDown();
+            allowReplacementInput.countDown();
+            interceptor.releaseLock();
+            if (!interceptor.isComplete()) {
+                interceptor.complete();
+            }
+            sourceExecutor.shutdownNow();
+            replacementExecutor.shutdownNow();
+            assertTrue(sourceExecutor.awaitTermination(5, TimeUnit.SECONDS));
+            assertTrue(replacementExecutor.awaitTermination(5, TimeUnit.SECONDS));
+        }
     }
 
     @Test
@@ -359,9 +424,56 @@ class ControlPlaneShardLifecycleTest {
         return new SocketSnapshot(0, topology.effectiveCores(), 0, 0, 0, 0, snapshots, 0);
     }
 
+    private static final class SourceGate implements LatticeSource {
+        final CountDownLatch requestEntered = new CountDownLatch(1);
+        final CountDownLatch allowRequest = new CountDownLatch(1);
+        LatticeReceiver downstream;
+        AbstractFrame frame;
+        boolean complete;
+
+        @Override
+        public void addDownstream(LatticeReceiver downstream) {
+            this.downstream = downstream;
+        }
+
+        @Override
+        public long pull(
+                java.util.function.Consumer<AbstractFrame> consumer,
+                java.util.function.Function<AbstractFrame, Boolean> stopCondition,
+                long demand) {
+            return 0;
+        }
+
+        @Override
+        public void request(long demand) {
+            requestEntered.countDown();
+            try {
+                assertTrue(allowRequest.await(5, TimeUnit.SECONDS));
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(failure);
+            }
+            downstream.push(frame);
+        }
+
+        @Override
+        public void complete() {
+            complete = true;
+        }
+
+        @Override
+        public boolean isComplete() {
+            return complete;
+        }
+    }
+
     private static final class RecordingClone implements CloneableObject {
         final CloneConfig config;
         final List<RecordingClone> created = new ArrayList<>();
+        CountDownLatch updateEntered;
+        CountDownLatch allowUpdate;
+        CountDownLatch inputEntered;
+        CountDownLatch allowInput;
         Runnable afterDump = () -> {};
         final List<AbstractFrame> received = new ArrayList<>();
         final List<String> events = new ArrayList<>();
@@ -379,6 +491,10 @@ class ControlPlaneShardLifecycleTest {
         @Override
         public RecordingClone clone(CloneConfig config) {
             RecordingClone clone = new RecordingClone(config);
+            clone.updateEntered = updateEntered;
+            clone.allowUpdate = allowUpdate;
+            clone.inputEntered = inputEntered;
+            clone.allowInput = allowInput;
             created.add(clone);
             return clone;
         }
@@ -408,6 +524,15 @@ class ControlPlaneShardLifecycleTest {
             receiver.setDownstreamMapping(bits(0), new LatticeEdge[] {terminal});
             receiver.addUpstream(input);
             receiver.setDrain(false);
+            if (inputEntered != null) {
+                inputEntered.countDown();
+                try {
+                    assertTrue(allowInput.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(failure);
+                }
+            }
         }
 
         @Override
@@ -418,6 +543,19 @@ class ControlPlaneShardLifecycleTest {
         @Override
         public boolean isStarted() {
             return started;
+        }
+
+        @Override
+        public void update(CoreSnapshot snapshot) {
+            if (updateEntered != null) {
+                updateEntered.countDown();
+                try {
+                    assertTrue(allowUpdate.await(5, TimeUnit.SECONDS));
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(failure);
+                }
+            }
         }
 
         @Override

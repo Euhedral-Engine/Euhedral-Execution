@@ -18,6 +18,10 @@ public interface LatticeSource {
     /// - The implementation must stop the pull when the stop condition is true
     long pull(Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand);
 
+    /// Signals demand to the source. Implementations may push during this call or later from another
+    /// thread. Each downstream `push()` is a separate frame-admission event and selects the routing
+    /// generation that is live when that push begins; returning from `request()` does not reserve a
+    /// routing generation for future asynchronous frames.
     void request(long demand);
 
     void complete();
