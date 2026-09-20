@@ -782,7 +782,12 @@ class UpstreamQueueTest {
     private static QueueFixture queueFixture() {
         QueueIngestSink sink = new QueueIngestSink();
         LatticeVertex vertex = new LatticeVertex("productive-queue-test", 1);
-        vertex.downstreams[0] = new LatticeEdge(new AtomicBoolean());
+        LatticeEdge downstream = new LatticeEdge(new AtomicBoolean());
+        BitSet active = new BitSet(1);
+        active.set(0);
+        vertex.setDrain(true);
+        assertTrue(vertex.setDownstreamMapping(active, new LatticeEdge[] {downstream}));
+        vertex.setDrain(false);
         LatticeVertex.UpstreamInterceptor handle = vertex.new UpstreamInterceptor();
         handle.upstream = sink.getDelegate();
         sink.getDelegate().addDownstream(handle);

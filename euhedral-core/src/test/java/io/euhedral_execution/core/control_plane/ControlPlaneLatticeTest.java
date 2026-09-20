@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,6 +42,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -50,12 +55,16 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.api.parallel.Isolated;
 import org.mockito.MockedConstruction;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
+import test_utils.TestReceiver;
 
 @Isolated
+@Execution(ExecutionMode.SAME_THREAD)
 class ControlPlaneLatticeTest {
 
     private ControlPlaneShard baseShard;
@@ -265,6 +274,71 @@ class ControlPlaneLatticeTest {
         assertTrue(controlPlane.primed.get());
         assertArrayEquals(new int[] {1}, controlPlane.activeShardIds.get());
         assertArrayEquals(new int[] {1, 1, 1, 1}, controlPlane.weightedShardMap.get());
+    }
+
+    @Test
+    void closeDefersShardRetirementUntilAnInFlightGlobalRouteReturns() throws Exception {
+        controlPlane = createControlPlaneWithMocks(new SocketSnapshot[2]);
+        CountDownLatch routeEntered = new CountDownLatch(1);
+        CountDownLatch allowRoute = new CountDownLatch(1);
+        LatticeVertex controller = new LatticeVertex("close-route", 1, (frame, mapSize, state) -> {
+            routeEntered.countDown();
+            try {
+                assertTrue(allowRoute.await(5, TimeUnit.SECONDS));
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(failure);
+            }
+            return 0;
+        });
+        LatticeEdge socket = new LatticeEdge(controller.getDrainFlag());
+        TestReceiver receiver = new TestReceiver();
+        socket.addDownstream(receiver);
+        controller.setDrain(true);
+        BitSet active = new BitSet(1);
+        active.set(0);
+        assertTrue(controller.setDownstreamMapping(active, new LatticeEdge[] {socket}));
+        controller.setDrain(false);
+        controlPlane.ingestController.set(controller);
+        controlPlane.shards[0] = mockShards[0];
+        controlPlane.shardHandles[0] = socket;
+
+        ExecutorService producerExecutor = Executors.newSingleThreadExecutor();
+        try {
+            var producer = producerExecutor.submit(() -> controller.push(new test_utils.TestFrame("route")));
+            assertTrue(routeEntered.await(5, TimeUnit.SECONDS));
+
+            controlPlane.close();
+
+            verify(mockShards[0], never()).close();
+            ControlPlaneLattice whileOldRoutesRemain =
+                    ControlPlaneLattice.getOrCreate("replacement-during-close", "replacement-shard");
+            try {
+                assertSame(
+                        controlPlane,
+                        whileOldRoutesRemain,
+                        "The closing generation must retain singleton ownership until its admitted routes retire");
+            } finally {
+                if (whileOldRoutesRemain != controlPlane) {
+                    whileOldRoutesRemain.close();
+                }
+            }
+            allowRoute.countDown();
+            producer.get(5, TimeUnit.SECONDS);
+            assertEquals(1, receiver.received.size());
+            Awaitility.await()
+                    .atMost(Duration.ofSeconds(5))
+                    .untilAsserted(() -> verify(mockShards[0]).close());
+
+            ControlPlaneLattice replacement =
+                    ControlPlaneLattice.getOrCreate("replacement-after-close", "replacement-shard");
+            assertNotSame(controlPlane, replacement);
+            replacement.close();
+        } finally {
+            allowRoute.countDown();
+            producerExecutor.shutdownNow();
+            assertTrue(producerExecutor.awaitTermination(5, TimeUnit.SECONDS));
+        }
     }
 
     private ControlPlaneLattice createControlPlaneWithMocks(SocketSnapshot[] snapshots) {

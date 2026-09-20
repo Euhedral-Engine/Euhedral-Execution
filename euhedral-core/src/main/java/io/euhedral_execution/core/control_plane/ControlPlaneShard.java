@@ -53,6 +53,7 @@ public class ControlPlaneShard {
     protected final AtomicLong currentVersion = new AtomicLong(Integer.MIN_VALUE);
     protected final AtomicBoolean primed = new AtomicBoolean(false);
     protected final AtomicBoolean started = new AtomicBoolean(false);
+    private final AtomicBoolean shutdownScheduled = new AtomicBoolean(false);
     protected final AtomicBoolean rebalancing = new AtomicBoolean(false);
     protected final AtomicInteger coresToDrain = new AtomicInteger(0);
     protected final AtomicReference<LatticeVertex> coreDistributor = new AtomicReference<>();
@@ -61,6 +62,7 @@ public class ControlPlaneShard {
     protected final AtomicReference<CloneableObject[]> clones = new AtomicReference<>(new CloneableObject[0]);
     protected final LatticeEdge[] coreHandles = new LatticeEdge[SystemInfo.getMaxCoreId() + 1];
     protected volatile ExecutorService shardExecutor;
+    private LatticeEdge upstreamEdge;
     // Serializes final-drain publication with generation retirement, never frame processing.
     private final Object lifecycleLock = new Object();
 
@@ -92,6 +94,8 @@ public class ControlPlaneShard {
             if (!this.started.compareAndSet(false, true)) {
                 return;
             }
+            this.shutdownScheduled.set(false);
+            this.upstreamEdge = upstream;
             this.logger.info("Starting.");
             this.shardExecutor = Executors.newFixedThreadPool(
                     topology.effectiveCores().length(), r -> new Thread(r, this.shardName + "-ExecutorService"));
@@ -100,7 +104,9 @@ public class ControlPlaneShard {
             BitSet coreSet = info.getCoreSet();
 
             coreDistributor = new LatticeVertex(
-                    this.shardName + "-CoreDistributor", coreSet.previousSetBit(coreSet.length()) + 1, this::route);
+                    this.shardName + "-CoreDistributor",
+                    coreSet.previousSetBit(coreSet.length()) + 1,
+                    (frame, mapSize, state) -> this.route(frame, mapSize, state));
             this.coreDistributor.set(coreDistributor);
         }
         coreDistributor.addUpstream(upstream);
@@ -109,19 +115,27 @@ public class ControlPlaneShard {
 
     /// Routes work based on their policy level or uses default global routing.
     protected int route(AbstractFrame frame, int mapSize) {
+        return route(frame, mapSize, null);
+    }
+
+    protected int route(AbstractFrame frame, int mapSize, LatticeVertex.RoutingState routeState) {
         RoutingPolicy policy = frame.getRoutingPolicy();
         CpuInfo location = frame.getOrigin();
         if (policy.level > RoutingPolicy.SOCKET_LOCAL.level && location != null) {
             int core = location.core();
-            LatticeEdge handle = core >= 0 && core < this.coreHandles.length
-                    ? (LatticeEdge) HANDLE.getOpaque(this.coreHandles, core)
-                    : null;
-
-            if (handle != null) {
-                int index = this.coreDistributor.get().getActiveDownstreamIndex(core);
-                if (index >= 0) {
-                    return index;
-                }
+            LatticeEdge handle;
+            int index;
+            if (routeState != null) {
+                handle = routeState.getDownstream(core);
+                index = routeState.getActiveDownstreamIndex(core);
+            } else {
+                handle = core >= 0 && core < this.coreHandles.length
+                        ? (LatticeEdge) HANDLE.getOpaque(this.coreHandles, core)
+                        : null;
+                index = this.coreDistributor.get().getActiveDownstreamIndex(core);
+            }
+            if (handle != null && index >= 0) {
+                return index;
             }
         }
 
@@ -167,10 +181,11 @@ public class ControlPlaneShard {
         this.currentVersion.setRelease(topology.version());
 
         BitSet newCores = topology.effectiveCores();
-        remapIngestController(newCores);
+        prepareIngestController(newCores);
 
         CloneableObject[] oldClones = this.clones.getPlain();
         createNextClones(snapshot, topology);
+        publishIngestController(newCores);
 
         if (!this.primed.getOpaque()) {
             for (var clone : this.clones.getPlain()) {
@@ -188,18 +203,29 @@ public class ControlPlaneShard {
     }
 
     protected void remapIngestController(BitSet newCores) {
-        this.logger.trace("Remapping ingest controller.");
+        prepareIngestController(newCores);
+        publishIngestController(newCores);
+    }
+
+    private void prepareIngestController(BitSet newCores) {
+        this.logger.trace("Preparing ingest controller remap.");
         LatticeVertex distributor = this.coreDistributor.get();
         distributor.setDrain(true);
         for (int i = newCores.nextSetBit(0); i >= 0; i = newCores.nextSetBit(i + 1)) {
-            LatticeEdge handle = this.coreHandles[i];
+            LatticeEdge handle = (LatticeEdge) HANDLE.getOpaque(this.coreHandles, i);
             if (handle == null) {
                 handle = new LatticeEdge(distributor.getDrainFlag());
-                this.coreHandles[i] = handle;
                 HANDLE.setRelease(this.coreHandles, i, handle);
             }
         }
-        distributor.setDownstreamMapping(newCores, this.coreHandles);
+    }
+
+    private void publishIngestController(BitSet newCores) {
+        this.logger.trace("Publishing ingest controller remap.");
+        LatticeVertex distributor = this.coreDistributor.get();
+        if (!distributor.setDownstreamMapping(newCores, this.coreHandles)) {
+            throw new IllegalStateException("Core distributor rejected a prepared remap");
+        }
     }
 
     protected void createNextClones(SocketSnapshot snapshot, EffectiveSocketTopology topology) {
@@ -260,6 +286,7 @@ public class ControlPlaneShard {
 
         CloneableObject[] currClones = this.clones.getOpaque();
         LatticeVertex expectedDistributor = this.coreDistributor.get();
+        LatticeEdge[] retiringHandles = Arrays.copyOf(this.coreHandles, this.coreHandles.length);
 
         Set<Integer> deadClones = new HashSet<>();
         PlainQueue<CloneableObject> clones = new PlainQueue<>(Math.max(2, oldClones.length));
@@ -289,21 +316,29 @@ public class ControlPlaneShard {
                     SpinWait.awaitWhile(() -> !clone.isDrained() && System.nanoTime() < deadline);
 
                     boolean close = deadClones.contains(core) || System.nanoTime() >= deadline;
-                    if (close) {
-                        closeClone(clone);
-                    }
-
                     synchronized (this.lifecycleLock) {
                         // Retirement settles its count; late tasks cannot replace edges or spawn into the next run.
                         if (!this.started.get() || this.coreDistributor.get() != expectedDistributor) {
+                            if (close) {
+                                closeClone(clone);
+                            }
                             return;
                         }
                         if (close && !deadClones.contains(core)) {
                             this.logger.info("Restarting clone on core {}", core);
-                            this.coreHandles[core].close();
                             HANDLE.setRelease(
                                     this.coreHandles, core, new LatticeEdge(expectedDistributor.getDrainFlag()));
                             spawnClone(core, snapshot.coreSnapshots()[core], currClones);
+                        }
+                        if (close) {
+                            // The replacement mapping retires this generation. Its direct edge and
+                            // receiver owner stay live until every route admitted to it returns.
+                            LatticeEdge retiringHandle = retiringHandles[core];
+                            if (retiringHandle == null) {
+                                closeClone(clone);
+                            } else {
+                                retiringHandle.deferRetirement(() -> closeClone(clone));
+                            }
                         }
                         int remaining = this.coresToDrain.decrementAndGet();
                         if (remaining == 0) {
@@ -333,13 +368,15 @@ public class ControlPlaneShard {
             }
             if (this.coresToDrain.get() == 0) {
                 this.logger.info("Restarting ingest.");
-                // Only the last drain task publishes replacement edges into the distributor.
+                // The last drain task verifies the complete replacement map before reopening ingest.
                 LatticeVertex distributor = this.coreDistributor.get();
                 BitSet active = new BitSet(this.coreHandles.length);
                 for (int core : this.activeCoreIds.getAcquire()) {
                     active.set(core);
                 }
-                distributor.setDownstreamMapping(active, this.coreHandles);
+                if (!distributor.setDownstreamMapping(active, this.coreHandles)) {
+                    throw new IllegalStateException("Core distributor rejected the restart mapping");
+                }
                 for (CloneableObject clone : this.clones.getAcquire()) {
                     if (clone != null) {
                         clone.setDrainMode(false);
@@ -351,13 +388,33 @@ public class ControlPlaneShard {
         }
     }
 
-    /// Shuts down all cores under the shard's control.
+    /// Shuts down all cores under the shard's control after its incoming route generations retire.
     public void shutDownShard(AtomicInteger shutDownCounter) {
+        LatticeEdge incoming;
+        LatticeVertex expectedDistributor;
+        synchronized (this.lifecycleLock) {
+            if (!this.started.get() || !this.shutdownScheduled.compareAndSet(false, true)) {
+                shutDownCounter.decrementAndGet();
+                return;
+            }
+            incoming = this.upstreamEdge;
+            expectedDistributor = this.coreDistributor.get();
+        }
+
+        Runnable shutdown = () -> shutDownShardNow(shutDownCounter, expectedDistributor);
+        if (incoming == null) {
+            shutdown.run();
+        } else {
+            incoming.deferRetirement(shutdown);
+        }
+    }
+
+    private void shutDownShardNow(AtomicInteger shutDownCounter, LatticeVertex expectedDistributor) {
         CloneableObject[] clones;
         LatticeVertex distributor;
         ExecutorService executor;
         synchronized (this.lifecycleLock) {
-            if (!this.started.compareAndSet(true, false)) {
+            if (this.coreDistributor.get() != expectedDistributor || !this.started.compareAndSet(true, false)) {
                 shutDownCounter.decrementAndGet();
                 return;
             }
@@ -365,6 +422,7 @@ public class ControlPlaneShard {
             distributor = this.coreDistributor.getAndSet(null);
             executor = this.shardExecutor;
             this.shardExecutor = null;
+            this.upstreamEdge = null;
             this.activeCoreIds.setRelease(new int[0]);
             Arrays.fill(this.coreHandles, null);
             this.primed.set(false);
@@ -535,6 +593,7 @@ public class ControlPlaneShard {
             clones = this.clones.getAndSet(new CloneableObject[0]);
             executor = this.shardExecutor;
             this.shardExecutor = null;
+            this.upstreamEdge = null;
             this.activeCoreIds.setRelease(new int[0]);
             Arrays.fill(this.coreHandles, null);
             this.primed.set(false);
