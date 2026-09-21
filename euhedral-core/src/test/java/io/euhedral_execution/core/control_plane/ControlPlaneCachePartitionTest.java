@@ -2,6 +2,7 @@ package io.euhedral_execution.core.control_plane;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -283,22 +284,79 @@ class ControlPlaneCachePartitionTest {
     }
 
     @Test
-    void closedCacheRemainsRegisteredAndStealableCharacterization() {
+    void retiredCacheWithdrawsFromDiscoveryAndLeavesQueuedFramesForCollection() {
         TestCache thief = cache(1, true);
         TestCache victim = cache(1, true);
-        AbstractFrame frame = unorderedFrame();
+        TerminalFrame frame = terminalFrame();
         victim.push(frame);
         victim.close();
         assertTrue(victim.isClosed());
-        assertSame(victim, registry[fixtureCpu]);
+        assertNull(registry[fixtureCpu]);
         List<AbstractFrame> drained = new ArrayList<>();
-        assertEquals(1, thief.workSteal(drained::add, 1, fixtureCpu));
-        assertSame(frame, drained.getFirst());
-        assertTrue(victim.isDrained());
+        assertEquals(0, thief.workSteal(drained::add, 1, fixtureCpu));
+        assertTrue(drained.isEmpty());
+        assertEquals(0, frame.terminalCalls);
+        assertNull(frame.terminalFailure);
+        assertFalse(victim.isDrained());
+    }
+
+    @Test
+    void retirementDoesNotWaitForAThiefAlreadyDrainingTheRetiredCache() throws Exception {
+        TestCache thief = cache(1, true);
+        TestCache victim = cache(1, true);
+        AbstractFrame frame = unorderedFrame();
+        TerminalFrame residual = terminalFrame();
+        victim.push(frame);
+        victim.push(residual);
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        var executor = Executors.newFixedThreadPool(2);
+        try {
+            var stolen = executor.submit(() -> thief.workSteal(
+                    value -> {
+                        assertSame(frame, value);
+                        entered.countDown();
+                        await(release);
+                    },
+                    1,
+                    fixtureCpu));
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+
+            var closing = executor.submit(victim::close);
+            closing.get(1, TimeUnit.SECONDS);
+            assertNull(registry[fixtureCpu]);
+
+            release.countDown();
+            assertEquals(1L, stolen.get(5, TimeUnit.SECONDS));
+            assertEquals(0, residual.terminalCalls);
+            assertNull(residual.terminalFailure);
+            assertEquals(1L, victim.getLocalCacheCount());
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void retiringOldCacheCannotWithdrawAReplacementAtTheSameCpu() {
+        TestCache oldGeneration = cache(1, true);
+        TestCache replacement = cache(1, true);
+
+        oldGeneration.close();
+
+        assertSame(replacement, registry[fixtureCpu]);
     }
 
     private static AbstractFrame unorderedFrame() {
         AbstractFrame frame = new TestFrame(0);
+        frame.randomizeHash(1);
+        assertFalse(frame.isOrdered());
+        return frame;
+    }
+
+    private static TerminalFrame terminalFrame() {
+        TerminalFrame frame = new TerminalFrame();
         frame.randomizeHash(1);
         assertFalse(frame.isOrdered());
         return frame;
@@ -331,9 +389,28 @@ class ControlPlaneCachePartitionTest {
         }
     }
 
+    private static final class TerminalFrame extends AbstractFrame {
+        private int terminalCalls;
+        private Throwable terminalFailure;
+
+        private TerminalFrame() {
+            super(0);
+        }
+
+        @Override
+        public void doFinallyWithError(Throwable failure) {
+            this.terminalCalls++;
+            this.terminalFailure = failure;
+        }
+    }
+
     private static final class TestCache extends ControlPlaneCache {
         private TestCache(CacheConfig config, int cpu) {
             super(config, cpu, false);
+        }
+
+        private long staleSteal(Consumer<AbstractFrame> consumer, long limit) {
+            return drain(consumer, AbstractFrame::isOrdered, limit);
         }
 
         @Override

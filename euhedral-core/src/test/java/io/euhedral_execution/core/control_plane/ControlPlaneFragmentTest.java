@@ -86,7 +86,7 @@ class ControlPlaneFragmentTest {
                         executor.awaitTermination(Math.max(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS),
                         "Fixture pinned tasks did not terminate on CPU " + executor.getCpu());
             }
-            // Closing a cache does not unregister it; leaked buddy work can reach a later test.
+            // Restore the saved registry after verifying every pinned task terminated.
             if (this.savedWorkStealRegistry != null) {
                 System.arraycopy(
                         this.savedWorkStealRegistry, 0, this.workStealRegistry, 0, this.workStealRegistry.length);
@@ -130,21 +130,21 @@ class ControlPlaneFragmentTest {
     }
 
     @Test
-    void cleanupDoesNotRestoreRegistrationsWhileWorkerIsActive() throws InterruptedException {
-        assertCleanupLeavesActiveRegistrations(false, false);
+    void cleanupWithdrawsRegistrationWhileWorkerIsActive() throws InterruptedException {
+        assertCleanupWithdrawsActiveRegistration(false, false);
     }
 
     @Test
-    void interruptedCleanupDoesNotRestoreRegistrationsWhileWorkerIsActive() throws InterruptedException {
-        assertCleanupLeavesActiveRegistrations(true, false);
+    void interruptedCleanupWithdrawsRegistrationWhileWorkerIsActive() throws InterruptedException {
+        assertCleanupWithdrawsActiveRegistration(true, false);
     }
 
     @Test
-    void failedCleanupDoesNotRestoreRegistrationsWhileWorkerIsActive() throws InterruptedException {
-        assertCleanupLeavesActiveRegistrations(false, true);
+    void failedCleanupWithdrawsRegistrationWhileWorkerIsActive() throws InterruptedException {
+        assertCleanupWithdrawsActiveRegistration(false, true);
     }
 
-    private void assertCleanupLeavesActiveRegistrations(boolean interrupted, boolean cleanupFails)
+    private void assertCleanupWithdrawsActiveRegistration(boolean interrupted, boolean cleanupFails)
             throws InterruptedException {
         ControlPlaneFragment fragment = create(workerConfig());
         PinnedThreadExecutor executor = PinnedThreadExecutor.get(fragment.cpu);
@@ -184,7 +184,10 @@ class ControlPlaneFragmentTest {
 
             assertEquals(interrupted, Thread.currentThread().isInterrupted(), "Preserve caller interruption");
             assertFalse(executor.isTerminated(), "Shutdown is not task termination");
-            assertArrayEquals(activeRegistry, this.workStealRegistry, "Never restore while a fixture task is active");
+            assertNotSame(
+                    fragment,
+                    this.workStealRegistry[fragment.cpu],
+                    "Retirement withdraws the exact cache even while its worker finishes");
         } finally {
             this.fragments.remove(failedClose);
             Thread.interrupted();

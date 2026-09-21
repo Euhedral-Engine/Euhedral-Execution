@@ -12,6 +12,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
@@ -29,6 +30,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -486,6 +488,39 @@ class ControlPlaneShardTest {
         assertTrue(factory.created.get(0).dumpLocksCalled);
     }
 
+    @Test
+    void closeLogsAndContinuesWhenACloneWorkerOutlivesTheShardDeadline() throws Exception {
+        RecordingClone factory = new RecordingClone();
+        shard = new ControlPlaneShard(0, "TestShard", factory, Duration.ofMillis(20));
+        EffectiveSocketTopology topology = getTopology();
+        shard.start(getSocketSnapshot(topology), topology, new LatticeEdge(new AtomicBoolean()));
+
+        RecordingClone liveClone = factory.created.get(0);
+        CloneLivenessRegistry.WorkerSlot slot =
+                liveClone.livenessRegistry.slot(liveClone.config.effectiveCpus().nextSetBit(0));
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Thread worker = new Thread(() -> {
+            slot.enter(Thread.currentThread());
+            entered.countDown();
+            try {
+                release.await(5, TimeUnit.SECONDS);
+            } catch (InterruptedException failure) {
+                Thread.currentThread().interrupt();
+            } finally {
+                slot.exit();
+            }
+        });
+        worker.start();
+        assertTrue(entered.await(5, TimeUnit.SECONDS));
+
+        assertDoesNotThrow(shard::close);
+        assertTrue(slot.running());
+
+        release.countDown();
+        worker.join(5_000L);
+    }
+
     static class TestFrame extends AbstractFrame {
         TestFrame(long idHash) {
             super(idHash);
@@ -496,6 +531,7 @@ class ControlPlaneShardTest {
 
         private final List<RecordingClone> created;
         private final CloneConfig config;
+        private final CloneLivenessRegistry livenessRegistry;
 
         private LatticeSource input;
         private CoreSnapshot snapshot;
@@ -515,6 +551,7 @@ class ControlPlaneShardTest {
         private RecordingClone(List<RecordingClone> created, CloneConfig config) {
             this.created = created;
             this.config = config;
+            this.livenessRegistry = config == null ? null : config.livenessRegistry();
         }
 
         @Override
@@ -572,6 +609,11 @@ class ControlPlaneShardTest {
         @Override
         public int getCore() {
             return this.config == null ? -1 : this.config.coreId();
+        }
+
+        @Override
+        public CloneLivenessRegistry livenessRegistry() {
+            return this.livenessRegistry;
         }
 
         @Override

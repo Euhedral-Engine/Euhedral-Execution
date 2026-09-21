@@ -3,6 +3,7 @@ package io.euhedral_execution.core.control_plane;
 import static io.euhedral_execution.core.utils.MathFunctions.unsignedMultiplyHigh;
 
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.core.flow_control.LatticeEdge;
 import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
@@ -320,7 +321,7 @@ public class ControlPlaneShard {
                         // Retirement settles its count; late tasks cannot replace edges or spawn into the next run.
                         if (!this.started.get() || this.coreDistributor.get() != expectedDistributor) {
                             if (close) {
-                                closeClone(clone);
+                                closeClone(clone, deadline);
                             }
                             return;
                         }
@@ -335,9 +336,9 @@ public class ControlPlaneShard {
                             // receiver owner stay live until every route admitted to it returns.
                             LatticeEdge retiringHandle = retiringHandles[core];
                             if (retiringHandle == null) {
-                                closeClone(clone);
+                                closeClone(clone, deadline);
                             } else {
-                                retiringHandle.deferRetirement(() -> closeClone(clone));
+                                retiringHandle.deferRetirement(() -> closeClone(clone, deadline));
                             }
                         }
                         int remaining = this.coresToDrain.decrementAndGet();
@@ -350,13 +351,24 @@ public class ControlPlaneShard {
                 this.shardExecutor));
     }
 
-    protected final void closeClone(CloneableObject clone) {
+    protected final void closeClone(CloneableObject clone, long deadlineNanos) {
         try {
             clone.close();
         } catch (Exception e) {
             this.logger.error("Failed to shut down clone on core {}", clone.getCore());
         } finally {
+            awaitCloneTermination(clone, deadlineNanos);
             clone.dumpLocks();
+        }
+    }
+
+    private void awaitCloneTermination(CloneableObject clone, long deadlineNanos) {
+        CloneLivenessRegistry registry = clone.livenessRegistry();
+        if (registry == null) {
+            return;
+        }
+        if (!registry.awaitTermination(deadlineNanos)) {
+            this.logger.warn("Timed out waiting for clone workers on core {}; continuing shutdown", clone.getCore());
         }
     }
 
@@ -438,6 +450,7 @@ public class ControlPlaneShard {
             }
         }
         AtomicInteger drainCounter = new AtomicInteger(cloneCount);
+        long deadline = shutdownDeadline();
         for (int i = 0; i < clones.length; i++) {
             if (clones[i] == null) {
                 continue;
@@ -446,7 +459,7 @@ public class ControlPlaneShard {
             CloneableObject clone = clones[i];
             clones[i] = null;
 
-            shutdownCore(i, clone, drainCounter, shutDownCounter, executor);
+            shutdownCore(i, clone, drainCounter, shutDownCounter, executor, deadline);
         }
         if (cloneCount == 0) {
             shutDownCounter.decrementAndGet();
@@ -464,14 +477,14 @@ public class ControlPlaneShard {
             CloneableObject oldClone,
             AtomicInteger drainSignal,
             AtomicInteger shutDownCounter,
-            ExecutorService executor) {
+            ExecutorService executor,
+            long deadline) {
         this.logger.trace("Shutting down clone on core {}", coreId);
         oldClone.setDrainMode(true);
 
         CompletableFuture.runAsync(
                 () -> {
                     Thread.currentThread().setName(this.shardName + "-" + coreId);
-                    long deadline = System.nanoTime() + this.shutdownTimeout.toNanos();
                     try {
                         SpinWait.awaitWhile(() -> !oldClone.isDrained() && System.nanoTime() < deadline);
                         if (!oldClone.isDrained() && System.nanoTime() >= deadline) {
@@ -481,7 +494,7 @@ public class ControlPlaneShard {
                         this.logger.error("Shutdown cleanup failed for Core {}", coreId, e);
                     } finally {
                         try {
-                            closeClone(oldClone);
+                            closeClone(oldClone, deadline);
                         } catch (Exception e) {
                             this.logger.error("CRITICAL: Worker on core {} failed to close.", coreId, e);
                         } finally {
@@ -601,6 +614,7 @@ public class ControlPlaneShard {
             this.rebalancing.set(false);
         }
         this.logger.info("Closing.");
+        long deadline = shutdownDeadline();
         if (distributor != null) {
             try {
                 distributor.close();
@@ -612,11 +626,10 @@ public class ControlPlaneShard {
             CloneableObject clone = clones[i];
             if (clone != null) {
                 try {
-                    clone.close();
+                    closeClone(clone, deadline);
                 } catch (Exception e) {
                     this.logger.error("Failed to close clone.", e);
                 }
-                clone.dumpLocks();
                 clones[i] = null;
             }
         }
@@ -625,5 +638,10 @@ public class ControlPlaneShard {
             executor.shutdownNow();
         }
         this.logger.info("Closed.");
+    }
+
+    private long shutdownDeadline() {
+        long timeoutNanos = this.shutdownTimeout.toNanos();
+        return timeoutNanos <= 0L ? System.nanoTime() : System.nanoTime() + timeoutNanos;
     }
 }

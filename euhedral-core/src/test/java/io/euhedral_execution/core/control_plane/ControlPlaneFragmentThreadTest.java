@@ -5,10 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.config.LatticeConfig;
@@ -17,6 +19,7 @@ import io.euhedral_execution.core.flow_control.LatticeVertex;
 import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.BenchmarkFrame;
+import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.impl.BaseCloneableObject;
@@ -71,6 +74,9 @@ class ControlPlaneFragmentThreadTest {
             if (!release.await(5, TimeUnit.SECONDS)) throw new IllegalStateException("initialization gate timed out");
             return invocation.callRealMethod();
         };
+        var slot = config.cloneConfig()
+                .livenessRegistry()
+                .slot(config.cloneConfig().effectiveCpus().nextSetBit(0));
         Mockito.doAnswer(pauseInitialization).when(config).idlePolicy();
         try {
             assertFalse(fragment.ready());
@@ -78,6 +84,10 @@ class ControlPlaneFragmentThreadTest {
             assertTrue(entered.await(5, TimeUnit.SECONDS));
             assertTrue(fragment.isStarted());
             assertFalse(fragment.ready(), "thread registration must not publish incomplete worker state");
+            var worker = config.cloneConfig().livenessRegistry().workers()[0];
+            assertTrue(worker.running());
+            assertNotNull(worker.thread());
+            assertSame(worker.thread(), slot.thread());
             release.countDown();
             Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
             for (String fieldName : new String[] {"controlPolicy", "upstreamQueue"}) {
@@ -88,9 +98,133 @@ class ControlPlaneFragmentThreadTest {
         } finally {
             release.countDown();
             fragment.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
         assertFalse(fragment.ready(), "a closed worker must withdraw readiness");
+        Awaitility.await().atMost(TIMEOUT).until(() -> !slot.running());
+        assertFalse(slot.running());
+        assertNull(slot.thread());
+    }
+
+    @Test
+    void closeLogsAndContinuesWhenTheWorkerThreadRemainsRunning() throws Exception {
+        CloneConfig clone = cloneConfig();
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(clone));
+        InterruptIgnoringReceiver receiver = new InterruptIgnoringReceiver();
+        fragment.output().addDownstream(receiver);
+        fragment.push(DummyFrame.INSTANCE);
+        fragment.start();
+        assertTrue(receiver.entered.await(5, TimeUnit.SECONDS));
+
+        try {
+            fragment.close();
+            assertTrue(clone.livenessRegistry().workers()[0].running());
+        } finally {
+            receiver.release.countDown();
+            fragment.close();
+            awaitWorkersAndCloseExecutors(fragment);
+        }
+    }
+
+    @Test
+    void exceptionalWorkerExitClearsThePublishedLivenessRecord() {
+        CloneConfig clone = cloneConfig();
+        FragmentConfig config = Mockito.spy(FragmentConfig.ofDefaults().clone(clone));
+        AtomicBoolean failed = new AtomicBoolean();
+        Mockito.doAnswer(invocation -> {
+                    failed.set(true);
+                    throw new IllegalStateException("deliberate worker failure");
+                })
+                .when(config)
+                .idlePolicy();
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
+        var slot = clone.livenessRegistry().slot(clone.effectiveCpus().nextSetBit(0));
+        try {
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(failed::get);
+            Awaitility.await().atMost(TIMEOUT).until(() -> !slot.running());
+            assertNull(slot.thread());
+        } finally {
+            fragment.close();
+            awaitWorkersAndCloseExecutors(fragment);
+        }
+    }
+
+    @Test
+    void livenessRegistryIndexesSparsePhysicalCpuIds() {
+        BitSet cpus = new BitSet();
+        cpus.set(2);
+        cpus.set(9);
+
+        CloneLivenessRegistry registry = new CloneLivenessRegistry(cpus);
+
+        assertNull(registry.slot(0));
+        assertNotNull(registry.slot(2));
+        assertNotNull(registry.slot(9));
+        assertNull(registry.slot(10));
+        assertEquals(2, registry.workers().length);
+    }
+
+    @Test
+    void cloneConfigRejectsALivenessRegistryForDifferentCpus() {
+        CloneConfig clone = cloneConfig();
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> new CloneConfig(
+                        clone.shardName(),
+                        clone.coreId(),
+                        clone.effectiveCpus(),
+                        new CloneLivenessRegistry(new BitSet())));
+    }
+
+    @Test
+    void smtBuddyPublishesAndRetiresItsOwnWorkerSlot() throws Exception {
+        BitSet available = SystemInfo.getCpuSet();
+        int primaryCpu = available.nextSetBit(0);
+        int buddyCpu = available.nextSetBit(primaryCpu + 1);
+        assumeTrue(buddyCpu >= 0, "Requires two available logical CPUs");
+
+        BitSet cpus = new BitSet();
+        cpus.set(primaryCpu);
+        cpus.set(buddyCpu);
+        CloneConfig clone = new CloneConfig(
+                "smt-liveness-test", SystemInfo.getCpuInfo(primaryCpu).core(), cpus);
+        FragmentConfig base = FragmentConfig.ofDefaults().clone(clone);
+        FragmentConfig config = new FragmentConfig(
+                base.cloneConfig(),
+                base.cacheConfig(),
+                base.observer(),
+                base.maxBatchSize(),
+                true,
+                base.idlePolicy(),
+                base.benchmarkMode(),
+                base.metricPrefix(),
+                base.registry());
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
+        try {
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+
+            var workers = clone.livenessRegistry().workers();
+            assertEquals(2, workers.length);
+            assertTrue(workers[0].running());
+            assertTrue(workers[1].running());
+            assertNotNull(workers[0].thread());
+            assertNotNull(workers[1].thread());
+
+            fragment.close();
+
+            assertTrue(clone.livenessRegistry().awaitTermination(System.nanoTime() + TIMEOUT.toNanos()));
+            workers = clone.livenessRegistry().workers();
+            assertFalse(workers[0].running());
+            assertFalse(workers[1].running());
+            assertNull(workers[0].thread());
+            assertNull(workers[1].thread());
+        } finally {
+            fragment.close();
+            awaitWorkersAndCloseExecutors(fragment);
+        }
     }
 
     @Test
@@ -117,6 +251,7 @@ class ControlPlaneFragmentThreadTest {
             } finally {
                 template.close();
                 lattice.baseShard().close();
+                assertTrue(clone.livenessRegistry().awaitTermination(System.nanoTime() + TIMEOUT.toNanos()));
                 PinnedThreadExecutor.closeAll();
             }
         }
@@ -197,7 +332,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -224,7 +359,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -252,7 +387,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -279,7 +414,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -306,7 +441,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -346,8 +481,16 @@ class ControlPlaneFragmentThreadTest {
             fragment.close();
             distributor.close();
             registry.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
+    }
+
+    private static void awaitWorkersAndCloseExecutors(ControlPlaneFragment fragment) {
+        CloneConfig clone = fragment.getConfig().cloneConfig();
+        if (clone != null) {
+            assertTrue(clone.livenessRegistry().awaitTermination(System.nanoTime() + TIMEOUT.toNanos()));
+        }
+        PinnedThreadExecutor.closeAll();
     }
 
     private static FragmentObserver createRecordingObserver() {
@@ -636,6 +779,40 @@ class ControlPlaneFragmentThreadTest {
         public void onError(Throwable throwable) {
             this.error.set(throwable);
         }
+
+        @Override
+        public void addUpstream(LatticeSource upstream) {}
+    }
+
+    private static final class InterruptIgnoringReceiver implements LatticeReceiver {
+
+        private final CountDownLatch entered = new CountDownLatch(1);
+        private final CountDownLatch release = new CountDownLatch(1);
+
+        @Override
+        public void push(AbstractFrame frame) {
+            this.entered.countDown();
+            boolean interrupted = false;
+            while (true) {
+                try {
+                    if (!this.release.await(5, TimeUnit.SECONDS)) {
+                        throw new IllegalStateException("terminal release timed out");
+                    }
+                    break;
+                } catch (InterruptedException expected) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        @Override
+        public void onComplete() {}
+
+        @Override
+        public void onError(Throwable throwable) {}
 
         @Override
         public void addUpstream(LatticeSource upstream) {}

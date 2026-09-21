@@ -39,8 +39,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     protected static final VarHandle CAP_FACTOR;
     protected static final VarHandle PRIMED;
     protected static final VarHandle TOTAL_COUNT;
+    private static final VarHandle WORK_STEAL_SLOT = MethodHandles.arrayElementVarHandle(ControlPlaneCache[].class);
 
     private static final ControlPlaneCache[] WORK_STEAL = new ControlPlaneCache[SystemInfo.getCpuCount()];
+    private static final Throwable RETIREMENT_FAILURE =
+            new IllegalStateException("Frame was rejected because its cache retired");
 
     static {
         try {
@@ -56,6 +59,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
     private final CacheConfig cacheConfig;
     private final CacheMetrics metrics;
     private final int core;
+    private final int registryCpu;
+    private final java.util.concurrent.atomic.AtomicBoolean retired = new java.util.concurrent.atomic.AtomicBoolean();
 
     @Getter(AccessLevel.PROTECTED)
     private final PartitionedMpscQueue<AbstractFrame> localCache;
@@ -92,6 +97,7 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.cacheTerminal = null;
             this.frameQuota = 0;
             this.core = -1;
+            this.registryCpu = -1;
             this.pLocks = null;
         } else {
             this.logger = LoggerFactory.getLogger(Constants.getLoggerName(getName(cacheConfig)));
@@ -99,9 +105,9 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             this.chunkSize = getChunkSize(cacheConfig, partitions, smtEnabled);
             this.frameQuota = (long) this.chunkSize * partitions;
             this.core = cacheConfig.getCore();
+            this.registryCpu = cpu;
             this.localCache = new PartitionedMpscQueue<>(partitions, this.chunkSize, cacheConfig.maxPooledChunks());
             this.cacheTerminal = new CacheTerminal(this);
-            WORK_STEAL[cpu] = this;
 
             this.pLocks = cacheConfig.workSteal() ? new PaddedAtomicLongArray(partitions, true, false) : null;
 
@@ -120,12 +126,12 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
             setDrain(true);
             installInternalDownstreamMapping(mappings, terminal);
             setDrain(false);
+            WORK_STEAL_SLOT.setRelease(WORK_STEAL, cpu, this);
 
             String chunkSize = NumberFormat.getNumberInstance().format(this.chunkSize);
             String cacheCapacity = NumberFormat.getNumberInstance().format((long) partitions * this.chunkSize);
             this.logger.debug(
                     "Partitions: {} PartitionChunkSize: {} CacheCapacity: {}", partitions, chunkSize, cacheCapacity);
-            VarHandle.releaseFence();
         }
     }
 
@@ -238,10 +244,11 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         int cpuCount = SystemInfo.getCpuCount();
         int pos = cursor % cpuCount;
-        if (WORK_STEAL[pos] == null) {
+        ControlPlaneCache target = (ControlPlaneCache) WORK_STEAL_SLOT.getAcquire(WORK_STEAL, pos);
+        if (target == null) {
             return 0;
         }
-        return WORK_STEAL[pos].drain(consumer, AbstractFrame::isOrdered, limit);
+        return target.drain(consumer, AbstractFrame::isOrdered, limit);
     }
 
     @Override
@@ -308,6 +315,20 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         return cleared;
     }
 
+    @Override
+    public void close() {
+        if (this.localCache == null) {
+            super.close();
+            return;
+        }
+        if (!this.retired.compareAndSet(false, true)) {
+            return;
+        }
+
+        WORK_STEAL_SLOT.compareAndSet(WORK_STEAL, this.registryCpu, this, null);
+        super.close();
+    }
+
     /// Restores owner-local adaptive cache state at a drained benchmark boundary.
     protected final void resetAdaptiveCacheStateOnOwnerThread() {
         CAP_FACTOR.setRelease(this, 1.0);
@@ -370,6 +391,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         @Override
         public void push(AbstractFrame frame) {
+            if (this.cpc.retired.getAcquire()) {
+                frame.doFinallyWithError(RETIREMENT_FAILURE);
+                return;
+            }
             int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
             while (!this.cpc.localCache.offer(idx, frame)) {
                 Thread.onSpinWait();
@@ -384,6 +409,10 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
 
         @Override
         public void accept(AbstractFrame frame) {
+            if (this.cpc.retired.getAcquire()) {
+                frame.doFinallyWithError(RETIREMENT_FAILURE);
+                return;
+            }
             this.framesAdded++;
 
             int idx = RoutingFunction.DEFAULT.route(frame, this.partitions);
