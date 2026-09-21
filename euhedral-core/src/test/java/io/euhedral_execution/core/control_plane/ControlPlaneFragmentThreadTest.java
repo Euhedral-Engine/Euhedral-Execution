@@ -98,7 +98,7 @@ class ControlPlaneFragmentThreadTest {
         } finally {
             release.countDown();
             fragment.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
         assertFalse(fragment.ready(), "a closed worker must withdraw readiness");
         Awaitility.await().atMost(TIMEOUT).until(() -> !slot.running());
@@ -123,7 +123,7 @@ class ControlPlaneFragmentThreadTest {
         } finally {
             receiver.release.countDown();
             fragment.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -147,7 +147,7 @@ class ControlPlaneFragmentThreadTest {
             assertNull(slot.thread());
         } finally {
             fragment.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -223,7 +223,7 @@ class ControlPlaneFragmentThreadTest {
             assertNull(workers[1].thread());
         } finally {
             fragment.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -332,7 +332,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -359,7 +359,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -387,7 +387,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -414,7 +414,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -441,7 +441,7 @@ class ControlPlaneFragmentThreadTest {
             source.complete();
             fragment.close();
             distributor.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
     }
 
@@ -481,8 +481,16 @@ class ControlPlaneFragmentThreadTest {
             fragment.close();
             distributor.close();
             registry.close();
-            PinnedThreadExecutor.closeAll();
+            awaitWorkersAndCloseExecutors(fragment);
         }
+    }
+
+    private static void awaitWorkersAndCloseExecutors(ControlPlaneFragment fragment) {
+        CloneConfig clone = fragment.getConfig().cloneConfig();
+        if (clone != null) {
+            assertTrue(clone.livenessRegistry().awaitTermination(System.nanoTime() + TIMEOUT.toNanos()));
+        }
+        PinnedThreadExecutor.closeAll();
     }
 
     private static FragmentObserver createRecordingObserver() {
