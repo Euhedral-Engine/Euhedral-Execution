@@ -236,6 +236,7 @@ class ControlPlaneFragmentThreadTest {
             } finally {
                 template.close();
                 lattice.baseShard().close();
+                assertTrue(clone.livenessRegistry().awaitTermination(System.nanoTime() + TIMEOUT.toNanos()));
                 PinnedThreadExecutor.closeAll();
             }
         }
