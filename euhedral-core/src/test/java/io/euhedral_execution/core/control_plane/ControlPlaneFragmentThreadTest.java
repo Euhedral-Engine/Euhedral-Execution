@@ -152,6 +152,21 @@ class ControlPlaneFragmentThreadTest {
     }
 
     @Test
+    void livenessRegistryIndexesSparsePhysicalCpuIds() {
+        BitSet cpus = new BitSet();
+        cpus.set(2);
+        cpus.set(9);
+
+        CloneLivenessRegistry registry = new CloneLivenessRegistry(cpus);
+
+        assertNull(registry.slot(0));
+        assertNotNull(registry.slot(2));
+        assertNotNull(registry.slot(9));
+        assertNull(registry.slot(10));
+        assertEquals(2, registry.workers().length);
+    }
+
+    @Test
     void cloneConfigRejectsALivenessRegistryForDifferentCpus() {
         CloneConfig clone = cloneConfig();
         assertThrows(

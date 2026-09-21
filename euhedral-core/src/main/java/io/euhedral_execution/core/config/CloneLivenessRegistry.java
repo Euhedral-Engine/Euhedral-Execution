@@ -7,56 +7,41 @@ import java.util.concurrent.locks.LockSupport;
 /// Publishes the live worker identities belonging to one clone, including its optional SMT buddy.
 public final class CloneLivenessRegistry {
 
-    private final int[] cpus;
+    private final BitSet cpus;
     private final WorkerSlot[] slots;
 
     public CloneLivenessRegistry(BitSet effectiveCpus) {
         Objects.requireNonNull(effectiveCpus);
-        this.cpus = new int[effectiveCpus.cardinality()];
-        this.slots = new WorkerSlot[this.cpus.length];
-        int index = 0;
+        this.cpus = (BitSet) effectiveCpus.clone();
+        this.slots = new WorkerSlot[effectiveCpus.length()];
         for (int cpu = effectiveCpus.nextSetBit(0); cpu >= 0; cpu = effectiveCpus.nextSetBit(cpu + 1)) {
-            this.cpus[index] = cpu;
-            this.slots[index] = new WorkerSlot();
-            index++;
+            this.slots[cpu] = new WorkerSlot();
         }
     }
 
     /// Returns the mutable publication slot for one participating logical CPU.
     public WorkerSlot slot(int cpu) {
-        for (int i = 0; i < this.cpus.length; i++) {
-            if (this.cpus[i] == cpu) {
-                return this.slots[i];
-            }
-        }
-        return null;
+        return cpu >= 0 && cpu < this.slots.length ? this.slots[cpu] : null;
     }
 
     boolean matches(BitSet effectiveCpus) {
-        if (effectiveCpus.cardinality() != this.cpus.length) {
-            return false;
-        }
-        int index = 0;
-        for (int cpu = effectiveCpus.nextSetBit(0); cpu >= 0; cpu = effectiveCpus.nextSetBit(cpu + 1)) {
-            if (this.cpus[index++] != cpu) {
-                return false;
-            }
-        }
-        return true;
+        return this.cpus.equals(effectiveCpus);
     }
 
     /// Returns an immutable snapshot of every participating worker.
     public Worker[] workers() {
-        Worker[] snapshot = new Worker[this.slots.length];
-        for (int i = 0; i < this.slots.length; i++) {
-            snapshot[i] = this.slots[i].snapshot();
+        Worker[] snapshot = new Worker[this.cpus.cardinality()];
+        int index = 0;
+        for (int cpu = this.cpus.nextSetBit(0); cpu >= 0; cpu = this.cpus.nextSetBit(cpu + 1)) {
+            snapshot[index++] = this.slots[cpu].snapshot();
         }
         return snapshot;
     }
 
     /// Waits until every participating worker has cleared its running publication.
     public boolean awaitTermination(long deadlineNanos) {
-        for (WorkerSlot slot : this.slots) {
+        for (int cpu = this.cpus.nextSetBit(0); cpu >= 0; cpu = this.cpus.nextSetBit(cpu + 1)) {
+            WorkerSlot slot = this.slots[cpu];
             while (slot.running()) {
                 if (Thread.currentThread().isInterrupted()) {
                     return false;
