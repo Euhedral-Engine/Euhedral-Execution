@@ -101,6 +101,7 @@ class ControlPlaneFragmentThreadTest {
             PinnedThreadExecutor.closeAll();
         }
         assertFalse(fragment.ready(), "a closed worker must withdraw readiness");
+        Awaitility.await().atMost(TIMEOUT).until(() -> !slot.running());
         assertFalse(slot.running());
         assertNull(slot.thread());
     }
@@ -199,6 +200,7 @@ class ControlPlaneFragmentThreadTest {
 
             fragment.close();
 
+            assertTrue(clone.livenessRegistry().awaitTermination(System.nanoTime() + TIMEOUT.toNanos()));
             workers = clone.livenessRegistry().workers();
             assertFalse(workers[0].running());
             assertFalse(workers[1].running());
