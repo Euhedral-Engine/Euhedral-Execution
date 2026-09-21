@@ -1,6 +1,7 @@
 package io.euhedral_execution.core.impl;
 
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneFragment;
 import io.euhedral_execution.core.generics.AbstractExecutor;
@@ -148,6 +149,11 @@ public final class BaseCloneableObject implements CloneableObject {
     @Override
     public int getCore() {
         return this.config == null ? -1 : this.config.coreId();
+    }
+
+    @Override
+    public CloneLivenessRegistry livenessRegistry() {
+        return this.config == null ? null : this.config.livenessRegistry();
     }
 
     @Override

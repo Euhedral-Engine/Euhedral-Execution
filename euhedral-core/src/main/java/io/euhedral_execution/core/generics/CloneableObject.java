@@ -1,6 +1,7 @@
 package io.euhedral_execution.core.generics;
 
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
 
@@ -65,6 +66,10 @@ public interface CloneableObject {
 
     default int getCore() {
         return -1;
+    }
+
+    default CloneLivenessRegistry livenessRegistry() {
+        return null;
     }
 
     default void close() {}

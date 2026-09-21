@@ -1,6 +1,7 @@
 package io.euhedral_execution.core.control_plane;
 
 import io.euhedral_execution.core.config.CloneConfig;
+import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.control_plane.FragmentControlConfig.ExecutionPath;
@@ -78,6 +79,7 @@ public final class ControlPlaneFragment extends WorkRequester {
     private final AtomicLong resetRequested = new AtomicLong();
     private final AtomicLong resetCompleted = new AtomicLong();
     private final AtomicLong resetCleared = new AtomicLong();
+    private final CloneLivenessRegistry.WorkerSlot livenessSlot;
     private final PinnedThreadExecutor mainExecutor;
     private final CycleState state;
 
@@ -121,6 +123,10 @@ public final class ControlPlaneFragment extends WorkRequester {
         super(config.cacheConfig(), cpu, config.smtEnabled());
         this.config = config;
         this.cpu = cpu;
+        this.livenessSlot = config.cloneConfig() == null
+                ? null
+                : Objects.requireNonNull(
+                        config.cloneConfig().livenessRegistry().slot(cpu), "Missing liveness slot for CPU " + cpu);
 
         if (config.cloneConfig() == null) {
             this.socket = -1;
@@ -226,7 +232,13 @@ public final class ControlPlaneFragment extends WorkRequester {
     private void runPinnedWorker() {
         boolean registered = false;
         this.mainThread = Thread.currentThread();
+        if (this.livenessSlot != null) {
+            this.livenessSlot.enter(this.mainThread);
+        }
         try {
+            if (this.closeRequested.getAcquire()) {
+                return;
+            }
             logOwnerPlacement();
             ThreadTools.setTimerResolution(1);
             super.register();
@@ -246,6 +258,9 @@ public final class ControlPlaneFragment extends WorkRequester {
                 FlowThread.clearContext();
                 this.mainThread = null;
                 this.running.set(false);
+                if (this.livenessSlot != null) {
+                    this.livenessSlot.exit();
+                }
             }
         }
     }
@@ -614,19 +629,10 @@ public final class ControlPlaneFragment extends WorkRequester {
 
     @Override
     public synchronized void close() {
-        this.closeRequested.setRelease(true);
-        this.running.set(false);
-        Thread owner = this.mainThread;
-        if (owner != null && owner != Thread.currentThread()) {
-            owner.interrupt();
-            LockSupport.unpark(owner);
-            try {
-                owner.join(500L);
-            } catch (InterruptedException failure) {
-                Thread.currentThread().interrupt();
-            }
+        requestStop();
+        if (this.smtBuddy != null) {
+            this.smtBuddy.requestStop();
         }
-
         Throwable failure = null;
         if (this.smtBuddy != null) {
             failure = attemptCleanup(failure, this.smtBuddy::close);
@@ -640,6 +646,16 @@ public final class ControlPlaneFragment extends WorkRequester {
         failure = attemptCleanup(failure, super::close);
         this.logger.debug("Closed");
         rethrowCleanupFailure(failure);
+    }
+
+    private void requestStop() {
+        this.closeRequested.setRelease(true);
+        this.running.set(false);
+        Thread owner = this.mainThread;
+        if (owner != null && owner != Thread.currentThread()) {
+            owner.interrupt();
+            LockSupport.unpark(owner);
+        }
     }
 
     private static Throwable attemptCleanup(Throwable failure, Runnable cleanup) {
