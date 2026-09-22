@@ -124,6 +124,18 @@ jobs:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.GPG_PRIVATE_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.GPG_PASSPHRASE }}
 
+      - name: Submit Maven Central deployment
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_version.outputs.is_snapshot == 'false'
+        env:
+          CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
+        run: |
+          token=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 --wrap=0)
+          curl --fail --show-error --silent \
+            --header "Authorization: Bearer $token" \
+            --request POST \
+            "https://ossrh-staging-api.central.sonatype.com/manual/upload/defaultRepository/io.euhedral-execution?publishing_type=automatic"
+
       - name: Configure Git
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_version.outputs.is_snapshot == 'false'
         run: |
@@ -175,7 +187,7 @@ jobs:
           
           NEW_SNAPSHOT="$MAJOR.$MINOR.$PATCH-SNAPSHOT"
           
-          sed -i "s/^version =.*/version = "$NEW_SNAPSHOT"/" build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts
+          sed -i "s/^version = .*/version = \\\"$NEW_SNAPSHOT\\\"/" build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts
           
           git add build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts
           git commit -m "actions: Bump version to $NEW_SNAPSHOT [skip ci]"

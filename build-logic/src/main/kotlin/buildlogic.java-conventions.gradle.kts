@@ -14,7 +14,7 @@ jacoco {
 
 
 group = "io.euhedral-execution"
-version = "0.0.7-SNAPSHOT"
+version = "0.0.7"
 
 java {
     toolchain {
@@ -89,9 +89,9 @@ publishing {
         maven {
             name = "MavenCentral"
             val releasesRepoUrl =
-                uri("https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/")
+                uri("https://ossrh-staging-api.central.sonatype.com/service/local/staging/deploy/maven2/")
             val snapshotsRepoUrl =
-                uri("https://s01.oss.sonatype.org/content/repositories/snapshots/")
+                uri("https://central.sonatype.com/repository/maven-snapshots/")
             url = if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl
 
             credentials {
