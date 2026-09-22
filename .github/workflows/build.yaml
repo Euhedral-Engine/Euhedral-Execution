@@ -77,7 +77,13 @@ jobs:
       - name: Parse Version from gradle.properties
         id: check_version
         run: |
-          VERSION=$(grep '^version =' build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts | cut -d'=' -f2 | tr -d '"')
+          VERSION=$(sed -nE 's/^version = "([^"]+)"$/\1/p' build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts)
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::Could not parse the quoted project version."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "TARGET_TAG=v$VERSION" >> $GITHUB_OUTPUT
           
           if [[ "$VERSION" == *"-SNAPSHOT"* ]]; then
@@ -173,9 +179,9 @@ jobs:
 
       - name: Roll to Next Development Snapshot
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_version.outputs.is_snapshot == 'false'
+        env:
+          CURRENT_VERSION: ${{ steps.check_version.outputs.version }}
         run: |
-          CURRENT_VERSION=$(grep '^version =' build-logic/src/main/kotlin/buildlogic.java-conventions.gradle.kts | cut -d'=' -f2 | tr -d '"')
-          
           BASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
           IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
           
