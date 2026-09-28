@@ -91,8 +91,7 @@ try{
 }
 ```
 
-In this snippet, setting the trailing boolean to `true` allows the terminal consumer to execute
-concurrently across workers, while intermediate stages declare parallelism via `fanOut` or
+In this snippet, intermediate stages can declare parallelism via `fanOut` or
 sequential processing via `fanIn`. Each stage transformation and terminal callback runs inside its
 own frame, feeding intermediate results directly back into downstream sinks. When shutting down,
 ensure downstream work has actually finished before closing `PipelineRunner`: calling
@@ -214,9 +213,7 @@ intend to use locality-aware routing.
 ## From Socket to Core
 
 Each `ControlPlaneShard` is responsible for exactly one NUMA socket. Its core distributor is an
-internal `LatticeVertex` scaled against a portion of the socket's shared L3 cache capacity. It
-routes frames to active physical cores and holds unordered work in dedicated per-destination remote
-caches.
+internal `LatticeVertex` which routes frames to active physical coress.
 
 For each active physical core, the shard instantiates a [
 `CloneableObject`](../euhedral-core/src/main/java/io/euhedral_execution/core/generics/CloneableObject.java)
@@ -275,13 +272,13 @@ ControlPlaneFragment
 |----------|-------------------------------------------------------------------------------------------------------------------------------------|
 | `DIRECT` | Directly pulls frames from upstream source handles. If no progress was made, issues requests and pulls work into the routing graph. |
 | `STAGED` | Issues upstream demand requests into the vertex graph, then returns to draining local and remote caches.                            |
-| `CACHE`  | Focuses purely on chewing through cached frames without contending for upstream handles; parks only if no progress was made.        |
+| `IDLE`   | Parks the fragment to reduce contention and unnecessary capacity.                                                                   |
 
 The decision tree balances several live inputs: sampled execution runtimes, upstream handle lock
 contention, productive handle counts, active worker tallies, and the worker's own rank index. Under
 high concurrency, an offline-trained logistic participation model steps in, gracefully shifting
-excess workers into the `CACHE` path to avoid destructive lock thrashing on upstream sources. The
-primary worker (rank 1) is never forced into CACHE withdrawal.
+excess workers into the `IDLE` path to avoid destructive lock thrashing on upstream sources. The
+primary worker (rank 1) is never forced into `IDLE` withdrawal.
 
 Freshly started workers default to `DIRECT` until baseline execution samples are gathered. Once
 warmed up, switching to `DIRECT` requires low contention (at or below 85%) and execution runtimes
@@ -292,10 +289,10 @@ processing to scale up or down smoothly within bounded limits (defaulting to a m
 frames per batch) while respecting CPU pressure caps.
 
 When no work is found, workers use targeted parking strategies tailored to whether the stall was an
-upstream dry-spell or a cache miss. [
+upstream availability gap or a cache miss. [
 `IdlePolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/CacheTimingConfig.java)
 defines park backoffs and contention-history decay rates, adapting automatically to real-time
-measurements or falling back to fixed timing. Crucially, `CACHE` workers always double-check local
+measurements or falling back to fixed timing. Crucially, `IDLE` workers always double-check local
 queues for fresh work before entering park states.
 
 The hot worker loop remains identical whether running in production or under JMH benchmarks;
@@ -401,7 +398,7 @@ OS-specific quirks:
   readings.
 - `JNIClassLoader` unpacks and links the appropriate native platform library dynamically.
 
-Affinity capabilities vary by environment: Linux and Windows support hard hardware CPU masks, macOS
+Affinity capabilities vary by environment: Linux and Windows support hard hardware CPU masks, MacOS
 offers scheduler locality hints, and container environments fall back gracefully. Telemetry
 collection is cleanly segregated: raw OS hooks feed into `SampleStateEngine` for delta analysis,
 which `PressureEvaluator` turns into normalized pressure metrics. Listener notifications are
@@ -455,7 +452,7 @@ offline models:
   runs during decision-tree initialization to convert its machine-independent synthetic-work
   constants into precise, nanosecond-calibrated limits tailored to the host CPU.
 - [`IdlePolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/IdlePolicy.java)
-  carries CACHE park and acquisition-contention timing independently of decision-tree thresholds.
+  carries IDLE park and acquisition-contention timing independently of decision-tree thresholds.
 - Model coefficients (such as the default `logistic-05-sqrt` model in [
   `ParticipationLogisticModel`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ParticipationLogisticModel.java)
   and cache timing curves in [
