@@ -53,8 +53,6 @@ When the lattice spins up, it executes a clear bootstrap sequence:
    to discover NUMA sockets, physical cores, logical siblings, and cache tiers.
 2. **Filters and maps usable CPUs** with [
    `TopologyMapper`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/TopologyMapper.java).
-   Whenever more than one physical core is present, it reserves physical core 0 for OS and system
-   background threads by omitting all of its logical siblings from the worker pool.
 3. **Instantiates a [
    `ControlPlaneShard`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)**
    for each detected NUMA socket.
@@ -68,10 +66,11 @@ When the lattice spins up, it executes a clear bootstrap sequence:
 Getting a basic pipeline up and running requires only a few lines:
 
 ```java
-PipelineFrame.Builder<Integer, Integer> builder =
-        PipelineFrame.<Integer>builder().fanOut(value -> value * value);
 CountDownLatch completed = new CountDownLatch(3);
 AtomicInteger total = new AtomicInteger();
+
+PipelineFrame.Builder<Integer, Integer> builder =
+        PipelineFrame.<Integer>builder().fanOut(value -> value * value);
 PipelineRunner<Integer> runner = new PipelineRunner<>(builder, result -> {
     total.addAndGet(result);
     completed.countDown();
@@ -79,31 +78,16 @@ PipelineRunner<Integer> runner = new PipelineRunner<>(builder, result -> {
 
 ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate();
 try{
-        lattice.
+    lattice.addUpstream(runner);
 
-addUpstream(runner);
-    List.
-
-of(2,4,8).
-
-forEach(runner::run);
-    if(!completed.
-
-await(10,TimeUnit.SECONDS)){
-        throw new
-
-IllegalStateException("Pipeline did not complete in time");
+    List.of(2,4,8).forEach(runner::run);
+    if(!completed.await(10,TimeUnit.SECONDS)) {
+        throw new IllegalStateException("Pipeline did not complete in time");
     }
-            System.out.
-
-println(total.get());
-        }finally{
-        runner.
-
-complete();
-    lattice.
-
-close();
+    System.out.println(total.get());
+} finally {
+    runner.complete();
+    lattice.close();
 }
 ```
 
