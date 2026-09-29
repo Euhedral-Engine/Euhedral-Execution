@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.affinity.internal;
 
 import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+import io.euhedral_execution.hardware_utils.affinity.AffinityProvider;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
 import org.slf4j.Logger;

@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.affinity.internal.AffinityController;
-import io.euhedral_execution.hardware_utils.affinity.internal.AffinityProvider;
 import java.util.ArrayDeque;
 import java.util.BitSet;
 import java.util.Deque;

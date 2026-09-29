@@ -1,7 +1,7 @@
 package io.euhedral_execution.hardware_utils.macos;
 
 import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
-import io.euhedral_execution.hardware_utils.affinity.internal.ThreadPinner;
+import io.euhedral_execution.hardware_utils.affinity.ThreadPinner;
 import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;

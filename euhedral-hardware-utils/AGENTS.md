@@ -38,8 +38,8 @@ Treat every exported package as public API.
 |--------------------------------|----------|------------------------------------------------------------------------------------------------------------------|
 | `topology`                     | yes      | `SystemInfo`, `TopologyMapper`                                                                                   |
 | `topology.internal`            | no       | Topology normalization, validation, bootstrap, and the hex-mask codec                                            |
-| `affinity`                     | yes      | `ThreadTools`, `AffinityCapability`, `PinnedThreadExecutor`, legacy `ThreadPinner`                               |
-| `affinity.internal`            | no       | Affinity controller, masks, and provider; sealed `affinity.internal.ThreadPinner`                                |
+| `affinity`                     | yes      | `ThreadTools`, `AffinityCapability`, `PinnedThreadExecutor`, `AffinityProvider`, sealed `ThreadPinner`           |
+| `affinity.internal`            | no       | Affinity controller and mask helpers                                                                             |
 | `monitor`                      | yes      | `ResourceMonitor`, `SystemUtilization` records, `SystemSnapshotProvider`                                         |
 | `monitor.sampling` and its `enums`, `primitives`, `samples`, `signals` packages | yes | Detailed provider interface and typed signal records                            |
 | `monitor.internal`             | no       | Sample state engine, slow-sample cache, compatibility adapter, latest-value dispatcher, deadline waiter, clock, topology updater |
@@ -50,9 +50,11 @@ Treat every exported package as public API.
 | `linux`, `macos`, `windows`    | yes      | Platform layout, resource, and affinity facades, including the JNI `native` declarations                         |
 | `macos.sysctl`, `windows.win32`| no       | Platform helper types used only inside this module                                                               |
 
-`affinity.ThreadPinner` (public abstract class) and `affinity.internal.ThreadPinner` (sealed; permits
-only the three platform affinity classes) are different types. The public class is retained for API
-compatibility and has no implementation in the source tree.
+`affinity.ThreadPinner` is a public sealed abstract class that permits only `LinuxAffinity`,
+`MacosAffinity`, and `WindowsAffinity`, and implements `AffinityProvider`. Its constructors are
+`protected`. An earlier unused non-sealed `ThreadPinner` (formerly `common.ThreadPinner`) was removed.
+The platform classes in `linux`, `macos`, and `windows` are exported and extend the sealed class, so
+it must stay in an exported package.
 
 ### Package placement rules
 
@@ -81,7 +83,7 @@ Paths are relative to `src/main/java/io/euhedral_execution/hardware_utils/` and
 | Topology discovery, normalization, or fallback      | `SystemInfo`, `topology/internal/`, the platform `*SystemLayout` classes                                                            | `topology/internal/TopologyNormalizerTest`, `SystemInfoTest`, `SystemInfoFallbackTest`, `TopologyCacheFallbackTest`, `TopologyOwnershipTest`, the platform `*TopologyFixtureTest` classes, `linux/LinuxSystemLayoutFixtureTest` |
 | Hex CPU masks                                       | `topology/internal/MaskCodec`, `SystemInfo.fromHexMask` and `toHexMask`                                                             | `compatibility/MaskFormattingCompatibilityTest`                                                                                                                                         |
 | Effective topology publication and versions         | `TopologyMapper`, `monitor/internal/TopologyUpdater`                                                                                | `TopologyMapperTest`, `TopologyMapperPublicationTest`, `TopologyMapperVersionTest`, `TopologyMapperCoreZeroTest`, `compatibility/CoreZeroReservationCompatibilityTest`                   |
-| Affinity policy, leases, managed CPU identity       | `ThreadTools`, `AffinityCapability`, `affinity/internal/AffinityController`, `affinity/internal/AffinityMasks`, `affinity/internal/ThreadPinner`                | `ThreadToolsAffinityTest`, `linux/LinuxAffinityTest`, `macos/MacosAffinityTest`, `windows/WindowsAffinityTest`                                                                          |
+| Affinity policy, leases, managed CPU identity       | `ThreadTools`, `AffinityCapability`, `affinity/AffinityProvider`, `affinity/ThreadPinner`, `affinity/internal/AffinityController`, `affinity/internal/AffinityMasks`                | `ThreadToolsAffinityTest`, `linux/LinuxAffinityTest`, `macos/MacosAffinityTest`, `windows/WindowsAffinityTest`                                                                          |
 | Pinned executor lifecycle, registry, cleanup, hooks | `PinnedThreadExecutor`                                                                                                              | `PinnedThreadExecutorTest`, `PinnedThreadExecutorLifecycleTest`, `compatibility/PinnedThreadExecutorCompatibilityTest`                                                                  |
 | Monitor lifecycle, cadence, listener dispatch       | `ResourceMonitor`, `monitor/internal/`                                                                                              | `ResourceMonitorTest`, `monitor/internal/LatestValueDispatcherTest`, `compatibility/DefaultCadenceCompatibilityTest`                                                                   |
 | Raw sampling and interval resolution                | `monitor/sampling/`, `monitor/internal/`, `linux/LinuxResourceProvider`, `linux/CgroupV2Resources`, `linux/LinuxPaths`, `macos/MacosResources`, `windows/WindowsResources` | `monitor/sampling/` and `monitor/internal/` tests, `linux/LinuxResourceProviderTest`, `macos/MacosResourcesTest`, `windows/WindowsResourcesTest`                                                  |
@@ -227,7 +229,8 @@ The `compatibility` test package pins behavior against branch point `900d8c50`:
 
 The API baseline was re-keyed once for the package reorganization: entries moved from `common`,
 the root package, and `internal.sampling` to `topology`, `affinity`, `monitor`, and `util`, and the
-export count went from ten to twelve. Member signatures were otherwise unchanged. Keep the file in
+export count went from ten to twelve. Member signatures were otherwise unchanged, except that `affinity.ThreadPinner` is now the sealed
+platform base class (protected constructors, implements `AffinityProvider`). Keep the file in
 canonical UTF-8 byte order, because `ApiSurface.read` rejects unsorted entries.
 
 Treat these files as reviewed contracts. Do not edit a baseline to make a test pass. An intentional

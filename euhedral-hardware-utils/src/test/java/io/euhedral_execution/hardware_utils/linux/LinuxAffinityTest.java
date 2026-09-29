@@ -8,8 +8,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+import io.euhedral_execution.hardware_utils.affinity.AffinityProvider;
 import io.euhedral_execution.hardware_utils.affinity.internal.AffinityController;
-import io.euhedral_execution.hardware_utils.affinity.internal.AffinityProvider;
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import io.euhedral_execution.hardware_utils.util.OSName;
 import java.util.BitSet;
@@ -107,7 +107,7 @@ class LinuxAffinityTest {
     }
 
     private static final class LinuxAffinityProxy
-            implements io.euhedral_execution.hardware_utils.affinity.internal.AffinityProvider {
+            implements io.euhedral_execution.hardware_utils.affinity.AffinityProvider {
 
         private final AffinityCapability capability;
         private final Supplier<long[]> captureSupplier;

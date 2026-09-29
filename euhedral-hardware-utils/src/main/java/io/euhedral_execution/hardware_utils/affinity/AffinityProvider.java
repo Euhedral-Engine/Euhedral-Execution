@@ -1,6 +1,4 @@
-package io.euhedral_execution.hardware_utils.affinity.internal;
-
-import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+package io.euhedral_execution.hardware_utils.affinity;
 
 /// Operational boundary between common affinity policy and platform facades.
 public interface AffinityProvider {

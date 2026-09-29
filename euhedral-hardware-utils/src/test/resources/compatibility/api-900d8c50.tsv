@@ -55,7 +55,7 @@ method	io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor#isTerm
 method	io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor#shutdown()V	access=public;signature=-;exceptions=-
 method	io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor#shutdownNow()Ljava/util/List;	access=public;signature=()Ljava/util/List<Ljava/lang/Runnable;>;;exceptions=-
 method	io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor#start(Ljava/lang/String;IZ)V	access=public;signature=-;exceptions=-
-method	io/euhedral_execution/hardware_utils/affinity/ThreadPinner#<init>()V	access=public;signature=-;exceptions=-
+method	io/euhedral_execution/hardware_utils/affinity/ThreadPinner#<init>()V	access=protected;signature=-;exceptions=-
 method	io/euhedral_execution/hardware_utils/affinity/ThreadPinner#getCpu()I	access=public,abstract;signature=-;exceptions=-
 method	io/euhedral_execution/hardware_utils/affinity/ThreadPinner#setAffinity([J)Z	access=public,abstract;signature=-;exceptions=-
 method	io/euhedral_execution/hardware_utils/affinity/ThreadPinner#setTimerResolution(J)Z	access=public,abstract;signature=-;exceptions=-
@@ -479,13 +479,13 @@ record	io/euhedral_execution/hardware_utils/topology/TopologyMapper$EffectiveSys
 record	io/euhedral_execution/hardware_utils/topology/TopologyMapper$EffectiveSystemTopology#000003	name=socketTopologies;descriptor=Ljava/util/List;;signature=Ljava/util/List<Lio/euhedral_execution/hardware_utils/topology/TopologyMapper$EffectiveSocketTopology;>;
 record	io/euhedral_execution/hardware_utils/topology/TopologyMapper$EffectiveSystemTopology#000004	name=globalVersion;descriptor=I;signature=-
 type	io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor	access=public,final;super=java/util/concurrent/AbstractExecutorService;interfaces=java/lang/AutoCloseable;signature=-
-type	io/euhedral_execution/hardware_utils/affinity/ThreadPinner	access=public,abstract;super=java/lang/Object;interfaces=-;signature=-
+type	io/euhedral_execution/hardware_utils/affinity/ThreadPinner	access=public,abstract;super=java/lang/Object;interfaces=io/euhedral_execution/hardware_utils/affinity/AffinityProvider;signature=-
 type	io/euhedral_execution/hardware_utils/affinity/ThreadTools	access=public,final;super=java/lang/Object;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/linux/CgroupV2Resources	access=public;super=java/lang/Object;interfaces=io/euhedral_execution/hardware_utils/monitor/SystemSnapshotProvider;signature=-
-type	io/euhedral_execution/hardware_utils/linux/LinuxAffinity	access=public,final;super=io/euhedral_execution/hardware_utils/affinity/internal/ThreadPinner;interfaces=-;signature=-
+type	io/euhedral_execution/hardware_utils/linux/LinuxAffinity	access=public,final;super=io/euhedral_execution/hardware_utils/affinity/ThreadPinner;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/linux/LinuxPaths	access=public,final;super=java/lang/Object;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/linux/LinuxSystemLayout	access=public,final;super=java/lang/Object;interfaces=-;signature=-
-type	io/euhedral_execution/hardware_utils/macos/MacosAffinity	access=public,final;super=io/euhedral_execution/hardware_utils/affinity/internal/ThreadPinner;interfaces=-;signature=-
+type	io/euhedral_execution/hardware_utils/macos/MacosAffinity	access=public,final;super=io/euhedral_execution/hardware_utils/affinity/ThreadPinner;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/macos/MacosResources	access=public,final;super=java/lang/Object;interfaces=io/euhedral_execution/hardware_utils/monitor/SystemSnapshotProvider;signature=-
 type	io/euhedral_execution/hardware_utils/macos/MacosSystemLayout	access=public,final;super=java/lang/Object;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/monitor/ResourceMonitor	access=public;super=java/lang/Object;interfaces=java/lang/AutoCloseable;signature=-
@@ -509,6 +509,6 @@ type	io/euhedral_execution/hardware_utils/topology/TopologyMapper$EffectiveSyste
 type	io/euhedral_execution/hardware_utils/util/OSName	access=public,final,enum;super=java/lang/Enum;interfaces=-;signature=Ljava/lang/Enum<Lio/euhedral_execution/hardware_utils/util/OSName;>;
 type	io/euhedral_execution/hardware_utils/util/UnmodifiableBitSet	access=public,final;super=java/util/BitSet;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/util/UnmodifiableDoubleArray	access=public,final;super=java/lang/Object;interfaces=-;signature=-
-type	io/euhedral_execution/hardware_utils/windows/WindowsAffinity	access=public,final;super=io/euhedral_execution/hardware_utils/affinity/internal/ThreadPinner;interfaces=-;signature=-
+type	io/euhedral_execution/hardware_utils/windows/WindowsAffinity	access=public,final;super=io/euhedral_execution/hardware_utils/affinity/ThreadPinner;interfaces=-;signature=-
 type	io/euhedral_execution/hardware_utils/windows/WindowsResources	access=public,final;super=java/lang/Object;interfaces=io/euhedral_execution/hardware_utils/monitor/SystemSnapshotProvider;signature=-
 type	io/euhedral_execution/hardware_utils/windows/WindowsSystemLayout	access=public,final;super=java/lang/Object;interfaces=-;signature=-

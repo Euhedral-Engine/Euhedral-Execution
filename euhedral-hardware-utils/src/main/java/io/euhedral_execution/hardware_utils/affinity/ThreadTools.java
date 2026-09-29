@@ -1,7 +1,6 @@
 package io.euhedral_execution.hardware_utils.affinity;
 
 import io.euhedral_execution.hardware_utils.affinity.internal.AffinityController;
-import io.euhedral_execution.hardware_utils.affinity.internal.AffinityProvider;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
 import io.euhedral_execution.hardware_utils.macos.MacosAffinity;
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
