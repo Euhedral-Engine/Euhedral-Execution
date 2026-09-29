@@ -54,6 +54,23 @@ Treat every exported package as public API.
 only the three platform affinity classes) are different types. The public class is retained for API
 compatibility and has no implementation in the source tree.
 
+### Package placement rules
+
+The package tree groups code by responsibility: `topology`, `affinity`, `monitor`, `util`,
+`nativelib`, and the per-OS `linux`, `macos`, `windows` packages.
+
+- Public API goes in the owning responsibility package (`topology`, `affinity`, `monitor`,
+  `util`), never in an `internal` package. `module-info.java` must not export any package named
+  `internal`.
+- Implementation details go in the `internal` package nested under their owner, for example
+  `monitor.internal` or `affinity.internal`. Do not create a top-level `internal` package again.
+- A new exported package needs a `module-info.java` export, an updated export count in
+  `ApiCompatibilityTest` and `ApiSurfaceReader`, and a deliberate baseline update (see below).
+- Classes with `native` methods stay in `linux`, `macos`, and `windows`. Moving one changes its JNI
+  symbol name, `expected_jni_headers` in `build.zig`, and the native contract baseline.
+- Test classes mirror the package of the class they test. The smoke-bundle path for
+  `NativeLoadSmokeMain` in `build.gradle.kts` and the CI workflow use the `nativelib` package.
+
 ## Read by change, not by directory sweep
 
 Paths are relative to `src/main/java/io/euhedral_execution/hardware_utils/` and
@@ -207,6 +224,11 @@ The `compatibility` test package pins behavior against branch point `900d8c50`:
 - [defect-ledger.tsv](src/test/resources/compatibility/defect-ledger.tsv): each recorded correction
   maps to an exact regression test, and `DefectLedgerTest` hard-codes the expected ID-to-owner
   mapping.
+
+The API baseline was re-keyed once for the package reorganization: entries moved from `common`,
+the root package, and `internal.sampling` to `topology`, `affinity`, `monitor`, and `util`, and the
+export count went from ten to twelve. Member signatures were otherwise unchanged. Keep the file in
+canonical UTF-8 byte order, because `ApiSurface.read` rejects unsorted entries.
 
 Treat these files as reviewed contracts. Do not edit a baseline to make a test pass. An intentional
 break requires explicit user approval and a baseline update in the same change, called out in the
