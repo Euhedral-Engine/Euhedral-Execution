@@ -14,7 +14,7 @@ Add the Core artifact:
 <dependency>
   <groupId>io.euhedral-execution</groupId>
   <artifactId>euhedral-core</artifactId>
-  <version>0.0.7</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 

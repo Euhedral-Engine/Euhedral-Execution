@@ -29,10 +29,10 @@ mise trust
 mise install
 
 # Install MacOS SDK
-mkdir -p ~/.local/share/mise/installs/macos-sdk
+mkdir -p ~/.cache/euhedral-execution/macos-sdk
 curl --fail --location --silent --show-error \
   https://github.com/joseluisq/macosx-sdks/releases/download/26.1/MacOSX26.1.sdk.tar.xz \
-  | tar -xJ -C ~/.local/share/mise/installs/macos-sdk/
+  | tar -xJ -C ~/.cache/euhedral-execution/macos-sdk/
 ```
 
 ### Basic Build Commands
@@ -95,7 +95,7 @@ zig version
    locally.
 
 ```
-SDKROOT = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"
+SDKROOT = "{{env.HOME}}/.cache/euhedral-execution/macos-sdk/MacOSX26.1.sdk"
 RCODESIGN = "{{env.HOME}}/.local/share/mise/installs/apple-codesign/apple-codesign-0.29.0/rcodesign"
 ZIG = "{{env.HOME}}/.local/share/mise/installs/zig/0.16.0/zig"
 ```

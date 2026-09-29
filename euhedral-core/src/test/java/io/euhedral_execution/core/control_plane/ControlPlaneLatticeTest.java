@@ -170,20 +170,26 @@ class ControlPlaneLatticeTest {
     }
 
     @AfterEach
-    void tearDown() {
-        if (controlPlane != null) {
-            controlPlane.close();
+    void tearDown() throws InterruptedException {
+        try {
+            if (controlPlane != null) {
+                controlPlane.close();
+                assertTrue(
+                        controlPlane.controlPlaneExecutor.awaitTermination(5, TimeUnit.SECONDS),
+                        "The lattice must release its singleton before the next test starts");
+            }
+        } finally {
+            if (mockResourceMonitor != null) {
+                mockResourceMonitor.close();
+            }
+            if (mockTopologyMapper != null) {
+                mockTopologyMapper.close();
+            }
+            if (mockSysInfo != null) {
+                mockSysInfo.close();
+            }
+            version = 0;
         }
-        if (mockResourceMonitor != null) {
-            mockResourceMonitor.close();
-        }
-        if (mockTopologyMapper != null) {
-            mockTopologyMapper.close();
-        }
-        if (mockSysInfo != null) {
-            mockSysInfo.close();
-        }
-        version = 0;
     }
 
     @Test
@@ -334,6 +340,7 @@ class ControlPlaneLatticeTest {
                     ControlPlaneLattice.getOrCreate("replacement-after-close", "replacement-shard");
             assertNotSame(controlPlane, replacement);
             replacement.close();
+            assertTrue(replacement.controlPlaneExecutor.awaitTermination(5, TimeUnit.SECONDS));
         } finally {
             allowRoute.countDown();
             producerExecutor.shutdownNow();
@@ -351,7 +358,9 @@ class ControlPlaneLatticeTest {
         }
 
         LatticeConfig config = new LatticeConfig("TestControlPlane", new BitSet(), Duration.ZERO, baseShard);
-        return ControlPlaneLattice.getOrCreate(config);
+        ControlPlaneLattice lattice = ControlPlaneLattice.getOrCreate(config);
+        assertFalse(lattice.closed.get(), "A previous test left a closing lattice in the singleton slot");
+        return lattice;
     }
 
     @Test

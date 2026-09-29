@@ -81,4 +81,11 @@ tasks.withType<JacocoReport>().configureEach {
     enabled = false
 }
 
+// The benchmark distribution is local-only, not a Maven library.
+publishing.publications.clear()
+tasks.withType<AbstractPublishToMaven>().configureEach { enabled = false }
+tasks.withType<GenerateMavenPom>().configureEach { enabled = false }
+tasks.withType<GenerateModuleMetadata>().configureEach { enabled = false }
+tasks.withType<Sign>().configureEach { enabled = false }
+
 description = "Euhedral Benchmarks"
