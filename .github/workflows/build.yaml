@@ -46,6 +46,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
           cache-cleanup: on-success
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION }}
+          add-job-summary: 'always'
 
       - name: Cache Zig
         uses: actions/cache@v6.1.0
