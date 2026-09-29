@@ -151,7 +151,7 @@ public final class WindowsResources implements SystemSnapshotProvider {
                     cpuThrottle,
                     UnmodifiableBitSet.wrap(effectiveCpus),
                     this.pressure.clone(),
-                    this.buffer.clone(),
+                    Arrays.copyOf(this.buffer, 3),
                     ioBytes);
             this.snapshot.set(snap);
             return snap;
