@@ -8,6 +8,6 @@ zig = "0.16.0"
 apple-codesign = "github:indygreg/apple-platform-rs"
 
 [env]
-SDKROOT = "{{env.HOME}}/.local/share/mise/installs/macos-sdk/MacOSX26.1.sdk"
+SDKROOT = "{{env.HOME}}/.cache/euhedral-execution/macos-sdk/MacOSX26.1.sdk"
 RCODESIGN = "{{env.HOME}}/.local/share/mise/installs/apple-codesign/apple-codesign-0.29.0/rcodesign"
 ZIG = "{{env.HOME}}/.local/share/mise/installs/zig/0.16.0/zig"
