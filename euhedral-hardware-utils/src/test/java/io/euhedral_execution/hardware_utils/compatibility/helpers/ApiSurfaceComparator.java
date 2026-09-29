@@ -24,7 +24,7 @@ public final class ApiSurfaceComparator {
             if (currentEntry == null) {
                 removed.add(new CompatibilityReport.Difference(
                         baselineEntry.getKey(), baselineEntry.getValue().value(), null));
-            } else if (!baselineEntry.getValue().value().equals(currentEntry.value())) {
+            } else if (!compatibleValue(baselineEntry.getValue(), currentEntry)) {
                 changed.add(new CompatibilityReport.Difference(
                         baselineEntry.getKey(), baselineEntry.getValue().value(), currentEntry.value()));
             }
@@ -37,11 +37,26 @@ public final class ApiSurfaceComparator {
         }
 
         Set<String> baselineModule = baseline.moduleEntries().stream()
-                .map(Entry::line)
+                .map(ApiSurfaceComparator::moduleCompatibilityLine)
                 .collect(Collectors.toCollection(() -> new TreeSet<>(ApiSurface.UTF8_ORDER)));
         Set<String> currentModule = current.moduleEntries().stream()
-                .map(Entry::line)
+                .map(ApiSurfaceComparator::moduleCompatibilityLine)
                 .collect(Collectors.toCollection(() -> new TreeSet<>(ApiSurface.UTF8_ORDER)));
         return new CompatibilityReport(baselineModule.equals(currentModule), removed, changed, added);
+    }
+
+    private static String moduleCompatibilityLine(Entry entry) {
+        if (!entry.kind().equals("module")) {
+            return entry.line();
+        }
+        String value = entry.value().replaceFirst(";version=[^;]*", "");
+        return new Entry(entry.kind(), entry.key(), value).line();
+    }
+
+    private static boolean compatibleValue(Entry baseline, Entry current) {
+        if (baseline.kind().equals("module") && current.kind().equals("module")) {
+            return moduleCompatibilityLine(baseline).equals(moduleCompatibilityLine(current));
+        }
+        return baseline.value().equals(current.value());
     }
 }

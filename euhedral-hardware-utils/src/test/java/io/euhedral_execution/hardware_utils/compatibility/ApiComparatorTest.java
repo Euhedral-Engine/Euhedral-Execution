@@ -46,5 +46,14 @@ class ApiComparatorTest {
         CompatibilityReport moduleReport = ApiSurfaceComparator.compare(baseline, changedModule);
         assertFalse(moduleReport.moduleSame());
         assertFalse(moduleReport.passes());
+
+        ApiSurface moduleVersionChange = new ApiSurface(List.of(
+                new Entry("module", "module", "name=example;version=0.0.8-SNAPSHOT"),
+                new Entry("method", "Example#value()I", "access=public"),
+                new Entry("record", "Example#000000", "name=left;descriptor=I;signature=-"),
+                new Entry("record", "Example#000001", "name=right;descriptor=J;signature=-")));
+        CompatibilityReport versionReport = ApiSurfaceComparator.compare(baseline, moduleVersionChange);
+        assertTrue(versionReport.moduleSame());
+        assertTrue(versionReport.passes());
     }
 }
