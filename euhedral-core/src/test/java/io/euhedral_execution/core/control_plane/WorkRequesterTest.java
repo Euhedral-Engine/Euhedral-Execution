@@ -10,7 +10,7 @@ import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.CloneableObject;
 import io.euhedral_execution.core.utils.FlowThread;
-import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.util.BitSet;
 import org.junit.jupiter.api.Test;
 

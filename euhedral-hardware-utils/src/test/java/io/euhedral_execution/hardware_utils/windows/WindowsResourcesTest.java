@@ -4,12 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
-import io.euhedral_execution.hardware_utils.internal.sampling.enums.SignalValidity;
-import io.euhedral_execution.hardware_utils.internal.sampling.samples.FastHardwareSample;
-import io.euhedral_execution.hardware_utils.internal.sampling.samples.SlowHardwareSample;
-import io.euhedral_execution.hardware_utils.internal.sampling.signals.CpuFastSignals;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.monitor.sampling.enums.SignalValidity;
+import io.euhedral_execution.hardware_utils.monitor.sampling.samples.FastHardwareSample;
+import io.euhedral_execution.hardware_utils.monitor.sampling.samples.SlowHardwareSample;
+import io.euhedral_execution.hardware_utils.monitor.sampling.signals.CpuFastSignals;
+import io.euhedral_execution.hardware_utils.util.OSName;
 import org.junit.jupiter.api.Test;
 
 public class WindowsResourcesTest {

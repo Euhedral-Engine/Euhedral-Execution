@@ -15,7 +15,7 @@ import io.euhedral_execution.benchmarks.cfd.solver.Simulation;
 import io.euhedral_execution.benchmarks.cfd.solver.SimulationException;
 import io.euhedral_execution.benchmarks.cfd.validation.ValidationRunner;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
 import java.io.IOException;
 import java.io.InterruptedIOException;
 import java.io.PrintStream;

@@ -3,11 +3,11 @@ package io.euhedral_execution.hardware_utils.compatibility;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.TopologyMapper;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.HardwareUtilization;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
-import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.HardwareUtilization;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.TopologyMapper;
+import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
 import org.junit.jupiter.api.Test;
 

@@ -1,7 +1,7 @@
 package io.euhedral_execution.hardware_utils.linux;
 
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.Constants;
+import io.euhedral_execution.hardware_utils.util.OSName;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;

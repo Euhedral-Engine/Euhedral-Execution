@@ -3,7 +3,7 @@ package io.euhedral_execution.benchmarks.cfd.execution;
 import static org.junit.jupiter.api.Assertions.*;
 
 import io.euhedral_execution.benchmarks.cfd.config.ConfigLoader;
-import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class BackendOptionsTest {
             assertTrue(SystemInfo.getCpuSet().get(cpu));
         }
         long availableCpus = SystemInfo.getCpuSet().stream()
-                .filter(io.euhedral_execution.hardware_utils.ThreadTools.BASE_MASK::get)
+                .filter(io.euhedral_execution.hardware_utils.affinity.ThreadTools.BASE_MASK::get)
                 .count();
         if (availableCpus >= 2) {
             assertEquals(2, budget.workerCount());

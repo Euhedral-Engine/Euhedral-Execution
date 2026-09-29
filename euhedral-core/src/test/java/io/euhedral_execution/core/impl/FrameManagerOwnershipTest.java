@@ -6,7 +6,7 @@ import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.CallbackFrame;
 import io.euhedral_execution.core.ingest.SingleUseSource;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuInfo;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Set;

@@ -3,8 +3,8 @@ package io.euhedral_execution.hardware_utils.macos;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
 import io.euhedral_execution.hardware_utils.macos.MacosResources.MacosResourceProbe;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

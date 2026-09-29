@@ -1,12 +1,12 @@
 package io.euhedral_execution.hardware_utils.macos;
 
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
-import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
-import io.euhedral_execution.hardware_utils.internal.Constants;
-import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.monitor.SystemSnapshotProvider;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.util.OSName;
+import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;

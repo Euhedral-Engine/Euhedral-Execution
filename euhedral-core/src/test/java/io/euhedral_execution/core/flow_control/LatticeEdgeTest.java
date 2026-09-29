@@ -16,10 +16,10 @@ import static org.mockito.Mockito.when;
 
 import io.euhedral_execution.core.flow_control.UpstreamQueue.UpstreamHandle;
 import io.euhedral_execution.core.frames.AbstractFrame;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
-import io.euhedral_execution.hardware_utils.ThreadTools;
-import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;

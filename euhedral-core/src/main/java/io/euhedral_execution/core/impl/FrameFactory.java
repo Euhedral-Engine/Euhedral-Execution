@@ -1,9 +1,9 @@
 package io.euhedral_execution.core.impl;
 
 import io.euhedral_execution.core.frames.AbstractFrame;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
-import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuInfo;
 import io.euhedral_execution.hashing.HasherApi;
 import java.util.concurrent.ThreadLocalRandom;
 

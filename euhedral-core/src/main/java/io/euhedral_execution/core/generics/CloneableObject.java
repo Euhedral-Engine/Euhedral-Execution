@@ -2,8 +2,8 @@ package io.euhedral_execution.core.generics;
 
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.CloneLivenessRegistry;
-import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.CoreSnapshot;
+import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.CoreSnapshot;
 
 /// ## Base interface for everything below the
 /// [`ControlPlaneShard`][io.euhedral_execution.core.control_plane.ControlPlaneShard]

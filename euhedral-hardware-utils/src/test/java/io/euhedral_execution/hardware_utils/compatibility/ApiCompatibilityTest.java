@@ -20,7 +20,7 @@ class ApiCompatibilityTest {
         report.write(reportPath);
 
         assertEquals(
-                10,
+                12,
                 current.moduleEntries().stream()
                         .filter(entry -> entry.kind().equals("module-exports"))
                         .count());

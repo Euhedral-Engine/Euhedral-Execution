@@ -7,9 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.internal.topology.CoreKind;
-import io.euhedral_execution.hardware_utils.internal.topology.LogicalCpu;
-import io.euhedral_execution.hardware_utils.internal.topology.TopologyInput;
+import io.euhedral_execution.hardware_utils.topology.internal.CoreKind;
+import io.euhedral_execution.hardware_utils.topology.internal.LogicalCpu;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyInput;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

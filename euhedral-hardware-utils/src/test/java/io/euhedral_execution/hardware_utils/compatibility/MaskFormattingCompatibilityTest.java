@@ -3,7 +3,7 @@ package io.euhedral_execution.hardware_utils.compatibility;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
 import java.util.Map;

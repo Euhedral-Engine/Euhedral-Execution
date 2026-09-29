@@ -1,7 +1,7 @@
 package io.euhedral_execution.benchmarks.queue_benchmarks;
 
 import io.euhedral_execution.data_structures.queues.MpscQueue;
-import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;

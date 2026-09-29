@@ -72,7 +72,7 @@ The following paths are beneath `euhedral-core/src/main/java/io/euhedral_executi
 
 ## Affinity and completion
 
-`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ThreadTools.java` exposes affinity capability, CPU identity, affinity application, and restoration. Baseline workers use these APIs at thread startup and shutdown. Reported capabilities distinguish exact placement, locality hints, and unsupported affinity.
+`euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/affinity/ThreadTools.java` exposes affinity capability, CPU identity, affinity application, and restoration. Baseline workers use these APIs at thread startup and shutdown. Reported capabilities distinguish exact placement, locality hints, and unsupported affinity.
 
 Brick completion publishes numerical writes and private diagnostic reductions. The external driver advances the generation after all successful terminal acknowledgements. Queue draining describes source state; the application barrier describes completed computation.
 

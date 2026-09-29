@@ -19,8 +19,8 @@ class DefaultCadenceCompatibilityTest {
     void defaultsToExactlyTwoHundredMilliseconds() throws Exception {
         AtomicBoolean durationCreated = new AtomicBoolean();
         AtomicBoolean delegates = new AtomicBoolean();
-        byte[] bytes = Files.readAllBytes(
-                TestPaths.classesDirectory().resolve("io/euhedral_execution/hardware_utils/ResourceMonitor.class"));
+        byte[] bytes = Files.readAllBytes(TestPaths.classesDirectory()
+                .resolve("io/euhedral_execution/hardware_utils/monitor/ResourceMonitor.class"));
         new ClassReader(bytes)
                 .accept(
                         new ClassVisitor(Opcodes.ASM9) {
@@ -29,7 +29,7 @@ class DefaultCadenceCompatibilityTest {
                                     int access, String name, String descriptor, String signature, String[] exceptions) {
                                 if (!name.equals("<init>")
                                         || !descriptor.equals(
-                                                "(Lio/euhedral_execution/hardware_utils/TopologyMapper;)V")) {
+                                                "(Lio/euhedral_execution/hardware_utils/topology/TopologyMapper;)V")) {
                                     return null;
                                 }
                                 return new MethodVisitor(Opcodes.ASM9) {
@@ -64,10 +64,11 @@ class DefaultCadenceCompatibilityTest {
                                         }
                                         if (durationCreated.get()
                                                 && opcode == Opcodes.INVOKESPECIAL
-                                                && owner.equals("io/euhedral_execution/hardware_utils/ResourceMonitor")
+                                                && owner.equals(
+                                                        "io/euhedral_execution/hardware_utils/monitor/ResourceMonitor")
                                                 && invokedName.equals("<init>")
                                                 && invokedDescriptor.equals(
-                                                        "(Lio/euhedral_execution/hardware_utils/TopologyMapper;Ljava/time/Duration;)V")) {
+                                                        "(Lio/euhedral_execution/hardware_utils/topology/TopologyMapper;Ljava/time/Duration;)V")) {
                                             delegates.set(true);
                                         }
                                     }

@@ -11,7 +11,7 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
-import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
 import java.util.BitSet;
 import java.util.function.Consumer;
 import java.util.function.Function;

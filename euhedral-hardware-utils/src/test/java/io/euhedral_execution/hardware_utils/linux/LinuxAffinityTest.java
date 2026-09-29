@@ -7,11 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.AffinityCapability;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.AffinityController;
-import io.euhedral_execution.hardware_utils.internal.AffinityProvider;
+import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+import io.euhedral_execution.hardware_utils.affinity.internal.AffinityController;
+import io.euhedral_execution.hardware_utils.affinity.internal.AffinityProvider;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.util.OSName;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -107,7 +107,7 @@ class LinuxAffinityTest {
     }
 
     private static final class LinuxAffinityProxy
-            implements io.euhedral_execution.hardware_utils.internal.AffinityProvider {
+            implements io.euhedral_execution.hardware_utils.affinity.internal.AffinityProvider {
 
         private final AffinityCapability capability;
         private final Supplier<long[]> captureSupplier;

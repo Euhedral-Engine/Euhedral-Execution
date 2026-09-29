@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
-import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;

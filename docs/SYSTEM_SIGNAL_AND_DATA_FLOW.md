@@ -142,13 +142,13 @@ Each core's [`ControlPlaneFragment`](file:///home/brandon/src/Euhedral-Execution
   - Action 3: Park Thread (`LockSupport.parkNanos`)
 
 ### 4.3 Hardware Resource & Pressure Signal Loop
-- **Sampling Tick**: [`ResourceMonitor`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ResourceMonitor.java#L40) runs a background thread every 200ms sampling OS/JNI counters via [`SystemSnapshotProvider`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/common/SystemSnapshotProvider.java).
+- **Sampling Tick**: [`ResourceMonitor`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/monitor/ResourceMonitor.java#L40) runs a background thread every 200ms sampling OS/JNI counters via [`SystemSnapshotProvider`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/monitor/SystemSnapshotProvider.java).
 - **Pressure Calculation**: Emits `HardwareUtilization` containing CPU pressure, socket pressure, and process quota.
 - **Dynamic Quota & Batch Tuning**: [`ControlPlaneLattice.update()`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java#L264) receives utilization updates, recalculating per-shard and per-fragment batch limits. Under high CPU pressure, usable fragment cache capacity shrinks rapidly to prevent queuing congestion.
 
 ### 4.4 Topology Change, Drain, & Atomic Rebalance Signals
 When physical CPU topology or process core availability changes:
-1. **Topology Version Bump**: [`TopologyMapper`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/TopologyMapper.java) detects version discrepancy.
+1. **Topology Version Bump**: [`TopologyMapper`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/topology/TopologyMapper.java) detects version discrepancy.
 2. **Drain Signal**: `ingestController.setDrain(true)` sets the drain flag on [`LatticeVertex`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/flow_control/LatticeVertex.java). Work ingest freezes.
 3. **Atomic Remap**: New [`ControlPlaneShard`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java) and [`ControlPlaneFragment`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java) pipelines are constructed and initialized with NUMA `firstTouch()`.
 4. **Decommission & Resume**: Retired shards/fragments drain remaining buffered frames, then close. The drain flag is cleared (`setDrain(false)`), resuming active ingest.
@@ -184,9 +184,9 @@ When physical CPU topology or process core availability changes:
 
 | Module | Primary Symbol / Class | Category | Role & Functionality |
 | :--- | :--- | :--- | :--- |
-| `euhedral-hardware-utils` | [`SystemInfo`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/SystemInfo.java) | Topology | Reads physical OS CPU, socket, L1/L2/L3 cache topology via JNI. |
-| `euhedral-hardware-utils` | [`ResourceMonitor`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ResourceMonitor.java) | Monitoring | 200ms periodic timer sampling CPU/system pressure snapshots. |
-| `euhedral-hardware-utils` | [`PinnedThreadExecutor`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/PinnedThreadExecutor.java) | Execution | Binds core worker threads to specific physical CPUs. |
+| `euhedral-hardware-utils` | [`SystemInfo`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/topology/SystemInfo.java) | Topology | Reads physical OS CPU, socket, L1/L2/L3 cache topology via JNI. |
+| `euhedral-hardware-utils` | [`ResourceMonitor`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/monitor/ResourceMonitor.java) | Monitoring | 200ms periodic timer sampling CPU/system pressure snapshots. |
+| `euhedral-hardware-utils` | [`PinnedThreadExecutor`](file:///home/brandon/src/Euhedral-Execution/euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor.java) | Execution | Binds core worker threads to specific physical CPUs. |
 | `euhedral-core` | [`ControlPlaneLattice`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneLattice.java) | Control Plane | Top-level JVM singleton orchestrating socket shards and global ingest. |
 | `euhedral-core` | [`ControlPlaneShard`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java) | Control Plane | Per-socket controller managing core distributors and fragment workers. |
 | `euhedral-core` | [`ControlPlaneFragment`](file:///home/brandon/src/Euhedral-Execution/euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java) | Execution | Per-core pinned worker executing local cache, remote pulls, and upstream pulls. |

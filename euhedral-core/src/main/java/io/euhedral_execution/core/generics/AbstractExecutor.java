@@ -3,7 +3,7 @@ package io.euhedral_execution.core.generics;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.internal.Constants;
-import io.euhedral_execution.hardware_utils.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

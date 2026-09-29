@@ -1,19 +1,19 @@
 package io.euhedral_execution.hardware_utils.windows;
 
-import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuCacheLayout;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.SocketInfo;
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.Constants;
-import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
-import io.euhedral_execution.hardware_utils.internal.topology.CacheDomain;
-import io.euhedral_execution.hardware_utils.internal.topology.CoreKind;
-import io.euhedral_execution.hardware_utils.internal.topology.LogicalCpu;
-import io.euhedral_execution.hardware_utils.internal.topology.TopologyBootstrap;
-import io.euhedral_execution.hardware_utils.internal.topology.TopologyInput;
-import io.euhedral_execution.hardware_utils.internal.topology.TopologyModel;
-import io.euhedral_execution.hardware_utils.internal.topology.TopologyNormalizer;
+import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CoreInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuCacheLayout;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.SocketInfo;
+import io.euhedral_execution.hardware_utils.topology.internal.CacheDomain;
+import io.euhedral_execution.hardware_utils.topology.internal.CoreKind;
+import io.euhedral_execution.hardware_utils.topology.internal.LogicalCpu;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyBootstrap;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyInput;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyModel;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyNormalizer;
+import io.euhedral_execution.hardware_utils.util.OSName;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import io.euhedral_execution.hardware_utils.windows.win32.CacheRelationship;
 import io.euhedral_execution.hardware_utils.windows.win32.CacheRelationship.CacheType;
 import io.euhedral_execution.hardware_utils.windows.win32.GroupAffinity;
@@ -56,7 +56,7 @@ public final class WindowsSystemLayout {
         this.model = new TopologyNormalizer().normalize(translate(copyRelationships(relationships)));
     }
 
-    private WindowsSystemLayout(io.euhedral_execution.hardware_utils.internal.topology.TopologyProvider provider) {
+    private WindowsSystemLayout(io.euhedral_execution.hardware_utils.topology.internal.TopologyProvider provider) {
         this.model =
                 TopologyBootstrap.normalize(provider, Runtime.getRuntime().availableProcessors(), LOGGER, "windows");
     }

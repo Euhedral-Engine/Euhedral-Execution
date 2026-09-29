@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.euhedral_execution.core.flow_control.RoutingPolicy;
 import io.euhedral_execution.core.generics.FramePusher;
 import io.euhedral_execution.core.impl.FrameManager;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuInfo;
 import io.euhedral_execution.hashing.HasherApi;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
