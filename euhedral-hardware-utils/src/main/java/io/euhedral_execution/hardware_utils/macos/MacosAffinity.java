@@ -1,10 +1,10 @@
 package io.euhedral_execution.hardware_utils.macos;
 
-import io.euhedral_execution.hardware_utils.AffinityCapability;
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.Constants;
-import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
-import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
+import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+import io.euhedral_execution.hardware_utils.affinity.ThreadPinner;
+import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.util.OSName;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

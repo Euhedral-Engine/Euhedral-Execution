@@ -40,7 +40,7 @@ class NativeLoadSmokeIT {
         command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
         command.add("-cp");
         command.add(classpath(smoke));
-        command.add("io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain");
+        command.add("io.euhedral_execution.hardware_utils.nativelib.NativeLoadSmokeMain");
         command.add("linux-get-cpu");
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
         String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);

@@ -128,8 +128,8 @@ tasks.register<Copy>("prepareNativeSmokeBundle") {
         into(".")
     }
 
-    from("${layout.buildDirectory.get()}/classes/java/test/io/euhedral_execution/hardware_utils/internal/NativeLoadSmokeMain.class") {
-        into("io/euhedral_execution/hardware_utils/internal")
+    from("${layout.buildDirectory.get()}/classes/java/test/io/euhedral_execution/hardware_utils/nativelib/NativeLoadSmokeMain.class") {
+        into("io/euhedral_execution/hardware_utils/nativelib")
     }
 
     from(configurations.runtimeClasspath) {

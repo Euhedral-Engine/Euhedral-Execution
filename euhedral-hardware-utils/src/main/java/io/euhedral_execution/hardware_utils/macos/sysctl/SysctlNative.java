@@ -1,8 +1,8 @@
 package io.euhedral_execution.hardware_utils.macos.sysctl;
 
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.macos.MacosSystemLayout;
+import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.util.OSName;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;

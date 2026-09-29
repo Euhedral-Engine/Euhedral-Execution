@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
-import io.euhedral_execution.hardware_utils.internal.sampling.samples.FastHardwareSample;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.monitor.sampling.samples.FastHardwareSample;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

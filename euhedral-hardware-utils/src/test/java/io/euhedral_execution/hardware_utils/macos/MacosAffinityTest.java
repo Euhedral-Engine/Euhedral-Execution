@@ -6,8 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.AffinityCapability;
-import io.euhedral_execution.hardware_utils.common.OSName;
+import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+import io.euhedral_execution.hardware_utils.util.OSName;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 

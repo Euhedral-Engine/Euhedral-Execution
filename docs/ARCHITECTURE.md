@@ -49,16 +49,16 @@ slate.
 When the lattice spins up, it executes a clear bootstrap sequence:
 
 1. **Inspects the hardware topology** using [
-   `SystemInfo`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/SystemInfo.java)
+   `SystemInfo`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/topology/SystemInfo.java)
    to discover NUMA sockets, physical cores, logical siblings, and cache tiers.
 2. **Filters and maps usable CPUs** with [
-   `TopologyMapper`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/TopologyMapper.java).
+   `TopologyMapper`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/topology/TopologyMapper.java).
 3. **Instantiates a [
    `ControlPlaneShard`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneShard.java)**
    for each detected NUMA socket.
 4. **Initializes active shards** and boots up their per-core worker pipelines.
 5. **Launches the [
-   `ResourceMonitor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/ResourceMonitor.java)**,
+   `ResourceMonitor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/monitor/ResourceMonitor.java)**,
    which by default samples fast system metrics every 200 ms to continuously stream hardware
    pressure and topology changes into the control plane. Slower metrics run on longer sampling
    cadences.
@@ -240,7 +240,7 @@ requires special tracing, sandboxing, or lifecycle interception.
 The real muscle of Euhedral is the [
 `ControlPlaneFragment`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ControlPlaneFragment.java).
 Each fragment runs on a dedicated [
-`PinnedThreadExecutor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/PinnedThreadExecutor.java)
+`PinnedThreadExecutor`](../euhedral-hardware-utils/src/main/java/io/euhedral_execution/hardware_utils/affinity/PinnedThreadExecutor.java)
 pinned to a logical CPU belonging to its core (subject to the OS platform's affinity support).
 
 Its inheritance structure shows how it layers responsibilities:

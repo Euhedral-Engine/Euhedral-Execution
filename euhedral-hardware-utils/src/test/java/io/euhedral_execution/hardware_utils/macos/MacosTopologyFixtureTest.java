@@ -5,12 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import io.euhedral_execution.hardware_utils.SystemInfo.CoreInfo;
-import io.euhedral_execution.hardware_utils.SystemInfo.CpuInfo;
 import io.euhedral_execution.hardware_utils.macos.sysctl.SysctlInt;
 import io.euhedral_execution.hardware_utils.macos.sysctl.SysctlLong;
 import io.euhedral_execution.hardware_utils.macos.sysctl.SysctlProvider;
 import io.euhedral_execution.hardware_utils.macos.sysctl.SysctlString;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CoreInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo.CpuInfo;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;

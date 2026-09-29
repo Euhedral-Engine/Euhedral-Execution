@@ -21,7 +21,7 @@ import io.euhedral_execution.core.ingest.QueueIngestSink;
 import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import io.euhedral_execution.data_structures.queues.MpscQueue;
-import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.math.BigInteger;
 import java.util.Arrays;
 import java.util.BitSet;

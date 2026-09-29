@@ -1,11 +1,11 @@
 package io.euhedral_execution.hardware_utils.windows;
 
-import io.euhedral_execution.hardware_utils.AffinityCapability;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.common.OSName;
-import io.euhedral_execution.hardware_utils.internal.Constants;
-import io.euhedral_execution.hardware_utils.internal.JNIClassLoader;
-import io.euhedral_execution.hardware_utils.internal.ThreadPinner;
+import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
+import io.euhedral_execution.hardware_utils.affinity.ThreadPinner;
+import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.util.OSName;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;

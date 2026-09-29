@@ -5,7 +5,7 @@ import io.euhedral_execution.benchmarks.cfd.execution.*;
 import io.euhedral_execution.benchmarks.cfd.geometry.GeometryMask;
 import io.euhedral_execution.benchmarks.cfd.solver.Simulation;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
 
 /// One fork owns its runtime. Driver first-touch/reset and continuous scheduler history are explicit policies.
 final class BenchmarkRuntime implements AutoCloseable {

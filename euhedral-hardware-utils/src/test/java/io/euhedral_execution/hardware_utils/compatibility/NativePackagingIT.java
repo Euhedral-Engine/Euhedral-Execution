@@ -109,7 +109,7 @@ class NativePackagingIT {
                 assertTrue(
                         name.endsWith(".jar")
                                 || name.equals(
-                                        "io/euhedral_execution/hardware_utils/internal/NativeLoadSmokeMain.class"),
+                                        "io/euhedral_execution/hardware_utils/nativelib/NativeLoadSmokeMain.class"),
                         () -> "native-package: unexpected smoke file " + name);
                 assertFalse(name.toLowerCase().matches(".*(credential|secret|token|cache).*"), name);
             }

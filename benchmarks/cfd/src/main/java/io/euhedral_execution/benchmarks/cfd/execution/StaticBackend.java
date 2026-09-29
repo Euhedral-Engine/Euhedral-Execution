@@ -1,7 +1,7 @@
 package io.euhedral_execution.benchmarks.cfd.execution;
 
 import io.euhedral_execution.benchmarks.cfd.solver.StepContext;
-import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
 import java.util.concurrent.locks.LockSupport;
 
 /// Persistent workers own contiguous range sequences; a monitor publishes each generation once.

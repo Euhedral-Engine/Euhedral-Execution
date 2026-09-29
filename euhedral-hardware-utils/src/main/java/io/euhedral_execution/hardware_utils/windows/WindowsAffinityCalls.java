@@ -1,7 +1,7 @@
 package io.euhedral_execution.hardware_utils.windows;
 
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.internal.AffinityMasks;
+import io.euhedral_execution.hardware_utils.affinity.internal.AffinityMasks;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.util.BitSet;
 
 final class WindowsAffinityCalls {

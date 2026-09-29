@@ -23,31 +23,55 @@ authoritative. [BUILD.md](../BUILD.md) and the hardware section of
   used most outside this module are `SystemInfo` and its nested records, `ThreadTools`,
   `PinnedThreadExecutor`, `TopologyMapper` and its nested records, `ResourceMonitor`,
   `UnmodifiableBitSet`, and the `SystemUtilization` snapshot records.
-- The logger namespace is `euhedral.hardware_utils.` (`internal/Constants.LOGGER_PREFIX`), not the
+- The logger namespace is `euhedral.hardware_utils.` (`util/internal/Constants.LOGGER_PREFIX`), not the
   Java package name. Its level is controlled by
   [euhedral-hardware-utils.xml](src/main/resources/logback-fragments/euhedral-hardware-utils.xml)
   through `EuhedralHardwareUtilsLog` or `AllEuhedralLogs`.
 
 ### Exported surface
 
-[module-info.java](src/main/java/module-info.java) exports ten packages. Several package names are
-misleading; treat every exported package as public API.
+[module-info.java](src/main/java/module-info.java) exports twelve packages. Every package named
+`internal` is unexported and nested under the package that owns it; nothing public lives there.
+Treat every exported package as public API.
 
-| Package                                                                     | Exported | Owns                                                                                                                         |
-|-----------------------------------------------------------------------------|----------|------------------------------------------------------------------------------------------------------------------------------|
-| `hardware_utils`                                                            | yes      | `SystemInfo`, `ThreadTools`, `AffinityCapability`, `PinnedThreadExecutor`, `TopologyMapper`, `ResourceMonitor`              |
-| `common`                                                                    | yes      | `SystemUtilization` records, `UnmodifiableBitSet`, `UnmodifiableDoubleArray`, `OSName`, `SystemSnapshotProvider`, legacy `common.ThreadPinner` |
-| `linux`, `macos`, `windows`                                                 | yes      | Platform layout, resource, and affinity facades, including the JNI `native` declarations                                     |
-| `internal.sampling` and its `enums`, `primitives`, `samples`, `signals` packages | yes | Detailed provider interface, sample state engine, compatibility adapter, typed signal records                                |
-| `internal`                                                                  | no       | Affinity controller, masks, and provider; sealed `internal.ThreadPinner`; native loader, catalog, extractor, file security   |
-| `internal.topology`                                                         | no       | Topology normalization, validation, bootstrap, and the hex-mask codec                                                        |
-| `internal.pressure`                                                         | no       | Pressure evaluation, projection, constants, and state                                                                        |
-| `internal.monitor`                                                          | no       | Latest-value dispatcher, deadline waiter, monotonic clock, and topology updater seams                                        |
-| `macos.sysctl`, `windows.win32`                                             | no       | Platform helper types used only inside this module                                                                           |
+| Package                        | Exported | Owns                                                                                                             |
+|--------------------------------|----------|------------------------------------------------------------------------------------------------------------------|
+| `topology`                     | yes      | `SystemInfo`, `TopologyMapper`                                                                                   |
+| `topology.internal`            | no       | Topology normalization, validation, bootstrap, and the hex-mask codec                                            |
+| `affinity`                     | yes      | `ThreadTools`, `AffinityCapability`, `PinnedThreadExecutor`, `AffinityProvider`, sealed `ThreadPinner`           |
+| `affinity.internal`            | no       | Affinity controller and mask helpers                                                                             |
+| `monitor`                      | yes      | `ResourceMonitor`, `SystemUtilization` records, `SystemSnapshotProvider`                                         |
+| `monitor.sampling` and its `enums`, `primitives`, `samples`, `signals` packages | yes | Detailed provider interface and typed signal records                            |
+| `monitor.internal`             | no       | Sample state engine, slow-sample cache, compatibility adapter, latest-value dispatcher, deadline waiter, clock, topology updater |
+| `monitor.internal.pressure`    | no       | Pressure evaluation, projection, constants, and state                                                            |
+| `util`                         | yes      | `OSName`, `UnmodifiableBitSet`, `UnmodifiableDoubleArray`                                                        |
+| `util.internal`                | no       | `Constants` (logger naming)                                                                                      |
+| `nativelib`                    | no       | JNI class loader, native catalog, extractor, file security                                                       |
+| `linux`, `macos`, `windows`    | yes      | Platform layout, resource, and affinity facades, including the JNI `native` declarations                         |
+| `macos.sysctl`, `windows.win32`| no       | Platform helper types used only inside this module                                                               |
 
-`common.ThreadPinner` (public abstract class) and `internal.ThreadPinner` (sealed; permits only the
-three platform affinity classes) are different types. The `common` class is retained for API
-compatibility and has no implementation in the source tree.
+`affinity.ThreadPinner` is a public sealed abstract class that permits only `LinuxAffinity`,
+`MacosAffinity`, and `WindowsAffinity`, and implements `AffinityProvider`. Its constructors are
+`protected`. An earlier unused non-sealed `ThreadPinner` (formerly `common.ThreadPinner`) was removed.
+The platform classes in `linux`, `macos`, and `windows` are exported and extend the sealed class, so
+it must stay in an exported package.
+
+### Package placement rules
+
+The package tree groups code by responsibility: `topology`, `affinity`, `monitor`, `util`,
+`nativelib`, and the per-OS `linux`, `macos`, `windows` packages.
+
+- Public API goes in the owning responsibility package (`topology`, `affinity`, `monitor`,
+  `util`), never in an `internal` package. `module-info.java` must not export any package named
+  `internal`.
+- Implementation details go in the `internal` package nested under their owner, for example
+  `monitor.internal` or `affinity.internal`. Do not create a top-level `internal` package again.
+- A new exported package needs a `module-info.java` export, an updated export count in
+  `ApiCompatibilityTest` and `ApiSurfaceReader`, and a deliberate baseline update (see below).
+- Classes with `native` methods stay in `linux`, `macos`, and `windows`. Moving one changes its JNI
+  symbol name, `expected_jni_headers` in `build.zig`, and the native contract baseline.
+- Test classes mirror the package of the class they test. The smoke-bundle path for
+  `NativeLoadSmokeMain` in `build.gradle.kts` and the CI workflow use the `nativelib` package.
 
 ## Read by change, not by directory sweep
 
@@ -56,15 +80,15 @@ Paths are relative to `src/main/java/io/euhedral_execution/hardware_utils/` and
 
 | Change                                              | Primary implementation                                                                                                              | Nearest tests                                                                                                                                                                           |
 |-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Topology discovery, normalization, or fallback      | `SystemInfo`, `internal/topology/`, the platform `*SystemLayout` classes                                                            | `internal/topology/TopologyNormalizerTest`, `SystemInfoTest`, `SystemInfoFallbackTest`, `TopologyCacheFallbackTest`, `TopologyOwnershipTest`, the platform `*TopologyFixtureTest` classes, `linux/LinuxSystemLayoutFixtureTest` |
-| Hex CPU masks                                       | `internal/topology/MaskCodec`, `SystemInfo.fromHexMask` and `toHexMask`                                                             | `compatibility/MaskFormattingCompatibilityTest`                                                                                                                                         |
-| Effective topology publication and versions         | `TopologyMapper`, `internal/monitor/TopologyUpdater`                                                                                | `TopologyMapperTest`, `TopologyMapperPublicationTest`, `TopologyMapperVersionTest`, `TopologyMapperCoreZeroTest`, `compatibility/CoreZeroReservationCompatibilityTest`                   |
-| Affinity policy, leases, managed CPU identity       | `ThreadTools`, `AffinityCapability`, `internal/AffinityController`, `internal/AffinityMasks`, `internal/ThreadPinner`                | `ThreadToolsAffinityTest`, `linux/LinuxAffinityTest`, `macos/MacosAffinityTest`, `windows/WindowsAffinityTest`                                                                          |
+| Topology discovery, normalization, or fallback      | `SystemInfo`, `topology/internal/`, the platform `*SystemLayout` classes                                                            | `topology/internal/TopologyNormalizerTest`, `SystemInfoTest`, `SystemInfoFallbackTest`, `TopologyCacheFallbackTest`, `TopologyOwnershipTest`, the platform `*TopologyFixtureTest` classes, `linux/LinuxSystemLayoutFixtureTest` |
+| Hex CPU masks                                       | `topology/internal/MaskCodec`, `SystemInfo.fromHexMask` and `toHexMask`                                                             | `compatibility/MaskFormattingCompatibilityTest`                                                                                                                                         |
+| Effective topology publication and versions         | `TopologyMapper`, `monitor/internal/TopologyUpdater`                                                                                | `TopologyMapperTest`, `TopologyMapperPublicationTest`, `TopologyMapperVersionTest`, `TopologyMapperCoreZeroTest`, `compatibility/CoreZeroReservationCompatibilityTest`                   |
+| Affinity policy, leases, managed CPU identity       | `ThreadTools`, `AffinityCapability`, `affinity/AffinityProvider`, `affinity/ThreadPinner`, `affinity/internal/AffinityController`, `affinity/internal/AffinityMasks`                | `ThreadToolsAffinityTest`, `linux/LinuxAffinityTest`, `macos/MacosAffinityTest`, `windows/WindowsAffinityTest`                                                                          |
 | Pinned executor lifecycle, registry, cleanup, hooks | `PinnedThreadExecutor`                                                                                                              | `PinnedThreadExecutorTest`, `PinnedThreadExecutorLifecycleTest`, `compatibility/PinnedThreadExecutorCompatibilityTest`                                                                  |
-| Monitor lifecycle, cadence, listener dispatch       | `ResourceMonitor`, `internal/monitor/`                                                                                              | `ResourceMonitorTest`, `internal/monitor/LatestValueDispatcherTest`, `compatibility/DefaultCadenceCompatibilityTest`                                                                   |
-| Raw sampling and interval resolution                | `internal/sampling/`, `linux/LinuxResourceProvider`, `linux/CgroupV2Resources`, `linux/LinuxPaths`, `macos/MacosResources`, `windows/WindowsResources` | `internal/sampling/` tests, `linux/LinuxResourceProviderTest`, `macos/MacosResourcesTest`, `windows/WindowsResourcesTest`                                                  |
-| Pressure scoring                                    | `internal/pressure/`, `common/SystemUtilization`                                                                                    | `internal/pressure/PressureCompositionTest` (the other pressure tests are placeholders; see caveats), `common/` tests                                                                   |
-| Native load, catalog, extraction, file permissions  | `internal/JNIClassLoader`, `NativeProductCatalog`, `NativeLibraryLoader`, `NativeLibraryExtractor`, `NativeFileSecurity`            | `internal/NativeLoaderTest`, `compatibility/NativeManifestTest`, `compatibility/NativePackagingTest`, `compatibility/NativeLoadSmokeIT`                                                  |
+| Monitor lifecycle, cadence, listener dispatch       | `ResourceMonitor`, `monitor/internal/`                                                                                              | `ResourceMonitorTest`, `monitor/internal/LatestValueDispatcherTest`, `compatibility/DefaultCadenceCompatibilityTest`                                                                   |
+| Raw sampling and interval resolution                | `monitor/sampling/`, `monitor/internal/`, `linux/LinuxResourceProvider`, `linux/CgroupV2Resources`, `linux/LinuxPaths`, `macos/MacosResources`, `windows/WindowsResources` | `monitor/sampling/` and `monitor/internal/` tests, `linux/LinuxResourceProviderTest`, `macos/MacosResourcesTest`, `windows/WindowsResourcesTest`                                                  |
+| Pressure scoring                                    | `monitor/internal/pressure/`, `monitor/SystemUtilization`                                                                                    | `monitor/internal/pressure/PressureCompositionTest` (the other pressure tests are placeholders; see caveats), `monitor/` and `util/` tests                                                                   |
+| Native load, catalog, extraction, file permissions  | `nativelib/JNIClassLoader`, `NativeProductCatalog`, `NativeLibraryLoader`, `NativeLibraryExtractor`, `NativeFileSecurity`            | `nativelib/NativeLoaderTest`, `compatibility/NativeManifestTest`, `compatibility/NativePackagingTest`, `compatibility/NativeLoadSmokeIT`                                                  |
 | JNI signatures or C++ sources                       | Platform `*Affinity`, `*Resources`, `*SystemLayout`, `macos/sysctl/SysctlNative`; `src/main/native/<os>/`                            | `compatibility/NativeCompatibilityTest`, `JniHeaderTest`, `NativeBinaryGateTest`, `NativeBinaryInspectionIT`                                                                            |
 | Zig build flags, products, signing                  | `src/main/native/build.zig`, `native-products.json`, `build.gradle.kts`                                                             | `compatibility/NativeBuildPolicyTest`, `NativeManifestTest`, `NativeSigningTest`, `NativeBinaryGateTest`, `NativePackagingIT`                                                           |
 | Any exported signature or `module-info.java`        | Exported packages above                                                                                                             | `compatibility/ApiCompatibilityTest`                                                                                                                                                    |
@@ -195,13 +219,19 @@ The `compatibility` test package pins behavior against branch point `900d8c50`:
 
 - [api-900d8c50.tsv](src/test/resources/compatibility/api-900d8c50.tsv): `ApiCompatibilityTest`
   fails on any removed or changed exported member or any module-descriptor change, and asserts
-  exactly ten exported packages. Additions are reported but pass. The report is written to
+  exactly twelve exported packages. Additions are reported but pass. The report is written to
   `build/compatibility/compatibility-report.txt`.
 - [native-contract-900d8c50.tsv](src/test/resources/compatibility/native-contract-900d8c50.tsv):
   native products and JNI declarations.
 - [defect-ledger.tsv](src/test/resources/compatibility/defect-ledger.tsv): each recorded correction
   maps to an exact regression test, and `DefectLedgerTest` hard-codes the expected ID-to-owner
   mapping.
+
+The API baseline was re-keyed once for the package reorganization: entries moved from `common`,
+the root package, and `internal.sampling` to `topology`, `affinity`, `monitor`, and `util`, and the
+export count went from ten to twelve. Member signatures were otherwise unchanged, except that `affinity.ThreadPinner` is now the sealed
+platform base class (protected constructors, implements `AffinityProvider`). Keep the file in
+canonical UTF-8 byte order, because `ApiSurface.read` rejects unsorted entries.
 
 Treat these files as reviewed contracts. Do not edit a baseline to make a test pass. An intentional
 break requires explicit user approval and a baseline update in the same change, called out in the
@@ -219,8 +249,9 @@ Focused iteration examples:
 
 ```bash
 mise exec -- gradle :euhedral-hardware-utils:test \
-  --tests 'io.euhedral_execution.hardware_utils.internal.pressure.*' \
-  --tests 'io.euhedral_execution.hardware_utils.internal.sampling.*'
+  --tests 'io.euhedral_execution.hardware_utils.monitor.internal.pressure.*' \
+  --tests 'io.euhedral_execution.hardware_utils.monitor.sampling.*' \
+  --tests 'io.euhedral_execution.hardware_utils.monitor.internal.*'
 
 mise exec -- gradle :euhedral-hardware-utils:test \
   --tests 'io.euhedral_execution.hardware_utils.compatibility.*'

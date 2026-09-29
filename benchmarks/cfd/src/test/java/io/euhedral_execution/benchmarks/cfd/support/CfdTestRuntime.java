@@ -2,8 +2,8 @@ package io.euhedral_execution.benchmarks.cfd.support;
 
 import io.euhedral_execution.core.config.LatticeConfig;
 import io.euhedral_execution.core.control_plane.ControlPlaneLattice;
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.ThreadTools;
+import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.util.BitSet;
 
 /// Bounds worker/cache allocation to the topology each correctness test actually exercises.

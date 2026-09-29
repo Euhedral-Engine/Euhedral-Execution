@@ -72,8 +72,8 @@ public final class ApiSurfaceReader {
 
         List<Entry> entries = new ArrayList<>();
         Set<String> exports = readModule(moduleFiles.get(0), entries);
-        if (exports.size() != 10) {
-            throw new IOException("expected exactly ten exported packages, found " + exports.size());
+        if (exports.size() != 12) {
+            throw new IOException("expected exactly twelve exported packages, found " + exports.size());
         }
 
         Map<String, int[]> innerAccess = new HashMap<>();

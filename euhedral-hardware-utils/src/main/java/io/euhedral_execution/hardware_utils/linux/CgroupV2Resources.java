@@ -1,11 +1,11 @@
 package io.euhedral_execution.hardware_utils.linux;
 
-import io.euhedral_execution.hardware_utils.SystemInfo;
-import io.euhedral_execution.hardware_utils.common.SystemSnapshotProvider;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.MemorySnapshotIdx;
-import io.euhedral_execution.hardware_utils.common.SystemUtilization.SystemSnapshot;
-import io.euhedral_execution.hardware_utils.common.UnmodifiableBitSet;
-import io.euhedral_execution.hardware_utils.internal.Constants;
+import io.euhedral_execution.hardware_utils.monitor.SystemSnapshotProvider;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.MemorySnapshotIdx;
+import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import it.unimi.dsi.fastutil.longs.LongArraySet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import java.nio.ByteBuffer;

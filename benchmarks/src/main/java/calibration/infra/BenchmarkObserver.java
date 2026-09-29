@@ -3,7 +3,7 @@ package calibration.infra;
 import calibration.config.CalibrationBenchmarkConfig;
 import io.euhedral_execution.core.control_plane.FragmentObserver;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicReferenceArray;
-import io.euhedral_execution.hardware_utils.SystemInfo;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicReference;
 import org.jspecify.annotations.Nullable;

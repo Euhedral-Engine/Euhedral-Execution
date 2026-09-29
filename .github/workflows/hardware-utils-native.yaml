@@ -104,7 +104,7 @@ jobs:
           test "$(find artifact -type f | wc -l)" -le 64
           test "$(du -sb artifact | cut -f1)" -le 134217728
           timeout 60s java -cp 'artifact/native-smoke:artifact/native-smoke/*:artifact/native-smoke/lib/*' \
-            io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain linux-get-cpu
+            io.euhedral_execution.hardware_utils.nativelib.NativeLoadSmokeMain linux-get-cpu
 
   linux-jdk17-musl:
     needs: cross-package
@@ -121,7 +121,7 @@ jobs:
           timeout 180s docker run --rm --network none --memory 512m --cpus 2 \
             -v "$PWD/artifact:/smoke:ro" eclipse-temurin:17-jre-alpine sh -ec '
               timeout 60s java -cp "/smoke/native-smoke:/smoke/native-smoke/*:/smoke/native-smoke/lib/*" \
-                io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain linux-get-cpu
+                io.euhedral_execution.hardware_utils.nativelib.NativeLoadSmokeMain linux-get-cpu
             '
 
   windows-jdk17:
@@ -140,7 +140,7 @@ jobs:
         shell: pwsh
         run: |
           java -cp 'artifact/native-smoke;artifact/native-smoke/*;artifact/native-smoke/lib/*' `
-            io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain load-only
+            io.euhedral_execution.hardware_utils.nativelib.NativeLoadSmokeMain load-only
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   macos-jdk17:
@@ -168,4 +168,4 @@ jobs:
           /usr/bin/codesign --verify --strict --verbose=4 bin/osx/osx_jni_arm64.dylib
           cd "$GITHUB_WORKSPACE"
           java -cp 'artifact/native-smoke:artifact/native-smoke/*:artifact/native-smoke/lib/*' \
-            io.euhedral_execution.hardware_utils.internal.NativeLoadSmokeMain load-only
+            io.euhedral_execution.hardware_utils.nativelib.NativeLoadSmokeMain load-only
