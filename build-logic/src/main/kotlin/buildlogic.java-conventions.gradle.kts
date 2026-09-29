@@ -14,7 +14,7 @@ jacoco {
 
 
 group = "io.euhedral-execution"
-version = "0.0.8-SNAPSHOT"
+version = "0.1.0"
 
 java {
     toolchain {
