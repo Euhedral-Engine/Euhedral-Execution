@@ -485,6 +485,43 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    /// Verifies a connected source with no productive handles is polled at the idle park cadence
+    /// rather than at full speed.
+    @Test
+    void loopParksWhileConnectedSourceEmitsNothing() throws Exception {
+        ControlPlaneFragment fragment =
+                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        LatticeVertex distributor = connect(fragment);
+        SilentSource source = new SilentSource();
+        CountingReceiver receiver = new CountingReceiver();
+
+        try {
+            fragment.output().addDownstream(receiver);
+            fragment.start();
+            Awaitility.await().atMost(TIMEOUT).until(fragment::ready);
+            distributor.ingest(source);
+            Awaitility.await().atMost(TIMEOUT).until(() -> source.pullCalls.get() > 0);
+
+            long before = source.pullCalls.get();
+            long window = Duration.ofMillis(200).toNanos();
+            long start = System.nanoTime();
+            Thread.sleep(Duration.ofMillis(200));
+            long elapsed = System.nanoTime() - start;
+            long polls = source.pullCalls.get() - before;
+
+            // One poll per cycle at most, and every cycle parks for at least the default park.
+            long ceiling = elapsed / FragmentControlConfig.DEFAULT_PARK_NS + 1L;
+            assertTrue(polls <= ceiling, "polls=" + polls + " ceiling=" + ceiling + " window=" + window);
+            assertEquals(0, receiver.received.get());
+            assertNull(receiver.error.get());
+        } finally {
+            source.complete();
+            fragment.close();
+            distributor.close();
+            awaitWorkersAndCloseExecutors(fragment);
+        }
+    }
+
     private static void awaitWorkersAndCloseExecutors(ControlPlaneFragment fragment) {
         CloneConfig clone = fragment.getConfig().cloneConfig();
         if (clone != null) {
@@ -712,6 +749,44 @@ class ControlPlaneFragmentThreadTest {
             if (this.index.get() >= this.frames.length) {
                 complete();
             }
+        }
+    }
+
+    /// A connected source that stays open and never has work.
+    private static final class SilentSource implements LatticeSource {
+
+        private final AtomicBoolean complete = new AtomicBoolean();
+        private final AtomicReference<LatticeReceiver> downstream = new AtomicReference<>();
+        private final AtomicInteger pullCalls = new AtomicInteger();
+
+        @Override
+        public void addDownstream(LatticeReceiver receiver) {
+            this.downstream.compareAndSet(null, receiver);
+        }
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            this.pullCalls.incrementAndGet();
+            return 0L;
+        }
+
+        @Override
+        public void request(long demand) {}
+
+        @Override
+        public void complete() {
+            if (this.complete.compareAndSet(false, true)) {
+                LatticeReceiver receiver = this.downstream.getAndSet(null);
+                if (receiver != null) {
+                    receiver.onComplete();
+                }
+            }
+        }
+
+        @Override
+        public boolean isComplete() {
+            return this.complete.get();
         }
     }
 

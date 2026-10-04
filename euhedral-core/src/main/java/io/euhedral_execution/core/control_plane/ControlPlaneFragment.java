@@ -365,6 +365,13 @@ public final class ControlPlaneFragment extends WorkRequester {
             return;
         }
         if (processed <= 0L) {
+            // A connected source whose handles emitted nothing on the last attempt would otherwise
+            // be polled at full speed.
+            if (this.upstreamQueue.getProductiveHandleCount() == 0L) {
+                LockSupport.parkNanos(FragmentControlConfig.DEFAULT_PARK_NS);
+                this.state.nowNs = System.nanoTime();
+                return;
+            }
             Thread.yield();
             return;
         }
