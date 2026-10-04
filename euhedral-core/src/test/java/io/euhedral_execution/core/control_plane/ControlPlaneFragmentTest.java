@@ -17,6 +17,7 @@ import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.FragmentConfig;
 import io.euhedral_execution.core.config.IdlePolicy;
 import io.euhedral_execution.core.flow_control.LatticeHotSource;
+import io.euhedral_execution.core.flow_control.UpstreamQueue;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.frames.DummyFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
@@ -503,6 +504,25 @@ class ControlPlaneFragmentTest {
             assertDoesNotThrow(() -> fragment.update(mockSnap));
             assertEquals(capBefore, fragment.getAdaptiveBatchCap());
         }
+    }
+
+    @Test
+    void unproductiveParkFollowsThePolicyAndTheProductiveHandleCount() {
+        UpstreamQueue upstream = Mockito.mock(UpstreamQueue.class);
+        FragmentDecisionTree defaults = new FragmentDecisionTree(IdlePolicy.DEFAULT);
+        FragmentDecisionTree longer = new FragmentDecisionTree(IdlePolicy.DEFAULT.withUnproductiveParkNs(250_000L));
+        FragmentDecisionTree disabled = new FragmentDecisionTree(IdlePolicy.DEFAULT.withUnproductiveParkNs(0L));
+
+        Mockito.when(upstream.getProductiveHandleCount()).thenReturn(0L);
+        assertEquals(
+                IdlePolicy.DEFAULT_UNPRODUCTIVE_PARK_NS,
+                ControlPlaneFragment.unproductiveParkNanos(defaults, upstream));
+        assertEquals(250_000L, ControlPlaneFragment.unproductiveParkNanos(longer, upstream));
+        assertEquals(0L, ControlPlaneFragment.unproductiveParkNanos(disabled, upstream));
+
+        Mockito.when(upstream.getProductiveHandleCount()).thenReturn(1L);
+        assertEquals(0L, ControlPlaneFragment.unproductiveParkNanos(defaults, upstream));
+        assertEquals(0L, ControlPlaneFragment.unproductiveParkNanos(longer, upstream));
     }
 
     private ControlPlaneFragment create(FragmentConfig config) {
