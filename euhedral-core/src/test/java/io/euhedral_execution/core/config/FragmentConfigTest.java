@@ -26,6 +26,11 @@ class FragmentConfigTest {
         assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(-1L, 1L));
         assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(1L, 0L));
         assertThrows(IllegalArgumentException.class, () -> new IdlePolicy(1L, -1L));
+        assertEquals(IdlePolicy.DEFAULT_UNPRODUCTIVE_PARK_NS, IdlePolicy.DEFAULT.unproductiveParkNs());
+        assertEquals(
+                250_000L, IdlePolicy.DEFAULT.withUnproductiveParkNs(250_000L).unproductiveParkNs());
+        assertEquals(0L, IdlePolicy.DEFAULT.withUnproductiveParkNs(0L).unproductiveParkNs());
+        assertThrows(IllegalArgumentException.class, () -> IdlePolicy.DEFAULT.withUnproductiveParkNs(-1L));
         FragmentConfig legacy =
                 new FragmentConfig(null, CacheConfig.ofDefaults(), null, 100, false, 7_000_000L, false, null, null);
         assertEquals(new IdlePolicy(15_000L, 7_000_000L), legacy.idlePolicy());

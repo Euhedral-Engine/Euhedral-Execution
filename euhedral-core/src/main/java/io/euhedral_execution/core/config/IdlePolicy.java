@@ -3,10 +3,24 @@ package io.euhedral_execution.core.config;
 import java.util.List;
 import org.jspecify.annotations.NonNull;
 
+/// Timing for workers that have no work.
+///
+/// @param idleParkNs             Default park of a worker the decision tree selected for `IDLE`.
+/// @param contentionHalfLifeNanos Half-life of acquisition contention history.
+/// @param function               Park and half-life curves, or `null` for fixed timing.
+/// @param unproductiveParkNs     Park of a worker that processed nothing while none of its upstream
+/// handles emitted work on their last attempt. Longer parks save power at the cost of the time a
+/// parked worker takes to notice new work. Zero disables the park.
 public record IdlePolicy(
         long idleParkNs,
         long contentionHalfLifeNanos,
-        @NonNull TimingProvider function) {
+        @NonNull TimingProvider function,
+        long unproductiveParkNs) {
+
+    /// Retains the default unproductive park.
+    public IdlePolicy(long idleParkNs, long contentionHalfLifeNanos, TimingProvider function) {
+        this(idleParkNs, contentionHalfLifeNanos, function, DEFAULT_UNPRODUCTIVE_PARK_NS);
+    }
 
     /// Explicit fixed timing.
     public IdlePolicy(long idleParkNs, long contentionHalfLifeNanos) {
@@ -37,6 +51,7 @@ public record IdlePolicy(
     }
 
     public static final long DEFAULT_IDLE_PARK_NS = 15_000L;
+    public static final long DEFAULT_UNPRODUCTIVE_PARK_NS = 15_000L;
     public static final long DEFAULT_CONTENTION_HALF_LIFE_NANOS = 1_000_000L;
     /// Default IDLE timing policy selected from scarce-source calibration.
     /// Source policy: cache-scarce-v1 / policy-158a61afee6653cbbfde.
@@ -82,8 +97,16 @@ public record IdlePolicy(
         if (idleParkNs < 0L) {
             throw new IllegalArgumentException("idleParkNs must not be negative");
         }
+        if (unproductiveParkNs < 0L) {
+            throw new IllegalArgumentException("unproductiveParkNs must not be negative");
+        }
         if (contentionHalfLifeNanos <= 0L) {
             throw new IllegalArgumentException("contentionHalfLifeNanos must be positive");
         }
+    }
+
+    /// Returns this policy with a different unproductive park.
+    public IdlePolicy withUnproductiveParkNs(long unproductiveParkNs) {
+        return new IdlePolicy(this.idleParkNs, this.contentionHalfLifeNanos, this.function, unproductiveParkNs);
     }
 }

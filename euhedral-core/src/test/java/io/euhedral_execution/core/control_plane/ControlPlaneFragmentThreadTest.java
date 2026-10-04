@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import io.euhedral_execution.core.config.CacheConfig;
 import io.euhedral_execution.core.config.CloneConfig;
 import io.euhedral_execution.core.config.CloneLivenessRegistry;
 import io.euhedral_execution.core.config.FragmentConfig;
@@ -489,8 +490,42 @@ class ControlPlaneFragmentThreadTest {
     /// rather than at full speed.
     @Test
     void loopParksWhileConnectedSourceEmitsNothing() throws Exception {
-        ControlPlaneFragment fragment =
-                new ControlPlaneFragment(FragmentConfig.ofDefaults().clone(cloneConfig()));
+        long polls = pollsOverWindow(IdlePolicy.DEFAULT, Duration.ofMillis(200));
+
+        assertTrue(
+                polls <= pollCeiling(IdlePolicy.DEFAULT_UNPRODUCTIVE_PARK_NS, Duration.ofMillis(200)),
+                "polls=" + polls);
+    }
+
+    /// Verifies the unproductive park follows the configured policy.
+    @Test
+    void loopParksForTheConfiguredUnproductiveDuration() throws Exception {
+        long park = Duration.ofMillis(1).toNanos();
+        long polls = pollsOverWindow(IdlePolicy.DEFAULT.withUnproductiveParkNs(park), Duration.ofMillis(300));
+
+        assertTrue(polls <= pollCeiling(park, Duration.ofMillis(300)), "polls=" + polls);
+    }
+
+    /// Verifies a zero unproductive park restores uninterrupted polling.
+    @Test
+    void zeroUnproductiveParkPollsWithoutParking() throws Exception {
+        long polls = pollsOverWindow(IdlePolicy.DEFAULT.withUnproductiveParkNs(0L), Duration.ofMillis(200));
+
+        assertTrue(
+                polls > pollCeiling(IdlePolicy.DEFAULT_UNPRODUCTIVE_PARK_NS, Duration.ofMillis(200)), "polls=" + polls);
+    }
+
+    /// At most one poll per cycle, and every cycle parks for at least `parkNs`.
+    private static long pollCeiling(long parkNs, Duration window) {
+        return window.toNanos() / parkNs + 1L;
+    }
+
+    /// Counts the polls an open, empty source receives from one idle fragment over `window`.
+    private long pollsOverWindow(IdlePolicy policy, Duration window) throws Exception {
+        FragmentConfig config = new FragmentConfig(
+                        null, CacheConfig.ofDefaults(null, null), null, 4_096, true, policy, false, null, null)
+                .clone(cloneConfig());
+        ControlPlaneFragment fragment = new ControlPlaneFragment(config);
         LatticeVertex distributor = connect(fragment);
         SilentSource source = new SilentSource();
         CountingReceiver receiver = new CountingReceiver();
@@ -503,17 +538,15 @@ class ControlPlaneFragmentThreadTest {
             Awaitility.await().atMost(TIMEOUT).until(() -> source.pullCalls.get() > 0);
 
             long before = source.pullCalls.get();
-            long window = Duration.ofMillis(200).toNanos();
             long start = System.nanoTime();
-            Thread.sleep(Duration.ofMillis(200));
+            Thread.sleep(window);
             long elapsed = System.nanoTime() - start;
             long polls = source.pullCalls.get() - before;
 
-            // One poll per cycle at most, and every cycle parks for at least the default park.
-            long ceiling = elapsed / FragmentControlConfig.DEFAULT_PARK_NS + 1L;
-            assertTrue(polls <= ceiling, "polls=" + polls + " ceiling=" + ceiling + " window=" + window);
             assertEquals(0, receiver.received.get());
             assertNull(receiver.error.get());
+            // Scale to the nominal window so scheduling delay in the sleep cannot loosen the bound.
+            return polls * window.toNanos() / elapsed;
         } finally {
             source.complete();
             fragment.close();

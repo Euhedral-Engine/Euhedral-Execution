@@ -208,6 +208,11 @@ final class FragmentDecisionTree {
         return this.idlePolicy.idleParkNs();
     }
 
+    /// Returns the configured park of a worker whose upstream handles are all unproductive.
+    long unproductiveParkNs() {
+        return this.idlePolicy.unproductiveParkNs();
+    }
+
     long contentionHalfLifeNanos() {
         return this.idlePolicy.contentionHalfLifeNanos();
     }

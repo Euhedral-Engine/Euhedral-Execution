@@ -453,6 +453,26 @@ offline models:
   constants into precise, nanosecond-calibrated limits tailored to the host CPU.
 - [`IdlePolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/IdlePolicy.java)
   carries IDLE park and acquisition-contention timing independently of decision-tree thresholds.
+  `unproductiveParkNs` (default 15 µs, `0` disables) is the park of a worker that processed
+  nothing while none of its upstream handles emitted work on their last pull or request. Raise it
+  to save power while a source is connected but quiet; a parked worker notices new work up to one
+  park later, and the lattice's other workers shorten that in proportion to their number. Idle
+  lattice on 32 CPUs with an open, empty source, one run per setting:
+
+  | `unproductiveParkNs` | CPU (cores) | CPU (% of machine) | Pickup p50 / max |
+  |----------------------|-------------|--------------------|------------------|
+  | 0                    | 31.6        | 98.7               | 4 µs / 40 µs     |
+  | 15 µs                | 12.2        | 38.2               | 2 µs / 7 µs      |
+  | 50 µs                | 2.4         | 7.4                | 2 µs / 7 µs      |
+  | 100 µs               | 0.96        | 3.0                | 2 µs / 17 µs     |
+  | 250 µs               | 0.40        | 1.3                | 6 µs / 27 µs     |
+  | 1 ms                 | 0.23        | 0.7                | 17 µs / 248 µs   |
+  | 5 ms                 | 0.14        | 0.4                | 210 µs / 640 µs  |
+  | 10 ms                | 0.09        | 0.3                | 369 µs / 1.7 ms  |
+
+  Pickup is the time from a frame becoming available to a worker's pull claiming it (40 events per
+  setting). With a single worker it is about half the park at the median and one park at worst
+  (10 ms: 4.6 ms / 9.9 ms).
 - Model coefficients (such as the default `logistic-05-sqrt` model in [
   `ParticipationLogisticModel`](../euhedral-core/src/main/java/io/euhedral_execution/core/control_plane/ParticipationLogisticModel.java)
   and cache timing curves in [
