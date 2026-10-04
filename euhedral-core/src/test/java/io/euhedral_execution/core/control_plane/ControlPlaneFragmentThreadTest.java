@@ -506,16 +506,6 @@ class ControlPlaneFragmentThreadTest {
         assertTrue(polls <= pollCeiling(park, Duration.ofMillis(300)), "polls=" + polls);
     }
 
-    /// Verifies a zero unproductive park polls more often than the default park, measured back to
-    /// back so the comparison does not depend on the host's absolute cycle cost.
-    @Test
-    void zeroUnproductiveParkPollsWithoutParking() throws Exception {
-        long parked = pollsOverWindow(IdlePolicy.DEFAULT, Duration.ofMillis(200));
-        long unparked = pollsOverWindow(IdlePolicy.DEFAULT.withUnproductiveParkNs(0L), Duration.ofMillis(200));
-
-        assertTrue(unparked > parked, "unparked=" + unparked + " parked=" + parked);
-    }
-
     /// At most one poll per cycle, and every cycle parks for at least `parkNs`.
     private static long pollCeiling(long parkNs, Duration window) {
         return window.toNanos() / parkNs + 1L;

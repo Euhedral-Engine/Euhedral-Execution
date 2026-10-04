@@ -367,8 +367,8 @@ public final class ControlPlaneFragment extends WorkRequester {
         if (processed <= 0L) {
             // A connected source whose handles emitted nothing on the last attempt would otherwise
             // be polled at full speed.
-            long parkNanos = this.controlPolicy.unproductiveParkNs();
-            if (parkNanos > 0L && this.upstreamQueue.getProductiveHandleCount() == 0L) {
+            long parkNanos = unproductiveParkNanos(this.controlPolicy, this.upstreamQueue);
+            if (parkNanos > 0L) {
                 LockSupport.parkNanos(parkNanos);
                 this.state.nowNs = System.nanoTime();
                 return;
@@ -417,6 +417,13 @@ public final class ControlPlaneFragment extends WorkRequester {
         } finally {
             this.metrics.executionFinished();
         }
+    }
+
+    /// Returns the park for a cycle that processed nothing, or zero when the park is disabled or an
+    /// upstream handle emitted work on its last attempt.
+    static long unproductiveParkNanos(FragmentDecisionTree policy, UpstreamQueue upstream) {
+        long parkNanos = policy.unproductiveParkNs();
+        return parkNanos > 0L && upstream.getProductiveHandleCount() == 0L ? parkNanos : 0L;
     }
 
     /// Selects fixed or adaptive contention aging without changing source-service ownership.
