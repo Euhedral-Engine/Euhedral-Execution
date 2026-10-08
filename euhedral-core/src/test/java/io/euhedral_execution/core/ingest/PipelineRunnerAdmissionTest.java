@@ -19,9 +19,12 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 
@@ -221,6 +224,39 @@ class PipelineRunnerAdmissionTest {
         }
     }
 
+    @RepeatedTest(20)
+    @Timeout(30)
+    void closeRacingPublicationNeverStrandsAnAcceptedFrame() throws Exception {
+        var pool = Executors.newFixedThreadPool(2);
+        try (var run = new AdmissionRun(PipelineFrame.<Object>builder(), new Gate())) {
+            var start = new CountDownLatch(1);
+            var accepted = new ArrayList<CompletableFuture<PipelineFrame.Outcome>>();
+            var submitter = pool.submit(() -> {
+                start.await();
+                try {
+                    while (true) accepted.add(run.runner.submit(new Object()));
+                } catch (IllegalStateException closed) {
+                    return null; // admission closed
+                }
+            });
+            var closer = pool.submit(() -> {
+                start.await();
+                run.runner.complete();
+                return null;
+            });
+            start.countDown();
+            closer.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            submitter.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+
+            // No downstream demand was ever granted, so every accepted chain must have been cancelled out of the queue.
+            for (var future : accepted) assertOutcome(future, PipelineFrame.Status.CANCELLED);
+            assertThat(run.runner.size()).isZero();
+            assertNoAcceptedChains(run.runner);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     private static void assertOutcome(CompletableFuture<PipelineFrame.Outcome> future, PipelineFrame.Status status)
             throws Exception {
         var outcome = future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
@@ -261,9 +297,9 @@ class PipelineRunnerAdmissionTest {
     }
 
     private static void assertNoAcceptedChains(PipelineRunner<Object> runner) throws Exception {
-        synchronized (runner.lifecycleLock) {
-            assertThat(readField(PipelineRunner.class, runner, "inFlight")).isEqualTo(0L);
-        }
+        // The admission word's sign bit only records that admission closed; the rest counts accepted chains.
+        var admission = (AtomicLong) readField(PipelineRunner.class, runner, "admission");
+        assertThat(admission.get() & Long.MAX_VALUE).isEqualTo(0L);
     }
 
     private enum SubmissionMode {

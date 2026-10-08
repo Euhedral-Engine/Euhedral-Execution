@@ -19,9 +19,7 @@ import org.jspecify.annotations.NonNull;
 public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineRunner {
 
     private final Delegate delegate;
-    // Serializes publication with close, never frame checkout or user notifications.
-    protected final Object lifecycleLock = new Object();
-    private boolean publicationClosed;
+    private final AtomicBoolean publicationClosed = new AtomicBoolean();
 
     public QueueIngestSink() {
         this(new PartitionedMpscQueue<>(8_192));
@@ -45,9 +43,8 @@ public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineR
     /// @return success
     public boolean offer(AbstractFrame frame) {
         Objects.requireNonNull(frame);
-        synchronized (this.lifecycleLock) {
-            return !this.publicationClosed && this.delegate.queue.offer(frame);
-        }
+        if (this.publicationClosed.get()) return false;
+        return afterPublish(this.delegate.queue.offer(frame));
     }
 
     /// Offers the object to a random partition based on the seed. If the seed does not change, the
@@ -56,9 +53,8 @@ public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineR
     /// @return success
     public boolean offer(long randomSeed, AbstractFrame frame) {
         Objects.requireNonNull(frame);
-        synchronized (this.lifecycleLock) {
-            return !this.publicationClosed && this.delegate.queue.offer(randomSeed, frame);
-        }
+        if (this.publicationClosed.get()) return false;
+        return afterPublish(this.delegate.queue.offer(randomSeed, frame));
     }
 
     /// Offers the object to a specific partition. Always succeeds if the queue is unbounded.
@@ -66,9 +62,18 @@ public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineR
     /// @return success
     public boolean offer(int partition, AbstractFrame frame) {
         Objects.requireNonNull(frame);
-        synchronized (this.lifecycleLock) {
-            return !this.publicationClosed && this.delegate.queue.offer(partition, frame);
-        }
+        if (this.publicationClosed.get()) return false;
+        return afterPublish(this.delegate.queue.offer(partition, frame));
+    }
+
+    /// Close does not wait for publishers. A frame published concurrently with [#complete()] is either seen by whoever
+    /// drains after the close, or its publisher sees the close here and calls [#onPublishedAfterClose()].
+    private boolean afterPublish(boolean accepted) {
+        if (!accepted) return false;
+        // Order the enqueue before the closed read; the closer orders its write before its drain.
+        VarHandle.fullFence();
+        if (this.publicationClosed.get()) onPublishedAfterClose();
+        return true;
     }
 
     /// Clears the queue.
@@ -76,17 +81,25 @@ public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineR
         this.delegate.queue.clear();
     }
 
-    /// Acquires the queue's single-consumer ownership without blocking a running drain.
+    /// Acquires the queue's single-consumer ownership without blocking a running drain. A caller that loses the race
+    /// relies on the owner: after releasing, the owner re-checks for frames enqueued behind its drain, so a frame
+    /// published before a failed acquisition is never left behind.
     protected final void discardQueued(Consumer<AbstractFrame> consumer) {
-        if (!this.delegate.draining.compareAndSet(false, true)) return;
-        try {
-            this.delegate.queue.drain(consumer, Long.MAX_VALUE);
-        } finally {
-            this.delegate.draining.set(false);
-        }
+        do {
+            if (!this.delegate.draining.compareAndSet(false, true)) return;
+            try {
+                this.delegate.queue.drain(consumer, Long.MAX_VALUE);
+            } finally {
+                this.delegate.draining.set(false);
+            }
+        } while (!this.delegate.queue.isEmpty());
     }
 
     protected void onDrainFinished() {}
+
+    /// Called by a publisher whose frame was enqueued while the sink was closing, so it may have missed the final
+    /// drain. Must not block.
+    protected void onPublishedAfterClose() {}
 
     public long size() {
         return this.delegate.queue.sizeLong();
@@ -100,9 +113,7 @@ public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineR
     /// immediately. Does not clear the queue.
     @Override
     public void complete() {
-        synchronized (this.lifecycleLock) {
-            this.publicationClosed = true;
-        }
+        this.publicationClosed.set(true);
         this.delegate.finishCompletion();
     }
 

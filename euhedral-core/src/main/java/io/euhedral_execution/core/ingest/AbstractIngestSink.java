@@ -6,6 +6,8 @@ import io.euhedral_execution.core.generics.LatticeSource;
 import io.euhedral_execution.core.utils.CommonVarHandles;
 import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
 import java.lang.invoke.VarHandle;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -29,7 +31,7 @@ public abstract class AbstractIngestSink {
         protected final PaddedAtomicLong demand = new PaddedAtomicLong(0);
         protected boolean complete;
         protected LatticeReceiver downstream;
-        private boolean attached;
+        private final AtomicBoolean attached = new AtomicBoolean();
 
         protected static long accumulate(long curr, long next) {
             if (next < 0) return Math.max(0, curr + next);
@@ -39,19 +41,21 @@ public abstract class AbstractIngestSink {
 
         @Override
         public void addDownstream(LatticeReceiver terminal) {
-            java.util.Objects.requireNonNull(terminal);
-            boolean duplicate;
-            boolean completed;
-            synchronized (this) {
-                duplicate = this.attached;
-                completed = isComplete();
-                if (!duplicate) {
-                    this.attached = true;
-                    if (!completed) DOWNSTREAM.setRelease(this, terminal);
-                }
+            Objects.requireNonNull(terminal);
+            if (!this.attached.compareAndSet(false, true)) {
+                terminal.onError(new IllegalStateException("Already has a downstream"));
+                return;
             }
-            if (duplicate) terminal.onError(new IllegalStateException("Already has a downstream"));
-            else if (completed) terminal.onComplete();
+            if (isComplete()) {
+                terminal.onComplete();
+                return;
+            }
+            DOWNSTREAM.setVolatile(this, terminal);
+            // complete() may have run between the check above and the publication. Whichever side
+            // empties the slot owns the notification, so the terminal hears it exactly once.
+            if ((boolean) COMPLETE.getVolatile(this) && DOWNSTREAM.compareAndSet(this, terminal, null)) {
+                terminal.onComplete();
+            }
         }
 
         protected LatticeReceiver getDownstream() {
@@ -88,13 +92,9 @@ public abstract class AbstractIngestSink {
 
         @Override
         public void complete() {
-            LatticeReceiver terminal;
-            synchronized (this) {
-                if (isComplete()) return;
-                COMPLETE.setRelease(this, true);
-                terminal = (LatticeReceiver) DOWNSTREAM.getAndSet(this, null);
-                this.demand.lazySet(0);
-            }
+            if (!COMPLETE.compareAndSet(this, false, true)) return;
+            this.demand.lazySet(0);
+            var terminal = (LatticeReceiver) DOWNSTREAM.getAndSet(this, null);
             if (terminal != null) terminal.onComplete();
         }
 
