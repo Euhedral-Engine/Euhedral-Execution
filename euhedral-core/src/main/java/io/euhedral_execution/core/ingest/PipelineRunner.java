@@ -8,29 +8,33 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 /// A single-submission-owner pipeline with end-to-end graceful completion.
-/// Run/submit checkout is deliberately not synchronized: FrameManager still has one consumer.
+/// Run/submit checkout is lock-free: FrameManager still has one consumer, and admission is a single atomic word.
 /// Close may race submission; future callbacks run on finalizers and must respect submission ownership.
 public final class PipelineRunner<I> extends QueueIngestSink {
+
+    // The sign bit is set once admission closes; the remaining bits count accepted chains that have not finished.
+    private static final long ADMISSION_CLOSED = Long.MIN_VALUE;
 
     private final FrameManager<I, PipelineFrame<I>> manager;
     private final long password = ThreadLocalRandom.current().nextLong();
 
     private final AtomicBoolean killSwitch = new AtomicBoolean(false);
     private final Runnable completion = this::chainFinished;
-    private boolean admissionClosed;
-    private long inFlight;
+    private final AtomicLong admission = new AtomicLong();
     private final int partitions;
 
     private PipelineFrame<I> checkout(I data) {
         Objects.requireNonNull(data);
-        synchronized (this.lifecycleLock) {
-            if (this.admissionClosed) throw new IllegalStateException("Pipeline admission is closed");
-            this.inFlight++;
-        }
-        // FrameManager checkout remains single-owner; lifecycle locking does not serialize it.
+        long state;
+        do {
+            state = this.admission.get();
+            if (state < 0) throw new IllegalStateException("Pipeline admission is closed");
+        } while (!this.admission.compareAndSet(state, state + 1));
+        // FrameManager checkout remains single-owner; admission does not serialize it.
         try {
             var root = this.manager.getOrCreate(data, this.password);
             root.onCompletion(this.completion);
@@ -42,22 +46,16 @@ public final class PipelineRunner<I> extends QueueIngestSink {
     }
 
     private void chainFinished() {
-        boolean finished;
-        synchronized (this.lifecycleLock) {
-            this.inFlight--;
-            finished = this.admissionClosed && this.inFlight == 0;
-        }
-        if (finished) super.complete();
+        if (this.admission.decrementAndGet() == ADMISSION_CLOSED) super.complete();
+    }
+
+    private long closeAdmission() {
+        return this.admission.accumulateAndGet(ADMISSION_CLOSED, (state, closed) -> state | closed);
     }
 
     @Override
     public void completeGracefully() {
-        boolean finished;
-        synchronized (this.lifecycleLock) {
-            this.admissionClosed = true;
-            finished = this.inFlight == 0;
-        }
-        if (finished) super.complete();
+        if (closeAdmission() == ADMISSION_CLOSED) super.complete();
     }
 
     public <O> PipelineRunner(PipelineFrame.Builder<I, O> builder, Consumer<O> consumer, boolean consumeInParallel) {
@@ -138,11 +136,14 @@ public final class PipelineRunner<I> extends QueueIngestSink {
     }
 
     @Override
+    protected void onPublishedAfterClose() {
+        onDrainFinished();
+    }
+
+    @Override
     public void complete() {
-        synchronized (this.lifecycleLock) {
-            this.admissionClosed = true;
-            this.killSwitch.setRelease(true);
-        }
+        this.killSwitch.setRelease(true);
+        closeAdmission();
         try {
             super.complete();
         } finally {
