@@ -235,8 +235,8 @@ final class NativeLibraryExtractor {
         }
         String hex = HexFormat.of().formatHex(actual);
         if (!expected.equals(hex)) {
-            throw new IOException("native-loader: SHA-256 mismatch for " + product.id() + ": expected " + expected
-                    + ", actual " + hex);
+            throw new NativeFileSecurity.VerificationException("native-loader: SHA-256 mismatch for " + product.id()
+                    + ": expected " + expected + ", actual " + hex);
         }
     }
 

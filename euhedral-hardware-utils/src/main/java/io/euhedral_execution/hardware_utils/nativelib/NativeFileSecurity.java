@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.nativelib;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -77,9 +78,11 @@ interface NativeFileSecurity {
 
             @Override
             public UserPrincipal currentUser(Path probeParent) throws IOException {
-                // /proc/self is NOT usable: the kernel reports it as root-owned for non-dumpable processes (observed
-                // under the test JVM). The probe is safe because verifySafeParent has already required a parent that
-                // is not shared-writable, or is sticky, so no other user can unlink and recreate the probe.
+                // Used where /proc/self/status is unavailable (the file owner of /proc/self is unreliable: root for
+                // non-dumpable processes). verifySafeParent has required a parent owned by this user or root (root
+                // only,
+                // when shared), so other users cannot unlink and recreate the probe. Residue: a non-shared parent owned
+                // by another user who can swap the probe is an operator misconfiguration of the extract directory.
                 Path probe = Files.createTempFile(
                         probeParent, ".euhedral-owner-probe-", null, posixAttributes(probeParent, PRIVATE_FILE));
                 UserPrincipal owner;
@@ -101,6 +104,48 @@ interface NativeFileSecurity {
         UserPrincipal ownerOf(Path path) throws IOException;
 
         UserPrincipal currentUser(Path probeParent) throws IOException;
+    }
+
+    /// Numeric uid source, independent of any file inside the extraction parent. `effectiveUid` is read from
+    /// `/proc/self/status` (Linux); it is `-1` when unavailable (e.g. macOS), in which case the probe identity is used.
+    interface UnixIds {
+
+        UnixIds DEFAULT = new UnixIds() {
+            @Override
+            public long effectiveUid() throws IOException {
+                Path status = Path.of("/proc/self/status");
+                if (!Files.isReadable(status)) {
+                    return -1;
+                }
+                return parseEffectiveUid(Files.readString(status, StandardCharsets.UTF_8));
+            }
+
+            @Override
+            public long ownerUid(Path path) throws IOException {
+                return ((Number) Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS)).longValue();
+            }
+        };
+
+        /// Parses the `Uid:` line (real, effective, saved, filesystem) and returns the EFFECTIVE (second) uid.
+        static long parseEffectiveUid(String status) throws IOException {
+            for (String line : status.split("\n")) {
+                if (line.startsWith("Uid:")) {
+                    String[] fields = line.substring(4).trim().split("\\s+");
+                    if (fields.length >= 2) {
+                        try {
+                            return Long.parseLong(fields[1]);
+                        } catch (NumberFormatException e) {
+                            throw new IOException("native-loader: malformed Uid line in /proc/self/status", e);
+                        }
+                    }
+                }
+            }
+            throw new IOException("native-loader: no Uid line in /proc/self/status");
+        }
+
+        long effectiveUid() throws IOException;
+
+        long ownerUid(Path path) throws IOException;
     }
 
     private static FileAttribute<?>[] posixAttributes(Path parentDirectory, Set<PosixFilePermission> permissions)
@@ -128,14 +173,20 @@ interface NativeFileSecurity {
     final class PosixSecurity implements NativeFileSecurity {
 
         private final OwnerLookup ownerLookup;
+        private final UnixIds unixIds;
         private volatile UserPrincipal currentUser;
 
         PosixSecurity() {
-            this(OwnerLookup.DEFAULT);
+            this(OwnerLookup.DEFAULT, UnixIds.DEFAULT);
         }
 
         PosixSecurity(OwnerLookup ownerLookup) {
+            this(ownerLookup, UnixIds.DEFAULT);
+        }
+
+        PosixSecurity(OwnerLookup ownerLookup, UnixIds unixIds) {
             this.ownerLookup = Objects.requireNonNull(ownerLookup, "ownerLookup");
+            this.unixIds = Objects.requireNonNull(unixIds, "unixIds");
         }
 
         private static void set(Path path, String permissions) throws IOException {
@@ -164,7 +215,7 @@ interface NativeFileSecurity {
                 throw new VerificationException("native-loader: " + path + " is a symbolic link");
             }
             if (directory ? !basic.isDirectory() : !basic.isRegularFile()) {
-                throw new IOException(
+                throw new VerificationException(
                         "native-loader: " + path + " is not a " + (directory ? "directory" : "regular file"));
             }
             UserPrincipal owner = ownerLookup.ownerOf(path);
@@ -181,7 +232,7 @@ interface NativeFileSecurity {
             }
             Set<PosixFilePermission> wanted = directory ? PRIVATE_DIRECTORY : PRIVATE_FILE_EXECUTABLE;
             if (!actual.equals(wanted)) {
-                throw new IOException(
+                throw new VerificationException(
                         "native-loader: " + path + " permissions are " + PosixFilePermissions.toString(actual)
                                 + "; expected " + PosixFilePermissions.toString(wanted));
             }
@@ -202,18 +253,33 @@ interface NativeFileSecurity {
             return posixAttributes(parentDirectory, PRIVATE_FILE_EXECUTABLE);
         }
 
+        /// Parent rules (POSIX, `unix` view available):
+        /// - group/other-writable without sticky: rejected (entries could be renamed or replaced);
+        /// - group/other-writable with sticky: must be owned by root, because a sticky directory's owner can still
+        ///   delete or rename entries and clear the bit;
+        /// - otherwise: owned by root or by the current user.
+        /// The current user is the effective uid from `/proc/self/status` where readable, else the owner of a probe
+        /// file (macOS). Not checked, and left to the operator who configures `-Dio.euhedral.native.extract.dir`:
+        /// ancestors of the parent (a non-sticky, other-writable ancestor lets the parent itself be renamed), and a
+        /// non-shared parent owned by another user when the identity came from the probe.
         @Override
         public void verifySafeParent(Path directory) throws IOException {
+            boolean unix = Files.getFileStore(directory).supportsFileAttributeView("unix");
             boolean sticky = false;
             int mode;
-            if (Files.getFileStore(directory).supportsFileAttributeView("unix")) {
+            if (unix) {
                 mode = (Integer) Files.getAttribute(directory, "unix:mode", LinkOption.NOFOLLOW_LINKS);
                 sticky = (mode & 01000) != 0;
             } else {
                 // Without the unix view the sticky bit cannot be observed, so any shared-writable parent is unsafe.
                 int bits = 0;
-                for (PosixFilePermission permission :
-                        Files.getPosixFilePermissions(directory, LinkOption.NOFOLLOW_LINKS)) {
+                Set<PosixFilePermission> permissions;
+                try {
+                    permissions = Files.getPosixFilePermissions(directory, LinkOption.NOFOLLOW_LINKS);
+                } catch (UnsupportedOperationException e) {
+                    throw new IOException("native-loader: POSIX file attributes are unavailable for " + directory, e);
+                }
+                for (PosixFilePermission permission : permissions) {
                     bits |= switch (permission) {
                         case GROUP_WRITE -> 020;
                         case OTHERS_WRITE -> 02;
@@ -222,10 +288,33 @@ interface NativeFileSecurity {
                 }
                 mode = bits;
             }
-            if ((mode & 022) != 0 && !sticky) {
+            boolean shared = (mode & 022) != 0;
+            if (shared && !sticky) {
                 throw new VerificationException("native-loader: extraction parent " + directory + " has mode "
                         + String.format("%04o", mode & 07777)
                         + ", which is group- or other-writable without the sticky bit; use a private directory");
+            }
+            if (!unix) {
+                return;
+            }
+            long owner = unixIds.ownerUid(directory);
+            if (owner == 0) {
+                return;
+            }
+            boolean ours;
+            if (shared) {
+                ours = false;
+            } else {
+                long effective = unixIds.effectiveUid();
+                ours = effective >= 0
+                        ? owner == effective
+                        : currentUser(directory).equals(ownerLookup.ownerOf(directory));
+            }
+            if (!ours) {
+                throw new VerificationException("native-loader: extraction parent " + directory + " is owned by uid "
+                        + owner + "; it must be owned by root"
+                        + (shared ? " (it is shared-writable)" : " or the current user")
+                        + ". Set -Dio.euhedral.native.extract.dir to a private directory you own.");
             }
         }
 
@@ -247,7 +336,7 @@ interface NativeFileSecurity {
             if (Files.getFileStore(library).supportsFileAttributeView("unix")) {
                 Object links = Files.getAttribute(library, "unix:nlink", LinkOption.NOFOLLOW_LINKS);
                 if (!(links instanceof Integer count) || count != 1) {
-                    throw new IOException(
+                    throw new VerificationException(
                             "native-loader: " + library + " has " + links + " hard links; expected exactly 1");
                 }
             }

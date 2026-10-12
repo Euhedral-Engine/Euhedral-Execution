@@ -609,20 +609,103 @@ class NativeLoaderTest {
         }
     }
 
-    @Test
-    @EnabledOnOs(OS.LINUX)
-    void acceptsStickySharedParent() throws Exception {
-        Path shared = temporaryDirectory.resolve("sticky");
+    private static NativeFileSecurity.UnixIds ids(long effective, long owner) {
+        return new NativeFileSecurity.UnixIds() {
+            @Override
+            public long effectiveUid() {
+                return effective;
+            }
+
+            @Override
+            public long ownerUid(Path path) {
+                return owner;
+            }
+        };
+    }
+
+    private NativeLibraryExtractor extractorWithIds(Path parent, NativeFileSecurity.UnixIds ids) {
+        return new NativeLibraryExtractor(
+                "linux",
+                parent,
+                new NativeFileSecurity.PosixSecurity(NativeFileSecurity.OwnerLookup.DEFAULT, ids),
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC),
+                pid -> false,
+                new SecureRandom(new byte[] {5, 6, 7, 8}),
+                424242,
+                USER,
+                logger());
+    }
+
+    private Path stickyParent(String name) throws Exception {
+        Path shared = temporaryDirectory.resolve(name);
         Files.createDirectory(shared);
         Files.setPosixFilePermissions(shared, PosixFilePermissions.fromString("rwxrwxrwx"));
-        new ProcessBuilder("chmod", "1777", shared.toString())
-                .inheritIO()
-                .start()
-                .waitFor();
+        assertEquals(
+                0,
+                new ProcessBuilder("chmod", "1777", shared.toString())
+                        .inheritIO()
+                        .start()
+                        .waitFor());
         assertTrue(((Integer) Files.getAttribute(shared, "unix:mode") & 01000) != 0, "sticky bit must be set");
-        NativeLibraryExtractor extractor = posixExtractorAt(shared);
+        return shared;
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void acceptsStickySharedParentOwnedByRoot() throws Exception {
+        Path shared = stickyParent("sticky-root");
+        NativeLibraryExtractor extractor = extractorWithIds(shared, ids(1000, 0));
         Path library = extractor.prepare(product());
         assertTrue(library.startsWith(shared));
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void rejectsStickySharedParentOwnedByANonRootUser() throws Exception {
+        Path shared = stickyParent("sticky-user");
+        // Even when the owner is the current user: a sticky directory's owner can rename entries and clear the bit.
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> extractorWithIds(shared, ids(1000, 1000)).prepare(product()));
+        assertInstanceOf(NativeFileSecurity.VerificationException.class, failure);
+        assertTrue(failure.getMessage().contains(shared.toString()), failure.getMessage());
+        assertTrue(failure.getMessage().contains("uid 1000"), failure.getMessage());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void privateParentMustBeOwnedByTheCurrentUidOrRoot() throws Exception {
+        Path own = privateDirectory(temporaryDirectory.resolve("own"));
+        NativeLibraryExtractor accepted = extractorWithIds(own, ids(1000, 1000));
+        accepted.prepare(product());
+        accepted.allCandidatesFailed();
+
+        Path foreign = privateDirectory(temporaryDirectory.resolve("foreign"));
+        IOException failure = assertThrows(
+                IOException.class,
+                () -> extractorWithIds(foreign, ids(1000, 2000)).prepare(product()));
+        assertInstanceOf(NativeFileSecurity.VerificationException.class, failure);
+        assertTrue(failure.getMessage().contains("uid 2000"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("-Dio.euhedral.native.extract.dir"), failure.getMessage());
+    }
+
+    @Test
+    void effectiveUidIsParsedFromProcStatus() throws Exception {
+        String status = "Name:\tjava\nUmask:\t0022\nUid:\t1000\t1001\t1002\t1003\nGid:\t5\t6\t7\t8\n";
+        assertEquals(1001L, NativeFileSecurity.UnixIds.parseEffectiveUid(status));
+        assertThrows(IOException.class, () -> NativeFileSecurity.UnixIds.parseEffectiveUid("Name:\tjava\n"));
+        assertThrows(IOException.class, () -> NativeFileSecurity.UnixIds.parseEffectiveUid("Uid:\t1000\n"));
+    }
+
+    @Test
+    void hashMismatchSurfacesAsVerificationException() throws Exception {
+        NativeProduct wrong = new NativeProduct(
+                "linux-glibc-x64", "linux", "x64", "glibc", 10, "/bin/linux/glibc/linux_jni_x64.so", "0".repeat(64));
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(new byte[] {1}), new RecordingSecurity());
+        assertThrows(NativeFileSecurity.VerificationException.class, () -> extractor.extract(wrong));
         extractor.allCandidatesFailed();
     }
 
