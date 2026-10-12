@@ -263,6 +263,13 @@ public class ResourceMonitor implements AutoCloseable {
         }
     }
 
+    /// Raw lifecycle state, for tests in this package only.
+    int stateForTest() {
+        return (int) STATE.getVolatile(this);
+    }
+
+    static final int CLOSED_FOR_TEST = CLOSED;
+
     private boolean isFullyClosed() {
         return (int) STATE.getVolatile(this) == CLOSED && dispatcher.isClosed();
     }
@@ -274,7 +281,7 @@ public class ResourceMonitor implements AutoCloseable {
     /// CLOSING (volatile) before this method loads the flags (volatile), while an evaluator stores a flag
     /// (volatile) before loading the state (volatile). Sequential consistency over those four accesses
     /// guarantees that either this method sees the flag set (and does not publish CLOSED), or the
-    /// evaluator sees CLOSING and backs out without touching shared output. The flag clears form the
+    /// evaluator sees CLOSING and backs out without touching shared output. The flag clears are the
     /// mirror pair: an evaluator stores flag = false (volatile) and then calls this method, which loads
     /// the state; a closer CASes CLOSING and then loads the flags. One of the two always observes the
     /// other, so the last party to act completes the CLOSING -> CLOSED transition.

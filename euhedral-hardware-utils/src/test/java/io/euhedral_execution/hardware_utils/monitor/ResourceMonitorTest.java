@@ -317,7 +317,7 @@ class ResourceMonitorTest {
         IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider();
         AtomicInteger clockCalls = new AtomicInteger();
         MonotonicClock clock = () -> {
-            // call 1 is the loop's t0; call 2 is the first in-loop read, outside tick(); both throw
+            // call 1 is the loop's t0 and call 3 an in-loop read outside tick(); both throw
             int call = clockCalls.incrementAndGet();
             if (call == 1 || call == 3) {
                 throw new IllegalStateException("clock");
@@ -361,13 +361,9 @@ class ResourceMonitorTest {
             polling.set(t);
             return t;
         };
+        Duration sampleRate = Duration.ofMillis(200);
         ResourceMonitor m = new ResourceMonitor(
-                TopologyUpdater.from(new TopologyMapper(new BitSet())),
-                Duration.ofMillis(200),
-                snapshots,
-                clock,
-                waiter,
-                factory);
+                TopologyUpdater.from(new TopologyMapper(new BitSet())), sampleRate, snapshots, clock, waiter, factory);
         CountDownLatch published = new CountDownLatch(1);
         m.addListener(u -> published.countDown());
         try {
@@ -385,7 +381,7 @@ class ResourceMonitorTest {
             long elapsedNs = System.nanoTime() - wallStart;
             long cpu = bean.getThreadCpuTime(t.getId()) - cpuBefore;
             assertTrue(cpu < 20_000_000L, "CPU ns burned with a failing waiter: " + cpu);
-            long allowed = elapsedNs / Duration.ofMillis(200).toNanos() + 2;
+            long allowed = elapsedNs / sampleRate.toNanos() + 2;
             assertTrue(
                     waits.get() - waitsBefore <= allowed, "waiter retried in a spin: " + (waits.get() - waitsBefore));
             healthy.set(true);
@@ -474,7 +470,10 @@ class ResourceMonitorTest {
             polling.get().join();
         });
         assertFalse(polling.get().isAlive());
-        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(m.close(Duration.ZERO)));
+        // The poller's Error path closes via closeInternal(0) and its finally block completes
+        // CLOSING -> CLOSED before the thread exits, so this holds without any close() from the test.
+        assertEquals(ResourceMonitor.CLOSED_FOR_TEST, m.stateForTest());
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(m.close(Duration.ofSeconds(4))));
     }
 
     private static class IncrementingSnapshotProvider implements SystemSnapshotProvider {
