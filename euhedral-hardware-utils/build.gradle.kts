@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     id("buildlogic.java-conventions")
 }
@@ -9,6 +11,7 @@ java {
 
 val nativeGeneratedResources = layout.buildDirectory.dir("generated-resources/native")
 val generatedJniDir = layout.buildDirectory.dir("generated-jni")
+val hashedCatalogResources = layout.buildDirectory.dir("generated-resources/native-catalog")
 
 tasks.named<JavaCompile>("compileJava") {
     options.compilerArgs.addAll(
@@ -25,6 +28,7 @@ tasks.named<JavaCompile>("compileJava") {
 
 val cleanNativeResources = tasks.register<Delete>("cleanNativeResources") {
     delete(nativeGeneratedResources)
+    delete(hashedCatalogResources)
     delete(layout.buildDirectory.dir("classes/java/main/bin"))
     delete(
         layout.buildDirectory.file(
@@ -70,11 +74,60 @@ val zigBuild = tasks.register<Exec>("zigBuild") {
     description = "Cross compiles the JNI source code."
 }
 
+// zig writes the catalog before the products exist, so the sha256 column is appended here, after the build, from the
+// installed binaries. The zig-written TSV stays an intermediate; only this task's output is packaged.
+val hashNativeCatalog = tasks.register("hashNativeCatalog") {
+    dependsOn(zigBuild)
+
+    val nativeRoot = nativeGeneratedResources
+    val outputRoot = hashedCatalogResources
+    inputs.dir(nativeRoot).withPropertyName("nativeResources")
+    outputs.dir(outputRoot).withPropertyName("hashedCatalog")
+
+    doLast {
+        val root = nativeRoot.get().asFile
+        val source = root.resolve("META-INF/euhedral/native-products.tsv")
+        val target = outputRoot.get().asFile.resolve("META-INF/euhedral/native-products.tsv")
+        val hashed = StringBuilder()
+        source.readText(Charsets.UTF_8).split("\n").dropLast(1).forEach { line ->
+            hashed.append(line)
+            if (line.startsWith("product\t")) {
+                val fields = line.split("\t")
+                if (fields.size != 7) {
+                    throw GradleException("native catalog product row must have 7 fields before hashing: $line")
+                }
+                val product = root.resolve(fields[6].removePrefix("/"))
+                if (!product.isFile) {
+                    throw GradleException("native catalog references a missing product: $product")
+                }
+                val digest = MessageDigest.getInstance("SHA-256")
+                product.inputStream().use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read < 0) break
+                        digest.update(buffer, 0, read)
+                    }
+                }
+                hashed.append('\t').append(digest.digest().joinToString("") { "%02x".format(it) })
+            }
+            hashed.append('\n')
+        }
+        target.parentFile.mkdirs()
+        target.writeText(hashed.toString(), Charsets.UTF_8)
+    }
+
+    description = "Appends the sha256 column to the generated native product catalog."
+}
+
 val copyNativeResources = tasks.register<Copy>("copyNativeResources") {
     dependsOn(zigBuild)
+    dependsOn(hashNativeCatalog)
 
     from(nativeGeneratedResources) {
         include("bin/**")
+    }
+    from(hashedCatalogResources) {
         include("META-INF/euhedral/native-products.tsv")
     }
     into(sourceSets.main.get().output.classesDirs.singleFile)

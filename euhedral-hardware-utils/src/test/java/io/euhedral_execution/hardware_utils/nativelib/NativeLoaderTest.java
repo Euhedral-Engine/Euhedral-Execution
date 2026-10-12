@@ -10,13 +10,21 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
+import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -38,6 +46,8 @@ class NativeLoaderTest {
         product\tmacos-arm64\tmacos\tarm64\tnone\t10\t/bin/osx/osx_jni_arm64.dylib
         product\twindows-x64\twindows\tx64\tnone\t10\t/bin/windows/windows_jni_x64.dll
         """;
+
+    private static final String USER = "tester";
 
     @TempDir
     Path temporaryDirectory;
@@ -218,7 +228,7 @@ class NativeLoaderTest {
     void staleCleanupRejectsUnsafeEntriesAndStopsAfterSixtyFourChildren() throws Exception {
         long now = Instant.parse("2026-08-01T12:00:00Z").toEpochMilli();
         Path parent = temporaryDirectory.resolve("stale-parent");
-        Path base = parent.resolve("euhedral-native-v1");
+        Path base = parent.resolve(NativeLibraryExtractor.baseDirectoryName(USER));
         Files.createDirectories(base);
         Path eligible =
                 staleRun(base, 90001, "11111111111111111111111111111111", now - 86_400_001L, "owner.properties", false);
@@ -244,16 +254,380 @@ class NativeLoaderTest {
         assertTrue(Files.isSymbolicLink(symlink));
 
         Path boundedParent = temporaryDirectory.resolve("bounded-parent");
-        Path boundedBase = boundedParent.resolve("euhedral-native-v1");
+        Path boundedBase = boundedParent.resolve(NativeLibraryExtractor.baseDirectoryName(USER));
         Files.createDirectories(boundedBase);
         for (int index = 0; index < 64; index++) {
             Files.createDirectory(
-                    boundedBase.resolve(String.format("load-%05d-00000000000000000000000000000000", index + 1)));
+                    boundedBase.resolve(String.format("load-%d-00000000000000000000000000000000", index + 1)));
         }
         Path sixtyFifth = staleRun(
                 boundedBase, 99999, "ffffffffffffffffffffffffffffffff", now - 86_400_001L, "owner.properties", false);
         extractorAt(boundedParent, pid -> false).prepare(product());
         assertTrue(Files.exists(sixtyFifth), "entry 65 must not be inspected");
+    }
+
+    private static String sha256(byte[] bytes) throws Exception {
+        return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
+    }
+
+    private static String hashedCatalog(String hash) {
+        return CATALOG.replaceAll("(?m)^(product\t[^\n]*)$", "$1\t" + hash);
+    }
+
+    private static UserPrincipal principal(String name) {
+        return new UserPrincipal() {
+            @Override
+            public String getName() {
+                return name;
+            }
+
+            @Override
+            public boolean equals(Object other) {
+                return other instanceof UserPrincipal that && that.getName().equals(name);
+            }
+
+            @Override
+            public int hashCode() {
+                return name.hashCode();
+            }
+
+            @Override
+            public String toString() {
+                return name;
+            }
+        };
+    }
+
+    private static NativeFileSecurity.OwnerLookup owners(String owner, String current) {
+        return new NativeFileSecurity.OwnerLookup() {
+            @Override
+            public UserPrincipal ownerOf(Path path) {
+                return principal(owner);
+            }
+
+            @Override
+            public UserPrincipal currentUser(Path probeParent) {
+                return principal(current);
+            }
+        };
+    }
+
+    private static Path privateDirectory(Path directory) throws Exception {
+        Files.createDirectory(directory);
+        Files.setPosixFilePermissions(directory, PosixFilePermissions.fromString("rwx------"));
+        return directory;
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void rejectsBaseDirectoryWithLoosePermissions() throws Exception {
+        Path base = temporaryDirectory.resolve(NativeLibraryExtractor.baseDirectoryName(USER));
+        Files.createDirectory(base);
+        Files.setPosixFilePermissions(base, PosixFilePermissions.fromString("rwxrwxrwx"));
+        // Foreign owner: ownership is reported first.
+        NativeLibraryExtractor foreign = extractor(
+                "linux",
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                new NativeFileSecurity.PosixSecurity(owners("mallory", "tester")));
+        IOException notOwned = assertThrows(IOException.class, () -> foreign.prepare(product()));
+        assertTrue(notOwned.getMessage().contains("not owned by"), notOwned.getMessage());
+        // Same owner, loose mode: the mode is rejected and the directory is NOT silently chmodded.
+        NativeLibraryExtractor loose = extractor(
+                "linux",
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                new NativeFileSecurity.PosixSecurity(owners("tester", "tester")));
+        IOException modeFailure = assertThrows(IOException.class, () -> loose.prepare(product()));
+        assertTrue(modeFailure.getMessage().contains("rwxrwxrwx"), modeFailure.getMessage());
+        assertEquals(PosixFilePermissions.fromString("rwxrwxrwx"), Files.getPosixFilePermissions(base));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void rejectsForeignOwnedPrivateBaseDirectory() throws Exception {
+        privateDirectory(temporaryDirectory.resolve(NativeLibraryExtractor.baseDirectoryName(USER)));
+        NativeLibraryExtractor extractor = extractor(
+                "linux",
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                new NativeFileSecurity.PosixSecurity(owners("mallory", "tester")));
+        IOException failure = assertThrows(IOException.class, () -> extractor.prepare(product()));
+        assertTrue(failure.getMessage().contains("not owned by"), failure.getMessage());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void rejectsSymbolicLinkBaseDirectory() throws Exception {
+        Path target = privateDirectory(temporaryDirectory.resolve("elsewhere"));
+        Files.createSymbolicLink(temporaryDirectory.resolve(NativeLibraryExtractor.baseDirectoryName(USER)), target);
+        NativeLibraryExtractor extractor = extractor(
+                "linux", path -> new ByteArrayInputStream(new byte[] {1}), new NativeFileSecurity.PosixSecurity());
+        assertThrows(IOException.class, () -> extractor.prepare(product()));
+    }
+
+    /// Delegates attribute and verification calls to the real POSIX policy but turns every post-creation chmod into
+    /// a no-op, so the observed modes can only come from the creation-time attributes.
+    private static final class CreationOnlySecurity implements NativeFileSecurity {
+
+        private final NativeFileSecurity delegate = new NativeFileSecurity.PosixSecurity();
+        private final List<String> attributeRequests = new ArrayList<>();
+
+        @Override
+        public void secureDirectory(Path path) {}
+
+        @Override
+        public void secureMarker(Path path) {}
+
+        @Override
+        public void secureLibrary(Path path) {}
+
+        @Override
+        public void adoptExistingDirectory(Path directory) {}
+
+        @Override
+        public FileAttribute<?>[] directoryAttributes(Path parentDirectory) throws IOException {
+            attributeRequests.add("directory");
+            return delegate.directoryAttributes(parentDirectory);
+        }
+
+        @Override
+        public FileAttribute<?>[] markerAttributes(Path parentDirectory) throws IOException {
+            attributeRequests.add("marker");
+            return delegate.markerAttributes(parentDirectory);
+        }
+
+        @Override
+        public FileAttribute<?>[] libraryAttributes(Path parentDirectory) throws IOException {
+            attributeRequests.add("library");
+            return delegate.libraryAttributes(parentDirectory);
+        }
+
+        @Override
+        public void verifyPrivateDirectory(Path directory, Path probeParent) throws IOException {
+            delegate.verifyPrivateDirectory(directory, probeParent);
+        }
+
+        @Override
+        public void verifyPrivateLibrary(Path library, Path probeParent) throws IOException {
+            delegate.verifyPrivateLibrary(library, probeParent);
+        }
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void createsRunDirectoryPrivateAtCreation() throws Exception {
+        CreationOnlySecurity security = new CreationOnlySecurity();
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(new byte[] {1, 2, 3}), security);
+        Path library = extractor.prepare(product());
+        Path run = library.getParent();
+        Path base = run.getParent();
+        Path marker = run.resolve("owner.properties");
+        Set<PosixFilePermission> directoryMode = PosixFilePermissions.fromString("rwx------");
+        assertEquals(directoryMode, Files.getPosixFilePermissions(base));
+        assertEquals(directoryMode, Files.getPosixFilePermissions(run));
+        assertEquals(PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(marker));
+        Path extracted = extractor.extract(product());
+        assertEquals(directoryMode, Files.getPosixFilePermissions(extracted));
+        assertTrue(security.attributeRequests.containsAll(List.of("directory", "marker", "library")));
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    void rejectsHashMismatch() throws Exception {
+        NativeProductCatalog catalog = NativeProductCatalog.parse(hashedCatalog("0".repeat(64)), path -> true);
+        List<Path> loaded = new ArrayList<>();
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(new byte[] {1, 2, 3}), new RecordingSecurity());
+        ExceptionInInitializerError failure = assertThrows(
+                ExceptionInInitializerError.class,
+                () -> new NativeLibraryLoader(catalog, extractor, loaded::add, logger()).load("linux", "amd64"));
+        assertTrue(loaded.isEmpty(), "System.load must not be reached after a hash mismatch");
+        assertEquals(2, failure.getSuppressed().length);
+        IOException cause = assertInstanceOf(IOException.class, failure.getSuppressed()[0]);
+        assertTrue(cause.getMessage().contains("SHA-256 mismatch"), cause.getMessage());
+    }
+
+    @Test
+    void acceptsMatchingHashAndRejectsMalformedHash() throws Exception {
+        byte[] content = {1, 2, 3};
+        NativeProductCatalog catalog = NativeProductCatalog.parse(hashedCatalog(sha256(content)), path -> true);
+        assertEquals(sha256(content), catalog.select("linux", "amd64").get(0).sha256());
+        List<Path> loaded = new ArrayList<>();
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(content), new RecordingSecurity());
+        new NativeLibraryLoader(catalog, extractor, loaded::add, logger()).load("linux", "amd64");
+        assertEquals(1, loaded.size());
+
+        assertThrows(IOException.class, () -> NativeProductCatalog.parse(hashedCatalog("ABC"), path -> true));
+        assertThrows(
+                IOException.class,
+                () -> NativeProductCatalog.parse(hashedCatalog("A".repeat(64)), path -> true),
+                "hash digits must be lowercase");
+        String mixed = CATALOG.replace(
+                "/bin/linux/glibc/linux_jni_x64.so\n", "/bin/linux/glibc/linux_jni_x64.so\t" + "0".repeat(64) + "\n");
+        assertThrows(IOException.class, () -> NativeProductCatalog.parse(mixed, path -> true));
+    }
+
+    @Test
+    void catalogWithoutHashColumnStillLoadsWithSizeCheckOnly() throws Exception {
+        NativeProductCatalog catalog = catalog();
+        assertEquals(null, catalog.select("linux", "amd64").get(0).sha256());
+        List<Path> loaded = new ArrayList<>();
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(new byte[] {9, 9}), new RecordingSecurity());
+        NativeLoadResult result =
+                new NativeLibraryLoader(catalog, extractor, loaded::add, logger()).load("linux", "amd64");
+        assertEquals("linux-glibc-x64", result.product().id());
+        assertEquals(1, loaded.size());
+    }
+
+    @Test
+    void perUserDirectoryNameIsSanitizedAndBounded() {
+        assertEquals("euhedral-native-v1-alice", NativeLibraryExtractor.baseDirectoryName("alice"));
+        assertEquals("euhedral-native-v1-a_b_c._-", NativeLibraryExtractor.baseDirectoryName("a b/c._-"));
+        assertEquals("euhedral-native-v1-___", NativeLibraryExtractor.baseDirectoryName("éè\\"));
+        assertEquals("euhedral-native-v1-_", NativeLibraryExtractor.baseDirectoryName(null));
+        assertEquals("euhedral-native-v1-_", NativeLibraryExtractor.baseDirectoryName(""));
+        assertEquals("euhedral-native-v1-" + "x".repeat(64), NativeLibraryExtractor.baseDirectoryName("x".repeat(200)));
+    }
+
+    @Test
+    void extractionUsesThePerUserBaseDirectory() throws Exception {
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(new byte[] {1}), new RecordingSecurity());
+        Path library = extractor.prepare(product());
+        assertEquals(
+                temporaryDirectory.resolve("euhedral-native-v1-tester"),
+                library.getParent().getParent());
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void verifyBeforeLoadRejectsTamperedLibrary() throws Exception {
+        byte[] content = {1, 2, 3, 4};
+        NativeProduct hashed = new NativeProduct(
+                "linux-glibc-x64", "linux", "x64", "glibc", 10, "/bin/linux/glibc/linux_jni_x64.so", sha256(content));
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(content), new NativeFileSecurity.PosixSecurity());
+
+        Path library = extractor.extract(hashed);
+        extractor.verifyBeforeLoad(hashed, library);
+
+        Files.write(library, new byte[] {1, 2, 3, 5});
+        IOException changed = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(hashed, library));
+        assertTrue(changed.getMessage().contains("SHA-256"), changed.getMessage());
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void verifyBeforeLoadRejectsLooseModeHardLinkAndSymlink() throws Exception {
+        byte[] content = {1, 2, 3, 4};
+        NativeProduct hashed = new NativeProduct(
+                "linux-glibc-x64", "linux", "x64", "glibc", 10, "/bin/linux/glibc/linux_jni_x64.so", sha256(content));
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(content), new NativeFileSecurity.PosixSecurity());
+        Path library = extractor.extract(hashed);
+
+        Files.setPosixFilePermissions(library, PosixFilePermissions.fromString("rwxrwx---"));
+        IOException loose = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(hashed, library));
+        assertTrue(loose.getMessage().contains("rwxrwx---"), loose.getMessage());
+        Files.setPosixFilePermissions(library, PosixFilePermissions.fromString("rwx------"));
+
+        Path link = library.getParent().resolve("extra-link");
+        Files.createLink(link, library);
+        IOException hardLink = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(hashed, library));
+        assertTrue(hardLink.getMessage().contains("hard link"), hardLink.getMessage());
+        Files.delete(link);
+        extractor.verifyBeforeLoad(hashed, library);
+
+        Path copy = temporaryDirectory.resolve("copy.so");
+        Files.copy(library, copy);
+        Files.delete(library);
+        Files.createSymbolicLink(library, copy);
+        assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(hashed, library));
+        Files.delete(library);
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void verifyBeforeLoadRejectsForeignOwnedRunDirectory() throws Exception {
+        AtomicReference<String> owner = new AtomicReference<>("tester");
+        NativeFileSecurity.OwnerLookup lookup = new NativeFileSecurity.OwnerLookup() {
+            @Override
+            public UserPrincipal ownerOf(Path path) {
+                return principal(owner.get());
+            }
+
+            @Override
+            public UserPrincipal currentUser(Path probeParent) {
+                return principal("tester");
+            }
+        };
+        NativeLibraryExtractor extractor = extractor(
+                "linux",
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                new NativeFileSecurity.PosixSecurity(lookup));
+        Path library = extractor.extract(product());
+        extractor.verifyBeforeLoad(product(), library);
+        owner.set("mallory");
+        IOException failure = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(product(), library));
+        assertTrue(failure.getMessage().contains("not owned by"), failure.getMessage());
+        owner.set("tester");
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void failsClosedWhenOwnerLookupThrows() throws Exception {
+        NativeFileSecurity.OwnerLookup broken = new NativeFileSecurity.OwnerLookup() {
+            @Override
+            public UserPrincipal ownerOf(Path path) throws IOException {
+                throw new IOException("lookup unavailable");
+            }
+
+            @Override
+            public UserPrincipal currentUser(Path probeParent) {
+                return principal("tester");
+            }
+        };
+        NativeLibraryExtractor extractor = extractor(
+                "linux",
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                new NativeFileSecurity.PosixSecurity(broken));
+        assertThrows(IOException.class, () -> extractor.prepare(product()));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void realOwnerLookupAcceptsADirectoryThisProcessCreated() throws Exception {
+        NativeLibraryExtractor extractor = extractor(
+                "linux", path -> new ByteArrayInputStream(new byte[] {1}), new NativeFileSecurity.PosixSecurity());
+        Path library = extractor.prepare(product());
+        // A second extractor re-adopts the now pre-existing per-user base directory.
+        NativeLibraryExtractor second = extractor(
+                "linux", path -> new ByteArrayInputStream(new byte[] {1}), new NativeFileSecurity.PosixSecurity());
+        second.prepare(product());
+        second.allCandidatesFailed();
+        extractor.allCandidatesFailed();
+        assertTrue(library.getParent().getParent().getFileName().toString().endsWith("-tester"));
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void staleCleanupFiltersBeforeApplyingTheEntryLimit() throws Exception {
+        long now = Instant.parse("2026-08-01T12:00:00Z").toEpochMilli();
+        Path parent = temporaryDirectory.resolve("filter-parent");
+        Path base = parent.resolve(NativeLibraryExtractor.baseDirectoryName(USER));
+        Files.createDirectories(base);
+        for (int index = 0; index < 100; index++) {
+            Files.createDirectory(base.resolve(String.format("aaa-unrelated-%03d", index)));
+        }
+        Path stale =
+                staleRun(base, 99999, "ffffffffffffffffffffffffffffffff", now - 86_400_001L, "owner.properties", false);
+        extractorAt(parent, pid -> false).prepare(product());
+        assertFalse(Files.exists(stale), "unrelated entries must not consume the inspection budget");
     }
 
     private NativeProductCatalog catalog() throws IOException {
@@ -271,6 +645,7 @@ class NativeLoaderTest {
                 pid -> false,
                 new SecureRandom(new byte[] {1, 2, 3, 4}),
                 424242,
+                USER,
                 logger());
     }
 
@@ -284,6 +659,7 @@ class NativeLoaderTest {
                 processAlive,
                 new SecureRandom(new byte[] {5, 6, 7, 8}),
                 424242,
+                USER,
                 logger());
     }
 

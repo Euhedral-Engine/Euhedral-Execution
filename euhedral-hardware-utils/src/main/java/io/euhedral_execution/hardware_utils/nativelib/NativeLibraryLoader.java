@@ -76,6 +76,7 @@ final class NativeLibraryLoader {
                 extractionPath = extractor.pathFor(candidate);
                 logger.debug("Attempting to load JNI product {} from {}", candidate.id(), candidate.resourcePath());
                 Path extracted = extractor.extract(candidate);
+                extractor.verifyBeforeLoad(candidate, extracted);
                 librarySystem.load(extracted);
                 extractor.loadSucceeded(extracted);
                 return new NativeLoadResult(candidate, extracted, List.copyOf(failures));

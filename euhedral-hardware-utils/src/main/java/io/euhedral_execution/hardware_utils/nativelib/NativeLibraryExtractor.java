@@ -2,6 +2,9 @@ package io.euhedral_execution.hardware_utils.nativelib;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.FileAlreadyExistsException;
@@ -11,10 +14,14 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.FileOwnerAttributeView;
 import java.nio.file.attribute.UserPrincipal;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -22,12 +29,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongPredicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
 final class NativeLibraryExtractor {
 
     static final String EXTRACT_DIRECTORY_PROPERTY = "io.euhedral.native.extract.dir";
     static final long MAX_LIBRARY_BYTES = 67_108_864L;
+    static final String BASE_DIRECTORY_PREFIX = "euhedral-native-v1-";
+    private static final int MAX_USER_SEGMENT = 64;
     private static final long STALE_AGE_MILLIS = 24L * 60L * 60L * 1_000L;
     private static final int MAX_STALE_ENTRIES = 64;
     private static final int COPY_BUFFER_SIZE = 64 * 1_024;
@@ -43,11 +53,15 @@ final class NativeLibraryExtractor {
     private final SecureRandom random;
     private final Logger logger;
     private final long processId;
+    private final String userName;
     private final AtomicBoolean hookRegistered = new AtomicBoolean();
-    private Path baseDirectory;
-    private Path runDirectory;
-    private Path marker;
-    private Path retainedLibrary;
+    // The shutdown hook thread reads these, so they must be safely published.
+    private volatile Path baseDirectory;
+    private volatile Path runDirectory;
+    private volatile Path marker;
+    private volatile Path retainedLibrary;
+    private volatile long extractedBytes;
+    private volatile byte @Nullable [] extractedDigest;
 
     NativeLibraryExtractor(
             String operatingSystem,
@@ -58,6 +72,7 @@ final class NativeLibraryExtractor {
             LongPredicate processAlive,
             SecureRandom random,
             long processId,
+            String userName,
             Logger logger) {
         this.operatingSystem = Objects.requireNonNull(operatingSystem, "operatingSystem");
         this.parent = Objects.requireNonNull(parent, "parent").toAbsolutePath().normalize();
@@ -67,6 +82,7 @@ final class NativeLibraryExtractor {
         this.processAlive = Objects.requireNonNull(processAlive, "processAlive");
         this.random = Objects.requireNonNull(random, "random");
         this.processId = processId;
+        this.userName = userName;
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -80,6 +96,7 @@ final class NativeLibraryExtractor {
                 pid -> ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false),
                 new SecureRandom(),
                 ProcessHandle.current().pid(),
+                System.getProperty("user.name"),
                 logger);
     }
 
@@ -137,11 +154,90 @@ final class NativeLibraryExtractor {
         return childOwner.equals(baseView.getOwner());
     }
 
+    /// `euhedral-native-v1-<user>`. The user segment keeps `[A-Za-z0-9._-]`, maps everything else to `_`, is capped at
+    /// 64 characters and is `_` when the name is null or empty, so one user's directory can never be another's.
+    static String baseDirectoryName(@Nullable String userName) {
+        if (userName == null || userName.isEmpty()) {
+            return BASE_DIRECTORY_PREFIX + '_';
+        }
+        int length = Math.min(userName.length(), MAX_USER_SEGMENT);
+        StringBuilder name = new StringBuilder(BASE_DIRECTORY_PREFIX.length() + length).append(BASE_DIRECTORY_PREFIX);
+        for (int index = 0; index < length; index++) {
+            char character = userName.charAt(index);
+            boolean allowed = (character >= 'a' && character <= 'z')
+                    || (character >= 'A' && character <= 'Z')
+                    || (character >= '0' && character <= '9')
+                    || character == '.'
+                    || character == '_'
+                    || character == '-';
+            name.append(allowed ? character : '_');
+        }
+        return name.toString();
+    }
+
+    private static MessageDigest sha256() throws IOException {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException e) {
+            throw new IOException("native-loader: SHA-256 is unavailable", e);
+        }
+    }
+
+    private static void writeFully(WritableByteChannel channel, ByteBuffer buffer) throws IOException {
+        while (buffer.hasRemaining()) {
+            channel.write(buffer);
+        }
+    }
+
+    /// Final gate immediately before the path is handed to `System.load`: re-verifies the base directory, the run
+    /// directory and the library (owner, exact mode, no symbolic links, single hard link on POSIX) and re-hashes the
+    /// bytes on disk against both the catalog hash and the digest taken while copying.
+    void verifyBeforeLoad(NativeProduct product, Path library) throws IOException {
+        Path base = baseDirectory;
+        Path run = runDirectory;
+        byte[] copied = extractedDigest;
+        if (base == null || run == null || copied == null || !run.equals(library.getParent())) {
+            throw new IOException("native-loader: " + library + " is not a library extracted by this loader");
+        }
+        security.verifyPrivateDirectory(base, parent);
+        security.verifyPrivateDirectory(run, parent);
+        security.verifyPrivateLibrary(library, parent);
+        MessageDigest digest = sha256();
+        long count = 0;
+        byte[] buffer = new byte[COPY_BUFFER_SIZE];
+        try (InputStream input = Files.newInputStream(library, LinkOption.NOFOLLOW_LINKS)) {
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                count += read;
+                if (count > MAX_LIBRARY_BYTES) {
+                    throw new IOException("native-loader: " + library + " grew beyond " + MAX_LIBRARY_BYTES + " bytes");
+                }
+                digest.update(buffer, 0, read);
+            }
+        }
+        byte[] actual = digest.digest();
+        if (count != extractedBytes || !MessageDigest.isEqual(actual, copied)) {
+            throw new IOException("native-loader: SHA-256 changed after extraction for " + product.id());
+        }
+        checkCatalogHash(product, actual);
+    }
+
+    private static void checkCatalogHash(NativeProduct product, byte[] actual) throws IOException {
+        String expected = product.sha256();
+        if (expected == null) {
+            return;
+        }
+        String hex = HexFormat.of().formatHex(actual);
+        if (!expected.equals(hex)) {
+            throw new IOException("native-loader: SHA-256 mismatch for " + product.id() + ": expected " + expected
+                    + ", actual " + hex);
+        }
+    }
+
     Path prepare(NativeProduct firstProduct) throws IOException {
         validateParent();
-        baseDirectory = parent.resolve("euhedral-native-v1");
-        createOrValidateDirectory(baseDirectory);
-        security.secureDirectory(baseDirectory);
+        baseDirectory = parent.resolve(baseDirectoryName(userName));
+        createOrAdoptDirectory(baseDirectory, parent);
         cleanupStaleDirectories();
         createRunDirectory();
         registerShutdownHook();
@@ -164,13 +260,19 @@ final class NativeLibraryExtractor {
             throw new IOException("native-loader: extraction path already exists: " + destination);
         }
         long count = 0;
+        MessageDigest digest = sha256();
         try (InputStream input = resources.open(product.resourcePath())) {
             if (input == null) {
                 throw new IOException("native-loader: missing product resource " + product.resourcePath());
             }
-            try (var output =
-                    Files.newOutputStream(destination, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+            // Created with the private mode already applied (where the file store is POSIX); CREATE_NEW never
+            // follows a pre-planted symbolic link.
+            try (SeekableByteChannel output = Files.newByteChannel(
+                    destination,
+                    EnumSet.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
+                    security.libraryAttributes(runDirectory))) {
                 byte[] buffer = new byte[COPY_BUFFER_SIZE];
+                ByteBuffer view = ByteBuffer.wrap(buffer);
                 int read;
                 while ((read = input.read(buffer)) != -1) {
                     if (read == 0) {
@@ -180,7 +282,9 @@ final class NativeLibraryExtractor {
                         throw new IOException(
                                 "native-loader: product exceeds " + MAX_LIBRARY_BYTES + " bytes: " + product.id());
                     }
-                    output.write(buffer, 0, read);
+                    digest.update(buffer, 0, read);
+                    view.clear().limit(read);
+                    writeFully(output, view);
                     count += read;
                 }
             }
@@ -190,7 +294,12 @@ final class NativeLibraryExtractor {
             if (Files.size(destination) != count) {
                 throw new IOException("native-loader: extracted size mismatch for " + product.id());
             }
+            byte[] actual = digest.digest();
+            // Without a catalog hash (older catalogs) only the size check above applies.
+            checkCatalogHash(product, actual);
             security.secureLibrary(destination);
+            extractedBytes = count;
+            extractedDigest = actual;
             retainedLibrary = destination;
             return destination;
         } catch (IOException | SecurityException e) {
@@ -233,14 +342,23 @@ final class NativeLibraryExtractor {
         }
     }
 
-    private void createOrValidateDirectory(Path directory) throws IOException {
+    private void createOrAdoptDirectory(Path directory, Path containing) throws IOException {
+        boolean created;
         try {
-            Files.createDirectory(directory);
+            Files.createDirectory(directory, security.directoryAttributes(containing));
+            created = true;
         } catch (FileAlreadyExistsException ignored) {
+            created = false;
             if (Files.isSymbolicLink(directory) || !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)) {
                 throw new IOException("native-loader: extraction directory is not a safe directory: " + directory);
             }
         }
+        if (created) {
+            security.secureDirectory(directory);
+        } else {
+            security.adoptExistingDirectory(directory);
+        }
+        security.verifyPrivateDirectory(directory, parent);
     }
 
     private void createRunDirectory() throws IOException {
@@ -253,17 +371,18 @@ final class NativeLibraryExtractor {
             }
             Path candidate = baseDirectory.resolve("load-" + processId + '-' + suffix);
             try {
-                Files.createDirectory(candidate);
+                Files.createDirectory(candidate, security.directoryAttributes(baseDirectory));
                 runDirectory = candidate;
                 security.secureDirectory(runDirectory);
+                security.verifyPrivateDirectory(runDirectory, parent);
                 marker = runDirectory.resolve("owner.properties");
                 String contents = "schema=1\npid=" + processId + "\ncreatedEpochMillis=" + clock.millis() + "\n";
-                Files.writeString(
+                try (SeekableByteChannel output = Files.newByteChannel(
                         marker,
-                        contents,
-                        StandardCharsets.UTF_8,
-                        StandardOpenOption.CREATE_NEW,
-                        StandardOpenOption.WRITE);
+                        EnumSet.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE),
+                        security.markerAttributes(runDirectory))) {
+                    writeFully(output, ByteBuffer.wrap(contents.getBytes(StandardCharsets.UTF_8)));
+                }
                 security.secureMarker(marker);
                 return;
             } catch (FileAlreadyExistsException ignored) {
@@ -298,6 +417,9 @@ final class NativeLibraryExtractor {
             logger.debug("native-loader: stale cleanup inventory failed for {}", baseDirectory, e);
             return;
         }
+        // Filter on the run-directory name before applying the budget so unrelated entries cannot starve cleanup.
+        children.removeIf(
+                path -> !RUN_DIRECTORY.matcher(path.getFileName().toString()).matches());
         children.sort(Comparator.comparing(path -> path.getFileName().toString()));
         children.stream().limit(MAX_STALE_ENTRIES).forEach(this::cleanupStaleDirectory);
     }
