@@ -72,6 +72,43 @@ class NativeBuildPolicyTest {
         assertTrue(call < afterIf.indexOf("return JNI_VERSION"), "seeder must run before JNI_OnLoad returns");
     }
 
+    private static String sysctlBody(String src, String function) {
+        int fn = src.indexOf("MacosSystemLayout_" + function + "(");
+        assertTrue(fn >= 0, function + " must exist");
+        return braced(src, src.indexOf('{', fn));
+    }
+
+    @Test
+    void macosSysctlWrappersAreMemorySafe() throws Exception {
+        String src = Files.readString(
+                TestPaths.projectDirectory().resolve("src/main/native/macos/macos_system_layout.cpp"),
+                StandardCharsets.UTF_8);
+        for (String function : new String[] {"getSysctlString", "getSysctlInt", "getSysctlLong"}) {
+            String body = sysctlBody(src, function);
+            int get = body.indexOf("GetStringUTFChars(");
+            assertTrue(get >= 0, function + " must read its key");
+            String afterGet = body.substring(body.indexOf(';', get) + 1).strip();
+            assertTrue(
+                    afterGet.startsWith("if (key == NULL)"),
+                    function + " must NULL-check the key immediately after GetStringUTFChars");
+        }
+
+        String string = sysctlBody(src, "getSysctlString");
+        assertTrue(string.contains("malloc(size + 1)"), "string buffer needs room for the terminator");
+        assertTrue(string.contains("buffer[size] = '\\0'"), "string buffer must be NUL-terminated");
+        assertTrue(
+                string.indexOf("buffer[size] = '\\0'") < string.indexOf("NewStringUTF(buffer)"),
+                "terminate before NewStringUTF");
+
+        for (String function : new String[] {"getSysctlInt", "getSysctlLong"}) {
+            String body = sysctlBody(src, function);
+            assertTrue(
+                    body.contains("sysctlbyname(key, &value, &size, NULL, 0) != 0"),
+                    function + " must check the sysctlbyname return code");
+            assertTrue(body.contains("size != sizeof(value)"), function + " must verify the returned size");
+        }
+    }
+
     private static String braced(String text, int open) {
         int depth = 0;
         for (int i = open; i < text.length(); i++) {
