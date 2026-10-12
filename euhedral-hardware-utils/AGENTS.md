@@ -226,6 +226,11 @@ The `compatibility` test package pins behavior against branch point `900d8c50`:
 - [defect-ledger.tsv](src/test/resources/compatibility/defect-ledger.tsv): each recorded correction
   maps to an exact regression test, and `DefectLedgerTest` hard-codes the expected ID-to-owner
   mapping.
+- [package-dependencies.tsv](src/test/resources/compatibility/package-dependencies.tsv):
+  `PackageDependencyTest` fails on any added package edge (an architecture change that needs
+  approval) and on any removed edge (delete the line to lock in the improvement). The file is
+  sorted, one `from<TAB>to` per line, with package names relative to
+  `io.euhedral_execution.hardware_utils`.
 
 The API baseline was re-keyed once for the package reorganization: entries moved from `common`,
 the root package, and `internal.sampling` to `topology`, `affinity`, `monitor`, and `util`, and the
