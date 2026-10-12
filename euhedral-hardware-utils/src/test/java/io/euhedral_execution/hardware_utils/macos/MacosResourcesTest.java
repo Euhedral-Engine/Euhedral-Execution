@@ -47,6 +47,18 @@ public class MacosResourcesTest {
         assertEquals(100_000_000L, snapshot.inactiveFileMemory());
     }
 
+    @Test
+    @DisplayName("Probe rusage[0] is nanoseconds and is not rescaled by the timebase")
+    public void testRusageCpuTimeIsNanosecondsIn() {
+        MockProbe probe = new MockProbe();
+        probe.cpuUsageNs = 1_000_000_000L;
+        probe.timebaseNumer = 125; // non-identity: any Java-side rescale would change the value
+        probe.timebaseDenom = 3;
+        MacosResources resources = new MacosResources(probe);
+
+        assertEquals(1_000_000_000L, resources.getSnapshot().cpuUsage());
+    }
+
     private static class MockProbe implements MacosResourceProbe {
         boolean rusageValid = true;
         long cpuUsageNs = 1_500_000L;

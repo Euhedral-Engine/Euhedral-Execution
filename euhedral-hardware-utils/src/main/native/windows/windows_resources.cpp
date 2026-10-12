@@ -17,11 +17,12 @@ static DWORD g_CpuCount = 0;
 static BOOL g_InJob = FALSE;
 static BOOL g_HasJobMemoryLimit = FALSE;
 static jlong g_JobMemoryLimit = 0;
-static atomic_bool g_Initialized = false;
+// Globals above are written only inside initOnceCallback. InitOnceExecuteOnce blocks concurrent
+// callers until the callback returns and gives them acquire visibility of its writes, so every
+// caller of init() observes fully initialized globals.
+static INIT_ONCE g_InitOnce = INIT_ONCE_STATIC_INIT;
 
-static void init() {
-    if (atomic_exchange(&g_Initialized, true)) return;
-
+static BOOL CALLBACK initOnceCallback(PINIT_ONCE, PVOID, PVOID*) {
     g_CpuCount = GetActiveProcessorCount(ALL_PROCESSOR_GROUPS);
 
     HANDLE process = GetCurrentProcess();
@@ -40,7 +41,15 @@ static void init() {
         }
     }
 
-    g_Initialized = TRUE;
+    return TRUE;
+}
+
+static void init() {
+    // A failed callback is not latched by InitOnce; it would be retried on the next call.
+    // The callback never fails, so the result is only checked defensively.
+    if (!InitOnceExecuteOnce(&g_InitOnce, initOnceCallback, NULL, NULL)) {
+        return;
+    }
 }
 
 JNIEXPORT void JNICALL

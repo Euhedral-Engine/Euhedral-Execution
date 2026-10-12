@@ -109,6 +109,41 @@ class NativeBuildPolicyTest {
         }
     }
 
+    @Test
+    void macosRusageReportsNanosecondsNotMachTicks() throws Exception {
+        String src = Files.readString(
+                TestPaths.projectDirectory().resolve("src/main/native/macos/macos_resources.cpp"),
+                StandardCharsets.UTF_8);
+        int fn = src.indexOf("MacosResources_getProcessRusageNative(");
+        assertTrue(fn >= 0, "rusage function must exist");
+        String body = braced(src, src.indexOf('{', fn));
+        assertTrue(
+                body.contains("values[0] = machTicksToNanos(rusage.ri_user_time + rusage.ri_system_time);"),
+                "the Mach-tick sum must be converted by the timebase before it is reported");
+
+        int helper = src.indexOf("machTicksToNanos(uint64_t");
+        assertTrue(helper >= 0, "conversion helper must exist");
+        String helperBody = braced(src, src.indexOf('{', helper));
+        assertTrue(src.contains("static mach_timebase_info_data_t"), "timebase must be cached in a static");
+        assertTrue(helperBody.contains("pthread_once("), "timebase must be initialized once, thread-safely");
+        assertTrue(src.contains("mach_timebase_info(&tb)"), "must read the Mach timebase");
+        assertTrue(helperBody.contains("__uint128_t"), "multiply must use 128-bit arithmetic");
+        assertTrue(helperBody.contains("numer") && helperBody.contains("denom"), "must scale by numer/denom");
+    }
+
+    @Test
+    void windowsInitUsesInitOnceExecuteOnce() throws Exception {
+        String src = Files.readString(
+                TestPaths.projectDirectory().resolve("src/main/native/windows/windows_resources.cpp"),
+                StandardCharsets.UTF_8);
+        assertFalse(src.contains("g_Initialized"), "no hand-rolled initialized flag may remain");
+        int fn = src.indexOf("static void init()");
+        assertTrue(fn >= 0, "init() must exist");
+        String body = braced(src, src.indexOf('{', fn));
+        assertTrue(body.contains("InitOnceExecuteOnce("), "init() must run the fill through InitOnceExecuteOnce");
+        assertTrue(src.contains("BOOL CALLBACK"), "callback must have the INIT_ONCE callback signature");
+    }
+
     private static String braced(String text, int open) {
         int depth = 0;
         for (int i = open; i < text.length(); i++) {
