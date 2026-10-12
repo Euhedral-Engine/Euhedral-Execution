@@ -2,7 +2,10 @@ package io.euhedral_execution.hardware_utils.monitor;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.HardwareUtilization;
@@ -13,9 +16,16 @@ import io.euhedral_execution.hardware_utils.monitor.internal.TopologyUpdater;
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import io.euhedral_execution.hardware_utils.topology.TopologyMapper;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
 import java.time.Duration;
 import java.util.BitSet;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.parallel.Isolated;
 
@@ -88,7 +98,193 @@ class ResourceMonitorTest {
         assertEquals(snapshots.effectiveCpus, utilization.globalEffectiveCpus());
     }
 
-    private static final class IncrementingSnapshotProvider implements SystemSnapshotProvider {
+    private static final DeadlineWaiter NO_WAIT = (deadline, clk) -> {};
+
+    private static ResourceMonitor monitor(IncrementingSnapshotProvider snapshots, ThreadFactory factory) {
+        MonotonicClock clock = () -> snapshots.startTime + SECONDS.toNanos(snapshots.samples.get());
+        return new ResourceMonitor(
+                TopologyUpdater.from(new TopologyMapper(new BitSet())),
+                Duration.ofMillis(200),
+                snapshots,
+                clock,
+                NO_WAIT,
+                factory);
+    }
+
+    @Test
+    void stoppedMonitorDoesNotSpin() throws InterruptedException {
+        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
+        Assumptions.assumeTrue(bean.isThreadCpuTimeSupported());
+        AtomicReference<Thread> polling = new AtomicReference<>();
+        ThreadFactory factory = r -> {
+            Thread t = new Thread(r);
+            polling.set(t);
+            return t;
+        };
+        try (ResourceMonitor monitor = monitor(new IncrementingSnapshotProvider(), factory)) {
+            monitor.start();
+            monitor.stop();
+            Thread t = polling.get();
+            // Let the thread settle into its STOPPED wait (it must park, not spin).
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+                while (t.getState() != Thread.State.WAITING) {
+                    Thread.yield();
+                }
+            });
+            long before = bean.getThreadCpuTime(t.getId());
+            Thread.sleep(200); // lets wall time pass only; no synchronization depends on it
+            long after = bean.getThreadCpuTime(t.getId());
+            assertTrue(before >= 0 && after >= 0, "polling thread terminated");
+            assertTrue(after - before < 20_000_000L, "CPU ns burned while STOPPED: " + (after - before));
+        }
+    }
+
+    @Test
+    void closeFromListenerReturns() {
+        ResourceMonitor monitor = monitor(new IncrementingSnapshotProvider(), Thread::new);
+        CountDownLatch closed = new CountDownLatch(1);
+        monitor.addListener(u -> {
+            monitor.close();
+            closed.countDown();
+        });
+        monitor.start();
+        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+            assertTrue(closed.await(2, TimeUnit.SECONDS));
+            assertTrue(monitor.close(Duration.ofSeconds(1)), "monitor must finish closing asynchronously");
+        });
+    }
+
+    @Test
+    void closeWithBlockedProviderTimesOut() {
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        AtomicInteger calls = new AtomicInteger();
+        IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider() {
+            @Override
+            public SystemSnapshot getSnapshot() {
+                // call 0 happens in the adapter constructor; later calls come from the polling thread
+                if (calls.getAndIncrement() >= 1) {
+                    entered.countDown();
+                    // Uninterruptible on purpose: close() interrupts the polling thread.
+                    boolean interrupted = false;
+                    while (true) {
+                        try {
+                            release.await();
+                            break;
+                        } catch (InterruptedException e) {
+                            interrupted = true;
+                        }
+                    }
+                    if (interrupted) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                return super.getSnapshot();
+            }
+        };
+        ResourceMonitor monitor = monitor(snapshots, Thread::new);
+        try {
+            monitor.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> entered.await());
+            assertTimeoutPreemptively(Duration.ofSeconds(2), () -> assertFalse(monitor.close(Duration.ofMillis(100))));
+        } finally {
+            release.countDown();
+        }
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(monitor.close(Duration.ofSeconds(4))));
+    }
+
+    @Test
+    void providerExceptionDoesNotKillMonitor() {
+        AtomicInteger calls = new AtomicInteger();
+        IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider() {
+            @Override
+            public SystemSnapshot getSnapshot() {
+                // call 0 is the adapter constructor, call 1 is the first tick
+                if (calls.getAndIncrement() == 1) {
+                    throw new IllegalStateException("injected");
+                }
+                return super.getSnapshot();
+            }
+        };
+        ResourceMonitor monitor = monitor(snapshots, Thread::new);
+        CountDownLatch published = new CountDownLatch(1);
+        monitor.addListener(u -> published.countDown());
+        try {
+            monitor.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(published.await(5, TimeUnit.SECONDS)));
+            assertTrue(calls.get() > 2);
+        } finally {
+            monitor.close();
+        }
+    }
+
+    @Test
+    void threadFactoryFailureRollsBack() {
+        AtomicInteger attempts = new AtomicInteger();
+        ThreadFactory flaky = r -> {
+            if (attempts.getAndIncrement() == 0) {
+                throw new IllegalStateException("no threads");
+            }
+            return new Thread(r);
+        };
+        ResourceMonitor m = monitor(new IncrementingSnapshotProvider(), flaky);
+        CountDownLatch published = new CountDownLatch(1);
+        m.addListener(u -> published.countDown());
+        try {
+            assertThrows(IllegalStateException.class, m::start);
+            m.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(published.await(5, TimeUnit.SECONDS)));
+        } finally {
+            m.close();
+        }
+    }
+
+    @Test
+    void nullThreadFromFactoryRollsBack() {
+        AtomicInteger attempts = new AtomicInteger();
+        ThreadFactory nullFirst = r -> attempts.getAndIncrement() == 0 ? null : new Thread(r);
+        ResourceMonitor m = monitor(new IncrementingSnapshotProvider(), nullFirst);
+        CountDownLatch published = new CountDownLatch(1);
+        m.addListener(u -> published.countDown());
+        try {
+            assertThrows(IllegalStateException.class, m::start);
+            m.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(published.await(5, TimeUnit.SECONDS)));
+        } finally {
+            m.close();
+        }
+    }
+
+    @Test
+    void stopStartStopCycleStaysResponsive() {
+        ResourceMonitor monitor = monitor(new IncrementingSnapshotProvider(), Thread::new);
+        CountDownLatch published = new CountDownLatch(1);
+        monitor.addListener(u -> published.countDown());
+        try {
+            for (int i = 0; i < 50; i++) {
+                monitor.start();
+                monitor.stop();
+            }
+            monitor.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(published.await(5, TimeUnit.SECONDS)));
+            monitor.stop();
+        } finally {
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(monitor.close(Duration.ofSeconds(4))));
+        }
+    }
+
+    @Test
+    void closeRacingStartCompletes() {
+        for (int i = 0; i < 50; i++) {
+            ResourceMonitor monitor = monitor(new IncrementingSnapshotProvider(), Thread::new);
+            Thread starter = new Thread(monitor::start);
+            starter.start();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(monitor.close(Duration.ofSeconds(4))));
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> starter.join());
+        }
+    }
+
+    private static class IncrementingSnapshotProvider implements SystemSnapshotProvider {
 
         private final long startTime = System.nanoTime();
         private final int cpuCount = Math.max(SystemInfo.getCpuCount(), 1);

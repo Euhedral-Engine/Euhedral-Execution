@@ -127,6 +127,16 @@ public final class LatestValueDispatcher {
         awaitWhile(() -> !(boolean) CLOSED.getAcquire(this));
     }
 
+    /// Returns true once the dispatch thread has fully exited. Non-blocking.
+    public boolean isClosed() {
+        return (boolean) CLOSED.getAcquire(this);
+    }
+
+    /// Returns true when the caller is the dispatch thread (i.e. inside a listener callback).
+    public boolean isDispatchThread() {
+        return Thread.currentThread() == dispatchThread;
+    }
+
     /// Initiates shutdown, publishing the termination hook before rejecting new work.
     public void beginClose(@Nullable Runnable terminationHook) {
         acquireLock();

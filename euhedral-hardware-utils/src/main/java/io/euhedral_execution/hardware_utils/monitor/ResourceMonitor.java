@@ -15,12 +15,19 @@ import io.euhedral_execution.hardware_utils.monitor.sampling.samples.FastHardwar
 import io.euhedral_execution.hardware_utils.monitor.sampling.samples.IntervalHardwareSample;
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import io.euhedral_execution.hardware_utils.topology.TopologyMapper;
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.locks.LockSupport;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ResourceMonitor implements AutoCloseable {
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(ResourceMonitor.class));
 
     private static final int NEW = 0;
     private static final int STARTING = 1;
@@ -71,7 +78,15 @@ public class ResourceMonitor implements AutoCloseable {
     }
 
     public ResourceMonitor(TopologyMapper mapper, Duration sampleRate) {
-        this(mapper, sampleRate, SystemInfo.SNAPSHOTTER);
+        this(mapper, sampleRate, requireSnapshotter());
+    }
+
+    private static SystemSnapshotProvider requireSnapshotter() {
+        SystemSnapshotProvider snapshotter = SystemInfo.SNAPSHOTTER;
+        if (snapshotter == null) {
+            throw new IllegalStateException("resource sampling unavailable on " + System.getProperty("os.name"));
+        }
+        return snapshotter;
     }
 
     ResourceMonitor(TopologyMapper mapper, Duration sampleRate, SystemSnapshotProvider provider) {
@@ -113,20 +128,42 @@ public class ResourceMonitor implements AutoCloseable {
 
     public void start() {
         while (true) {
-            int s = (int) STATE.getAcquire(this);
+            int s = (int) STATE.getVolatile(this);
             if (s == CLOSING || s == CLOSED) return;
             if (s == RUNNING || s == STARTING) return;
 
             if (STATE.compareAndSet(this, s, STARTING)) {
                 if (s == NEW) {
-                    Thread t = threadFactory.newThread(this::runLoop);
-                    t.setDaemon(true);
-                    this.pollingThread = t;
-                    t.start();
-                } else if (s == STOPPED) {
-                    // Signal thread to resume
-                    coalescedReadPending = false;
-                    STATE.setRelease(this, RUNNING);
+                    try {
+                        Thread t = threadFactory.newThread(this::runLoop);
+                        if (t == null) {
+                            throw new IllegalStateException("ThreadFactory returned null");
+                        }
+                        t.setDaemon(true);
+                        this.pollingThread = t;
+                        t.start();
+                    } catch (Throwable failure) {
+                        this.pollingThread = null;
+                        // Roll back so a later start() can retry. A concurrent stop() may have moved
+                        // STARTING to STOPPED meanwhile; no thread exists, so that also returns to NEW.
+                        // If close() won the race, finish the shutdown ourselves: no thread will.
+                        while (true) {
+                            int cur = (int) STATE.getVolatile(this);
+                            if (cur == STARTING || cur == STOPPED) {
+                                if (STATE.compareAndSet(this, cur, NEW)) break;
+                            } else {
+                                tryFinishClose();
+                                break;
+                            }
+                        }
+                        throw failure;
+                    }
+                } else {
+                    // STOPPED -> STARTING -> RUNNING. A CAS (not a plain store) so a concurrent
+                    // close() that moved STARTING to CLOSING is never overwritten.
+                    STATE.compareAndSet(this, STARTING, RUNNING);
+                    // State CAS happens before the unpark; the polling thread re-reads state after waking.
+                    LockSupport.unpark(pollingThread);
                 }
                 return;
             }
@@ -135,41 +172,116 @@ public class ResourceMonitor implements AutoCloseable {
 
     public void stop() {
         while (true) {
-            int s = (int) STATE.getAcquire(this);
+            int s = (int) STATE.getVolatile(this);
             if (s == CLOSING || s == CLOSED || s == STOPPED || s == NEW) return;
+            // Published before the state CAS so a polling thread that observes STOPPED also observes the
+            // pending coalesced read. The polling thread clears it before consuming it.
+            coalescedReadPending = true;
             if (STATE.compareAndSet(this, s, STOPPED)) {
-                coalescedReadPending = true;
                 return;
             }
         }
     }
 
+    /// Closes the monitor and waits until shutdown is complete.
+    ///
+    /// If called from the polling thread, from a listener callback (the dispatcher thread), or from a
+    /// topology update running inside this monitor's evaluation, the call cannot wait for itself: it
+    /// starts the shutdown and returns immediately, and shutdown completes asynchronously once the
+    /// callback returns.
     @Override
     public void close() {
+        closeInternal(Long.MAX_VALUE);
+    }
+
+    /// Closes the monitor, waiting at most `timeout` for shutdown to complete.
+    ///
+    /// @return true if the monitor is fully closed on return; false if the timeout elapsed first. When
+    ///     called from the polling thread, a listener callback, or a topology update inside this
+    ///     monitor's evaluation, the call never waits (it would wait on itself): it starts the shutdown
+    ///     and returns false unless the monitor is already fully closed.
+    public boolean close(Duration timeout) {
+        Objects.requireNonNull(timeout, "timeout");
+        long nanos;
+        try {
+            nanos = Math.max(0L, timeout.toNanos());
+        } catch (ArithmeticException overflow) {
+            nanos = Long.MAX_VALUE;
+        }
+        return closeInternal(nanos);
+    }
+
+    private boolean closeInternal(long timeoutNs) {
         while (true) {
-            int s = (int) STATE.getAcquire(this);
-            if (s == CLOSING || s == CLOSED) {
-                dispatcher.awaitClosed();
-                return;
-            }
-            if (STATE.compareAndSet(this, s, CLOSING)) {
-                dispatcher.beginClose(this::cleanup);
-
+            int s = (int) STATE.getVolatile(this);
+            if (s == CLOSING || s == CLOSED || STATE.compareAndSet(this, s, CLOSING)) {
+                if (s != CLOSING && s != CLOSED) {
+                    dispatcher.beginClose(this::tryFinishClose);
+                }
                 Thread t = pollingThread;
-                if (t != null && t != Thread.currentThread()) {
-                    t.interrupt();
+                if (t != null) {
+                    if (t != Thread.currentThread()) {
+                        t.interrupt();
+                    }
+                    LockSupport.unpark(t);
                 }
-
-                // wait for eval & pub to finish
-                while ((boolean) EVAL_ACTIVE.getAcquire(this) || (boolean) PUB_CLAIMED.getAcquire(this)) {
-                    Thread.onSpinWait();
-                }
-
-                STATE.setRelease(this, CLOSED);
-                dispatcher.awaitClosed();
-                return;
+                break;
             }
         }
+
+        Thread current = Thread.currentThread();
+        if (current == pollingThread || dispatcher.isDispatchThread() || Thread.holdsLock(evaluationLock)) {
+            tryFinishClose();
+            return isFullyClosed();
+        }
+
+        // Backoff wait; the caller's interrupt status must not turn parkNanos into a busy loop.
+        boolean interrupted = Thread.interrupted();
+        try {
+            long start = System.nanoTime();
+            int spins = 0;
+            while (true) {
+                tryFinishClose();
+                if (isFullyClosed()) {
+                    return true;
+                }
+                if (timeoutNs != Long.MAX_VALUE && System.nanoTime() - start >= timeoutNs) {
+                    return false;
+                }
+                if (spins < 64) {
+                    spins++;
+                    Thread.onSpinWait();
+                } else {
+                    LockSupport.parkNanos(50_000L);
+                }
+            }
+        } finally {
+            if (interrupted) {
+                current.interrupt();
+            }
+        }
+    }
+
+    private boolean isFullyClosed() {
+        return (int) STATE.getVolatile(this) == CLOSED && dispatcher.isClosed();
+    }
+
+    /// Moves CLOSING to CLOSED once no evaluation or publication is in flight. Callable from any
+    /// thread, any number of times.
+    ///
+    /// Safe because of the Dekker handshake documented on [#evaluateAndPublish()]: close() stores
+    /// CLOSING (volatile) before this method loads the flags (volatile), while an evaluator stores a flag
+    /// (volatile) before loading the state (volatile). Sequential consistency over those four accesses
+    /// guarantees that either this method sees the flag set (and does not publish CLOSED), or the
+    /// evaluator sees CLOSING and backs out without touching shared output.
+    private void tryFinishClose() {
+        if ((int) STATE.getVolatile(this) != CLOSING) {
+            return;
+        }
+        if ((boolean) EVAL_ACTIVE.getVolatile(this) || (boolean) PUB_CLAIMED.getVolatile(this)) {
+            return;
+        }
+        STATE.compareAndSet(this, CLOSING, CLOSED);
     }
 
     public void addListener(MonitorListener listener) {
@@ -180,11 +292,6 @@ public class ResourceMonitor implements AutoCloseable {
         dispatcher.removeListener(listener);
     }
 
-    private void cleanup() {
-        // All temporary allocations, executor hooks, and listener arrays clear on CLOSED.
-        // dispatcher already handles listeners.
-    }
-
     private void runLoop() {
         try {
             STATE.compareAndSet(this, STARTING, RUNNING);
@@ -193,16 +300,23 @@ public class ResourceMonitor implements AutoCloseable {
             long lastNow = t0;
 
             while (true) {
-                int s = (int) STATE.getAcquire(this);
+                int s = (int) STATE.getVolatile(this);
                 if (s == CLOSING || s == CLOSED) break;
 
                 if (s == STOPPED) {
+                    // Clear before consuming so a stop() that re-arms it concurrently is never lost.
                     if (coalescedReadPending) {
-                        evaluateAndPublish();
                         coalescedReadPending = false;
+                        tick();
+                        continue;
                     }
-                    Thread.onSpinWait();
+                    // stop()/start()/close() CAS the state before unparking us and we re-read the state
+                    // on every wakeup, so neither a lost nor a spurious wakeup can strand this thread.
+                    LockSupport.park(this);
                     continue;
+                }
+                if (s == STARTING) {
+                    STATE.compareAndSet(this, STARTING, RUNNING);
                 }
 
                 long now = clock.nanoTime();
@@ -222,27 +336,67 @@ public class ResourceMonitor implements AutoCloseable {
                     }
                 }
 
-                waiter.await(nextTick, clock);
+                try {
+                    waiter.await(nextTick, clock);
+                } catch (RuntimeException e) {
+                    recordTickFailure(e);
+                    continue;
+                }
 
                 // re-check state after wait
-                s = (int) STATE.getAcquire(this);
+                s = (int) STATE.getVolatile(this);
                 if (s == CLOSING || s == CLOSED) break;
                 if (s == STOPPED) continue;
 
-                evaluateAndPublish();
+                tick();
                 lastNow = clock.nanoTime();
             }
-        } catch (Throwable t) {
-            // Safe fallback to CLOSING then CLOSED
-            close();
+        } catch (Error e) {
+            LOGGER.error("ResourceMonitor polling thread terminating on error", e);
+            closeInternal(0L);
+        } finally {
+            // Complete the CLOSING -> CLOSED transition if close() is not (or no longer) waiting.
+            tryFinishClose();
         }
     }
 
+    /// Runs one evaluation; a RuntimeException from the provider, pressure model or topology update is
+    /// recorded and the monitor keeps running. Errors propagate to the loop's termination path.
+    private void tick() {
+        try {
+            evaluateAndPublish();
+        } catch (RuntimeException e) {
+            recordTickFailure(e);
+        }
+    }
+
+    // Owned by the polling thread; no synchronization needed.
+    private long tickFailures;
+
+    private void recordTickFailure(RuntimeException e) {
+        if (tickFailures++ == 0) {
+            LOGGER.warn("ResourceMonitor tick failed; continuing with the next tick", e);
+        } else if (LOGGER.isDebugEnabled()) {
+            LOGGER.debug("ResourceMonitor tick failed again (failure #{}); continuing", tickFailures, e);
+        }
+    }
+
+    /// Evaluates one sample and publishes it, unless the monitor is closing.
+    ///
+    /// Shutdown handshake (Dekker-style, needs sequential consistency): an evaluator does
+    /// `store(flag = true); load(state)` and a closer does `store(state = CLOSING); load(flag)`. Each side
+    /// stores to one location and then loads from the other, so release/acquire is not enough: it allows
+    /// the store to be reordered after the later load, and both sides could then miss each other. All four
+    /// accesses use volatile (seq-cst) mode, which places them in one total order, so at least one side
+    /// observes the other: either the closer sees the flag and waits (CLOSED is not published while the
+    /// evaluation is in flight), or the evaluator sees CLOSING/CLOSED and returns before touching any
+    /// shared output. Clearing a flag uses a release store: it only needs to make the evaluation's effects
+    /// visible to whoever later observes the flag as false with a volatile load.
     private void evaluateAndPublish() {
         synchronized (evaluationLock) {
-            EVAL_ACTIVE.setRelease(this, true);
+            EVAL_ACTIVE.setVolatile(this, true);
             try {
-                int s = (int) STATE.getAcquire(this);
+                int s = (int) STATE.getVolatile(this);
                 if (s == CLOSING || s == CLOSED) return;
 
                 long pollStartNs = clock.nanoTime();
@@ -259,9 +413,9 @@ public class ResourceMonitor implements AutoCloseable {
                     HardwareUtilization util = eval.candidate();
                     this.lastUtilization = util;
 
-                    PUB_CLAIMED.setRelease(this, true);
+                    PUB_CLAIMED.setVolatile(this, true);
                     try {
-                        s = (int) STATE.getAcquire(this);
+                        s = (int) STATE.getVolatile(this);
                         if (s != CLOSING && s != CLOSED) {
                             topology.update(util);
                             if (s == RUNNING) {
@@ -274,6 +428,9 @@ public class ResourceMonitor implements AutoCloseable {
                 }
             } finally {
                 EVAL_ACTIVE.setRelease(this, false);
+                // A close() whose waiter timed out or is the dispatcher/polling thread cannot finish the
+                // transition itself, so the last evaluator does it.
+                tryFinishClose();
             }
         }
     }
@@ -284,7 +441,7 @@ public class ResourceMonitor implements AutoCloseable {
             return utilization;
         }
 
-        int currentState = (int) STATE.getAcquire(this);
+        int currentState = (int) STATE.getVolatile(this);
         if (currentState == NEW || currentState == STOPPED) {
             evaluateAndPublish();
             utilization = lastUtilization;
