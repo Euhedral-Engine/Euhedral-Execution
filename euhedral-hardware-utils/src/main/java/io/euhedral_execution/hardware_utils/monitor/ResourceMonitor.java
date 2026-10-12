@@ -274,7 +274,10 @@ public class ResourceMonitor implements AutoCloseable {
     /// CLOSING (volatile) before this method loads the flags (volatile), while an evaluator stores a flag
     /// (volatile) before loading the state (volatile). Sequential consistency over those four accesses
     /// guarantees that either this method sees the flag set (and does not publish CLOSED), or the
-    /// evaluator sees CLOSING and backs out without touching shared output.
+    /// evaluator sees CLOSING and backs out without touching shared output. The flag clears form the
+    /// mirror pair: an evaluator stores flag = false (volatile) and then calls this method, which loads
+    /// the state; a closer CASes CLOSING and then loads the flags. One of the two always observes the
+    /// other, so the last party to act completes the CLOSING -> CLOSED transition.
     private void tryFinishClose() {
         if ((int) STATE.getVolatile(this) != CLOSING) {
             return;
@@ -296,7 +299,18 @@ public class ResourceMonitor implements AutoCloseable {
     private void runLoop() {
         try {
             STATE.compareAndSet(this, STARTING, RUNNING);
-            long t0 = clock.nanoTime();
+            long t0;
+            while (true) {
+                try {
+                    t0 = clock.nanoTime();
+                    break;
+                } catch (RuntimeException e) {
+                    recordTickFailure(e);
+                    int cs = (int) STATE.getVolatile(this);
+                    if (cs == CLOSING || cs == CLOSED) return;
+                    backoffAfterFailure();
+                }
+            }
             long nextTick = t0;
             long lastNow = t0;
 

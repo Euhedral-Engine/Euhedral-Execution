@@ -317,8 +317,9 @@ class ResourceMonitorTest {
         IncrementingSnapshotProvider snapshots = new IncrementingSnapshotProvider();
         AtomicInteger clockCalls = new AtomicInteger();
         MonotonicClock clock = () -> {
-            // call 1 is the loop's t0; call 2 is the first in-loop read, outside tick()
-            if (clockCalls.incrementAndGet() == 2) {
+            // call 1 is the loop's t0; call 2 is the first in-loop read, outside tick(); both throw
+            int call = clockCalls.incrementAndGet();
+            if (call == 1 || call == 3) {
                 throw new IllegalStateException("clock");
             }
             return snapshots.startTime + SECONDS.toNanos(snapshots.samples.get());
@@ -372,17 +373,21 @@ class ResourceMonitorTest {
         try {
             m.start();
             assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
-                while (waits.get() < 1) {
+                while (waits.get() < 1 && !Thread.currentThread().isInterrupted()) {
                     Thread.yield();
                 }
             });
             Thread t = polling.get();
             long cpuBefore = bean.getThreadCpuTime(t.getId());
             int waitsBefore = waits.get();
+            long wallStart = System.nanoTime();
             Thread.sleep(200); // lets wall time pass only
+            long elapsedNs = System.nanoTime() - wallStart;
             long cpu = bean.getThreadCpuTime(t.getId()) - cpuBefore;
             assertTrue(cpu < 20_000_000L, "CPU ns burned with a failing waiter: " + cpu);
-            assertTrue(waits.get() - waitsBefore <= 3, "waiter retried in a spin: " + (waits.get() - waitsBefore));
+            long allowed = elapsedNs / Duration.ofMillis(200).toNanos() + 2;
+            assertTrue(
+                    waits.get() - waitsBefore <= allowed, "waiter retried in a spin: " + (waits.get() - waitsBefore));
             healthy.set(true);
             assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(published.await(5, TimeUnit.SECONDS)));
         } finally {
@@ -444,6 +449,7 @@ class ResourceMonitorTest {
     @Test
     void errorFromProviderClosesMonitor() {
         AtomicInteger calls = new AtomicInteger();
+        CountDownLatch aboutToThrow = new CountDownLatch(1);
         AtomicReference<Thread> polling = new AtomicReference<>();
         ThreadFactory factory = r -> {
             Thread t = new Thread(r);
@@ -454,6 +460,7 @@ class ResourceMonitorTest {
             @Override
             public SystemSnapshot getSnapshot() {
                 if (calls.getAndIncrement() >= 1) {
+                    aboutToThrow.countDown();
                     throw new TestError();
                 }
                 return super.getSnapshot();
@@ -461,10 +468,13 @@ class ResourceMonitorTest {
         };
         ResourceMonitor m = monitor(snapshots, factory);
         m.start();
+        // No close() before the join: the Error path alone must terminate the poller and close the monitor.
         assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
-            assertTrue(m.close(Duration.ofSeconds(4)), "monitor must reach CLOSED after an Error");
+            assertTrue(aboutToThrow.await(5, TimeUnit.SECONDS));
             polling.get().join();
         });
+        assertFalse(polling.get().isAlive());
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> assertTrue(m.close(Duration.ZERO)));
     }
 
     private static class IncrementingSnapshotProvider implements SystemSnapshotProvider {
