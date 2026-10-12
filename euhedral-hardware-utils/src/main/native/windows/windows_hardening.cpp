@@ -10,9 +10,16 @@ __attribute__((visibility("hidden"))) uintptr_t __stack_chk_guard =
 
 // The initializer above is only a fallback: a compile-time constant would let
 // an attacker who reads the binary forge the canary. JNI_OnLoad calls this
-// before any protected frame can return (the DLL entry point is disabled, so
-// no earlier code runs), and it must not itself be instrumented because it
-// rewrites the value that instrumented epilogues compare against.
+// first thing. This is not "before all code": the MinGW CRT DllMainCRTStartup
+// (PE entry point) and TLS callbacks run before JNI_OnLoad, and on
+// DLL_THREAD_ATTACH they can run concurrently with it. Seeding is safe only
+// because that CRT code is uninstrumented and never reaches instrumented code,
+// so nothing compares against the guard while it changes. Invariant: no
+// stack-protected code may be reachable from the PE entry point or TLS
+// callbacks, and JNI_OnLoad must stay canary-free (it is no_stack_protector and
+// NativeBinaryInspectionIT checks it has no global-data addressing). The seeder
+// must also not be instrumented because it rewrites the value that
+// instrumented epilogues compare against.
 // Only KERNEL32 APIs are used, as the manifest import allowlist requires.
 static __attribute__((no_stack_protector)) uint64_t
 euhedral_splitmix64(uint64_t z) {

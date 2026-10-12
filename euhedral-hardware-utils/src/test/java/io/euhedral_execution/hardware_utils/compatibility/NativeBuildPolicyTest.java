@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import io.euhedral_execution.hardware_utils.compatibility.helpers.TestPaths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 class NativeBuildPolicyTest {
@@ -37,29 +38,50 @@ class NativeBuildPolicyTest {
 
     @Test
     void windowsStackGuardIsSeededAtLoadNotOnlyAConstant() throws Exception {
-        java.nio.file.Path native_ = TestPaths.projectDirectory().resolve("src/main/native");
-        String src = Files.readString(native_.resolve("windows/windows_hardening.cpp"), StandardCharsets.UTF_8);
+        Path nativeRoot = TestPaths.projectDirectory().resolve("src/main/native");
+        String src = Files.readString(nativeRoot.resolve("windows/windows_hardening.cpp"), StandardCharsets.UTF_8);
         int def = src.indexOf("void euhedral_seed_stack_guard(");
         assertTrue(def >= 0, "guard must be seeded at load");
-        int open = src.indexOf('{', def);
+        // The seeder's own declaration: text after the previous '}' or ';'.
+        int declStart = Math.max(src.lastIndexOf('}', def), src.lastIndexOf(';', def)) + 1;
+        assertTrue(
+                src.substring(declStart, def).contains("no_stack_protector"),
+                "seeder itself must be no_stack_protector");
+        String body = braced(src, src.indexOf('{', def));
+        assertTrue(body.contains("__stack_chk_guard ="), "seeder body must assign the guard");
+
+        String onload = Files.readString(nativeRoot.resolve("common/jni_onload.cpp"), StandardCharsets.UTF_8);
+        int fn = onload.indexOf("JNI_OnLoad(");
+        assertTrue(fn >= 0);
+        String onloadBody = braced(onload, onload.indexOf('{', fn));
+        String afterIf = onloadBody.substring(onloadBody.indexOf("#ifdef _WIN32") + "#ifdef _WIN32".length());
+        assertTrue(onloadBody.contains("#ifdef _WIN32"), "JNI_OnLoad must guard the seeder with _WIN32");
+        assertTrue(
+                afterIf.strip().startsWith("//") || afterIf.strip().startsWith("euhedral_seed_stack_guard();"),
+                "seeder call must be the first statement after #ifdef _WIN32");
+        int call = afterIf.indexOf("euhedral_seed_stack_guard();");
+        assertTrue(call >= 0, "JNI_OnLoad must call the seeder");
+        assertFalse(afterIf.substring(0, call).contains("#endif"), "no #endif before the seeder call");
+        assertFalse(
+                afterIf.substring(0, call)
+                                .replaceAll("(?m)^\\s*//.*$", "")
+                                .strip()
+                                .length()
+                        > 0,
+                "only comments may precede the call");
+        assertTrue(call < afterIf.indexOf("return JNI_VERSION"), "seeder must run before JNI_OnLoad returns");
+    }
+
+    private static String braced(String text, int open) {
         int depth = 0;
-        int close = open;
-        for (; close < src.length(); close++) {
-            char c = src.charAt(close);
+        for (int i = open; i < text.length(); i++) {
+            char c = text.charAt(i);
             if (c == '{') {
                 depth++;
             } else if (c == '}' && --depth == 0) {
-                break;
+                return text.substring(open, i);
             }
         }
-        String body = src.substring(open, close);
-        assertTrue(body.contains("__stack_chk_guard ="), "seeder body must assign the guard");
-        assertTrue(src.substring(0, def).contains("no_stack_protector"), "seeder must be no_stack_protector");
-
-        String onload = Files.readString(native_.resolve("common/jni_onload.cpp"), StandardCharsets.UTF_8);
-        int guardIf = onload.indexOf("#ifdef _WIN32");
-        int call = onload.indexOf("euhedral_seed_stack_guard();");
-        assertTrue(guardIf >= 0 && call > guardIf, "JNI_OnLoad must call the seeder under _WIN32");
-        assertTrue(call < onload.indexOf("return JNI_VERSION"), "seeder must run before JNI_OnLoad returns");
+        throw new AssertionError("unbalanced braces");
     }
 }

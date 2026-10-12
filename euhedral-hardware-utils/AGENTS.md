@@ -191,6 +191,12 @@ Native Zig and C++ sources are owned by this module; there is no separate native
   symbols at `GLIBC_2.17`, require macOS 11.0 with only `libSystem.B.dylib`, and restrict Windows
   imports to `KERNEL32.dll` plus two UCRT API sets. A new native dependency or import is a
   portability change: update the manifest allowlist deliberately and pass the binary gate.
+- Windows stack-guard invariant: `windows/windows_hardening.cpp` seeds `__stack_chk_guard` from
+  `JNI_OnLoad`. The CRT entry point (`DllMainCRTStartup`) and TLS callbacks still run before it, and
+  on thread attach can run concurrently. Keep all code reachable from them uninstrumented, and keep
+  `JNI_OnLoad` canary-free. `NativeBinaryInspectionIT` checks only the `JNI_OnLoad` body; the
+  entry/TLS reachability is not automated (the CRT graph is too fragile to disassemble reliably), so
+  review any new Windows native code or linker option against this rule.
 - `expected_jni_headers` in `build.zig` must list exactly the classes with `native` methods. Adding,
   removing, or renaming a native method also affects
   [native-contract-900d8c50.tsv](src/test/resources/compatibility/native-contract-900d8c50.tsv),
