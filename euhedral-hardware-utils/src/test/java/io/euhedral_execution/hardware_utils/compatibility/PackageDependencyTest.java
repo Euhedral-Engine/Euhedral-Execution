@@ -3,7 +3,7 @@ package io.euhedral_execution.hardware_utils.compatibility;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.IOException;
@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -44,39 +46,61 @@ class PackageDependencyTest {
     private static final int MAX_UTF8_CHARS = 65535;
 
     @Test
-    void noNewPackageEdges() throws IOException {
+    void packageEdgesMatchBaseline() throws IOException {
         String property = System.getProperty("classes.directory");
         assertNotNull(property, "classes.directory system property is not set");
-        Set<String> actual = scan(property.split(File.pathSeparator));
+        Map<String, String> actual = scan(property.split(File.pathSeparator));
         assertFalse(actual.isEmpty(), "no classes found under " + ROOT + " in " + property);
-        Set<String> allowed = readBaseline();
-
-        Set<String> added = new TreeSet<>(actual);
-        added.removeAll(allowed);
-        assertTrue(added.isEmpty(), "New package dependency edges (forbidden):\n" + String.join("\n", added));
-
-        Set<String> removed = new TreeSet<>(allowed);
-        removed.removeAll(actual);
+        List<String> baseline = readBaseline();
         assertEquals(
-                Set.of(),
-                removed,
-                "Edges were removed - delete them from package-dependencies.tsv to lock in the gain");
+                baseline.stream().distinct().sorted().collect(Collectors.toList()),
+                baseline,
+                "package-dependencies.tsv must be sorted with no duplicates");
+
+        Set<String> allowed = new TreeSet<>(baseline);
+        Map<String, String> added = new TreeMap<>(actual);
+        added.keySet().removeAll(allowed);
+        Set<String> removed = new TreeSet<>(allowed);
+        removed.removeAll(actual.keySet());
+        if (added.isEmpty() && removed.isEmpty()) {
+            return;
+        }
+
+        StringBuilder message = new StringBuilder();
+        if (!added.isEmpty()) {
+            message.append("Added edges (forbidden; a new package dependency needs explicit approval):");
+            added.forEach((edge, className) -> message.append("\n  ")
+                    .append(edge.replace("\t", " -> "))
+                    .append(" (via ")
+                    .append(className)
+                    .append(')'));
+        }
+        if (!removed.isEmpty()) {
+            if (!message.isEmpty()) {
+                message.append('\n');
+            }
+            message.append("Removed edges (good - delete these lines from "
+                    + "euhedral-hardware-utils/src/test/resources/compatibility/package-dependencies.tsv):");
+            for (String edge : removed) {
+                message.append("\n  ").append(edge.replace("\t", " -> "));
+            }
+        }
+        fail(message.toString());
     }
 
-    private static Set<String> readBaseline() throws IOException {
-        Set<String> allowed = new TreeSet<>();
+    private static List<String> readBaseline() throws IOException {
         try (InputStream in = PackageDependencyTest.class.getResourceAsStream(BASELINE)) {
             assertNotNull(in, "missing baseline resource " + BASELINE);
-            new String(in.readAllBytes(), StandardCharsets.UTF_8)
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8)
                     .lines()
                     .filter(line -> !line.isBlank())
-                    .forEach(allowed::add);
+                    .collect(Collectors.toList());
         }
-        return allowed;
     }
 
-    private static Set<String> scan(String[] entries) throws IOException {
-        Set<String> edges = new TreeSet<>();
+    /** Maps each edge ({@code from\tto}) to the first class, in sorted path order, that produced it. */
+    private static Map<String, String> scan(String[] entries) throws IOException {
+        Map<String, String> edges = new TreeMap<>();
         for (String entry : entries) {
             Path packageRoot = Path.of(entry).resolve(ROOT);
             if (!Files.isDirectory(packageRoot)) {
@@ -96,9 +120,9 @@ class PackageDependencyTest {
         return edges;
     }
 
-    private static void scanClass(byte[] bytes, Set<String> edges) {
+    private static void scanClass(byte[] bytes, Map<String, String> edges) {
         ClassReader reader = new ClassReader(bytes);
-        ClassEdges collector = new ClassEdges(pkg(reader.getClassName()), edges);
+        ClassEdges collector = new ClassEdges(reader.getClassName(), edges);
         collector.scanConstantPool(reader);
         reader.accept(collector, ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
     }
@@ -113,12 +137,14 @@ class PackageDependencyTest {
     }
 
     private static final class ClassEdges extends ClassVisitor {
+        private final String className;
         private final String from;
-        private final Set<String> edges;
+        private final Map<String, String> edges;
 
-        ClassEdges(String from, Set<String> edges) {
+        ClassEdges(String className, Map<String, String> edges) {
             super(Opcodes.ASM9);
-            this.from = from;
+            this.className = className;
+            this.from = pkg(className);
             this.edges = edges;
         }
 
@@ -267,7 +293,7 @@ class PackageDependencyTest {
             }
             String to = pkg(internalName);
             if (!to.equals(from)) {
-                edges.add(from + "\t" + to);
+                edges.putIfAbsent(from + "\t" + to, className);
             }
         }
 
