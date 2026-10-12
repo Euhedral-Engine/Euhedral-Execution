@@ -66,7 +66,7 @@ interface NativeFileSecurity {
     /// information, so tests can simulate a foreign owner without changing real ownership.
     interface OwnerLookup {
 
-        /// Production lookup. The current user is the owner of a file this process has just created in
+        /// Production lookup. The current user is the owner of a file this process just created in the validated
         /// `probeParent`; that is exact for the effective uid and, unlike `user.name`, still works for arbitrary
         /// container uids that have no passwd entry.
         OwnerLookup DEFAULT = new OwnerLookup() {
@@ -77,13 +77,24 @@ interface NativeFileSecurity {
 
             @Override
             public UserPrincipal currentUser(Path probeParent) throws IOException {
+                // /proc/self is NOT usable: the kernel reports it as root-owned for non-dumpable processes (observed
+                // under the test JVM). The probe is safe because verifySafeParent has already required a parent that
+                // is not shared-writable, or is sticky, so no other user can unlink and recreate the probe.
                 Path probe = Files.createTempFile(
-                        probeParent, ".euhedral-owner-probe-", null, privateFileAttribute(probeParent));
+                        probeParent, ".euhedral-owner-probe-", null, posixAttributes(probeParent, PRIVATE_FILE));
+                UserPrincipal owner;
                 try {
-                    return ownerOf(probe);
-                } finally {
-                    Files.deleteIfExists(probe);
+                    owner = ownerOf(probe);
+                } catch (IOException | RuntimeException e) {
+                    try {
+                        Files.deleteIfExists(probe);
+                    } catch (IOException | RuntimeException cleanup) {
+                        e.addSuppressed(cleanup);
+                    }
+                    throw e;
                 }
+                Files.deleteIfExists(probe);
+                return owner;
             }
         };
 
@@ -92,12 +103,27 @@ interface NativeFileSecurity {
         UserPrincipal currentUser(Path probeParent) throws IOException;
     }
 
-    private static FileAttribute<?>[] privateFileAttribute(Path parentDirectory) throws IOException {
+    private static FileAttribute<?>[] posixAttributes(Path parentDirectory, Set<PosixFilePermission> permissions)
+            throws IOException {
         if (!Files.getFileStore(parentDirectory).supportsFileAttributeView("posix")) {
             return NO_ATTRIBUTES;
         }
-        return new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(PRIVATE_FILE)};
+        return new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(permissions)};
     }
+
+    /// A failed ownership, mode, link or hash verification, as opposed to an ordinary I/O failure.
+    final class VerificationException extends IOException {
+
+        private static final long serialVersionUID = 1L;
+
+        VerificationException(String message) {
+            super(message);
+        }
+    }
+
+    /// Rejects an extraction parent into which another user could plant or rename entries. Only POSIX policies
+    /// enforce this.
+    default void verifySafeParent(Path parent) throws IOException {}
 
     final class PosixSecurity implements NativeFileSecurity {
 
@@ -121,14 +147,6 @@ interface NativeFileSecurity {
             view.setPermissions(PosixFilePermissions.fromString(permissions));
         }
 
-        private static FileAttribute<?>[] attributes(Path parentDirectory, Set<PosixFilePermission> permissions)
-                throws IOException {
-            if (!Files.getFileStore(parentDirectory).supportsFileAttributeView("posix")) {
-                return NO_ATTRIBUTES;
-            }
-            return new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(permissions)};
-        }
-
         private UserPrincipal currentUser(Path probeParent) throws IOException {
             UserPrincipal cached = currentUser;
             if (cached == null) {
@@ -143,7 +161,7 @@ interface NativeFileSecurity {
             BasicFileAttributes basic =
                     Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
             if (basic.isSymbolicLink()) {
-                throw new IOException("native-loader: " + path + " is a symbolic link");
+                throw new VerificationException("native-loader: " + path + " is a symbolic link");
             }
             if (directory ? !basic.isDirectory() : !basic.isRegularFile()) {
                 throw new IOException(
@@ -152,8 +170,8 @@ interface NativeFileSecurity {
             UserPrincipal owner = ownerLookup.ownerOf(path);
             UserPrincipal expected = currentUser(probeParent);
             if (!expected.equals(owner)) {
-                throw new IOException("native-loader: " + path + " is not owned by the current user (owner=" + owner
-                        + ", expected=" + expected + ")");
+                throw new VerificationException("native-loader: " + path + " is not owned by the current user (owner="
+                        + owner + ", expected=" + expected + ")");
             }
             Set<PosixFilePermission> actual;
             try {
@@ -171,17 +189,44 @@ interface NativeFileSecurity {
 
         @Override
         public FileAttribute<?>[] directoryAttributes(Path parentDirectory) throws IOException {
-            return attributes(parentDirectory, PRIVATE_DIRECTORY);
+            return posixAttributes(parentDirectory, PRIVATE_DIRECTORY);
         }
 
         @Override
         public FileAttribute<?>[] markerAttributes(Path parentDirectory) throws IOException {
-            return attributes(parentDirectory, PRIVATE_FILE);
+            return posixAttributes(parentDirectory, PRIVATE_FILE);
         }
 
         @Override
         public FileAttribute<?>[] libraryAttributes(Path parentDirectory) throws IOException {
-            return attributes(parentDirectory, PRIVATE_FILE_EXECUTABLE);
+            return posixAttributes(parentDirectory, PRIVATE_FILE_EXECUTABLE);
+        }
+
+        @Override
+        public void verifySafeParent(Path directory) throws IOException {
+            boolean sticky = false;
+            int mode;
+            if (Files.getFileStore(directory).supportsFileAttributeView("unix")) {
+                mode = (Integer) Files.getAttribute(directory, "unix:mode", LinkOption.NOFOLLOW_LINKS);
+                sticky = (mode & 01000) != 0;
+            } else {
+                // Without the unix view the sticky bit cannot be observed, so any shared-writable parent is unsafe.
+                int bits = 0;
+                for (PosixFilePermission permission :
+                        Files.getPosixFilePermissions(directory, LinkOption.NOFOLLOW_LINKS)) {
+                    bits |= switch (permission) {
+                        case GROUP_WRITE -> 020;
+                        case OTHERS_WRITE -> 02;
+                        default -> 0;
+                    };
+                }
+                mode = bits;
+            }
+            if ((mode & 022) != 0 && !sticky) {
+                throw new VerificationException("native-loader: extraction parent " + directory + " has mode "
+                        + String.format("%04o", mode & 07777)
+                        + ", which is group- or other-writable without the sticky bit; use a private directory");
+            }
         }
 
         @Override

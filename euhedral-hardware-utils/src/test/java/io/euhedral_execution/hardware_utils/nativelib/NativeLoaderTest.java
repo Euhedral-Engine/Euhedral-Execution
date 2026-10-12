@@ -553,11 +553,13 @@ class NativeLoaderTest {
     @Test
     @EnabledOnOs(OS.LINUX)
     void verifyBeforeLoadRejectsForeignOwnedRunDirectory() throws Exception {
-        AtomicReference<String> owner = new AtomicReference<>("tester");
+        AtomicReference<String> runOwner = new AtomicReference<>("tester");
         NativeFileSecurity.OwnerLookup lookup = new NativeFileSecurity.OwnerLookup() {
             @Override
             public UserPrincipal ownerOf(Path path) {
-                return principal(owner.get());
+                // Foreign only for the run directory; the base directory and library stay ours.
+                boolean run = path.getFileName().toString().startsWith("load-");
+                return principal(run ? runOwner.get() : "tester");
             }
 
             @Override
@@ -571,10 +573,56 @@ class NativeLoaderTest {
                 new NativeFileSecurity.PosixSecurity(lookup));
         Path library = extractor.extract(product());
         extractor.verifyBeforeLoad(product(), library);
-        owner.set("mallory");
+        runOwner.set("mallory");
         IOException failure = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(product(), library));
         assertTrue(failure.getMessage().contains("not owned by"), failure.getMessage());
-        owner.set("tester");
+        assertTrue(failure.getMessage().contains("load-"), failure.getMessage());
+        runOwner.set("tester");
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void verifyBeforeLoadRejectsLooseRunDirectoryMode() throws Exception {
+        NativeLibraryExtractor extractor = extractor(
+                "linux", path -> new ByteArrayInputStream(new byte[] {1}), new NativeFileSecurity.PosixSecurity());
+        Path library = extractor.extract(product());
+        Path run = library.getParent();
+        Files.setPosixFilePermissions(run, PosixFilePermissions.fromString("rwxr-xr-x"));
+        IOException failure = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(product(), library));
+        assertTrue(failure.getMessage().contains("rwxr-xr-x"), failure.getMessage());
+        Files.setPosixFilePermissions(run, PosixFilePermissions.fromString("rwx------"));
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void rejectsSharedWritableParentWithoutStickyBit() throws Exception {
+        for (String mode : List.of("rwxrwxrwx", "rwxrwx---")) {
+            Path shared = temporaryDirectory.resolve("shared-" + mode);
+            Files.createDirectory(shared);
+            Files.setPosixFilePermissions(shared, PosixFilePermissions.fromString(mode));
+            NativeLibraryExtractor extractor = posixExtractorAt(shared);
+            IOException failure = assertThrows(IOException.class, () -> extractor.prepare(product()), mode);
+            assertTrue(failure.getMessage().contains(shared.toString()), failure.getMessage());
+            assertTrue(failure.getMessage().contains("sticky"), failure.getMessage());
+        }
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void acceptsStickySharedParent() throws Exception {
+        Path shared = temporaryDirectory.resolve("sticky");
+        Files.createDirectory(shared);
+        Files.setPosixFilePermissions(shared, PosixFilePermissions.fromString("rwxrwxrwx"));
+        new ProcessBuilder("chmod", "1777", shared.toString())
+                .inheritIO()
+                .start()
+                .waitFor();
+        assertTrue(((Integer) Files.getAttribute(shared, "unix:mode") & 01000) != 0, "sticky bit must be set");
+        NativeLibraryExtractor extractor = posixExtractorAt(shared);
+        Path library = extractor.prepare(product());
+        assertTrue(library.startsWith(shared));
         extractor.allCandidatesFailed();
     }
 
@@ -644,6 +692,20 @@ class NativeLoaderTest {
                 Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC),
                 pid -> false,
                 new SecureRandom(new byte[] {1, 2, 3, 4}),
+                424242,
+                USER,
+                logger());
+    }
+
+    private NativeLibraryExtractor posixExtractorAt(Path parent) {
+        return new NativeLibraryExtractor(
+                "linux",
+                parent,
+                new NativeFileSecurity.PosixSecurity(),
+                path -> new ByteArrayInputStream(new byte[] {1}),
+                Clock.fixed(Instant.parse("2026-08-01T12:00:00Z"), ZoneOffset.UTC),
+                pid -> false,
+                new SecureRandom(new byte[] {5, 6, 7, 8}),
                 424242,
                 USER,
                 logger());

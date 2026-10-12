@@ -89,7 +89,11 @@ val hashNativeCatalog = tasks.register("hashNativeCatalog") {
         val source = root.resolve("META-INF/euhedral/native-products.tsv")
         val target = outputRoot.get().asFile.resolve("META-INF/euhedral/native-products.tsv")
         val hashed = StringBuilder()
-        source.readText(Charsets.UTF_8).split("\n").dropLast(1).forEach { line ->
+        val text = source.readText(Charsets.UTF_8)
+        if (!text.endsWith("\n")) {
+            throw GradleException("native catalog must end with LF: $source")
+        }
+        text.split("\n").dropLast(1).forEach { line ->
             hashed.append(line)
             if (line.startsWith("product\t")) {
                 val fields = line.split("\t")

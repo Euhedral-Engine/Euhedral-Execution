@@ -80,6 +80,10 @@ final class NativeLibraryLoader {
                 librarySystem.load(extracted);
                 extractor.loadSucceeded(extracted);
                 return new NativeLoadResult(candidate, extracted, List.copyOf(failures));
+            } catch (NativeFileSecurity.VerificationException failure) {
+                failures.add(new NativeLoadFailure(candidate, extractionPath, failure));
+                extractor.candidateFailed(extractionPath);
+                logger.warn("Verification of JNI product {} failed", candidate.id(), failure);
             } catch (IOException | SecurityException | LinkageError failure) {
                 failures.add(new NativeLoadFailure(candidate, extractionPath, failure));
                 extractor.candidateFailed(extractionPath);

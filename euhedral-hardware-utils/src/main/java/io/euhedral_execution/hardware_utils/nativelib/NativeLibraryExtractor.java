@@ -53,7 +53,7 @@ final class NativeLibraryExtractor {
     private final SecureRandom random;
     private final Logger logger;
     private final long processId;
-    private final String userName;
+    private final @Nullable String userName;
     private final AtomicBoolean hookRegistered = new AtomicBoolean();
     // The shutdown hook thread reads these, so they must be safely published.
     private volatile Path baseDirectory;
@@ -72,7 +72,7 @@ final class NativeLibraryExtractor {
             LongPredicate processAlive,
             SecureRandom random,
             long processId,
-            String userName,
+            @Nullable String userName,
             Logger logger) {
         this.operatingSystem = Objects.requireNonNull(operatingSystem, "operatingSystem");
         this.parent = Objects.requireNonNull(parent, "parent").toAbsolutePath().normalize();
@@ -196,8 +196,13 @@ final class NativeLibraryExtractor {
         Path base = baseDirectory;
         Path run = runDirectory;
         byte[] copied = extractedDigest;
-        if (base == null || run == null || copied == null || !run.equals(library.getParent())) {
-            throw new IOException("native-loader: " + library + " is not a library extracted by this loader");
+        if (base == null
+                || run == null
+                || copied == null
+                || !run.equals(library.getParent())
+                || !library.equals(retainedLibrary)) {
+            throw new NativeFileSecurity.VerificationException(
+                    "native-loader: " + library + " is not a library extracted by this loader");
         }
         security.verifyPrivateDirectory(base, parent);
         security.verifyPrivateDirectory(run, parent);
@@ -217,7 +222,8 @@ final class NativeLibraryExtractor {
         }
         byte[] actual = digest.digest();
         if (count != extractedBytes || !MessageDigest.isEqual(actual, copied)) {
-            throw new IOException("native-loader: SHA-256 changed after extraction for " + product.id());
+            throw new NativeFileSecurity.VerificationException(
+                    "native-loader: SHA-256 changed after extraction for " + product.id());
         }
         checkCatalogHash(product, actual);
     }
@@ -309,6 +315,8 @@ final class NativeLibraryExtractor {
     }
 
     void candidateFailed(Path library) {
+        extractedDigest = null;
+        extractedBytes = 0;
         deleteCandidate(library);
     }
 
@@ -340,6 +348,7 @@ final class NativeLibraryExtractor {
             throw new IOException(
                     "native-loader: extraction parent must be an absolute existing writable directory: " + parent);
         }
+        security.verifySafeParent(parent);
     }
 
     private void createOrAdoptDirectory(Path directory, Path containing) throws IOException {
