@@ -2,6 +2,8 @@ package io.euhedral_execution.benchmarks.queue_benchmarks;
 
 import io.euhedral_execution.data_structures.queues.MpmcQueue;
 import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import java.util.BitSet;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -55,8 +57,12 @@ public class MPMCBenchmarks {
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
             consumer = new QueueConsumer(blackhole);
+            // Logical CPU ids can be sparse, so walk the active set instead of assuming 0..n-1.
+            BitSet activeCpus = SystemInfo.getCpuSet();
+            int cpu = activeCpus.nextSetBit(0);
             for (int i = 0; i < executors.length; i++) {
-                executors[i] = PinnedThreadExecutor.getOrSetIfAbsent(i, "Thread-" + i, Thread.MAX_PRIORITY, true);
+                executors[i] = PinnedThreadExecutor.getOrSetIfAbsent(cpu, "Thread-" + i, Thread.MAX_PRIORITY, true);
+                cpu = activeCpus.nextSetBit(cpu + 1);
             }
             for (int i = 0; i < values.length; i++) {
                 values[i] = i;
