@@ -9,12 +9,27 @@ public final class MaskCodec {
 
     /**
      * Parses a kernel-style hex mask: comma-separated 32-bit chunks, most significant chunk first.
-     * Each chunk is 1-8 hex digits with optional surrounding whitespace and a single leading
-     * {@code 0x}/{@code 0X}. Chunk {@code k} from the right contributes bits {@code k*32 .. k*32+31}.
-     * Parsing is allocation-free apart from the result, so it does not use regex or {@code split}.
+     * Chunk {@code k} from the right contributes bits {@code k*32 .. k*32+31}.
+     *
+     * <p>Compatible with the historical {@code String.split(",")} behaviour: trailing empty chunks
+     * are ignored, so {@code "1,"} is {@code {0}} and {@code ","} is empty; a leading or middle empty
+     * chunk throws. Each chunk may have surrounding whitespace, one optional {@code +}, and one
+     * optional {@code 0x}/{@code 0X} prefix. Leading zeros are unrestricted; at most 8 significant
+     * hex digits are allowed. Parsing does not use regex or {@code split}.
      */
     public static BitSet parse(String mask) {
         int end = mask.length();
+        if (mask.indexOf(',') < 0) {
+            BitSet set = new BitSet(32);
+            parseChunk(mask, 0, end, 0, 0, set);
+            return set;
+        }
+        while (end > 0 && mask.charAt(end - 1) == ',') {
+            end--;
+        }
+        if (end == 0) {
+            return new BitSet();
+        }
         int chunkCount = 1;
         for (int i = 0; i < end; i++) {
             if (mask.charAt(i) == ',') {
@@ -43,20 +58,35 @@ public final class MaskCodec {
         while (e > s && mask.charAt(e - 1) <= ' ') {
             e--;
         }
+        boolean signSeen = false;
+        if (s < e && mask.charAt(s) == '+') {
+            signSeen = true;
+            s++;
+        }
         if (e - s >= 2 && mask.charAt(s) == '0' && (mask.charAt(s + 1) == 'x' || mask.charAt(s + 1) == 'X')) {
             s += 2;
+            while (s < e && mask.charAt(s) <= ' ') {
+                s++;
+            }
+            if (!signSeen && s < e && mask.charAt(s) == '+') {
+                s++;
+            }
         }
-        int digits = e - s;
-        if (digits < 1 || digits > 8) {
-            throw new NumberFormatException(
-                    "invalid hex mask chunk at index " + index + ": \"" + mask.substring(from, to) + "\"");
+        if (s == e) {
+            throw invalidChunk(index, mask, from, to);
+        }
+        while (s < e && mask.charAt(s) == '0') {
+            s++;
+        }
+        int significant = e - s;
+        if (significant > 8) {
+            throw invalidChunk(index, mask, from, to);
         }
         long value = 0;
         for (int i = s; i < e; i++) {
             int digit = hexValue(mask.charAt(i));
             if (digit < 0) {
-                throw new NumberFormatException(
-                        "invalid hex mask chunk at index " + index + ": \"" + mask.substring(from, to) + "\"");
+                throw invalidChunk(index, mask, from, to);
             }
             value = (value << 4) | digit;
         }
@@ -65,6 +95,11 @@ public final class MaskCodec {
             set.set(base + Long.numberOfTrailingZeros(value));
             value &= value - 1;
         }
+    }
+
+    private static NumberFormatException invalidChunk(int index, String mask, int from, int to) {
+        return new NumberFormatException(
+                "invalid hex mask chunk at index " + index + ": \"" + mask.substring(from, to) + "\"");
     }
 
     private static int hexValue(char c) {
