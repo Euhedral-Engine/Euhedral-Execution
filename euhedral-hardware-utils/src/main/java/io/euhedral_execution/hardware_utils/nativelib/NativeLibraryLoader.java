@@ -47,8 +47,10 @@ final class NativeLibraryLoader {
             }
             message.append('.');
         }
-        return message.append(" A noexec mount is a possible cause; retry with "
-                        + "-Dio.euhedral.native.extract.dir=<absolute executable filesystem directory>.")
+        return message.append(
+                        " Possible causes: a noexec mount, or an unsafe extraction parent (shared-writable without sticky bit, "
+                                + "or foreign-owned); set -Dio.euhedral.native.extract.dir to a private directory owned by "
+                                + "this user (absolute path on an executable filesystem).")
                 .toString();
     }
 

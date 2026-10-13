@@ -78,11 +78,13 @@ interface NativeFileSecurity {
 
             @Override
             public UserPrincipal currentUser(Path probeParent) throws IOException {
-                // Used where /proc/self/status is unavailable (the file owner of /proc/self is unreliable: root for
-                // non-dumpable processes). verifySafeParent has required a parent owned by this user or root (root
-                // only,
-                // when shared), so other users cannot unlink and recreate the probe. Residue: a non-shared parent owned
-                // by another user who can swap the probe is an operator misconfiguration of the extract directory.
+                // The probe supplies the identity for verify() ownership checks (on Linux too); the parent check
+                // reads the effective uid from /proc/self/status when it is readable and uses the probe only
+                // otherwise. (The owner of /proc/self is unreliable: root for non-dumpable processes.)
+                // verifySafeParent has required a parent owned by this user or by root (by root alone when it is
+                // shared-writable), so other users cannot unlink and recreate the probe. Residue: a non-shared
+                // parent owned by another user who can swap the probe is an operator misconfiguration of the
+                // extract directory.
                 Path probe = Files.createTempFile(
                         probeParent, ".euhedral-owner-probe-", null, posixAttributes(probeParent, PRIVATE_FILE));
                 UserPrincipal owner;
@@ -122,9 +124,14 @@ interface NativeFileSecurity {
 
             @Override
             public long ownerUid(Path path) throws IOException {
-                return ((Number) Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS)).longValue();
+                return unsignedUid(Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS));
             }
         };
+
+        /// `unix:uid` is an Integer holding the 32-bit uid; widen it as unsigned so a uid >= 2^31 does not go negative.
+        static long unsignedUid(Object attribute) {
+            return attribute instanceof Long l ? l : Integer.toUnsignedLong(((Number) attribute).intValue());
+        }
 
         /// Parses the `Uid:` line (real, effective, saved, filesystem) and returns the EFFECTIVE (second) uid.
         static long parseEffectiveUid(String status) throws IOException {

@@ -3,6 +3,7 @@ package io.euhedral_execution.hardware_utils.nativelib;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -164,8 +165,8 @@ class NativeLoaderTest {
         assertInstanceOf(IOException.class, failure.getSuppressed()[0]);
         assertTrue(failure.getMessage().contains("/bin/linux/glibc/linux_jni_x64.so"));
         assertTrue(failure.getMessage().contains("/bin/linux/musl/linux_jni_x64.so"));
-        assertTrue(failure.getMessage().contains("noexec mount is a possible cause"));
-        assertTrue(failure.getMessage().contains("-Dio.euhedral.native.extract.dir="));
+        assertTrue(failure.getMessage().contains("a noexec mount, or an unsafe extraction parent"));
+        assertTrue(failure.getMessage().contains("-Dio.euhedral.native.extract.dir to a private directory"));
     }
 
     @Test
@@ -607,6 +608,50 @@ class NativeLoaderTest {
             assertTrue(failure.getMessage().contains(shared.toString()), failure.getMessage());
             assertTrue(failure.getMessage().contains("sticky"), failure.getMessage());
         }
+    }
+
+    @Test
+    void rejectedParentIsPreparedOnceAcrossCandidates() throws Exception {
+        AtomicInteger attempts = new AtomicInteger();
+        NativeFileSecurity rejecting = new NativeFileSecurity() {
+            @Override
+            public void secureDirectory(Path path) {}
+
+            @Override
+            public void secureMarker(Path path) {}
+
+            @Override
+            public void secureLibrary(Path path) {}
+
+            @Override
+            public void verifySafeParent(Path parent) throws IOException {
+                attempts.incrementAndGet();
+                throw new VerificationException("native-loader: unsafe parent " + parent);
+            }
+        };
+        NativeLibraryExtractor extractor =
+                extractor("linux", path -> new ByteArrayInputStream(new byte[] {1}), rejecting);
+        ExceptionInInitializerError failure = assertThrows(
+                ExceptionInInitializerError.class,
+                () -> new NativeLibraryLoader(catalog(), extractor, path -> {}, logger()).load("linux", "amd64"));
+        assertEquals(2, failure.getSuppressed().length, "both candidates must still fail");
+        assertEquals(1, attempts.get(), "the rejected parent must be prepared exactly once");
+        assertInstanceOf(NativeFileSecurity.VerificationException.class, failure.getSuppressed()[0]);
+        assertSame(failure.getSuppressed()[0], failure.getSuppressed()[1].getCause());
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void ownerUidAboveIntMaxIsUnsigned() throws Exception {
+        assertEquals(2147483648L, NativeFileSecurity.UnixIds.unsignedUid(Integer.MIN_VALUE));
+        assertEquals(4294967295L, NativeFileSecurity.UnixIds.unsignedUid(-1));
+        assertEquals(1000L, NativeFileSecurity.UnixIds.unsignedUid(1000));
+        assertEquals(2147483648L, NativeFileSecurity.UnixIds.unsignedUid(2147483648L));
+        Path parent = temporaryDirectory.resolve("high-uid");
+        Files.createDirectory(parent);
+        Files.setPosixFilePermissions(parent, PosixFilePermissions.fromString("rwx------"));
+        // Owner uid 2^31 equals effective uid 2147483648: accepted, not seen as negative.
+        extractorWithIds(parent, ids(2147483648L, 0x8000_0000L)).prepare(product());
     }
 
     private static NativeFileSecurity.UnixIds ids(long effective, long owner) {

@@ -56,6 +56,7 @@ final class NativeLibraryExtractor {
     private final @Nullable String userName;
     private final AtomicBoolean hookRegistered = new AtomicBoolean();
     // The shutdown hook thread reads these, so they must be safely published.
+    private volatile @Nullable IOException prepareFailure;
     private volatile Path baseDirectory;
     private volatile Path runDirectory;
     private volatile Path marker;
@@ -241,6 +242,20 @@ final class NativeLibraryExtractor {
     }
 
     Path prepare(NativeProduct firstProduct) throws IOException {
+        IOException earlier = prepareFailure;
+        if (earlier != null) {
+            // The parent was already rejected (and reported once); fail fast without re-preparing.
+            throw new IOException("native-loader: extraction setup already failed: " + earlier.getMessage(), earlier);
+        }
+        try {
+            return doPrepare(firstProduct);
+        } catch (IOException e) {
+            prepareFailure = e;
+            throw e;
+        }
+    }
+
+    private Path doPrepare(NativeProduct firstProduct) throws IOException {
         validateParent();
         baseDirectory = parent.resolve(baseDirectoryName(userName));
         createOrAdoptDirectory(baseDirectory, parent);
