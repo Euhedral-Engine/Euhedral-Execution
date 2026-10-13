@@ -3,16 +3,15 @@ package io.euhedral_execution.hardware_utils.monitor.sampling.signals;
 import io.euhedral_execution.hardware_utils.monitor.sampling.enums.SignalValidity;
 import io.euhedral_execution.hardware_utils.monitor.sampling.primitives.CounterSignal;
 import io.euhedral_execution.hardware_utils.monitor.sampling.primitives.DoubleGaugeSignal;
-import org.jspecify.annotations.Nullable;
 
 public record CpuFastSignals(
-        @Nullable CounterSignal schedulerWait,
-        @Nullable CounterSignal psiStall,
-        @Nullable DoubleGaugeSignal reportedSchedulerStallRatio,
-        @Nullable CounterSignal quotaThrottle,
-        @Nullable CounterSignal steal,
-        @Nullable DoubleGaugeSignal externalContentionRatio,
-        @Nullable DoubleGaugeSignal runnablePerCapacity) {
+        CounterSignal schedulerWait,
+        CounterSignal psiStall,
+        DoubleGaugeSignal reportedSchedulerStallRatio,
+        CounterSignal quotaThrottle,
+        CounterSignal steal,
+        DoubleGaugeSignal externalContentionRatio,
+        DoubleGaugeSignal runnablePerCapacity) {
     public CpuFastSignals {
         if (reportedSchedulerStallRatio != null && reportedSchedulerStallRatio.validity() == SignalValidity.VALID) {
             if (reportedSchedulerStallRatio.value() > 1.0) {

@@ -9,19 +9,18 @@ import io.euhedral_execution.hardware_utils.monitor.sampling.signals.IoFastSigna
 import io.euhedral_execution.hardware_utils.monitor.sampling.signals.MemoryFastSignals;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
-import org.jspecify.annotations.Nullable;
 
 public record FastHardwareSample(
         long observedAtNs,
         int logicalSpan,
         UnmodifiableBitSet effectiveCpus,
-        @Nullable LongGaugeSignal quotaCapacityCpus,
-        @Nullable LongGaugeSignal quotaPeriodNs,
-        @Nullable CounterSignal productiveCpuNs,
-        @Nullable CounterSignal scopeQuotaThrottledNs,
-        @Nullable CounterSignal scopeSchedulerWaitNs,
-        @Nullable CounterSignal scopePsiStallNs,
-        @Nullable DoubleGaugeSignal scopeReportedSchedulerStallRatio,
+        LongGaugeSignal quotaCapacityCpus,
+        LongGaugeSignal quotaPeriodNs,
+        CounterSignal productiveCpuNs,
+        CounterSignal scopeQuotaThrottledNs,
+        CounterSignal scopeSchedulerWaitNs,
+        CounterSignal scopePsiStallNs,
+        DoubleGaugeSignal scopeReportedSchedulerStallRatio,
         CpuFastSignals[] cpuSignals,
         MemoryFastSignals memorySignals,
         IoFastSignals ioSignals) {

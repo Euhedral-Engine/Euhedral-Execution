@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils.compatibility;
 
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
@@ -197,8 +198,7 @@ class NullContractTest {
 
     @Test
     void samplingNullContracts() throws Exception {
-        String samples = "io.euhedral_execution.hardware_utils.monitor.sampling.";
-        var fast = Class.forName(samples + "samples.FastHardwareSample");
+        var fast = load("monitor.sampling.samples.FastHardwareSample");
         for (String name : List.of(
                 "quotaCapacityCpus",
                 "quotaPeriodNs",
@@ -207,7 +207,7 @@ class NullContractTest {
                 "scopeSchedulerWaitNs",
                 "scopePsiStallNs",
                 "scopeReportedSchedulerStallRatio")) {
-            assertTrue(nullableComponent(fast, name), "FastHardwareSample." + name + " is tolerated null");
+            assertFalse(nullableComponent(fast, name), "FastHardwareSample." + name + " is non-null");
         }
         for (String name : List.of(
                 "schedulerWait",
@@ -217,7 +217,7 @@ class NullContractTest {
                 "steal",
                 "externalContentionRatio",
                 "runnablePerCapacity")) {
-            assertTrue(nullableComponent(Class.forName(samples + "signals.CpuFastSignals"), name), name);
+            assertFalse(nullableComponent(load("monitor.sampling.signals.CpuFastSignals"), name), name);
         }
         for (String name : List.of(
                 "hardLimitBytes",
@@ -226,39 +226,37 @@ class NullContractTest {
                 "inactiveFileBytes",
                 "cumulativeReclaimBytes",
                 "memoryStallNs")) {
-            assertTrue(nullableComponent(Class.forName(samples + "signals.MemoryFastSignals"), name), name);
+            assertFalse(nullableComponent(load("monitor.sampling.signals.MemoryFastSignals"), name), name);
         }
         for (String name : List.of(
                 "productiveBytes", "stallNs", "operationLatencyNs", "completedOperations", "maximumQueueDepth")) {
-            assertTrue(nullableComponent(Class.forName(samples + "signals.IoFastSignals"), name), name);
+            assertFalse(nullableComponent(load("monitor.sampling.signals.IoFastSignals"), name), name);
         }
-        var internal = "io.euhedral_execution.hardware_utils.monitor.internal.";
-        var engine = Class.forName(internal + "SampleStateEngine");
+        var engine = load("monitor.internal.SampleStateEngine");
         var fastSample = fast;
         assertTrue(nullableReturn(engine, "processFast", long.class, fastSample));
         assertTrue(nullableParam(engine, "processFast", 1, long.class, fastSample));
         assertTrue(nullableParam(
-                engine, "processSlow", 1, long.class, Class.forName(samples + "samples.SlowHardwareSample")));
+                engine, "processSlow", 1, long.class, load("monitor.sampling.samples.SlowHardwareSample")));
         assertTrue(nullableField(engine, "lastMembership"));
-        var cache = Class.forName(internal + "SlowSampleCache");
+        var cache = load("monitor.internal.SlowSampleCache");
         assertTrue(nullableReturn(cache, "resolve", long.class));
         assertTrue(nullableField(cache, "lastSample"));
-        var constants = Class.forName(internal + "pressure.PressureConstants");
-        assertTrue(nullableParam(constants, "thermalLoss", 0, Class.forName(samples + "enums.ThermalSeverity")));
+        var constants = load("monitor.internal.pressure.PressureConstants");
+        assertTrue(nullableParam(constants, "thermalLoss", 0, load("monitor.sampling.enums.ThermalSeverity")));
     }
 
     @Test
     void monitorPackagesAreNullMarked() throws Exception {
-        String base = "io.euhedral_execution.hardware_utils.monitor.";
         assertMarked(
                 io.euhedral_execution.hardware_utils.monitor.ResourceMonitor.class,
-                Class.forName(base + "sampling.DetailedSystemSnapshotProvider"),
-                Class.forName(base + "sampling.enums.SignalValidity"),
-                Class.forName(base + "sampling.primitives.CounterSignal"),
-                Class.forName(base + "sampling.samples.FastHardwareSample"),
-                Class.forName(base + "sampling.signals.CpuFastSignals"),
-                Class.forName(base + "internal.MonotonicClock"),
-                Class.forName(base + "internal.pressure.PressureState"));
+                load("monitor.sampling.DetailedSystemSnapshotProvider"),
+                load("monitor.sampling.enums.SignalValidity"),
+                load("monitor.sampling.primitives.CounterSignal"),
+                load("monitor.sampling.samples.FastHardwareSample"),
+                load("monitor.sampling.signals.CpuFastSignals"),
+                load("monitor.internal.MonotonicClock"),
+                load("monitor.internal.pressure.PressureState"));
     }
 
     private static Class<?> load(String name) throws ClassNotFoundException {

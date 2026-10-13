@@ -259,6 +259,7 @@ public final class SystemUtilization {
             long memPerCpuUsageBytes,
             double diskIOBytesPerSecond,
             double diskIOPressure,
+            /// null when no legacy snapshot is attached
             @Nullable SystemSnapshot snapshot) {
 
         public HardwareUtilization {

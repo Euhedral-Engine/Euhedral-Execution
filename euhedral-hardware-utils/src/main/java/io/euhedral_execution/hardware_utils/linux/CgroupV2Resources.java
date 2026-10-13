@@ -463,7 +463,7 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
     ///
     /// @param channel FileChannel to read
     /// @return bytes read or -1 if failure
-    private int readToBuffer(FileChannel channel) {
+    private int readToBuffer(@Nullable FileChannel channel) {
         try {
             this.buffer.clear();
             channel.position(0);
