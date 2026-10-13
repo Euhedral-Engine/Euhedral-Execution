@@ -33,6 +33,7 @@ import java.util.BitSet;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.LockSupport;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -57,6 +58,8 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
 
     private final Map<String, Long> lastLoggedNs = new ConcurrentHashMap<>();
     private final LinuxPaths paths;
+    private final Path diskstatsPath;
+    private final @Nullable Path ioPressureOverride;
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(65_536);
     // Fast state
     private final BitSet effectiveCpus = new BitSet(SystemInfo.getCpuCount());
@@ -131,7 +134,15 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     }
 
     public LinuxResourceProvider(LinuxPaths paths) {
+        this(paths, LinuxPaths.PROC_DISKSTATS, null);
+    }
+
+    /// Test seam: fixtures stand in for `/proc/diskstats` and for the cgroup `io.pressure` file (which
+    /// `LinuxPaths.resolveV2Path` would otherwise fall back to the host's real cgroup root for).
+    LinuxResourceProvider(LinuxPaths paths, Path diskstatsPath, @Nullable Path ioPressureOverride) {
         this.paths = paths;
+        this.diskstatsPath = diskstatsPath;
+        this.ioPressureOverride = ioPressureOverride;
     }
 
     public static boolean isFilteredBlockDevice(int major, String name) {
@@ -408,7 +419,9 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                 }
             }
         } catch (Exception e) {
-            logRateLimited(cpusetStr, "Failed to parse cpuset range: " + e.getMessage());
+            if (logDue(cpusetStr)) {
+                LOGGER.warn("Failed to parse cpuset range: {}", e.getMessage());
+            }
             bitSet.set(0, SystemInfo.getCpuCount());
         }
     }
@@ -708,7 +721,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
 
     private void readFilteredDiskIoBytes() {
         diskIoBytes = 0L;
-        String diskstats = readSource(LinuxPaths.PROC_DISKSTATS, SRC_DISKSTATS);
+        String diskstats = readSource(diskstatsPath, SRC_DISKSTATS);
         if (diskstats == null) {
             diskStatus = readStatus;
             return;
@@ -744,7 +757,9 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     private void readIoStallNs() {
         ioStallNs = 0L;
         if (ioStallSource != IO_SRC_DISKSTATS) {
-            String content = readSource(paths.resolveV2Path("io.pressure"), SRC_IO_PRESSURE);
+            String content = readSource(
+                    ioPressureOverride != null ? ioPressureOverride : paths.resolveV2Path("io.pressure"),
+                    SRC_IO_PRESSURE);
             if (content != null) {
                 long totalUs = LinuxProcParsers.parsePsiSomeTotal(content);
                 if (totalUs >= 0L && totalUs <= Long.MAX_VALUE / 1000L) {
@@ -760,13 +775,15 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                 ioStallStatus = FAILED;
                 return;
             }
-            ioStallSource = IO_SRC_DISKSTATS;
         }
-        String diskstats = readSource(LinuxPaths.PROC_DISKSTATS, SRC_DISKSTATS);
+        String diskstats = readSource(diskstatsPath, SRC_DISKSTATS);
         if (diskstats == null) {
             ioStallStatus = readStatus;
             return;
         }
+        // Commit to diskstats only after it was actually read, so that when neither source exists at
+        // first sight a PSI file that appears later can still be chosen.
+        ioStallSource = IO_SRC_DISKSTATS;
         ioStallStatus = OK;
         long totalMs = 0;
         int n = diskstats.length();
@@ -861,7 +878,9 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
                     break;
                 }
                 if (total + bytesRead > MAX_FILE_BYTES) {
-                    logRateLimited(path.toString(), "File " + path + " exceeds " + MAX_FILE_BYTES + " bytes");
+                    if (logDue(path.toString())) {
+                        LOGGER.warn("File {} exceeds {} bytes", path, MAX_FILE_BYTES);
+                    }
                     readStatus = FAILED;
                     return null;
                 }
@@ -877,16 +896,18 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             readStatus = OK;
             return new String(scratch, 0, total, StandardCharsets.UTF_8);
         } catch (IOException e) {
-            logRateLimited(path.toString(), "Error reading file " + path + ": " + e.getMessage());
+            if (logDue(path.toString())) {
+                LOGGER.warn("Error reading file {}: {}", path, e.getMessage());
+            }
             readStatus = Files.exists(path) ? FAILED : ABSENT;
             return null;
         }
     }
 
-    /// Reads a file of at most 1 MiB. Returns null if the file is missing, unreadable, or larger than
-    /// the cap; a truncated read is never returned because a partial counter file would parse as a
-    /// plausible wrong value.
-    public String readFileBounded(Path path) {
+    /// Reads a file of at most 1 MiB, holding the provider lock for the duration. Returns `null` on
+    /// failure (the file is missing or unreadable) or when the file is larger than 1 MiB; a truncated
+    /// read is never returned because a partial counter file would parse as a plausible wrong value.
+    public @Nullable String readFileBounded(Path path) {
         acquireLock();
         try {
             return readFileInternal(path);
@@ -895,13 +916,16 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
         }
     }
 
-    private void logRateLimited(String key, String message) {
+    /// True (and records the time) when a warning for `key` may be logged now. Callers build the
+    /// message only after this returns true, so a persistently failing file allocates nothing per tick.
+    private boolean logDue(String key) {
         long now = System.nanoTime();
         Long last = lastLoggedNs.get(key);
         if (last == null || (now - last) >= LOG_RATE_LIMIT_NS) {
-            LOGGER.warn(message);
             lastLoggedNs.put(key, now);
+            return true;
         }
+        return false;
     }
 
     @Override

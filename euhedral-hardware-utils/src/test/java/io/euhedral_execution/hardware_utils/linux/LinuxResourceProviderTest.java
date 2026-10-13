@@ -289,6 +289,23 @@ class LinuxResourceProviderTest {
     }
 
     @Test
+    void ioPressureAppearingAfterNoSourceAtFirstSightIsChosen(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Path psi = root.resolve("io.pressure");
+        Path diskstats = tempDir.resolve("diskstats");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir), diskstats, psi)) {
+            // Neither source exists: nothing is chosen yet.
+            provider.sampleFast(1L);
+            provider.sampleFast(2L);
+
+            Files.writeString(psi, "some avg10=0.00 avg60=0.00 avg300=0.00 total=9\n");
+            var chosen = provider.sampleFast(3L).ioSignals().completedOperations();
+            assertEquals(SignalValidity.VALID, chosen.validity());
+            assertEquals(9000L, chosen.value());
+        }
+    }
+
+    @Test
     void malformedCpuStatIsTransientFailureAndNeverThrows(@TempDir Path tempDir) throws IOException {
         Path root = v2Fixture(tempDir);
         Files.writeString(root.resolve("cpu.stat"), "usage_usec notanumber\n");
