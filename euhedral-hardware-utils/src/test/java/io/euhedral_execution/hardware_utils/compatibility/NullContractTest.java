@@ -24,6 +24,22 @@ class NullContractTest {
     }
 
     @Test
+    void otherNullReturningMethodsAreNullable() throws Exception {
+        assertTrue(SystemInfo.class
+                .getMethod("getSystemSnapshot")
+                .getAnnotatedReturnType()
+                .isAnnotationPresent(Nullable.class));
+        assertTrue(TopologyMapper.class
+                .getMethod("getEffectiveSocketTopology", int.class)
+                .getAnnotatedReturnType()
+                .isAnnotationPresent(Nullable.class));
+        assertTrue(io.euhedral_execution.hardware_utils.topology.internal.TopologyBootstrap.class
+                .getMethod("resources", org.slf4j.Logger.class)
+                .getAnnotatedReturnType()
+                .isAnnotationPresent(Nullable.class));
+    }
+
+    @Test
     void snapshotterIsNullable() throws Exception {
         // Reflect on the declaration only; reading the field would initialize SystemInfo.
         assertTrue(SystemInfo.class.getField("SNAPSHOTTER").getAnnotatedType().isAnnotationPresent(Nullable.class));
@@ -55,8 +71,11 @@ class NullContractTest {
 
     @Test
     void packagesAreNullMarked() {
-        for (Class<?> anchor :
-                List.of(SystemInfo.class, io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet.class)) {
+        for (Class<?> anchor : List.of(
+                SystemInfo.class,
+                io.euhedral_execution.hardware_utils.topology.internal.MaskCodec.class,
+                io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet.class,
+                io.euhedral_execution.hardware_utils.util.internal.Constants.class)) {
             assertTrue(
                     anchor.getPackage().isAnnotationPresent(NullMarked.class),
                     anchor.getPackageName() + " must be @NullMarked");

@@ -24,7 +24,7 @@ public final class TopologyMapper {
     private final UnmodifiableBitSet allowedCpus;
     private final int[] socketVersions;
     private final AtomicLong submissionSequence = new AtomicLong();
-    private final AtomicReference<PendingRequest> pending = new AtomicReference<>();
+    private final AtomicReference<@Nullable PendingRequest> pending = new AtomicReference<>();
     private final AtomicBoolean drainOwner = new AtomicBoolean();
     // The graph is completely frozen before this volatile write. Reader methods perform one
     // volatile read, which publishes every final value reachable from the selected graph.

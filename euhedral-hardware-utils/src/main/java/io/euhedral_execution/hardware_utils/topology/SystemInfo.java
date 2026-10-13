@@ -114,7 +114,7 @@ public final class SystemInfo {
         return MAX_SOCKET_ID;
     }
 
-    public static SystemSnapshot getSystemSnapshot() {
+    public static @Nullable SystemSnapshot getSystemSnapshot() {
         return SNAPSHOTTER.getSnapshot();
     }
 
