@@ -210,8 +210,10 @@ Native Zig and C++ sources are owned by this module; there is no separate native
   for stale-directory handling. By default a parent that is not private
   (shared-writable without the sticky bit, sticky but not root-owned, or non-shared and owned by
   another uid) is tolerated with one WARN per process naming its path, mode, owner uid, the swap
-  risk, and the remedy; when the identity then comes from the owner probe it is cross-checked
-  against the `user.name` user-database lookup and any mismatch or lookup failure fails the load.
+  risk, and the remedy. Ownership checks compare numeric owner uids with the effective uid from
+  `/proc/self/status`; only where that is unreadable (macOS) is the owner probe used, and for an
+  unsafe parent it is cross-checked against the `user.name` user-database lookup (a mismatch or
+  lookup failure fails the load).
   `-Dio.euhedral.native.extract.strictParent=true` (read once at extractor construction) restores
   fail-closed rejection: owned by the current user or root (root only, and sticky, if
   shared-writable). The base directory, run directory and library stay strict in both modes (owner,

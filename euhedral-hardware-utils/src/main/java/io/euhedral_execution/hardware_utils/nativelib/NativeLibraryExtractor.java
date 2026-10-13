@@ -385,14 +385,23 @@ final class NativeLibraryExtractor {
             // The parent stays tolerated; the security policy distrusts any identity probed inside it.
             security.acceptUnsafeParent();
             if (parentWarned.compareAndSet(false, true)) {
+                long uid = risk.ownerUid();
+                if (uid < 0) {
+                    try {
+                        uid = security.parentOwnerUid(parent);
+                    } catch (IOException | RuntimeException e) {
+                        uid = -1;
+                    }
+                }
                 logger.warn(
-                        "native-loader: extraction parent {} (mode {}, owner uid {}) is not private; another local"
-                                + " user able to write to this directory could swap the extracted library between"
+                        "native-loader: extraction parent {} (mode {}, owner uid {}) is not private: {}. Another"
+                                + " local user able to write to this directory could swap the extracted library between"
                                 + " verification and load. Set -Dio.euhedral.native.extract.dir to a private directory"
                                 + " owned by this user, or set -D{}=true to refuse such a parent.",
                         parent,
                         risk.mode(),
-                        risk.ownerUid(),
+                        uid < 0 ? "unknown" : Long.toString(uid),
+                        risk.threat(),
                         STRICT_PARENT_PROPERTY);
             }
         }

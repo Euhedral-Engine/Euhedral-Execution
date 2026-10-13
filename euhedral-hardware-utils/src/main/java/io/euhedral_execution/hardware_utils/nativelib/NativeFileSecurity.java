@@ -69,9 +69,9 @@ interface NativeFileSecurity {
     /// information, so tests can simulate a foreign owner without changing real ownership.
     interface OwnerLookup {
 
-        /// Production lookup. The current user is the owner of a file this process just created in the validated
-        /// `probeParent`; that is exact for the effective uid and, unlike `user.name`, still works for arbitrary
-        /// container uids that have no passwd entry.
+        /// Production lookup, used only when the effective uid cannot be read from `/proc/self/status` (e.g. macOS).
+        /// The current user is then the owner of a file this process just created in `probeParent`; that is exact for
+        /// the effective uid and, unlike `user.name`, works for uids that have no passwd entry.
         OwnerLookup DEFAULT = new OwnerLookup() {
             @Override
             public UserPrincipal ownerOf(Path path) throws IOException {
@@ -80,9 +80,9 @@ interface NativeFileSecurity {
 
             @Override
             public UserPrincipal currentUser(Path probeParent) throws IOException {
-                // The probe supplies the identity for verify() ownership checks (on Linux too); the parent check
-                // reads the effective uid from /proc/self/status when it is readable and uses the probe only
-                // otherwise. (The owner of /proc/self is unreliable: root for non-dumpable processes.)
+                // The probe supplies the identity only when /proc/self/status is unreadable; both the parent
+                // assessment and verify() otherwise compare numeric uids against the /proc effective uid.
+                // (The owner of /proc/self is unreliable: root for non-dumpable processes.)
                 // In strict mode verifySafeParent has required a parent owned by this user or by root (by root
                 // alone when it is shared-writable), so other users cannot unlink and recreate the probe. When an
                 // unsafe parent is tolerated (relaxed mode) another user may be able to swap the probe and forge
@@ -122,8 +122,14 @@ interface NativeFileSecurity {
     }
 
     /// An extraction parent that fails the safe-parent rules. `message` is the exact strict-mode rejection text;
-    /// `mode` is the octal permission string (or `unknown`), `ownerUid` is `-1` when it could not be read.
-    record ParentRisk(String message, String mode, long ownerUid) {}
+    /// `mode` is the octal permission string; `ownerUid` is `-1` when not read (see [#parentOwnerUid]) or unavailable;
+    /// `threat` says who can tamper with the directory, for the relaxed-mode warning.
+    record ParentRisk(String message, String mode, long ownerUid, String threat) {}
+
+    /// Numeric owner uid of the parent for diagnostics, or `-1` when the policy cannot observe it.
+    default long parentOwnerUid(Path parent) throws IOException {
+        return -1;
+    }
 
     /// Numeric uid source, independent of any file inside the extraction parent. `effectiveUid` is read from
     /// `/proc/self/status` (Linux); it is `-1` when unavailable (e.g. macOS), in which case the probe identity is used.
@@ -283,11 +289,25 @@ interface NativeFileSecurity {
                 throw new VerificationException(
                         "native-loader: " + path + " is not a " + (directory ? "directory" : "regular file"));
             }
-            UserPrincipal owner = ownerLookup.ownerOf(path);
-            UserPrincipal expected = currentUser(probeParent);
-            if (!expected.equals(owner)) {
-                throw new VerificationException("native-loader: " + path + " is not owned by the current user (owner="
-                        + owner + ", expected=" + expected + ")");
+            // Identity source: the effective uid from /proc/self/status when readable (independent of every file
+            // in the extraction parent, and works for arbitrary container uids without a passwd entry), compared
+            // with the numeric owner uid. Only when it is unavailable (macOS) does the probe apply, and then it is
+            // cross-checked against the user database if the parent is unsafe.
+            long effective = unixIds.effectiveUid();
+            if (effective >= 0) {
+                long ownerUid = unixIds.ownerUid(path);
+                if (ownerUid != effective) {
+                    throw new VerificationException("native-loader: " + path
+                            + " is not owned by the current user (owner uid=" + ownerUid + ", expected uid="
+                            + effective + ")");
+                }
+            } else {
+                UserPrincipal owner = ownerLookup.ownerOf(path);
+                UserPrincipal expected = currentUser(probeParent);
+                if (!expected.equals(owner)) {
+                    throw new VerificationException("native-loader: " + path
+                            + " is not owned by the current user (owner=" + owner + ", expected=" + expected + ")");
+                }
             }
             Set<PosixFilePermission> actual;
             try {
@@ -364,17 +384,20 @@ interface NativeFileSecurity {
                 }
                 mode = bits;
             }
-            String modeText = String.format("%04o", mode & 07777);
             boolean shared = (mode & 022) != 0;
-            long owner = unix ? unixIds.ownerUid(directory) : -1;
             if (shared && !sticky) {
                 return new ParentRisk(
-                        "native-loader: extraction parent " + directory + " has mode " + modeText
+                        "native-loader: extraction parent " + directory + " has mode " + modeText(mode)
                                 + ", which is group- or other-writable without the sticky bit; use a private directory",
-                        modeText,
-                        owner);
+                        modeText(mode),
+                        -1,
+                        "any local user able to write to it can rename or replace entries");
             }
-            if (!unix || owner == 0) {
+            if (!unix) {
+                return null;
+            }
+            long owner = unixIds.ownerUid(directory);
+            if (owner == 0) {
                 return null;
             }
             boolean ours;
@@ -394,8 +417,20 @@ interface NativeFileSecurity {
                             + "; it must be owned by root"
                             + (shared ? " (it is shared-writable)" : " or the current user")
                             + ". Set -Dio.euhedral.native.extract.dir to a private directory you own.",
-                    modeText,
-                    owner);
+                    modeText(mode),
+                    owner,
+                    shared
+                            ? "its owner (uid " + owner + ") can rename entries and clear the sticky bit"
+                            : "its owner (uid " + owner + ") can replace entries");
+        }
+
+        @Override
+        public long parentOwnerUid(Path directory) throws IOException {
+            return Files.getFileStore(directory).supportsFileAttributeView("unix") ? unixIds.ownerUid(directory) : -1;
+        }
+
+        private static String modeText(int mode) {
+            return String.format("%04o", mode & 07777);
         }
 
         @Override

@@ -330,14 +330,14 @@ class NativeLoaderTest {
         NativeLibraryExtractor foreign = extractor(
                 "linux",
                 path -> new ByteArrayInputStream(new byte[] {1}),
-                new NativeFileSecurity.PosixSecurity(owners("mallory", "tester")));
+                new NativeFileSecurity.PosixSecurity(owners("mallory", "tester"), NO_PROC));
         IOException notOwned = assertThrows(IOException.class, () -> foreign.prepare(product()));
         assertTrue(notOwned.getMessage().contains("not owned by"), notOwned.getMessage());
         // Same owner, loose mode: the mode is rejected and the directory is NOT silently chmodded.
         NativeLibraryExtractor loose = extractor(
                 "linux",
                 path -> new ByteArrayInputStream(new byte[] {1}),
-                new NativeFileSecurity.PosixSecurity(owners("tester", "tester")));
+                new NativeFileSecurity.PosixSecurity(owners("tester", "tester"), NO_PROC));
         IOException modeFailure = assertThrows(IOException.class, () -> loose.prepare(product()));
         assertTrue(modeFailure.getMessage().contains("rwxrwxrwx"), modeFailure.getMessage());
         assertEquals(PosixFilePermissions.fromString("rwxrwxrwx"), Files.getPosixFilePermissions(base));
@@ -350,7 +350,7 @@ class NativeLoaderTest {
         NativeLibraryExtractor extractor = extractor(
                 "linux",
                 path -> new ByteArrayInputStream(new byte[] {1}),
-                new NativeFileSecurity.PosixSecurity(owners("mallory", "tester")));
+                new NativeFileSecurity.PosixSecurity(owners("mallory", "tester"), NO_PROC));
         IOException failure = assertThrows(IOException.class, () -> extractor.prepare(product()));
         assertTrue(failure.getMessage().contains("not owned by"), failure.getMessage());
     }
@@ -572,7 +572,7 @@ class NativeLoaderTest {
         NativeLibraryExtractor extractor = extractor(
                 "linux",
                 path -> new ByteArrayInputStream(new byte[] {1}),
-                new NativeFileSecurity.PosixSecurity(lookup));
+                new NativeFileSecurity.PosixSecurity(lookup, NO_PROC));
         Path library = extractor.extract(product());
         extractor.verifyBeforeLoad(product(), library);
         runOwner.set("mallory");
@@ -656,6 +656,23 @@ class NativeLoaderTest {
         extractorWithIds(parent, ids(2147483648L, 0x8000_0000L), true).prepare(product());
     }
 
+    /// `/proc/self/status` unreadable (macOS): ownership falls back to the probe identity.
+    private static final NativeFileSecurity.UnixIds NO_PROC = ids(-1, 0);
+
+    private static NativeFileSecurity.UnixIds idsBy(long effective, java.util.function.ToLongFunction<Path> owners) {
+        return new NativeFileSecurity.UnixIds() {
+            @Override
+            public long effectiveUid() {
+                return effective;
+            }
+
+            @Override
+            public long ownerUid(Path path) {
+                return owners.applyAsLong(path);
+            }
+        };
+    }
+
     private static NativeFileSecurity.UnixIds ids(long effective, long owner) {
         return new NativeFileSecurity.UnixIds() {
             @Override
@@ -712,7 +729,8 @@ class NativeLoaderTest {
     @EnabledOnOs(OS.LINUX)
     void acceptsStickySharedParentOwnedByRoot() throws Exception {
         Path shared = stickyParent("sticky-root");
-        NativeLibraryExtractor extractor = extractorWithIds(shared, ids(1000, 0), true);
+        NativeLibraryExtractor extractor =
+                extractorWithIds(shared, idsBy(1000, path -> path.equals(shared) ? 0 : 1000), true);
         Path library = extractor.prepare(product());
         assertTrue(library.startsWith(shared));
         extractor.allCandidatesFailed();
@@ -855,8 +873,11 @@ class NativeLoaderTest {
     void relaxedModeAcceptsStickyParentOwnedByUid65534() throws Exception {
         Path sticky = parentWithMode("relaxed-sticky-65534", "1777");
         org.slf4j.Logger log = mockLogger();
-        NativeLibraryExtractor extractor =
-                relaxedExtractor(sticky, ids(1000, 65534), identity("tester", "tester", "tester", "tester"), log);
+        NativeLibraryExtractor extractor = relaxedExtractor(
+                sticky,
+                idsBy(1000, path -> path.equals(sticky) ? 65534 : 1000),
+                identity("tester", "tester", "tester", "tester"),
+                log);
         assertTrue(extractor.prepare(product()).startsWith(sticky));
         assertEquals(1, warnCount(log));
         extractor.allCandidatesFailed();
@@ -904,8 +925,8 @@ class NativeLoaderTest {
     void relaxedModeRejectsAProbeIdentityThatDisagreesWithTheUserDatabase() throws Exception {
         Path shared = parentWithMode("relaxed-spoof", "0777");
         // The probe in the unsafe parent says "mallory" while user.name resolves to "tester".
-        NativeLibraryExtractor mismatch = relaxedExtractor(
-                shared, ids(1000, 1000), identity("mallory", "mallory", "tester", "tester"), mockLogger());
+        NativeLibraryExtractor mismatch =
+                relaxedExtractor(shared, NO_PROC, identity("mallory", "mallory", "tester", "tester"), mockLogger());
         IOException failure = assertThrows(IOException.class, () -> mismatch.prepare(product()));
         assertInstanceOf(NativeFileSecurity.VerificationException.class, failure);
         assertTrue(failure.getMessage().contains("refusing to trust"), failure.getMessage());
@@ -913,7 +934,7 @@ class NativeLoaderTest {
         // A failed lookup fails closed instead of falling back to the probe.
         Path other = parentWithMode("relaxed-lookup-fails", "0777");
         NativeLibraryExtractor unresolved =
-                relaxedExtractor(other, ids(1000, 1000), identity("tester", "tester", "tester", null), mockLogger());
+                relaxedExtractor(other, NO_PROC, identity("tester", "tester", "tester", null), mockLogger());
         IOException lookupFailure = assertThrows(IOException.class, () -> unresolved.prepare(product()));
         assertInstanceOf(NativeFileSecurity.VerificationException.class, lookupFailure);
         assertTrue(lookupFailure.getMessage().contains("lookup of user 'tester' failed"), lookupFailure.getMessage());
@@ -921,7 +942,7 @@ class NativeLoaderTest {
         // An unset user name fails closed too.
         Path unnamed = parentWithMode("relaxed-no-name", "0777");
         NativeLibraryExtractor noName =
-                relaxedExtractor(unnamed, ids(1000, 1000), identity("tester", "tester", null, "tester"), mockLogger());
+                relaxedExtractor(unnamed, NO_PROC, identity("tester", "tester", null, "tester"), mockLogger());
         assertThrows(NativeFileSecurity.VerificationException.class, () -> noName.prepare(product()));
     }
 
@@ -931,7 +952,7 @@ class NativeLoaderTest {
         Path own = privateDirectory(temporaryDirectory.resolve("relaxed-safe-nolookup"));
         // user.name cannot be resolved, but the parent is safe, so the probe identity is used as before.
         NativeLibraryExtractor extractor =
-                relaxedExtractor(own, ids(1000, 1000), identity("tester", "tester", "tester", null), mockLogger());
+                relaxedExtractor(own, ids(-1, 1000), identity("tester", "tester", "tester", null), mockLogger());
         extractor.prepare(product());
         extractor.allCandidatesFailed();
     }
@@ -967,10 +988,60 @@ class NativeLoaderTest {
         NativeProductCatalog hashed = NativeProductCatalog.parse(hashedCatalog("0".repeat(64)), path -> true);
         NativeLibraryExtractor mismatch = relaxedExtractor(shared, ids(1000, 1000), lookup, mockLogger());
         List<Path> loaded = new ArrayList<>();
-        assertThrows(
+        ExceptionInInitializerError failure = assertThrows(
                 ExceptionInInitializerError.class,
                 () -> new NativeLibraryLoader(hashed, mismatch, loaded::add, mockLogger()).load("linux", "amd64"));
         assertTrue(loaded.isEmpty());
+        assertTrue(
+                java.util.Arrays.stream(failure.getSuppressed())
+                        .anyMatch(cause -> cause.getMessage().contains("SHA-256 mismatch")),
+                "the hash mismatch must be the recorded cause");
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void relaxedModeUsesTheProcUidSoAnUnresolvableUserNameDoesNotBlockTheLoad() throws Exception {
+        // Arbitrary container uid: user.name is unresolvable, /proc is readable.
+        Path shared = parentWithMode("relaxed-no-passwd", "0777");
+        NativeLibraryExtractor extractor =
+                relaxedExtractor(shared, ids(4242, 4242), identity("nobody", "nobody", "?", null), mockLogger());
+        Path library = extractor.prepare(product());
+        assertTrue(library.startsWith(shared));
+        extractor.allCandidatesFailed();
+    }
+
+    @Test
+    @EnabledOnOs(OS.LINUX)
+    void relaxedModeProcUidStillRejectsForeignBaseRunAndLibraryOwners() throws Exception {
+        java.util.concurrent.atomic.AtomicReference<String> foreignName =
+                new java.util.concurrent.atomic.AtomicReference<>();
+        Path shared = parentWithMode("relaxed-proc-owners", "0777");
+        NativeFileSecurity.UnixIds byName = idsBy(
+                4242,
+                path -> path.equals(shared) || !path.getFileName().toString().equals(foreignName.get()) ? 4242 : 7);
+        NativeFileSecurity.OwnerLookup throwing = identity("x", "x", "?", null);
+        NativeLibraryExtractor extractor = relaxedExtractor(shared, byName, throwing, mockLogger());
+        extractor.prepare(product());
+        Path library = extractor.extract(product());
+        Path run = library.getParent();
+        Path base = run.getParent();
+        extractor.verifyBeforeLoad(product(), library);
+        for (Path victim : List.of(library, run, base)) {
+            foreignName.set(victim.getFileName().toString());
+            IOException failure = assertThrows(IOException.class, () -> extractor.verifyBeforeLoad(product(), library));
+            assertInstanceOf(NativeFileSecurity.VerificationException.class, failure);
+            assertTrue(failure.getMessage().contains("owner uid=7"), failure.getMessage());
+        }
+        foreignName.set(null);
+        extractor.allCandidatesFailed();
+
+        // A foreign base directory is already rejected by prepare.
+        Path other = parentWithMode("relaxed-proc-base", "0777");
+        NativeLibraryExtractor foreignBase =
+                relaxedExtractor(other, idsBy(4242, path -> path.equals(other) ? 4242 : 7), throwing, mockLogger());
+        privateDirectory(other.resolve(NativeLibraryExtractor.baseDirectoryName(USER)));
+        IOException baseFailure = assertThrows(IOException.class, () -> foreignBase.prepare(product()));
+        assertTrue(baseFailure.getMessage().contains("not owned by"), baseFailure.getMessage());
     }
 
     @Test
@@ -1008,7 +1079,7 @@ class NativeLoaderTest {
         NativeLibraryExtractor extractor = extractor(
                 "linux",
                 path -> new ByteArrayInputStream(new byte[] {1}),
-                new NativeFileSecurity.PosixSecurity(broken));
+                new NativeFileSecurity.PosixSecurity(broken, NO_PROC));
         assertThrows(IOException.class, () -> extractor.prepare(product()));
     }
 
