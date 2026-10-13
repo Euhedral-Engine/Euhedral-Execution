@@ -203,7 +203,12 @@ class LinuxSystemLayoutFixtureTest {
     void offlineCpuIsExcluded(@TempDir Path tempDir) throws IOException {
         writeCpu(tempDir, 0, "0", "0");
         writeCpu(tempDir, 1, "0", "1");
-        Files.createDirectories(tempDir.resolve("cpu2")); // offline: no topology directory
+        Path offlineCache = Files.createDirectories(tempDir.resolve("cpu2/cache/index0"));
+        Files.writeString(offlineCache.resolve("type"), "Data");
+        Files.writeString(offlineCache.resolve("level"), "1");
+        Files.writeString(offlineCache.resolve("size"), "32K");
+        Files.writeString(offlineCache.resolve("coherency_line_size"), "64");
+        Files.writeString(offlineCache.resolve("shared_cpu_map"), "4");
         writeCpu(tempDir, 3, "0", "3");
         Files.writeString(tempDir.resolve("online"), "0-1,3\n");
 
@@ -216,6 +221,25 @@ class LinuxSystemLayoutFixtureTest {
         assertEquals(1, layout.getCoreInfoMap().get(core0).getCpuSet().cardinality());
         assertNotEquals(core0, layout.getCpuInfoMap().get(1).core());
         assertNotEquals(core0, layout.getCpuInfoMap().get(3).core());
+        assertNull(layout.getCacheLayout().get(2));
+        for (var cacheLayout : layout.getCacheLayout().values()) {
+            assertTrue(!cacheLayout.getL1Mask().get(2));
+            assertTrue(!cacheLayout.getL2Mask().get(2));
+            assertTrue(!cacheLayout.getL3Mask().get(2));
+        }
+    }
+
+    @Test
+    void noTopologyAtAllYieldsOneSocketAndDistinctCores(@TempDir Path tempDir) throws IOException {
+        for (int cpu = 0; cpu < 4; cpu++) {
+            Files.createDirectories(tempDir.resolve("cpu" + cpu));
+        }
+
+        LinuxSystemLayout layout = new LinuxSystemLayout(tempDir);
+
+        assertEquals(4, layout.getCpuInfoMap().size());
+        assertEquals(1, layout.getSocketInfoMap().size());
+        assertEquals(4, layout.getCoreInfoMap().size());
     }
 
     @Test
@@ -244,16 +268,19 @@ class LinuxSystemLayoutFixtureTest {
     }
 
     @Test
-    void missingPackageIdDoesNotMergeIntoPackageZero(@TempDir Path tempDir) throws IOException {
+    void missingPackageIdSharesOneUnknownPackage(@TempDir Path tempDir) throws IOException {
         writeCpu(tempDir, 0, "0", "0");
         writeCpu(tempDir, 1, null, "0");
+        writeCpu(tempDir, 2, null, "1");
 
         LinuxSystemLayout layout = new LinuxSystemLayout(tempDir);
 
         assertEquals(2, layout.getSocketInfoMap().size());
-        assertNotEquals(
-                layout.getCpuInfoMap().get(0).socket(),
-                layout.getCpuInfoMap().get(1).socket());
+        int real = layout.getCpuInfoMap().get(0).socket();
+        assertNotEquals(real, layout.getCpuInfoMap().get(1).socket());
+        assertEquals(
+                layout.getCpuInfoMap().get(1).socket(),
+                layout.getCpuInfoMap().get(2).socket());
         assertNotEquals(
                 layout.getCpuInfoMap().get(0).core(),
                 layout.getCpuInfoMap().get(1).core());
@@ -264,6 +291,12 @@ class LinuxSystemLayoutFixtureTest {
         assertEquals(bits(0, 1, 2, 3, 6, 8, 9), LinuxSystemLayout.parseCpuList("0-3,6,8-9"));
         assertEquals(bits(4), LinuxSystemLayout.parseCpuList(" 4\n"));
         assertEquals(bits(0, 1, 5), LinuxSystemLayout.parseCpuList(" 0 - 1 , 5 \n"));
+    }
+
+    @Test
+    void parseCpuListEnforcesMaximumCpuId() {
+        assertEquals(bits(1_048_575), LinuxSystemLayout.parseCpuList("1048575"));
+        assertNull(LinuxSystemLayout.parseCpuList("1048576"));
     }
 
     @Test

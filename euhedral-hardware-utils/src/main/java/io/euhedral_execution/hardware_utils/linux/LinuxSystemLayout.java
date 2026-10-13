@@ -77,10 +77,11 @@ public final class LinuxSystemLayout {
         for (Path directory : directories) {
             int cpu = parseCpu(directory.getFileName().toString());
             Path topology = directory.resolve("topology");
-            // A CPU without package or core identity must not merge into package 0 / core 0, so it
-            // gets a key unique to this CPU. die_id is absent on many kernels and keeps defaulting.
-            int packageId = parseAttrOrDefault(topology.resolve("physical_package_id"), syntheticId(cpu));
-            int coreId = parseAttrOrDefault(topology.resolve("core_id"), syntheticId(cpu));
+            // A CPU without package or core identity must not merge into package 0 / core 0.
+            // Missing package ids share one unknown package (no socket inflation); missing core ids are
+            // unique per CPU. die_id is absent on many kernels and keeps defaulting.
+            int packageId = parseAttrOrDefault(topology.resolve("physical_package_id"), UNKNOWN_PACKAGE_ID);
+            int coreId = parseAttrOrDefault(topology.resolve("core_id"), syntheticCoreId(cpu));
             int dieId = parseAttrOrDefault(topology.resolve("die_id"), 0);
             CacheScore cacheScore = collectCaches(directory.resolve("cache"), caches);
             raw.add(new RawCpu(cpu, packageId, dieId, coreId, frequencyScore(directory), cacheScore.value));
@@ -100,11 +101,17 @@ public final class LinuxSystemLayout {
         return new TopologyInput("linux", cpus, caches);
     }
 
-    /// Synthesized identity for a CPU that lacks a package or core id. The linux key encoding accepts only
-    /// decimal integers, so this is a negative value near `Integer.MIN_VALUE`; sysfs never reports ids in
-    /// that range, so it cannot collide with a real key, and it differs for every CPU.
-    private static int syntheticId(int cpu) {
-        return Integer.MIN_VALUE + cpu;
+    /// Shared package id for every CPU lacking `physical_package_id`. The linux key encoding accepts only
+    /// decimal integers, so this is `Integer.MIN_VALUE`, which sysfs never reports. Note that the
+    /// normalizer orders keys byte-wise, so `linux:package:-2147483648` sorts before `linux:package:0`
+    /// and takes socket index 0, shifting real packages up by one when any CPU lacks a package id.
+    private static final int UNKNOWN_PACKAGE_ID = Integer.MIN_VALUE;
+
+    /// Synthesized core id, unique per CPU and distinct from [#UNKNOWN_PACKAGE_ID] and real core ids.
+    /// Without an `online` file an offline directory lacking `topology/` also lands here: it becomes
+    /// its own core under the unknown package rather than a sibling of core 0.
+    private static int syntheticCoreId(int cpu) {
+        return Integer.MIN_VALUE + 1 + cpu;
     }
 
     /// Drops CPU directories that `<cpuRoot>/online` lists as offline. An absent or malformed file keeps
