@@ -57,6 +57,14 @@ public final class WindowsResources implements SystemSnapshotProvider {
     }
 
     private final AtomicReference<SystemSnapshot> snapshot = new AtomicReference<>();
+    private volatile DoubleGaugeSignal quotaExact = DoubleGaugeSignal.unsupported(0L);
+
+    /// Unrounded CPU quota from the most recent {@link #sampleFast(long)}. The long
+    /// {@code FastHardwareSample#quotaCapacityCpus()} truncates toward zero; this keeps the fraction.
+    public DoubleGaugeSignal quotaCapacityCpusExact() {
+        return quotaExact;
+    }
+
     private final long[] buffer;
     private final double[] lastIdle;
     private final double[] currentIdle;
@@ -172,6 +180,7 @@ public final class WindowsResources implements SystemSnapshotProvider {
 
             double quota = getCpuQuota();
             double quotaCpus = quota > 0.0 ? quota * span : span;
+            quotaExact = DoubleGaugeSignal.valid(quotaCpus, requestedAtNs);
 
             Arrays.fill(this.buffer, 0L);
             getCpuTimes(this.buffer);
