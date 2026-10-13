@@ -52,9 +52,6 @@ public final class TopologyQueries {
     public static CpuCacheLayout requireCacheLayout(TopologyModel model, int cpu) {
         CpuCacheLayout layout = model.cacheLayout().get(cpu);
         if (layout == null) {
-            if (isActiveCpu(model, cpu)) {
-                throw new IllegalArgumentException("cpu " + cpu + " has no cache layout");
-            }
             throw inactive("cpu ", cpu, "logical CPU", model.cpuInfo());
         }
         return layout;

@@ -47,6 +47,27 @@ class NullContractTest {
     }
 
     @Test
+    void strictTopologyAccessorsAreNotNullable() throws Exception {
+        for (String name : List.of("requireCpuInfo", "requireCoreInfo", "requireSocketInfo", "requireCacheLayout")) {
+            var method = SystemInfo.class.getMethod(name, int.class);
+            assertFalse(
+                    method.getAnnotatedReturnType().isAnnotationPresent(Nullable.class),
+                    "SystemInfo." + name + " throws for inactive IDs and must not be @Nullable");
+        }
+    }
+
+    @Test
+    void activeSocketsReturnAndElementsAreNotNullable() throws Exception {
+        var method = TopologyMapper.EffectiveSystemTopology.class.getMethod("activeSockets");
+        var returnType = method.getAnnotatedReturnType();
+        assertFalse(returnType.isAnnotationPresent(Nullable.class), "activeSockets is hole-free");
+        assertFalse(
+                ((AnnotatedParameterizedType) returnType)
+                        .getAnnotatedActualTypeArguments()[0].isAnnotationPresent(Nullable.class),
+                "activeSockets elements are never null");
+    }
+
+    @Test
     void effectiveSocketListElementsAreNullable() {
         var component = Arrays.stream(TopologyMapper.EffectiveSystemTopology.class.getRecordComponents())
                 .filter(c -> c.getName().equals("socketTopologies"))

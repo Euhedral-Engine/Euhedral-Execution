@@ -21,7 +21,8 @@ final class TopologyHelpers {
                         "linux", List.of(linuxCpu(0, 0, 0), linuxCpu(3, 0, 1), linuxCpu(7, 1, 0)), List.of()));
     }
 
-    /// Sparse CPUs {0, 1, 3, 4, 6, 7} over three sockets (one core each pair of CPUs).
+    /// Sparse CPUs {0, 1, 3, 6, 7} over three sockets: CPUs 0 and 1 share socket 0 (cores 0 and 1),
+    /// CPU 3 is alone on socket 1, and CPUs 6 and 7 share socket 2 (cores 0 and 1).
     static TopologyModel sparseThreeSocketModel() {
         return new TopologyNormalizer()
                 .normalize(new TopologyInput(

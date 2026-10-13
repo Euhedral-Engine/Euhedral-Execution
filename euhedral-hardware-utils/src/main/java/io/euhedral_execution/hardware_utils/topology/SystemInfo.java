@@ -236,7 +236,7 @@ public final class SystemInfo {
 
     /// Strict form of {@link #getCacheLayout(int)}.
     ///
-    /// @throws IllegalArgumentException if {@code cpu} is not active or has no cache layout
+    /// @throws IllegalArgumentException if {@code cpu} is not active
     public static CpuCacheLayout requireCacheLayout(int cpu) {
         return TopologyQueries.requireCacheLayout(TOPOLOGY_MODEL, cpu);
     }

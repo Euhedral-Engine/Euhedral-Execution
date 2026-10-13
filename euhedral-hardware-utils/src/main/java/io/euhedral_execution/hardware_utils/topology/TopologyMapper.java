@@ -277,7 +277,7 @@ public final class TopologyMapper {
         /// constructor, so this allocates a new unmodifiable list on every call.
         public List<EffectiveSocketTopology> activeSockets() {
             List<EffectiveSocketTopology> active = new ArrayList<>(effectiveSockets.cardinality());
-            for (EffectiveSocketTopology socket : socketTopologies) {
+            for (@Nullable EffectiveSocketTopology socket : socketTopologies) {
                 if (socket != null) {
                     active.add(socket);
                 }
