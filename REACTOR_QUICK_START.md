@@ -20,7 +20,7 @@ Add the Reactor integration to an application:
 <dependency>
   <groupId>io.euhedral-execution</groupId>
   <artifactId>euhedral-reactor-core</artifactId>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
 </dependency>
 ```
 

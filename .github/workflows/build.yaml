@@ -186,7 +186,12 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.check_version.outputs.is_snapshot == 'false'
         env:
           CURRENT_VERSION: ${{ steps.check_version.outputs.version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          # actions/checkout persists GITHUB_TOKEN as an http.extraheader, which overrides the
+          # app token in the remote URL and cannot push to the protected main branch.
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           BASE_VERSION=${CURRENT_VERSION%-SNAPSHOT}
           IFS='.' read -ra VERSION_PARTS <<< "$BASE_VERSION"
           
