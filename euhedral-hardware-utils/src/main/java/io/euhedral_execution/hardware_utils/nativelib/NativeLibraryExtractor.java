@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 final class NativeLibraryExtractor {
 
     static final String EXTRACT_DIRECTORY_PROPERTY = "io.euhedral.native.extract.dir";
+    static final String STRICT_PARENT_PROPERTY = "io.euhedral.native.extract.strictParent";
     static final long MAX_LIBRARY_BYTES = 67_108_864L;
     static final String BASE_DIRECTORY_PREFIX = "euhedral-native-v1-";
     private static final int MAX_USER_SEGMENT = 64;
@@ -54,9 +55,12 @@ final class NativeLibraryExtractor {
     private final Logger logger;
     private final long processId;
     private final @Nullable String userName;
+    private final boolean strictParent;
+    private final AtomicBoolean parentWarned = new AtomicBoolean();
     private final AtomicBoolean hookRegistered = new AtomicBoolean();
     // The shutdown hook thread reads these, so they must be safely published.
     private volatile @Nullable IOException prepareFailure;
+    private volatile boolean parentRejected;
     private volatile @Nullable Path baseDirectory;
     private volatile @Nullable Path runDirectory;
     private volatile @Nullable Path marker;
@@ -74,6 +78,7 @@ final class NativeLibraryExtractor {
             SecureRandom random,
             long processId,
             @Nullable String userName,
+            boolean strictParent,
             Logger logger) {
         this.operatingSystem = Objects.requireNonNull(operatingSystem, "operatingSystem");
         this.parent = Objects.requireNonNull(parent, "parent").toAbsolutePath().normalize();
@@ -84,6 +89,7 @@ final class NativeLibraryExtractor {
         this.random = Objects.requireNonNull(random, "random");
         this.processId = processId;
         this.userName = userName;
+        this.strictParent = strictParent;
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
@@ -98,6 +104,8 @@ final class NativeLibraryExtractor {
                 new SecureRandom(),
                 ProcessHandle.current().pid(),
                 System.getProperty("user.name"),
+                // Read once: the parent policy of a process must not change between candidates.
+                Boolean.getBoolean(STRICT_PARENT_PROPERTY),
                 logger);
     }
 
@@ -363,7 +371,46 @@ final class NativeLibraryExtractor {
             throw new IOException(
                     "native-loader: extraction parent must be an absolute existing writable directory: " + parent);
         }
-        security.verifySafeParent(parent);
+        if (strictParent) {
+            try {
+                security.verifySafeParent(parent);
+            } catch (NativeFileSecurity.VerificationException e) {
+                parentRejected = true;
+                throw e;
+            }
+            return;
+        }
+        NativeFileSecurity.ParentRisk risk = security.assessParent(parent);
+        if (risk != null) {
+            // The parent stays tolerated; the security policy distrusts any identity probed inside it.
+            security.acceptUnsafeParent();
+            if (parentWarned.compareAndSet(false, true)) {
+                long uid = risk.ownerUid();
+                if (uid < 0) {
+                    try {
+                        uid = security.parentOwnerUid(parent);
+                    } catch (IOException | RuntimeException e) {
+                        uid = -1;
+                    }
+                }
+                logger.warn(
+                        "native-loader: extraction parent {} (mode {}, owner uid {}) is not private: {}. Another"
+                                + " local user able to write to this directory could swap the extracted library between"
+                                + " verification and load. Set -Dio.euhedral.native.extract.dir to a private directory"
+                                + " owned by this user, or set -D{}=true to refuse such a parent.",
+                        parent,
+                        risk.mode(),
+                        uid < 0 ? "unknown" : Long.toString(uid),
+                        risk.threat(),
+                        STRICT_PARENT_PROPERTY);
+            }
+        }
+    }
+
+    /// True when strict mode rejected the extraction parent; the loader diagnostic names the parent as a cause only
+    /// then.
+    boolean parentRejectedByStrictMode() {
+        return parentRejected;
     }
 
     private void createOrAdoptDirectory(Path directory, Path containing) throws IOException {
