@@ -25,7 +25,11 @@ final class NativeLibraryLoader {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
-    private static String diagnostic(String operatingSystem, String architecture, List<NativeLoadFailure> failures) {
+    private static String diagnostic(
+            String operatingSystem,
+            String architecture,
+            List<NativeLoadFailure> failures,
+            boolean strictParentRejected) {
         StringBuilder message = new StringBuilder("native-loader: unable to load a native product for ")
                 .append(operatingSystem)
                 .append('/')
@@ -48,9 +52,13 @@ final class NativeLibraryLoader {
             message.append('.');
         }
         return message.append(
-                        " Possible causes: a noexec mount, or an unsafe extraction parent (shared-writable without sticky bit, "
-                                + "or foreign-owned); set -Dio.euhedral.native.extract.dir to a private directory owned by "
-                                + "this user (absolute path on an executable filesystem).")
+                        strictParentRejected
+                                ? " Possible causes: a noexec mount, or an unsafe extraction parent (shared-writable without"
+                                        + " sticky bit, or foreign-owned, rejected because strict mode is enabled); set"
+                                        + " -Dio.euhedral.native.extract.dir to a private directory owned by this user"
+                                        + " (absolute path on an executable filesystem)."
+                                : " Possible causes: a noexec mount; set -Dio.euhedral.native.extract.dir to a private"
+                                        + " directory owned by this user (absolute path on an executable filesystem).")
                 .toString();
     }
 
@@ -94,8 +102,8 @@ final class NativeLibraryLoader {
         }
 
         extractor.allCandidatesFailed();
-        ExceptionInInitializerError error =
-                new ExceptionInInitializerError(diagnostic(canonicalOs, canonicalArchitecture, failures));
+        ExceptionInInitializerError error = new ExceptionInInitializerError(
+                diagnostic(canonicalOs, canonicalArchitecture, failures, extractor.parentRejectedByStrictMode()));
         failures.forEach(failure -> error.addSuppressed(failure.cause()));
         throw error;
     }

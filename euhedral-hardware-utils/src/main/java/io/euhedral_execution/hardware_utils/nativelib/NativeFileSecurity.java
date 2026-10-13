@@ -2,6 +2,7 @@ package io.euhedral_execution.hardware_utils.nativelib;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -20,6 +21,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 interface NativeFileSecurity {
 
@@ -81,10 +83,11 @@ interface NativeFileSecurity {
                 // The probe supplies the identity for verify() ownership checks (on Linux too); the parent check
                 // reads the effective uid from /proc/self/status when it is readable and uses the probe only
                 // otherwise. (The owner of /proc/self is unreliable: root for non-dumpable processes.)
-                // verifySafeParent has required a parent owned by this user or by root (by root alone when it is
-                // shared-writable), so other users cannot unlink and recreate the probe. Residue: a non-shared
-                // parent owned by another user who can swap the probe is an operator misconfiguration of the
-                // extract directory.
+                // In strict mode verifySafeParent has required a parent owned by this user or by root (by root
+                // alone when it is shared-writable), so other users cannot unlink and recreate the probe. When an
+                // unsafe parent is tolerated (relaxed mode) another user may be able to swap the probe and forge
+                // the identity, so PosixSecurity cross-checks the probe owner against userName()/lookupUser() and
+                // fails closed on any disagreement or lookup failure.
                 Path probe = Files.createTempFile(
                         probeParent, ".euhedral-owner-probe-", null, posixAttributes(probeParent, PRIVATE_FILE));
                 UserPrincipal owner;
@@ -106,7 +109,21 @@ interface NativeFileSecurity {
         UserPrincipal ownerOf(Path path) throws IOException;
 
         UserPrincipal currentUser(Path probeParent) throws IOException;
+
+        /// The login name used to cross-check a probe identity taken inside an unsafe parent; `user.name` by default.
+        default @Nullable String userName() {
+            return System.getProperty("user.name");
+        }
+
+        /// Resolves `name` through the platform user database (not through any file in the extraction parent).
+        default UserPrincipal lookupUser(String name) throws IOException {
+            return FileSystems.getDefault().getUserPrincipalLookupService().lookupPrincipalByName(name);
+        }
     }
+
+    /// An extraction parent that fails the safe-parent rules. `message` is the exact strict-mode rejection text;
+    /// `mode` is the octal permission string (or `unknown`), `ownerUid` is `-1` when it could not be read.
+    record ParentRisk(String message, String mode, long ownerUid) {}
 
     /// Numeric uid source, independent of any file inside the extraction parent. `effectiveUid` is read from
     /// `/proc/self/status` (Linux); it is `-1` when unavailable (e.g. macOS), in which case the probe identity is used.
@@ -173,15 +190,26 @@ interface NativeFileSecurity {
         }
     }
 
-    /// Rejects an extraction parent into which another user could plant or rename entries. Only POSIX policies
-    /// enforce this.
+    /// Strict check: rejects (with a [VerificationException]) an extraction parent into which another user could
+    /// plant or rename entries. Only POSIX policies enforce this.
     default void verifySafeParent(Path parent) throws IOException {}
+
+    /// Relaxed-mode counterpart of [#verifySafeParent]: returns the risk instead of throwing, or `null` when the
+    /// parent passes every rule. I/O failures still propagate.
+    default @Nullable ParentRisk assessParent(Path parent) throws IOException {
+        return null;
+    }
+
+    /// Called when the caller proceeds although [#assessParent] reported a risk. A policy that derives the process
+    /// identity from a probe file inside the parent must stop trusting that probe on its own.
+    default void acceptUnsafeParent() {}
 
     final class PosixSecurity implements NativeFileSecurity {
 
         private final OwnerLookup ownerLookup;
         private final UnixIds unixIds;
         private volatile UserPrincipal currentUser;
+        private volatile boolean unsafeParent;
 
         PosixSecurity() {
             this(OwnerLookup.DEFAULT, UnixIds.DEFAULT);
@@ -209,9 +237,39 @@ interface NativeFileSecurity {
             UserPrincipal cached = currentUser;
             if (cached == null) {
                 cached = ownerLookup.currentUser(probeParent);
+                if (unsafeParent) {
+                    crossCheck(cached);
+                }
                 currentUser = cached;
             }
             return cached;
+        }
+
+        /// The probe is a file this process created inside the parent. When the parent is unsafe, another user may
+        /// have swapped it, so the owner it reports is attacker-controlled and cannot anchor the ownership checks on
+        /// its own. The login name is resolved through the platform user database instead, which the parent cannot
+        /// influence; the probe owner must equal it. A missing name, a failed lookup (e.g. an arbitrary container
+        /// uid without a passwd entry) or a disagreement fails closed rather than falling back to the probe.
+        private void crossCheck(UserPrincipal probeOwner) throws IOException {
+            String name = ownerLookup.userName();
+            if (name == null || name.isBlank()) {
+                throw new VerificationException("native-loader: cannot confirm the current user of an unsafe"
+                        + " extraction parent: user.name is unset; set -Dio.euhedral.native.extract.dir to a private"
+                        + " directory you own");
+            }
+            UserPrincipal named;
+            try {
+                named = ownerLookup.lookupUser(name);
+            } catch (IOException | RuntimeException e) {
+                throw new VerificationException("native-loader: cannot confirm the current user of an unsafe"
+                        + " extraction parent: lookup of user '" + name + "' failed (" + e + "); set"
+                        + " -Dio.euhedral.native.extract.dir to a private directory you own");
+            }
+            if (!probeOwner.equals(named)) {
+                throw new VerificationException("native-loader: identity probe in an unsafe extraction parent is"
+                        + " owned by " + probeOwner + " but user '" + name + "' resolves to " + named
+                        + "; refusing to trust it");
+            }
         }
 
         private void verify(Path path, Path probeParent, boolean directory) throws IOException {
@@ -261,16 +319,27 @@ interface NativeFileSecurity {
         }
 
         /// Parent rules (POSIX, `unix` view available):
-        /// - group/other-writable without sticky: rejected (entries could be renamed or replaced);
-        /// - group/other-writable with sticky: must be owned by root, because a sticky directory's owner can still
-        ///   delete or rename entries and clear the bit;
-        /// - otherwise: owned by root or by the current user.
+        /// - group/other-writable without sticky: unsafe (entries could be renamed or replaced);
+        /// - group/other-writable with sticky: unsafe unless owned by root, because a sticky directory's owner can
+        ///   still delete or rename entries and clear the bit;
+        /// - otherwise: unsafe unless owned by root or by the current user.
         /// The current user is the effective uid from `/proc/self/status` where readable, else the owner of a probe
-        /// file (macOS). Not checked, and left to the operator who configures `-Dio.euhedral.native.extract.dir`:
-        /// ancestors of the parent (a non-sticky, other-writable ancestor lets the parent itself be renamed), and a
-        /// non-shared parent owned by another user when the identity came from the probe.
+        /// file (macOS). This method enforces the rules strictly (fail closed); the extractor's default relaxed mode
+        /// uses [#assessParent] and proceeds with a warning, and then [#acceptUnsafeParent] makes the probe identity
+        /// subject to a user-database cross-check. Not checked, and left to the operator who configures
+        /// `-Dio.euhedral.native.extract.dir`: ancestors of the parent (a non-sticky, other-writable ancestor lets
+        /// the parent itself be renamed), and a non-shared parent owned by another user when the identity came from
+        /// the probe.
         @Override
         public void verifySafeParent(Path directory) throws IOException {
+            ParentRisk risk = assessParent(directory);
+            if (risk != null) {
+                throw new VerificationException(risk.message());
+            }
+        }
+
+        @Override
+        public @Nullable ParentRisk assessParent(Path directory) throws IOException {
             boolean unix = Files.getFileStore(directory).supportsFileAttributeView("unix");
             boolean sticky = false;
             int mode;
@@ -295,18 +364,18 @@ interface NativeFileSecurity {
                 }
                 mode = bits;
             }
+            String modeText = String.format("%04o", mode & 07777);
             boolean shared = (mode & 022) != 0;
+            long owner = unix ? unixIds.ownerUid(directory) : -1;
             if (shared && !sticky) {
-                throw new VerificationException("native-loader: extraction parent " + directory + " has mode "
-                        + String.format("%04o", mode & 07777)
-                        + ", which is group- or other-writable without the sticky bit; use a private directory");
+                return new ParentRisk(
+                        "native-loader: extraction parent " + directory + " has mode " + modeText
+                                + ", which is group- or other-writable without the sticky bit; use a private directory",
+                        modeText,
+                        owner);
             }
-            if (!unix) {
-                return;
-            }
-            long owner = unixIds.ownerUid(directory);
-            if (owner == 0) {
-                return;
+            if (!unix || owner == 0) {
+                return null;
             }
             boolean ours;
             if (shared) {
@@ -317,12 +386,24 @@ interface NativeFileSecurity {
                         ? owner == effective
                         : currentUser(directory).equals(ownerLookup.ownerOf(directory));
             }
-            if (!ours) {
-                throw new VerificationException("native-loader: extraction parent " + directory + " is owned by uid "
-                        + owner + "; it must be owned by root"
-                        + (shared ? " (it is shared-writable)" : " or the current user")
-                        + ". Set -Dio.euhedral.native.extract.dir to a private directory you own.");
+            if (ours) {
+                return null;
             }
+            return new ParentRisk(
+                    "native-loader: extraction parent " + directory + " is owned by uid " + owner
+                            + "; it must be owned by root"
+                            + (shared ? " (it is shared-writable)" : " or the current user")
+                            + ". Set -Dio.euhedral.native.extract.dir to a private directory you own.",
+                    modeText,
+                    owner);
+        }
+
+        @Override
+        public void acceptUnsafeParent() {
+            // Drop any identity obtained before the parent was known to be unsafe; the next use re-probes and
+            // cross-checks it.
+            unsafeParent = true;
+            currentUser = null;
         }
 
         @Override

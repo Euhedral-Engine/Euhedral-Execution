@@ -207,9 +207,16 @@ Native Zig and C++ sources are owned by this module; there is no separate native
   holder-class idiom loads once. The catalog selects candidates by OS alias, architecture alias, and
   load order (glibc before musl on Linux). Libraries are extracted under `java.io.tmpdir` or the
   absolute `-Dio.euhedral.native.extract.dir`, with owner-only permissions and PID owner markers
-  for stale-directory handling. The extraction parent must be owned by the current user or root
-  (root only, and sticky, if it is shared-writable). Do not weaken permission checks, symlink
-  handling, or fail-loud diagnostics.
+  for stale-directory handling. By default a parent that is not private
+  (shared-writable without the sticky bit, sticky but not root-owned, or non-shared and owned by
+  another uid) is tolerated with one WARN per process naming its path, mode, owner uid, the swap
+  risk, and the remedy; when the identity then comes from the owner probe it is cross-checked
+  against the `user.name` user-database lookup and any mismatch or lookup failure fails the load.
+  `-Dio.euhedral.native.extract.strictParent=true` (read once at extractor construction) restores
+  fail-closed rejection: owned by the current user or root (root only, and sticky, if
+  shared-writable). The base directory, run directory and library stay strict in both modes (owner,
+  mode 0700, no symlink, `nlink == 1`, SHA-256 at copy time and before load, private at creation).
+  Do not weaken those checks, symlink handling, or fail-loud diagnostics.
 - `LinuxAffinity` and `WindowsAffinity` catch load failure and degrade to `UNSUPPORTED`.
   `MacosAffinity` lets it propagate, and `ThreadTools` catches the resulting `LinkageError`.
   Preserve the rule that a missing native library degrades affinity and topology to fallbacks
