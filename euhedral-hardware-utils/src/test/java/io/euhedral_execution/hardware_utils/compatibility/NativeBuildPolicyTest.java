@@ -87,6 +87,9 @@ class NativeBuildPolicyTest {
             String body = sysctlBody(src, function);
             int get = body.indexOf("GetStringUTFChars(");
             assertTrue(get >= 0, function + " must read its key");
+            int nullGuard = body.indexOf("if (jkey == NULL)");
+            assertTrue(
+                    nullGuard >= 0 && nullGuard < get, function + " must reject a null jkey before GetStringUTFChars");
             String afterGet = body.substring(body.indexOf(';', get) + 1).strip();
             assertTrue(
                     afterGet.startsWith("if (key == NULL)"),

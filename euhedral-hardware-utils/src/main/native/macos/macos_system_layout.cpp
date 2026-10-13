@@ -17,6 +17,9 @@ JNIEXPORT jlong JNICALL
 Java_io_euhedral_1execution_hardware_1utils_macos_MacosSystemLayout_getSysctlLong(JNIEnv *env,
                                                                 jclass clazz,
                                                                 jstring jkey) {
+  if (jkey == NULL) {
+    return 0;
+  }
   const char *key = env->GetStringUTFChars(jkey, NULL);
   if (key == NULL) {
     return 0;
@@ -34,6 +37,9 @@ JNIEXPORT jint JNICALL
 Java_io_euhedral_1execution_hardware_1utils_macos_MacosSystemLayout_getSysctlInt(JNIEnv *env,
                                                                jclass clazz,
                                                                jstring jkey) {
+  if (jkey == NULL) {
+    return 0;
+  }
   const char *key = env->GetStringUTFChars(jkey, NULL);
   if (key == NULL) {
     return 0;
@@ -51,6 +57,9 @@ JNIEXPORT jstring JNICALL
 Java_io_euhedral_1execution_hardware_1utils_macos_MacosSystemLayout_getSysctlString(JNIEnv *env,
                                                                   jclass clazz,
                                                                   jstring jkey) {
+  if (jkey == NULL) {
+    return NULL;
+  }
   const char *key = env->GetStringUTFChars(jkey, NULL);
   if (key == NULL) {
     return NULL;
