@@ -38,4 +38,36 @@ class MaskFormattingCompatibilityTest {
         assertThrows(NumberFormatException.class, () -> SystemInfo.fromHexMask("not-hex"));
         assertThrows(NumberFormatException.class, () -> SystemInfo.fromHexMask("0x"));
     }
+
+    @Test
+    void rejectsChunksWiderThan32Bits() {
+        assertThrows(IllegalArgumentException.class, () -> SystemInfo.fromHexMask("ffffffffff"));
+    }
+
+    @Test
+    void rejectsEmbeddedPrefix() {
+        assertThrows(IllegalArgumentException.class, () -> SystemInfo.fromHexMask("ff0x01"));
+    }
+
+    @Test
+    void acceptsUpperCasePrefix() {
+        assertEquals(BitSet.valueOf(new long[] {0x3L}), SystemInfo.fromHexMask("0X3"));
+    }
+
+    @Test
+    void highChunkMapsToBit32() {
+        BitSet expected = new BitSet();
+        expected.set(32);
+        assertEquals(expected, SystemInfo.fromHexMask("1,00000000"));
+    }
+
+    @Test
+    void roundTripsSparseHighBits() {
+        BitSet set = new BitSet();
+        set.set(0);
+        set.set(63);
+        set.set(64);
+        set.set(1023);
+        assertEquals(set, SystemInfo.fromHexMask(SystemInfo.toHexMask(set)));
+    }
 }
