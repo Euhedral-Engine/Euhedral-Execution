@@ -133,7 +133,9 @@ Paths are relative to `src/main/java/io/euhedral_execution/hardware_utils/` and
 
 - `PinnedThreadExecutor` creates one fresh thread per accepted command; it is not a worker pool. A
   process-wide registry holds one live executor per logical CPU. `get` never restarts an executor;
-  `getOrSetIfAbsent` validates the CPU against `SystemInfo.getCpuCount()` before narrowing.
+  every registry entry point (`get`, `getOrSetIfAbsent`) validates the CPU through one injectable
+  predicate (default: in span and in `SystemInfo.getCpuSet()`) and throws `IllegalArgumentException`
+  for holes; a valid id with no executor still returns `null` from `get`.
 - `shutdown`, `shutdownNow`, `close`, `start` (restart after shutdown), `closeAll`, the `Cleaner`
   action, and the single registry-wide JVM shutdown hook form one lifecycle. Preserve idempotence,
   exactly-once cleanup, and the rule that a closed tombstone is dropped only after its last task
