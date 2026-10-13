@@ -243,7 +243,8 @@ public abstract class ControlPlaneCache extends LatticeVertex implements Cloneab
         }
 
         int cpuCount = SystemInfo.getCpuCount();
-        int pos = cursor % cpuCount;
+        // The caller's cursor counts up without bound and wraps to negative values.
+        int pos = Math.floorMod(cursor, cpuCount);
         ControlPlaneCache target = (ControlPlaneCache) WORK_STEAL_SLOT.getAcquire(WORK_STEAL, pos);
         if (target == null) {
             return 0;

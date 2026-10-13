@@ -220,6 +220,19 @@ class ControlPlaneCachePartitionTest {
     }
 
     @Test
+    void workStealAcceptsAWrappedCursor() {
+        TestCache cache = cache(1, true);
+        AbstractFrame frame = unorderedFrame();
+        cache.push(frame);
+        int cpuCount = SystemInfo.getCpuCount();
+        // A negative cursor congruent to the fixture's CPU, as a wrapped counter reaches.
+        int wrapped = fixtureCpu + (Integer.MIN_VALUE / cpuCount) * cpuCount;
+        List<AbstractFrame> drained = new ArrayList<>();
+        assertEquals(1, cache.workSteal(drained::add, 1, wrapped));
+        assertSame(frame, drained.getFirst());
+    }
+
+    @Test
     void consumerCallbackFailureReleasesPartitionLock() throws ReflectiveOperationException {
         TestCache cache = cache(1, true);
         AbstractFrame frame = unorderedFrame();
