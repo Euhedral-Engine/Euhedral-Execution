@@ -66,12 +66,10 @@ class NativePackagingIT {
             });
             assertEquals(expectedClasses, actualClasses, "native-package: class inventory differs");
             assertEquals(EXACT_NON_CLASS_FILES, actualNonClasses, "native-package: resource inventory differs");
-            assertEquals(
-                    NativeManifestTest.CATALOG,
-                    new String(
-                            archive.getInputStream(archive.getJarEntry("META-INF/euhedral/native-products.tsv"))
-                                    .readAllBytes(),
-                            java.nio.charset.StandardCharsets.UTF_8));
+            NativeManifestTest.assertHashedCatalog(new String(
+                    archive.getInputStream(archive.getJarEntry("META-INF/euhedral/native-products.tsv"))
+                            .readAllBytes(),
+                    java.nio.charset.StandardCharsets.UTF_8));
 
             for (String product : NativeManifestTest.PRODUCT_PATHS) {
                 try (InputStream input = archive.getInputStream(archive.getJarEntry(product))) {

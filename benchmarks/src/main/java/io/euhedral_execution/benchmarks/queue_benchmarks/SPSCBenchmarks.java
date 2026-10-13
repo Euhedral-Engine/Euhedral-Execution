@@ -2,6 +2,8 @@ package io.euhedral_execution.benchmarks.queue_benchmarks;
 
 import io.euhedral_execution.data_structures.queues.SpscQueue;
 import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
+import io.euhedral_execution.hardware_utils.topology.SystemInfo;
+import java.util.BitSet;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import org.jctools.queues.MessagePassingQueue;
@@ -49,7 +51,13 @@ public class SPSCBenchmarks {
         @Setup(Level.Trial)
         public void setup(Blackhole blackhole) {
             consumer = new QueueConsumer(blackhole);
-            executor = PinnedThreadExecutor.getOrSetIfAbsent(2, "Prod", Thread.MAX_PRIORITY, false);
+            // Logical CPU ids can be sparse, so id 2 may be a hole; use the third active CPU instead.
+            BitSet activeCpus = SystemInfo.getCpuSet();
+            int producerCpu = activeCpus.nextSetBit(0);
+            for (int skipped = 0; skipped < 2 && producerCpu >= 0; skipped++) {
+                producerCpu = activeCpus.nextSetBit(producerCpu + 1);
+            }
+            executor = PinnedThreadExecutor.getOrSetIfAbsent(producerCpu, "Prod", Thread.MAX_PRIORITY, false);
         }
 
         @Setup(Level.Invocation)

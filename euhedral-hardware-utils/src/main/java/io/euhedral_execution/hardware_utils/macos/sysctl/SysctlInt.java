@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.macos.sysctl;
 
 import java.util.OptionalInt;
+import org.jspecify.annotations.Nullable;
 
 /// Type-safe integer sysctl key query helper.
 public final class SysctlInt {
@@ -13,7 +14,7 @@ public final class SysctlInt {
     }
 
     /// Query sysctl integer value using the specified sysctl provider.
-    public static OptionalInt query(SysctlProvider provider, String key) {
+    public static OptionalInt query(@Nullable SysctlProvider provider, @Nullable String key) {
         if (provider == null || key == null) {
             return OptionalInt.empty();
         }

@@ -3,12 +3,13 @@ package io.euhedral_execution.hardware_utils.affinity;
 import io.euhedral_execution.hardware_utils.linux.LinuxAffinity;
 import io.euhedral_execution.hardware_utils.macos.MacosAffinity;
 import io.euhedral_execution.hardware_utils.windows.WindowsAffinity;
+import org.jspecify.annotations.Nullable;
 
 public abstract sealed class ThreadPinner implements AffinityProvider
         permits LinuxAffinity, MacosAffinity, WindowsAffinity {
 
     private final AffinityCapability capability;
-    private final RawLocalityCall localityCall;
+    private final @Nullable RawLocalityCall localityCall;
     private final boolean currentCpuAvailable;
 
     /// Creates a platform facade whose common affinity path is unsupported.
@@ -20,12 +21,13 @@ public abstract sealed class ThreadPinner implements AffinityProvider
     ///
     /// @param capability   complete common-path behavior supplied by this facade
     /// @param localityCall raw setter for one locality tag and the neutral tag `0`
-    protected ThreadPinner(AffinityCapability capability, RawLocalityCall localityCall) {
+    protected ThreadPinner(AffinityCapability capability, @Nullable RawLocalityCall localityCall) {
         this(capability, localityCall, false);
     }
 
     /// Creates a facade with independently declared affinity and current-CPU operations.
-    protected ThreadPinner(AffinityCapability capability, RawLocalityCall localityCall, boolean currentCpuAvailable) {
+    protected ThreadPinner(
+            AffinityCapability capability, @Nullable RawLocalityCall localityCall, boolean currentCpuAvailable) {
         this.capability = capability;
         this.localityCall = localityCall;
         this.currentCpuAvailable = currentCpuAvailable;

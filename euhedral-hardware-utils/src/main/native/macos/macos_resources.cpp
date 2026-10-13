@@ -140,6 +140,31 @@ Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getCoreTypeMask
   return outerArray;
 }
 
+// proc_pid_rusage reports ri_user_time/ri_system_time in Mach absolute-time ticks, not
+// nanoseconds. Convert with the (process-constant) timebase. The timebase is read once under
+// pthread_once (libSystem; avoids C++ static-guard symbols from libc++abi). The product of a
+// 64-bit tick count and a 32-bit numerator is below 2^96, so a 128-bit intermediate cannot
+// overflow; the quotient is clamped to the jlong range.
+static mach_timebase_info_data_t g_machTimebase;
+static pthread_once_t g_machTimebaseOnce = PTHREAD_ONCE_INIT;
+
+static void initMachTimebase() {
+  mach_timebase_info_data_t tb;
+  memset(&tb, 0, sizeof(tb));
+  if (mach_timebase_info(&tb) != KERN_SUCCESS || tb.denom == 0) {
+    tb.numer = 1;
+    tb.denom = 1;
+  }
+  g_machTimebase = tb;
+}
+
+static jlong machTicksToNanos(uint64_t ticks) {
+  pthread_once(&g_machTimebaseOnce, initMachTimebase);
+  __uint128_t nanos = ((__uint128_t)ticks * g_machTimebase.numer) / g_machTimebase.denom;
+  if (nanos > (__uint128_t)INT64_MAX) return (jlong)INT64_MAX;
+  return (jlong)nanos;
+}
+
 // Process Rusage: Nanosecond CPU times & cumulative disk I/O bytes
 JNIEXPORT jboolean JNICALL
 Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getProcessRusageNative(
@@ -153,7 +178,7 @@ Java_io_euhedral_1execution_hardware_1utils_macos_MacosResources_getProcessRusag
   memset(&rusage, 0, sizeof(rusage));
 
   if (proc_pid_rusage(getpid(), RUSAGE_INFO_V3, (void **)&rusage) == 0) {
-    values[0] = (jlong)(rusage.ri_user_time + rusage.ri_system_time);
+    values[0] = machTicksToNanos(rusage.ri_user_time + rusage.ri_system_time);
     values[1] = (jlong)(rusage.ri_diskio_bytesread + rusage.ri_diskio_byteswritten);
   } else {
     struct rusage usage;

@@ -27,6 +27,7 @@ import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,7 @@ import org.slf4j.LoggerFactory;
 /// normalization, and cumulative I/O bytes.
 public final class WindowsResources implements SystemSnapshotProvider {
 
-    public static final WindowsResources INSTANCE;
+    public static final @Nullable WindowsResources INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsResources.class));
     private static final VarHandle LOCK_STATE;
 
@@ -56,7 +57,17 @@ public final class WindowsResources implements SystemSnapshotProvider {
         }
     }
 
-    private final AtomicReference<SystemSnapshot> snapshot = new AtomicReference<>();
+    private final AtomicReference<@Nullable SystemSnapshot> snapshot = new AtomicReference<>();
+    private volatile DoubleGaugeSignal quotaExact = DoubleGaugeSignal.unsupported(0L);
+
+    /// Unrounded CPU quota from the most recent {@link #sampleFast(long)} (unlike the Linux provider,
+    /// {@link #getSnapshot()} does not update it). It holds the latest sampled value, so callers
+    /// should compare its {@code observedAtNs} with the sample's timestamp. The long
+    /// {@code FastHardwareSample#quotaCapacityCpus()} truncates toward zero; this keeps the fraction.
+    public DoubleGaugeSignal quotaCapacityCpusExact() {
+        return quotaExact;
+    }
+
     private final long[] buffer;
     private final double[] lastIdle;
     private final double[] currentIdle;
@@ -116,7 +127,7 @@ public final class WindowsResources implements SystemSnapshotProvider {
     }
 
     @Override
-    public SystemSnapshot getSnapshot() {
+    public @Nullable SystemSnapshot getSnapshot() {
         acquireLock();
         try {
             long now = System.nanoTime();
@@ -172,6 +183,7 @@ public final class WindowsResources implements SystemSnapshotProvider {
 
             double quota = getCpuQuota();
             double quotaCpus = quota > 0.0 ? quota * span : span;
+            quotaExact = DoubleGaugeSignal.valid(quotaCpus, requestedAtNs);
 
             Arrays.fill(this.buffer, 0L);
             getCpuTimes(this.buffer);

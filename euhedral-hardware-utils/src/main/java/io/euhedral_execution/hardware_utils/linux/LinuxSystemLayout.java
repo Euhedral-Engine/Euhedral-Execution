@@ -11,6 +11,7 @@ import io.euhedral_execution.hardware_utils.topology.internal.MaskCodec;
 import io.euhedral_execution.hardware_utils.topology.internal.TopologyBootstrap;
 import io.euhedral_execution.hardware_utils.topology.internal.TopologyInput;
 import io.euhedral_execution.hardware_utils.topology.internal.TopologyModel;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyNormalizer;
 import io.euhedral_execution.hardware_utils.topology.internal.TopologyProvider;
 import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;
@@ -23,6 +24,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +36,7 @@ import org.slf4j.LoggerFactory;
 /// `null` holes for offline or unmapped CPU IDs.
 public final class LinuxSystemLayout {
 
-    public static final LinuxSystemLayout INSTANCE;
+    public static final @Nullable LinuxSystemLayout INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxSystemLayout.class));
     private static final Path CPU_ROOT = Path.of("/sys/devices/system/cpu");
 
@@ -57,7 +59,7 @@ public final class LinuxSystemLayout {
     /// Scans sysfs CPU root directory for `cpu\d+` subdirectories, collecting topology
     /// attributes, cache domains, and core classification data. Returns an empty `TopologyInput`
     /// if `cpuRoot` is absent or unreadable.
-    private static TopologyInput collect(Path cpuRoot) {
+    private static TopologyInput collect(@Nullable Path cpuRoot) {
         if (cpuRoot == null || !Files.isDirectory(cpuRoot)) {
             return new TopologyInput("linux", List.of(), List.of());
         }
@@ -70,13 +72,17 @@ public final class LinuxSystemLayout {
         } catch (IOException e) {
             return new TopologyInput("linux", List.of(), List.of());
         }
+        directories = retainOnline(cpuRoot, directories);
         List<RawCpu> raw = new ArrayList<>(directories.size());
         List<CacheDomain> caches = new ArrayList<>();
         for (Path directory : directories) {
             int cpu = parseCpu(directory.getFileName().toString());
             Path topology = directory.resolve("topology");
-            int packageId = parseAttrOrDefault(topology.resolve("physical_package_id"), 0);
-            int coreId = parseAttrOrDefault(topology.resolve("core_id"), 0);
+            // A CPU without package or core identity must not merge into package 0 / core 0.
+            // Missing package ids share one unknown package (no socket inflation); missing core ids are
+            // unique per CPU. die_id is absent on many kernels and keeps defaulting.
+            int packageId = parseAttrOrDefault(topology.resolve("physical_package_id"), UNKNOWN_PACKAGE_ID);
+            int coreId = parseAttrOrDefault(topology.resolve("core_id"), syntheticCoreId(cpu));
             int dieId = parseAttrOrDefault(topology.resolve("die_id"), 0);
             CacheScore cacheScore = collectCaches(directory.resolve("cache"), caches);
             raw.add(new RawCpu(cpu, packageId, dieId, coreId, frequencyScore(directory), cacheScore.value));
@@ -94,6 +100,97 @@ public final class LinuxSystemLayout {
                 })
                 .toList();
         return new TopologyInput("linux", cpus, caches);
+    }
+
+    /// Shared package id for every CPU lacking `physical_package_id`. The linux key encoding accepts only
+    /// decimal integers, so this is `Integer.MIN_VALUE`, which sysfs never reports. Note that the
+    /// normalizer orders keys byte-wise, so `linux:package:-2147483648` sorts before `linux:package:0`
+    /// and takes socket index 0, shifting real packages up by one when any CPU lacks a package id.
+    private static final int UNKNOWN_PACKAGE_ID = Integer.MIN_VALUE;
+
+    /// Synthesized core id, unique per CPU and distinct from [#UNKNOWN_PACKAGE_ID] and real core ids.
+    /// Without an `online` file an offline directory lacking `topology/` also lands here: it becomes
+    /// its own core under the unknown package rather than a sibling of core 0.
+    private static int syntheticCoreId(int cpu) {
+        return Integer.MIN_VALUE + 1 + cpu;
+    }
+
+    /// Drops CPU directories that `<cpuRoot>/online` lists as offline. An absent or malformed file keeps
+    /// every directory.
+    private static List<Path> retainOnline(Path cpuRoot, List<Path> directories) {
+        Path file = cpuRoot.resolve("online");
+        if (!Files.isRegularFile(file)) {
+            return directories;
+        }
+        String text;
+        try {
+            text = Files.readString(file);
+        } catch (IOException e) {
+            LOGGER.debug("Cannot read online CPU list {}; using all CPU directories", file, e);
+            return directories;
+        }
+        BitSet online = parseCpuList(text);
+        if (online == null) {
+            LOGGER.debug("Malformed online CPU list '{}'; using all CPU directories", text.trim());
+            return directories;
+        }
+        return directories.stream()
+                .filter(path -> online.get(parseCpu(path.getFileName().toString())))
+                .toList();
+    }
+
+    /// Parses Linux cpulist syntax such as `0-3,6,8-11`. Returns `null` (unknown) for empty or
+    /// malformed input, including reversed ranges.
+    static @Nullable BitSet parseCpuList(@Nullable String text) {
+        if (text == null) {
+            return null;
+        }
+        String trimmed = text.trim();
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+        BitSet result = new BitSet();
+        int start = 0;
+        while (start <= trimmed.length()) {
+            int comma = trimmed.indexOf(',', start);
+            int end = comma < 0 ? trimmed.length() : comma;
+            String item = trimmed.substring(start, end).trim();
+            int dash = item.indexOf('-');
+            int low;
+            int high;
+            if (dash < 0) {
+                low = parseCpuNumber(item);
+                high = low;
+            } else {
+                low = parseCpuNumber(item.substring(0, dash).trim());
+                high = parseCpuNumber(item.substring(dash + 1).trim());
+            }
+            if (low < 0 || high < low) {
+                return null;
+            }
+            result.set(low, high + 1);
+            if (comma < 0) {
+                break;
+            }
+            start = comma + 1;
+        }
+        return result;
+    }
+
+    /// Parses a non-negative decimal CPU number of plain digits, or returns -1.
+    private static int parseCpuNumber(String value) {
+        if (value.isEmpty() || value.length() > 7) {
+            return -1;
+        }
+        int result = 0;
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c < '0' || c > '9') {
+                return -1;
+            }
+            result = result * 10 + (c - '0');
+        }
+        return result <= TopologyNormalizer.MAX_LOGICAL_CPU_ID ? result : -1;
     }
 
     /// Safely parses an integer attribute from a file, returning `defaultValue` if the file

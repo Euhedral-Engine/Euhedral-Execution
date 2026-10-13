@@ -38,6 +38,7 @@ monitor	monitor.sampling
 monitor	monitor.sampling.samples
 monitor	topology
 monitor	util
+monitor	util.internal
 monitor.internal	linux
 monitor.internal	macos
 monitor.internal	monitor

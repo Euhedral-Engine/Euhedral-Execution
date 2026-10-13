@@ -8,15 +8,15 @@ import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// Native Windows thread affinity, CPU discovery, and timer resolution provider facade.
 public final class WindowsAffinity extends ThreadPinner {
 
-    public static final WindowsAffinity INSTANCE;
+    public static final @Nullable WindowsAffinity INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsAffinity.class));
-    private static final AtomicBoolean WIN_RES_SET = new AtomicBoolean(false);
 
     static {
         boolean loaded = false;
@@ -35,9 +35,26 @@ public final class WindowsAffinity extends ThreadPinner {
     }
 
     private final AtomicInteger windowsResolution100ns = new AtomicInteger(-1);
+    private final AtomicBoolean timerResolutionSet = new AtomicBoolean(false);
+    private final TimerResolutionCall timerCall;
 
     private WindowsAffinity(boolean jniLoaded) {
-        super(jniLoaded ? AffinityCapability.EXACT : AffinityCapability.UNSUPPORTED, null, jniLoaded);
+        this(
+                jniLoaded ? AffinityCapability.EXACT : AffinityCapability.UNSUPPORTED,
+                jniLoaded,
+                WindowsAffinity::ntSetTimerResolution);
+    }
+
+    /// Package-private seam so tests can replace the native timer call without Windows.
+    WindowsAffinity(AffinityCapability capability, boolean jniLoaded, TimerResolutionCall timerCall) {
+        super(capability, null, jniLoaded);
+        this.timerCall = timerCall;
+    }
+
+    /// Raw timer-resolution call: returns the applied resolution in 100 ns units.
+    @FunctionalInterface
+    interface TimerResolutionCall {
+        int apply(int resolution100ns, boolean set);
     }
 
     private static native int setThreadAffinity(long[] masks);
@@ -52,7 +69,7 @@ public final class WindowsAffinity extends ThreadPinner {
 
     /// Captures the calling thread's current exact CPU mask without changing it.
     @Override
-    public long[] captureAffinity() {
+    public long @Nullable [] captureAffinity() {
         if (capability() == AffinityCapability.UNSUPPORTED) {
             return null;
         }
@@ -95,20 +112,31 @@ public final class WindowsAffinity extends ThreadPinner {
         return WindowsAffinityCalls.apply(masks, WindowsAffinity::setThreadAffinity);
     }
 
+    /// Requests a process-wide timer resolution. Validation runs first, so a bad argument never
+    /// consumes the one-shot slot. Native failures release the slot so a later call can retry.
     @Override
     public boolean setTimerResolution(long nanos) {
-        if (!WIN_RES_SET.compareAndSet(false, true)) {
+        if (nanos < 0) {
+            throw new IllegalArgumentException("Cannot set negative resolution: " + nanos);
+        }
+        if (capability() == AffinityCapability.UNSUPPORTED) {
+            return false;
+        }
+        if (!timerResolutionSet.compareAndSet(false, true)) {
             LOGGER.error("Windows timer resolution has already been set.");
             return false;
         }
 
-        if (nanos < 0) {
-            throw new IllegalArgumentException("Cannot set negative resolution: " + nanos);
-        }
         nanos = Math.max(nanos, 1L);
-
         int res = (int) (Math.min(Integer.MAX_VALUE, nanos) / 100L);
-        int applied = ntSetTimerResolution(res, true);
+        int applied;
+        try {
+            applied = timerCall.apply(res, true);
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.error("Failed to set Windows timer resolution.", e);
+            timerResolutionSet.set(false);
+            return false;
+        }
 
         if (!this.windowsResolution100ns.compareAndSet(-1, applied)) {
             LOGGER.error("Failed to set timer resolution. Already set. Desired {}", nanos);
@@ -121,15 +149,24 @@ public final class WindowsAffinity extends ThreadPinner {
                     .addShutdownHook(new Thread(
                             () -> {
                                 try {
-                                    ntSetTimerResolution(this.windowsResolution100ns.getAcquire(), false);
-                                } catch (Exception ignored) {
+                                    timerCall.apply(this.windowsResolution100ns.getAcquire(), false);
+                                } catch (RuntimeException | LinkageError ignored) {
                                     // Ignore on shutdown
                                 }
                             },
                             "win-timer-release"));
         } catch (Exception e) {
             LOGGER.error("Failed to set Windows timer resolution.", e);
-            WIN_RES_SET.set(false);
+            // The resolution is already applied natively and no hook will release it, so release it now.
+            // Best-effort: a failure here is logged and the slot is still freed.
+            try {
+                timerCall.apply(this.windowsResolution100ns.getAcquire(), false);
+            } catch (RuntimeException | LinkageError releaseFailure) {
+                LOGGER.error(
+                        "Failed to restore Windows timer resolution after hook registration failure.", releaseFailure);
+            }
+            this.windowsResolution100ns.set(-1);
+            timerResolutionSet.set(false);
             return false;
         }
         return true;

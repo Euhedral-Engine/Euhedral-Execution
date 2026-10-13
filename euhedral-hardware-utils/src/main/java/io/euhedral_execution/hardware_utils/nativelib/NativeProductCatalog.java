@@ -1,5 +1,6 @@
 package io.euhedral_execution.hardware_utils.nativelib;
 
+import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,9 +18,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 final class NativeProductCatalog {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(NativeProductCatalog.class));
     static final String RESOURCE = "/META-INF/euhedral/native-products.tsv";
     private static final int MAX_CATALOG_BYTES = 65_536;
     private final List<OsRule> osRules;
@@ -92,6 +97,7 @@ final class NativeProductCatalog {
         Set<String> resourcePaths = new HashSet<>();
         Set<String> candidateOrders = new HashSet<>();
         int section = 1;
+        boolean hashedProducts = false;
 
         for (int lineNumber = 1; lineNumber < lines.length - 1; lineNumber++) {
             String line = lines[lineNumber];
@@ -131,7 +137,16 @@ final class NativeProductCatalog {
                 }
                 case "product" -> {
                     section = 3;
-                    requireFieldCount(fields, 7, lineNumber);
+                    // 7 fields: catalogs generated before the sha256 column; 8 fields: with the trailing hash.
+                    if (fields.length != 7 && fields.length != 8) {
+                        throw failure("wrong field count at line " + (lineNumber + 1));
+                    }
+                    boolean hashed = fields.length == 8;
+                    if (!products.isEmpty() && hashed != hashedProducts) {
+                        throw failure("sha256 column must be present on all product rows or none (line "
+                                + (lineNumber + 1) + ")");
+                    }
+                    hashedProducts = hashed;
                     int order;
                     try {
                         order = Integer.parseInt(fields[5]);
@@ -140,7 +155,14 @@ final class NativeProductCatalog {
                     }
                     NativeProduct product;
                     try {
-                        product = new NativeProduct(fields[1], fields[2], fields[3], fields[4], order, fields[6]);
+                        product = new NativeProduct(
+                                fields[1],
+                                fields[2],
+                                fields[3],
+                                fields[4],
+                                order,
+                                fields[6],
+                                hashed ? fields[7] : null);
                     } catch (IllegalArgumentException e) {
                         throw failure(e.getMessage(), e);
                     }
@@ -176,6 +198,9 @@ final class NativeProductCatalog {
             if (!resourceProbe.exists(product.resourcePath())) {
                 throw failure("missing product resource " + product.resourcePath());
             }
+        }
+        if (!hashedProducts) {
+            LOGGER.debug("native-loader: catalog has no sha256 column; falling back to the extracted size check");
         }
         return new NativeProductCatalog(osRules, architectures, products);
     }
@@ -214,7 +239,7 @@ final class NativeProductCatalog {
         }
     }
 
-    private static String normalizeOs(String value) {
+    private static String normalizeOs(@Nullable String value) {
         String normalized = normalizeProperty(value);
         StringBuilder result = new StringBuilder(normalized.length());
         boolean whitespace = false;
@@ -233,7 +258,7 @@ final class NativeProductCatalog {
         return result.toString();
     }
 
-    private static String normalizeProperty(String value) {
+    private static String normalizeProperty(@Nullable String value) {
         if (value == null) {
             return "";
         }
@@ -260,7 +285,7 @@ final class NativeProductCatalog {
         return new IOException(message.startsWith("native-loader:") ? message : "native-loader: " + message, cause);
     }
 
-    List<NativeProduct> select(String osName, String osArch) {
+    List<NativeProduct> select(@Nullable String osName, @Nullable String osArch) {
         String normalizedOs = normalizeOs(osName);
         String canonicalOs = resolveOs(osName, normalizedOs);
         String normalizedArch = normalizeProperty(osArch);
@@ -280,11 +305,11 @@ final class NativeProductCatalog {
         return selected;
     }
 
-    String canonicalOs(String osName) {
+    String canonicalOs(@Nullable String osName) {
         return resolveOs(osName, normalizeOs(osName));
     }
 
-    String canonicalArchitecture(String osArch) {
+    String canonicalArchitecture(@Nullable String osArch) {
         String canonical = architectureAliases.get(normalizeProperty(osArch));
         if (canonical == null) {
             throw new IllegalArgumentException("native-loader: unsupported architecture '" + osArch
@@ -293,7 +318,7 @@ final class NativeProductCatalog {
         return canonical;
     }
 
-    private String resolveOs(String original, String normalized) {
+    private String resolveOs(@Nullable String original, String normalized) {
         List<OsRule> exact = osRules.stream()
                 .filter(rule -> rule.match() == Match.EXACT && rule.value().equals(normalized))
                 .toList();

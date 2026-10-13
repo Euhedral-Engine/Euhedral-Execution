@@ -3,6 +3,7 @@ package io.euhedral_execution.hardware_utils.util;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.DoubleConsumer;
+import org.jspecify.annotations.Nullable;
 
 public final class UnmodifiableDoubleArray {
     private final double[] delegate;
@@ -49,7 +50,7 @@ public final class UnmodifiableDoubleArray {
     }
 
     @Override
-    public boolean equals(Object other) {
+    public boolean equals(@Nullable Object other) {
         return other instanceof UnmodifiableDoubleArray values && Arrays.equals(delegate, values.delegate);
     }
 

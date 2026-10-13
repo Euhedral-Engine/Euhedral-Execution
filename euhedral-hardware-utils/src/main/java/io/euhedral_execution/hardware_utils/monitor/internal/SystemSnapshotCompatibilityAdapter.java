@@ -25,6 +25,7 @@ import io.euhedral_execution.hardware_utils.util.UnmodifiableDoubleArray;
 import io.euhedral_execution.hardware_utils.windows.WindowsResources;
 import java.util.BitSet;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 
 /// Translates legacy SystemSnapshotProvider implementations into the richer
 /// DetailedSystemSnapshotProvider SPI by performing one-time profile detection and producing
@@ -132,7 +133,7 @@ public final class SystemSnapshotCompatibilityAdapter implements DetailedSystemS
 
     /// Delegates to the wrapped provider's getSnapshot(); does not modify the result.
     @Override
-    public SystemSnapshot getSnapshot() {
+    public @Nullable SystemSnapshot getSnapshot() {
         return delegate.getSnapshot();
     }
 

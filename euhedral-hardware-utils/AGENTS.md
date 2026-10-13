@@ -133,7 +133,9 @@ Paths are relative to `src/main/java/io/euhedral_execution/hardware_utils/` and
 
 - `PinnedThreadExecutor` creates one fresh thread per accepted command; it is not a worker pool. A
   process-wide registry holds one live executor per logical CPU. `get` never restarts an executor;
-  `getOrSetIfAbsent` validates the CPU against `SystemInfo.getCpuCount()` before narrowing.
+  every registry entry point (`get`, `getOrSetIfAbsent`) validates the CPU through one injectable
+  predicate (default: in span and in `SystemInfo.getCpuSet()`) and throws `IllegalArgumentException`
+  for holes; a valid id with no executor still returns `null` from `get`.
 - `shutdown`, `shutdownNow`, `close`, `start` (restart after shutdown), `closeAll`, the `Cleaner`
   action, and the single registry-wide JVM shutdown hook form one lifecycle. Preserve idempotence,
   exactly-once cleanup, and the rule that a closed tombstone is dropped only after its last task
@@ -191,6 +193,12 @@ Native Zig and C++ sources are owned by this module; there is no separate native
   symbols at `GLIBC_2.17`, require macOS 11.0 with only `libSystem.B.dylib`, and restrict Windows
   imports to `KERNEL32.dll` plus two UCRT API sets. A new native dependency or import is a
   portability change: update the manifest allowlist deliberately and pass the binary gate.
+- Windows stack-guard invariant: `windows/windows_hardening.cpp` seeds `__stack_chk_guard` from
+  `JNI_OnLoad`. The CRT entry point (`DllMainCRTStartup`) and TLS callbacks still run before it, and
+  on thread attach can run concurrently. Keep all code reachable from them uninstrumented, and keep
+  `JNI_OnLoad` canary-free. `NativeBinaryInspectionIT` checks only the `JNI_OnLoad` body; the
+  entry/TLS reachability is not automated (the CRT graph is too fragile to disassemble reliably), so
+  review any new Windows native code or linker option against this rule.
 - `expected_jni_headers` in `build.zig` must list exactly the classes with `native` methods. Adding,
   removing, or renaming a native method also affects
   [native-contract-900d8c50.tsv](src/test/resources/compatibility/native-contract-900d8c50.tsv),
@@ -199,8 +207,18 @@ Native Zig and C++ sources are owned by this module; there is no separate native
   holder-class idiom loads once. The catalog selects candidates by OS alias, architecture alias, and
   load order (glibc before musl on Linux). Libraries are extracted under `java.io.tmpdir` or the
   absolute `-Dio.euhedral.native.extract.dir`, with owner-only permissions and PID owner markers
-  for stale-directory handling. Do not weaken permission checks, symlink handling, or fail-loud
-  diagnostics.
+  for stale-directory handling. By default a parent that is not private
+  (shared-writable without the sticky bit, sticky but not root-owned, or non-shared and owned by
+  another uid) is tolerated with one WARN per process naming its path, mode, owner uid, the swap
+  risk, and the remedy. Ownership checks compare numeric owner uids with the effective uid from
+  `/proc/self/status`; only where that is unreadable (macOS) is the owner probe used, and for an
+  unsafe parent it is cross-checked against the `user.name` user-database lookup (a mismatch or
+  lookup failure fails the load).
+  `-Dio.euhedral.native.extract.strictParent=true` (read once at extractor construction) restores
+  fail-closed rejection: owned by the current user or root (root only, and sticky, if
+  shared-writable). The base directory, run directory and library stay strict in both modes (owner,
+  mode 0700, no symlink, `nlink == 1`, SHA-256 at copy time and before load, private at creation).
+  Do not weaken those checks, symlink handling, or fail-loud diagnostics.
 - `LinuxAffinity` and `WindowsAffinity` catch load failure and degrade to `UNSUPPORTED`.
   `MacosAffinity` lets it propagate, and `ThreadTools` catches the resulting `LinkageError`.
   Preserve the rule that a missing native library degrades affinity and topology to fallbacks

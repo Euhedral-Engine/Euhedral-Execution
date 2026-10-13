@@ -7,6 +7,7 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public final class SystemUtilization {
 
@@ -35,7 +36,7 @@ public final class SystemUtilization {
             long globalBytesUsed,
             long memoryLimit,
             double memoryUtilization,
-            CoreSnapshot[] coreSnapshots,
+            @Nullable CoreSnapshot[] coreSnapshots,
             long lastUsageNs) {
 
         public SocketSnapshot {
@@ -45,12 +46,12 @@ public final class SystemUtilization {
         }
 
         @Override
-        public CoreSnapshot[] coreSnapshots() {
+        public @Nullable CoreSnapshot[] coreSnapshots() {
             return coreSnapshots.clone();
         }
 
         @Override
-        public final boolean equals(Object other) {
+        public final boolean equals(@Nullable Object other) {
             if (!(other instanceof SocketSnapshot snapshot)) {
                 return false;
             }
@@ -102,7 +103,7 @@ public final class SystemUtilization {
             long memoryLimit,
             double memoryUtilization,
             BitSet effectiveCpus,
-            CpuSnapshot[] cpuSnapshots) {
+            @Nullable CpuSnapshot[] cpuSnapshots) {
 
         public CoreSnapshot {
             effectiveCpus = new UnmodifiableBitSet(Objects.requireNonNull(effectiveCpus, "effectiveCpus"));
@@ -110,12 +111,12 @@ public final class SystemUtilization {
         }
 
         @Override
-        public CpuSnapshot[] cpuSnapshots() {
+        public @Nullable CpuSnapshot[] cpuSnapshots() {
             return cpuSnapshots.clone();
         }
 
         @Override
-        public boolean equals(Object other) {
+        public boolean equals(@Nullable Object other) {
             if (other instanceof CoreSnapshot snapshot) {
                 return coreId == snapshot.coreId
                         && Double.compare(quotaCpus, snapshot.quotaCpus) == 0
@@ -258,7 +259,8 @@ public final class SystemUtilization {
             long memPerCpuUsageBytes,
             double diskIOBytesPerSecond,
             double diskIOPressure,
-            SystemSnapshot snapshot) {
+            /// null when no legacy snapshot is attached
+            @Nullable SystemSnapshot snapshot) {
 
         public HardwareUtilization {
             globalEffectiveCpus =
@@ -328,7 +330,7 @@ public final class SystemUtilization {
                 long memPerCpuUsageBytes,
                 double diskIOBytesPerSecond,
                 double diskIOPressure,
-                SystemSnapshot snapshot) {
+                @Nullable SystemSnapshot snapshot) {
             return new HardwareUtilization(
                     timestampNs,
                     quotaCpus,
@@ -388,7 +390,8 @@ public final class SystemUtilization {
         }
 
         /// Get a snapshot of a socket's utilization
-        public SocketSnapshot getSocketSnapshot(int socketId, List<BitSet> effectiveCoreToCpu, double cpuQuotaPool) {
+        public @Nullable SocketSnapshot getSocketSnapshot(
+                int socketId, @Nullable List<@Nullable BitSet> effectiveCoreToCpu, double cpuQuotaPool) {
             if (effectiveCoreToCpu == null
                     || effectiveCoreToCpu.isEmpty()
                     || !Double.isFinite(cpuQuotaPool)

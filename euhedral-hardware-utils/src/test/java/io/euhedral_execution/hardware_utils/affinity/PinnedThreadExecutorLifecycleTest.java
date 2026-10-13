@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.IntPredicate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -501,6 +502,56 @@ class PinnedThreadExecutorLifecycleTest {
         harness.assertClean();
     }
 
+    /// Proves a hole id inside the span is rejected at registration and leaves no entry behind.
+    @Test
+    void holeCpuIsRejectedAtRegistration() {
+        Harness harness = new Harness(cpu -> cpu == 0 || cpu == 2 || cpu == 3);
+        IllegalArgumentException failure =
+                assertThrows(IllegalArgumentException.class, () -> harness.acquire(1, Thread::new));
+        assertTrue(failure.getMessage().contains("cpu 1 "), failure.getMessage());
+        assertEquals(0, harness.registry.entryCount());
+        assertNull(harness.controlOrNull(1));
+        assertThrows(IllegalArgumentException.class, () -> harness.acquire(4, Thread::new));
+        harness.assertClean();
+    }
+
+    /// Proves lookup of a hole id is invalid input while an unregistered active id stays absent.
+    @Test
+    void holeCpuIsRejectedByGet() {
+        Harness harness = new Harness(cpu -> cpu == 0 || cpu == 2 || cpu == 3);
+        IllegalArgumentException failure = assertThrows(IllegalArgumentException.class, () -> harness.registry.get(1));
+        assertTrue(failure.getMessage().contains("cpu 1 "), failure.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> harness.registry.get(-1));
+        assertNull(harness.registry.get(2));
+        harness.assertClean();
+    }
+
+    /// Proves a failing task binding reaches the uncaught handler and still runs bookkeeping.
+    @Test
+    void bindFailureIsNotSilent() throws Exception {
+        Harness harness = new Harness();
+        int cpu = testCpu();
+        AtomicReference<Throwable> uncaught = new AtomicReference<>();
+        CountDownLatch reported = new CountDownLatch(1);
+        PinnedThreadExecutor executor = harness.acquire(cpu, command -> {
+            Thread thread = new Thread(command);
+            thread.setUncaughtExceptionHandler((ignored, failure) -> {
+                uncaught.set(failure);
+                reported.countDown();
+            });
+            return thread;
+        });
+        harness.bindings.bindFailure.set(true);
+        AtomicBoolean ran = new AtomicBoolean();
+        executor.execute(() -> ran.set(true));
+        assertTrue(reported.await(WAIT_SECONDS, SECONDS));
+        assertInstanceOf(IllegalStateException.class, uncaught.get());
+        assertFalse(ran.get());
+        awaitCondition(() -> harness.control(cpu).activeTaskCount() == 0);
+        executor.close();
+        harness.assertClean();
+    }
+
     /// Proves E7 command, recoverable-cleanup, fatal-cleanup, and later-use outcomes.
     @Test
     void e7PreservesCommandFailureAndCompletesRecoverableAndFatalCleanup() throws Exception {
@@ -961,8 +1012,18 @@ class PinnedThreadExecutorLifecycleTest {
         private final FakeCleanupRegistrar cleanups = new FakeCleanupRegistrar();
         private final FakeHookRegistrar hooks = new FakeHookRegistrar();
         private final FakeTaskBinding bindings = new FakeTaskBinding();
-        private final PinnedThreadExecutor.Registry registry =
-                PinnedThreadExecutor.newTestRegistry(this.cleanups, this.hooks, this.bindings);
+        private final PinnedThreadExecutor.Registry registry;
+
+        /// Creates a harness using the production CPU validator.
+        private Harness() {
+            this.registry = PinnedThreadExecutor.newTestRegistry(this.cleanups, this.hooks, this.bindings);
+        }
+
+        /// Creates a harness whose CPU validity is injected.
+        private Harness(IntPredicate cpuValidator) {
+            this.registry =
+                    PinnedThreadExecutor.newTestRegistry(this.cleanups, this.hooks, this.bindings, cpuValidator);
+        }
 
         /// Acquires from the isolated registry with stable test configuration.
         private PinnedThreadExecutor acquire(int cpu, Function<Runnable, ? extends Thread> creator) {
@@ -1133,10 +1194,14 @@ class PinnedThreadExecutorLifecycleTest {
         private final AtomicBoolean releaseRecoverable = new AtomicBoolean();
         private final AtomicBoolean closeRecoverable = new AtomicBoolean();
         private final AtomicBoolean releaseFatal = new AtomicBoolean();
+        private final AtomicBoolean bindFailure = new AtomicBoolean();
 
         /// Installs one managed logical owner and returns its cleanup token.
         @Override
         public ThreadTools.ManagedCpuBinding bind(int cpu) {
+            if (this.bindFailure.compareAndSet(true, false)) {
+                throw new IllegalStateException("injected bind failure");
+            }
             Thread owner = Thread.currentThread();
             assertNull(this.owners.put(owner, cpu));
             return () -> {

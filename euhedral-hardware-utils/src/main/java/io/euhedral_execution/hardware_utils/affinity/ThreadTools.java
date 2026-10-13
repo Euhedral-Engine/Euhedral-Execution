@@ -92,7 +92,7 @@ public final class ThreadTools {
         return owner::close;
     }
 
-    private static AffinityProvider selectProvider() {
+    private static @Nullable AffinityProvider selectProvider() {
         try {
             if (OSName.isLinux()) {
                 return LinuxAffinity.INSTANCE;

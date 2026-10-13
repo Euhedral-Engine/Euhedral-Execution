@@ -18,8 +18,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Function;
+import java.util.function.IntPredicate;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,6 +30,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(PinnedThreadExecutor.class));
     private static final Cleaner CLEANER = Cleaner.create();
+    private static final IntPredicate ACTIVE_CPU_VALIDATOR = cpu ->
+            cpu >= 0 && cpu < SystemInfo.getCpuCount() && SystemInfo.getCpuSet().get(cpu);
     private static final Registry REGISTRY =
             new Registry(new JdkCleanupRegistrar(), new JvmHookRegistrar(), new ThreadToolsTaskBinding());
     private final Function<Runnable, ? extends Thread> threadCreator;
@@ -72,30 +76,17 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     /// Acquires the one live executor for a logical CPU with a creator fixed to a new identity.
     public static PinnedThreadExecutor getOrSetIfAbsent(
             Function<Runnable, ? extends Thread> threadCreator, long cpu, String name, int priority, boolean daemon) {
-        Objects.requireNonNull(threadCreator, "threadCreator");
-        Configuration configuration = Configuration.create(name, priority, daemon);
-        int validatedCpu = validateCpu(cpu);
-        return REGISTRY.acquire(threadCreator, cpu, validatedCpu, configuration);
+        return REGISTRY.acquire(threadCreator, cpu, name, priority, daemon);
     }
 
     /// Returns the currently running executor for a logical CPU without restarting it.
-    public static PinnedThreadExecutor get(long cpu) {
-        validateCpu(cpu);
+    public static @Nullable PinnedThreadExecutor get(long cpu) {
         return REGISTRY.get(cpu);
     }
 
     /// Permanently closes every running executor.
     public static void closeAll() {
         REGISTRY.closeAll();
-    }
-
-    /// Validates a public long CPU key before any narrowing or registry access.
-    private static int validateCpu(long cpu) {
-        int cpuCount = SystemInfo.getCpuCount();
-        if (cpu < 0 || cpu >= cpuCount) {
-            throw new IllegalArgumentException("Logical CPU is outside the supported span: " + cpu);
-        }
-        return (int) cpu;
     }
 
     /// Performs best-effort interruption and unparking without clearing caller interruption.
@@ -127,6 +118,15 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             TaskBinding taskBinding,
             ThreadConfigurator threadConfigurator) {
         return new Registry(cleanupRegistrar, hookRegistrar, taskBinding, threadConfigurator);
+    }
+
+    /// Provides an isolated registry whose CPU validity is decided by an injected predicate.
+    static Registry newTestRegistry(
+            CleanupRegistrar cleanupRegistrar,
+            HookRegistrar hookRegistrar,
+            TaskBinding taskBinding,
+            IntPredicate cpuValidator) {
+        return new Registry(cleanupRegistrar, hookRegistrar, taskBinding, new JdkThreadConfigurator(), cpuValidator);
     }
 
     /// Restarts a shutdown executor with new thread properties; a running executor is unchanged.
@@ -498,7 +498,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         private final HookRegistrar hookRegistrar;
         private final TaskBinding taskBinding;
         private final ThreadConfigurator threadConfigurator;
-        private HookRegistration hook;
+        private final IntPredicate cpuValidator;
+        private @Nullable HookRegistration hook;
         private boolean shutdownInProgress;
 
         /// Creates an isolated registry from bounded cleanup, hook, and task-binding roles.
@@ -512,6 +513,17 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
                 HookRegistrar hookRegistrar,
                 TaskBinding taskBinding,
                 ThreadConfigurator threadConfigurator) {
+            this(cleanupRegistrar, hookRegistrar, taskBinding, threadConfigurator, ACTIVE_CPU_VALIDATOR);
+        }
+
+        /// Creates an isolated registry whose single CPU validator guards every entry point.
+        Registry(
+                CleanupRegistrar cleanupRegistrar,
+                HookRegistrar hookRegistrar,
+                TaskBinding taskBinding,
+                ThreadConfigurator threadConfigurator,
+                IntPredicate cpuValidator) {
+            this.cpuValidator = Objects.requireNonNull(cpuValidator, "cpuValidator");
             this.cleanupRegistrar = Objects.requireNonNull(cleanupRegistrar, "cleanupRegistrar");
             this.hookRegistrar = Objects.requireNonNull(hookRegistrar, "hookRegistrar");
             this.taskBinding = Objects.requireNonNull(taskBinding, "taskBinding");
@@ -529,6 +541,14 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
             Configuration configuration = Configuration.create(name, priority, daemon);
             int validatedCpu = validateCpu(cpu);
             return acquire(threadCreator, cpu, validatedCpu, configuration);
+        }
+
+        /// Rejects ids outside the active CPU set before narrowing or any registry access.
+        private int validateCpu(long cpu) {
+            if (cpu < 0 || cpu > Integer.MAX_VALUE || !this.cpuValidator.test((int) cpu)) {
+                throw new IllegalArgumentException("cpu " + cpu + " is not an active logical CPU");
+            }
+            return (int) cpu;
         }
 
         /// Acquires, restarts, or installs the exact identity for one validated CPU key.
@@ -597,7 +617,8 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         }
 
         /// Observes only a live RUNNING identity and performs safe stale cleanup when possible.
-        synchronized PinnedThreadExecutor get(long cpuKey) {
+        synchronized @Nullable PinnedThreadExecutor get(long cpuKey) {
+            validateCpu(cpuKey);
             RegistryEntry entry = this.entries.get(cpuKey);
             if (entry == null) {
                 return null;
@@ -619,12 +640,12 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         }
 
         /// Runs an optional deterministic barrier after the snapshot closes while still gated.
-        void closeAll(Runnable afterClosedWhileLocked) {
+        void closeAll(@Nullable Runnable afterClosedWhileLocked) {
             closeAll(afterClosedWhileLocked, null);
         }
 
         /// Runs deterministic barriers around release of the close-all registry gate.
-        void closeAll(Runnable afterClosedWhileLocked, Runnable beforeCleanupAfterRelease) {
+        void closeAll(@Nullable Runnable afterClosedWhileLocked, @Nullable Runnable beforeCleanupAfterRelease) {
             List<CloseRequest> requests;
             synchronized (this) {
                 requests = new ArrayList<>(this.entries.size());
@@ -684,19 +705,19 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         }
 
         /// Returns the exact mapped executor regardless of lifecycle for race assertions.
-        synchronized PinnedThreadExecutor executorForTest(long cpuKey) {
+        synchronized @Nullable PinnedThreadExecutor executorForTest(long cpuKey) {
             RegistryEntry entry = this.entries.get(cpuKey);
             return entry == null ? null : entry.executor().get();
         }
 
         /// Returns the exact mapped cleanup action for delayed-action assertions.
-        synchronized Runnable actionForTest(long cpuKey) {
+        synchronized @Nullable Runnable actionForTest(long cpuKey) {
             RegistryEntry entry = this.entries.get(cpuKey);
             return entry == null ? null : entry.action();
         }
 
         /// Returns the mapped lifecycle control for deterministic state-boundary assertions.
-        synchronized LifecycleControl controlForTest(long cpuKey) {
+        synchronized @Nullable LifecycleControl controlForTest(long cpuKey) {
             RegistryEntry entry = this.entries.get(cpuKey);
             return entry == null ? null : entry.control();
         }
@@ -754,7 +775,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     /// Holds the registration assigned during construction and before registry publication.
     private static final class CleanupSlot {
 
-        private CleanupRegistration registration;
+        private @Nullable CleanupRegistration registration;
 
         /// Assigns the one registration before the executor is published.
         private void initialize(CleanupRegistration registration) {

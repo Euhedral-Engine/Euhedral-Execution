@@ -84,6 +84,31 @@ class NativeBinaryInspectionIT {
         return libraries;
     }
 
+    /**
+     * JNI_OnLoad seeds {@code __stack_chk_guard} and must not touch the guard itself first. The DLLs are stripped, so
+     * the guard symbol is unavailable; instead assert the function (up to its first return) has no global-data
+     * addressing: no RIP-relative operand on x64 and no adrp on arm64. A canary load would need one of them.
+     */
+    private static void assertJniOnLoadIsCanaryFree(String resource, String disassembly) {
+        String[] lines = disassembly.split("\\R");
+        int start = -1;
+        for (int i = 0; i < lines.length; i++) {
+            if (lines[i].contains("<JNI_OnLoad>:")) {
+                start = i + 1;
+                break;
+            }
+        }
+        assertTrue(start >= 0, resource + ": JNI_OnLoad not found");
+        boolean returned = false;
+        for (int i = start; i < lines.length && !returned; i++) {
+            String line = lines[i];
+            assertFalse(line.contains("(%rip)"), resource + ": JNI_OnLoad addresses global data: " + line);
+            assertFalse(line.contains("\tadrp"), resource + ": JNI_OnLoad addresses global data: " + line);
+            returned = line.matches(".*\\t(retq?|ret)(\\s.*)?$");
+        }
+        assertTrue(returned, resource + ": JNI_OnLoad has no return");
+    }
+
     private static Set<String> peImports(String output) {
         Set<String> imports = new HashSet<>();
         Matcher matcher = PE_IMPORT.matcher(output);
@@ -193,6 +218,7 @@ class NativeBinaryInspectionIT {
                     assertFalse(lowercase.contains(forbidden), resource + " contains " + forbidden);
                 }
                 assertExports(resource, output, "windows");
+                assertJniOnLoadIsCanaryFree(resource, run(objdump, "-d", "--no-show-raw-insn", product.toString()));
             } else {
                 output = run(
                         readobj,

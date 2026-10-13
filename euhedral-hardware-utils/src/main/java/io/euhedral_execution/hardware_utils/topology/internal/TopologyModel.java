@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public final class TopologyModel {
 
@@ -145,7 +146,7 @@ public final class TopologyModel {
         }
 
         @Override
-        public V get(Object key) {
+        public @Nullable V get(@Nullable Object key) {
             return delegate.get(key);
         }
 

@@ -4,6 +4,7 @@ import java.util.BitSet;
 import java.util.Objects;
 import java.util.stream.IntStream;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 public final class UnmodifiableBitSet extends BitSet {
 
@@ -158,7 +159,7 @@ public final class UnmodifiableBitSet extends BitSet {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(@Nullable Object obj) {
         return delegate.equals(obj);
     }
 

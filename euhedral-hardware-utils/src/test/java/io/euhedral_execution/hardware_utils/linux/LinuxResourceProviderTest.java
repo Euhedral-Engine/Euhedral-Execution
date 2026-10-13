@@ -3,9 +3,12 @@ package io.euhedral_execution.hardware_utils.linux;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnapshot;
+import io.euhedral_execution.hardware_utils.monitor.sampling.enums.SignalValidity;
+import io.euhedral_execution.hardware_utils.monitor.sampling.primitives.DoubleGaugeSignal;
 import io.euhedral_execution.hardware_utils.monitor.sampling.samples.FastHardwareSample;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -173,22 +176,230 @@ class LinuxResourceProviderTest {
     }
 
     @Test
-    void testLargeFileBoundedRead(@TempDir Path tempDir) throws IOException {
-        Path largeFile = tempDir.resolve("large_stat.txt");
+    void oversizedFileIsBounded(@TempDir Path tempDir) throws IOException {
+        // Reverses the old testLargeFileBoundedRead, which pinned "return everything".
+        Path largeFile = tempDir.resolve("huge.txt");
+        byte[] chunk = new byte[1 << 20];
+        java.util.Arrays.fill(chunk, (byte) 'a');
+        try (var out = Files.newOutputStream(largeFile)) {
+            for (int i = 0; i < 4; i++) {
+                out.write(chunk);
+            }
+        }
+        Path exact = tempDir.resolve("exact.txt");
+        Files.write(exact, chunk);
+        Path medium = tempDir.resolve("medium.txt");
         StringBuilder sb = new StringBuilder(100_000);
         for (int i = 0; i < 2000; i++) {
             sb.append("cpu").append(i).append(" 100 200 300 400 500 600 700 800 900 1000\n");
         }
-        String content = sb.toString();
-        assertTrue(content.length() > 65536);
-        Files.writeString(largeFile, content);
+        Files.writeString(medium, sb.toString());
 
         LinuxPaths paths = new LinuxPaths(tempDir.resolve("mountinfo"), tempDir.resolve("cgroup"), tempDir);
         try (LinuxResourceProvider provider = new LinuxResourceProvider(paths)) {
-            String readBack = provider.readFileBounded(largeFile);
-            assertNotNull(readBack);
-            assertEquals(content.length(), readBack.length());
-            assertEquals(content, readBack);
+            assertNull(provider.readFileBounded(largeFile));
+            assertNotNull(provider.readFileBounded(exact));
+            assertEquals(sb.toString(), provider.readFileBounded(medium));
+            assertNull(provider.readFileBounded(tempDir.resolve("missing")));
+        }
+    }
+
+    private static Path v2Fixture(Path tempDir) throws IOException {
+        Path mountinfo = tempDir.resolve("mountinfo");
+        Path cgroup = tempDir.resolve("cgroup");
+        Path cgroupRoot = tempDir.resolve("sys_cgroup");
+        Files.createDirectories(cgroupRoot);
+        Files.writeString(mountinfo, "40 28 0:34 / /sys/fs/cgroup rw,nosuid - cgroup2 cgroup2 rw\n");
+        Files.writeString(cgroup, "0::/\n");
+        Files.writeString(cgroupRoot.resolve("cpuset.cpus.effective"), "0\n");
+        return cgroupRoot;
+    }
+
+    private static LinuxPaths v2Paths(Path tempDir) {
+        return new LinuxPaths(tempDir.resolve("mountinfo"), tempDir.resolve("cgroup"), tempDir.resolve("sys_cgroup"));
+    }
+
+    @Test
+    void unreadableCpuStatIsTransientFailure(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Path cpuStat = root.resolve("cpu.stat");
+        Files.writeString(cpuStat, "usage_usec 1000\nthrottled_usec 10\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            FastHardwareSample first = provider.sampleFast(1L);
+            assertEquals(SignalValidity.VALID, first.productiveCpuNs().validity());
+            assertEquals(1_000_000L, first.productiveCpuNs().value());
+            assertEquals(10_000L, first.scopeQuotaThrottledNs().value());
+
+            // A directory in place of the file: it exists but every read fails. The "deleted file" case
+            // is masked by LinuxPaths.resolveV2Path falling back to the host's real cgroup root
+            // (which Phase 4 fixes), so it cannot be asserted hermetically here.
+            Files.delete(cpuStat);
+            Files.createDirectory(cpuStat);
+            FastHardwareSample second = provider.sampleFast(2L);
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE, second.productiveCpuNs().validity());
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    second.scopeQuotaThrottledNs().validity());
+        }
+    }
+
+    @Test
+    void missingThrottleKeyIsUnsupportedAcrossTicks(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            for (long t = 1; t <= 4; t++) {
+                FastHardwareSample s = provider.sampleFast(t);
+                assertEquals(SignalValidity.VALID, s.productiveCpuNs().validity());
+                assertEquals(
+                        SignalValidity.UNSUPPORTED, s.scopeQuotaThrottledNs().validity());
+            }
+            // Once seen, a vanished key is a failure, and a malformed one is too.
+            Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\nthrottled_usec 5\n");
+            assertEquals(
+                    SignalValidity.VALID,
+                    provider.sampleFast(5L).scopeQuotaThrottledNs().validity());
+            Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\n");
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    provider.sampleFast(6L).scopeQuotaThrottledNs().validity());
+            Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\nthrottled_usec junk\n");
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    provider.sampleFast(7L).scopeQuotaThrottledNs().validity());
+        }
+    }
+
+    @Test
+    void ioPressureFailureDoesNotFallBackToDiskstats(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Path psi = root.resolve("io.pressure");
+        Files.writeString(psi, "some avg10=0.00 avg60=0.00 avg300=0.00 total=7\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            var ok = provider.sampleFast(1L).ioSignals().completedOperations();
+            assertEquals(SignalValidity.VALID, ok.validity());
+            assertEquals(7000L, ok.value());
+
+            Files.writeString(psi, "some avg10=0.00 total=garbage\n");
+            var bad = provider.sampleFast(2L).ioSignals().completedOperations();
+            assertEquals(SignalValidity.TRANSIENT_FAILURE, bad.validity());
+            assertEquals(0L, bad.value());
+        }
+    }
+
+    @Test
+    void ioPressureAppearingAfterNoSourceAtFirstSightIsChosen(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Path psi = root.resolve("io.pressure");
+        Path diskstats = tempDir.resolve("diskstats");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir), diskstats, psi)) {
+            // Neither source exists: nothing is chosen yet.
+            provider.sampleFast(1L);
+            provider.sampleFast(2L);
+
+            Files.writeString(psi, "some avg10=0.00 avg60=0.00 avg300=0.00 total=9\n");
+            var chosen = provider.sampleFast(3L).ioSignals().completedOperations();
+            assertEquals(SignalValidity.VALID, chosen.validity());
+            assertEquals(9000L, chosen.value());
+        }
+    }
+
+    @Test
+    void malformedCpuStatIsTransientFailureAndNeverThrows(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Files.writeString(root.resolve("cpu.stat"), "usage_usec notanumber\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            FastHardwareSample s = provider.sampleFast(1L);
+            assertEquals(SignalValidity.TRANSIENT_FAILURE, s.productiveCpuNs().validity());
+        }
+    }
+
+    @Test
+    void vanishedSourceIsTransientAndNeverSeenSourceIsUnsupported(@TempDir Path tempDir) throws IOException {
+        // memory.current does not exist in the host's cgroup root, so the fallback in
+        // LinuxPaths.resolveV2Path cannot mask the fixture.
+        Path root = v2Fixture(tempDir);
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            FastHardwareSample never = provider.sampleFast(1L);
+            assertEquals(
+                    SignalValidity.UNSUPPORTED,
+                    never.memorySignals().usageBytes().validity());
+
+            Files.writeString(root.resolve("memory.current"), "4096\n");
+            FastHardwareSample seen = provider.sampleFast(2L);
+            assertEquals(SignalValidity.VALID, seen.memorySignals().usageBytes().validity());
+            assertEquals(4096L, seen.memorySignals().usageBytes().value());
+
+            Files.delete(root.resolve("memory.current"));
+            FastHardwareSample gone = provider.sampleFast(3L);
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    gone.memorySignals().usageBytes().validity());
+        }
+    }
+
+    @Test
+    void fractionalQuotaIsPreserved(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Files.writeString(root.resolve("cpu.max"), "50000 100000\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            FastHardwareSample s = provider.sampleFast(1L);
+            // Existing long field keeps its truncating semantics.
+            assertEquals(0L, s.quotaCapacityCpus().value());
+            assertEquals(SignalValidity.VALID, s.quotaCapacityCpus().validity());
+            DoubleGaugeSignal exact = provider.quotaCapacityCpusExact();
+            assertEquals(SignalValidity.VALID, exact.validity());
+            assertEquals(0.5, exact.value(), 1e-12);
+            assertEquals(0.5, provider.getSnapshot().quotaCpus(), 1e-12);
+        }
+    }
+
+    @Test
+    void periodComesFromCpuMax(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Files.writeString(root.resolve("cpu.max"), "50000 200000\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            FastHardwareSample s = provider.sampleFast(1L);
+            // quotaPeriodNs is documented in nanoseconds; cpu.max is in microseconds.
+            assertEquals(200_000_000L, s.quotaPeriodNs().value());
+            assertEquals(0.25, provider.quotaCapacityCpusExact().value(), 1e-12);
+            // The legacy snapshot keeps its microsecond unit.
+            assertEquals(200_000L, provider.getSnapshot().period());
+        }
+    }
+
+    @Test
+    void zeroPeriodIsAFailureNotInfinity(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Files.writeString(root.resolve("cpu.max"), "50000 0\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            FastHardwareSample s = provider.sampleFast(1L);
+            assertEquals(SignalValidity.TRANSIENT_FAILURE, s.quotaCapacityCpus().validity());
+            assertEquals(SignalValidity.TRANSIENT_FAILURE, s.quotaPeriodNs().validity());
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    provider.quotaCapacityCpusExact().validity());
+            assertTrue(Double.isFinite(provider.getSnapshot().quotaCpus()));
+        }
+    }
+
+    @Test
+    void cgroupV1ZeroPeriodIsAFailureNotInfinity(@TempDir Path tempDir) throws IOException {
+        Path mountinfo = tempDir.resolve("mountinfo");
+        Path cgroup = tempDir.resolve("cgroup");
+        Path cpuMount = tempDir.resolve("sys_cgroup_cpu");
+        Files.createDirectories(cpuMount);
+        Files.writeString(
+                mountinfo, "40 28 0:34 / " + cpuMount.toAbsolutePath() + " rw,nosuid - cgroup cgroup rw,cpu\n");
+        Files.writeString(cgroup, "2:cpu:/\n");
+        Files.writeString(cpuMount.resolve("cpu.cfs_quota_us"), "150000\n");
+        Files.writeString(cpuMount.resolve("cpu.cfs_period_us"), "0\n");
+        LinuxPaths paths = new LinuxPaths(mountinfo, cgroup, tempDir);
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(paths)) {
+            FastHardwareSample s = provider.sampleFast(1L);
+            assertEquals(SignalValidity.TRANSIENT_FAILURE, s.quotaCapacityCpus().validity());
+            assertTrue(Double.isFinite(provider.getSnapshot().quotaCpus()));
         }
     }
 

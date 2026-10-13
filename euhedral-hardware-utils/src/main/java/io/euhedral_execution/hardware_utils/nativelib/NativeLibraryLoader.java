@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
 final class NativeLibraryLoader {
@@ -25,7 +26,11 @@ final class NativeLibraryLoader {
         this.logger = Objects.requireNonNull(logger, "logger");
     }
 
-    private static String diagnostic(String operatingSystem, String architecture, List<NativeLoadFailure> failures) {
+    private static String diagnostic(
+            String operatingSystem,
+            String architecture,
+            List<NativeLoadFailure> failures,
+            boolean strictParentRejected) {
         StringBuilder message = new StringBuilder("native-loader: unable to load a native product for ")
                 .append(operatingSystem)
                 .append('/')
@@ -47,12 +52,18 @@ final class NativeLibraryLoader {
             }
             message.append('.');
         }
-        return message.append(" A noexec mount is a possible cause; retry with "
-                        + "-Dio.euhedral.native.extract.dir=<absolute executable filesystem directory>.")
+        return message.append(
+                        strictParentRejected
+                                ? " Possible causes: a noexec mount, or an unsafe extraction parent (shared-writable without"
+                                        + " sticky bit, or foreign-owned, rejected because strict mode is enabled); set"
+                                        + " -Dio.euhedral.native.extract.dir to a private directory owned by this user"
+                                        + " (absolute path on an executable filesystem)."
+                                : " Possible causes: a noexec mount; set -Dio.euhedral.native.extract.dir to a private"
+                                        + " directory owned by this user (absolute path on an executable filesystem).")
                 .toString();
     }
 
-    private static String sanitize(String value) {
+    private static String sanitize(@Nullable String value) {
         if (value == null) {
             return "";
         }
@@ -64,7 +75,7 @@ final class NativeLibraryLoader {
         return sanitized.toString().strip();
     }
 
-    NativeLoadResult load(String osName, String osArch) {
+    NativeLoadResult load(@Nullable String osName, @Nullable String osArch) {
         String canonicalOs = catalog.canonicalOs(osName);
         String canonicalArchitecture = catalog.canonicalArchitecture(osArch);
         List<NativeProduct> candidates = catalog.select(osName, osArch);
@@ -76,9 +87,14 @@ final class NativeLibraryLoader {
                 extractionPath = extractor.pathFor(candidate);
                 logger.debug("Attempting to load JNI product {} from {}", candidate.id(), candidate.resourcePath());
                 Path extracted = extractor.extract(candidate);
+                extractor.verifyBeforeLoad(candidate, extracted);
                 librarySystem.load(extracted);
                 extractor.loadSucceeded(extracted);
                 return new NativeLoadResult(candidate, extracted, List.copyOf(failures));
+            } catch (NativeFileSecurity.VerificationException failure) {
+                failures.add(new NativeLoadFailure(candidate, extractionPath, failure));
+                extractor.candidateFailed(extractionPath);
+                logger.warn("Verification of JNI product {} failed", candidate.id(), failure);
             } catch (IOException | SecurityException | LinkageError failure) {
                 failures.add(new NativeLoadFailure(candidate, extractionPath, failure));
                 extractor.candidateFailed(extractionPath);
@@ -87,8 +103,8 @@ final class NativeLibraryLoader {
         }
 
         extractor.allCandidatesFailed();
-        ExceptionInInitializerError error =
-                new ExceptionInInitializerError(diagnostic(canonicalOs, canonicalArchitecture, failures));
+        ExceptionInInitializerError error = new ExceptionInInitializerError(
+                diagnostic(canonicalOs, canonicalArchitecture, failures, extractor.parentRejectedByStrictMode()));
         failures.forEach(failure -> error.addSuppressed(failure.cause()));
         throw error;
     }

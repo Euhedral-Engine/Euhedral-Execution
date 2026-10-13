@@ -1,16 +1,21 @@
 package io.euhedral_execution.hardware_utils.monitor.internal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import io.euhedral_execution.hardware_utils.monitor.ResourceMonitor.MonitorListener;
 import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.HardwareUtilization;
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadMXBean;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -150,5 +155,70 @@ class LatestValueDispatcherTest {
         dispatcher.awaitClosed(); // Reentrant close barrier check
 
         assertEquals(1, hookCalls.get());
+    }
+
+    /// Captures the dispatch thread deterministically via a listener callback, then waits until idle.
+    private Thread captureIdleDispatchThread(LatestValueDispatcher d) throws InterruptedException {
+        AtomicReference<Thread> captured = new AtomicReference<>();
+        CountDownLatch seen = new CountDownLatch(1);
+        d.addListener(u -> {
+            captured.compareAndSet(null, Thread.currentThread());
+            seen.countDown();
+        });
+        d.offer(util1);
+        assertTrue(seen.await(5, TimeUnit.SECONDS));
+        Thread t = captured.get();
+        awaitWaiting(t);
+        return t;
+    }
+
+    private static void awaitWaiting(Thread t) {
+        assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+            while (t.getState() != Thread.State.WAITING
+                    && !Thread.currentThread().isInterrupted()) {
+                Thread.yield();
+            }
+        });
+    }
+
+    private static long cpuNanosOver200ms(Thread t) throws InterruptedException {
+        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
+        long before = bean.getThreadCpuTime(t.getId());
+        Thread.sleep(200); // lets wall time pass only; no synchronization depends on it
+        long after = bean.getThreadCpuTime(t.getId());
+        assertTrue(before >= 0 && after >= 0, "dispatch thread terminated");
+        return after - before;
+    }
+
+    @Test
+    void idleDispatcherDoesNotSpin() throws InterruptedException {
+        Assumptions.assumeTrue(ManagementFactory.getThreadMXBean().isThreadCpuTimeSupported());
+        Thread t = captureIdleDispatchThread(dispatcher);
+        long burned = cpuNanosOver200ms(t);
+        assertTrue(burned < 20_000_000L, "CPU ns burned while idle: " + burned);
+    }
+
+    @Test
+    void offerAfterIdleIsDeliveredPromptly() throws InterruptedException {
+        captureIdleDispatchThread(dispatcher);
+        CountDownLatch delivered = new CountDownLatch(1);
+        dispatcher.addListener(u -> delivered.countDown());
+        dispatcher.offer(util2);
+        assertTrue(delivered.await(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    void strayInterruptDoesNotSpinOrBreakDispatcher() throws InterruptedException {
+        Assumptions.assumeTrue(ManagementFactory.getThreadMXBean().isThreadCpuTimeSupported());
+        Thread t = captureIdleDispatchThread(dispatcher);
+        t.interrupt();
+        awaitWaiting(t);
+        long burned = cpuNanosOver200ms(t);
+        assertTrue(burned < 20_000_000L, "CPU ns burned after stray interrupt: " + burned);
+        assertTrue(!t.isInterrupted(), "interrupt flag must be cleared");
+        CountDownLatch delivered = new CountDownLatch(1);
+        dispatcher.addListener(u -> delivered.countDown());
+        dispatcher.offer(util2);
+        assertTrue(delivered.await(5, TimeUnit.SECONDS));
     }
 }

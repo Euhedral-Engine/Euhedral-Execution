@@ -254,8 +254,11 @@ pub fn build(b: *std.Build) void {
       library.install_name = expandInstallName(b, policy.installNameTemplate.?, outputFilename(b, component, architecture));
       library.entitlements = b.path("include/empty-entitlements.plist").getPath(b);
     } else if (std.mem.eql(u8, component.os, "windows")) {
-      // The JNI library has no C/C++ static initialization. Omitting the
-      // MinGW CRT DLL entry avoids its stdio-based pseudo-relocator.
+      // The JNI library has no C/C++ static initialization. Disabling the
+      // explicit entry option leaves the linker's default MinGW CRT DLL entry
+      // (DllMainCRTStartup) and TLS callbacks in place; windows_hardening.cpp
+      // overrides the stdio-based pseudo-relocator that entry would otherwise
+      // link. That startup code runs before JNI_OnLoad.
       library.entry = .disabled;
     }
 

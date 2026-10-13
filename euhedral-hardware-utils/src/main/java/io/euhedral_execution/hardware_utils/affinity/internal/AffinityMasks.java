@@ -2,6 +2,7 @@ package io.euhedral_execution.hardware_utils.affinity.internal;
 
 import java.util.Arrays;
 import java.util.BitSet;
+import org.jspecify.annotations.Nullable;
 
 public final class AffinityMasks {
 
@@ -15,7 +16,7 @@ public final class AffinityMasks {
     /// for logical IDs. Unset bits in `supported` are sparse holes and are rejected.
     ///
     /// @return the owned mask without trailing zero words, or `null` when invalid
-    public static long[] canonical(long[] source, int span, BitSet supported) {
+    public static long @Nullable [] canonical(long @Nullable [] source, int span, BitSet supported) {
         if (source == null || source.length > wordCount(span)) {
             return null;
         }

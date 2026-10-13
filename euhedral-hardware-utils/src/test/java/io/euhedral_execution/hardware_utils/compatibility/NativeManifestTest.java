@@ -78,8 +78,41 @@ class NativeManifestTest {
             assertTrue(paths.noneMatch(Files::isSymbolicLink), "native source tree contains a symlink");
         }
 
-        Path catalog =
+        // zig emits the catalog before the products exist; Gradle appends the sha256 column afterwards.
+        Path zigCatalog =
                 TestPaths.buildDirectory().resolve("generated-resources/native/META-INF/euhedral/native-products.tsv");
-        assertEquals(CATALOG, Files.readString(catalog, StandardCharsets.UTF_8));
+        assertEquals(CATALOG, Files.readString(zigCatalog, StandardCharsets.UTF_8));
+        Path catalog = TestPaths.buildDirectory()
+                .resolve("generated-resources/native-catalog/META-INF/euhedral/native-products.tsv");
+        assertHashedCatalog(Files.readString(catalog, StandardCharsets.UTF_8));
+    }
+
+    /// Asserts that `actual` is [#CATALOG] with a trailing lowercase SHA-256 column on every product row, and that
+    /// each hash is the digest of the installed product it names.
+    static void assertHashedCatalog(String actual) throws Exception {
+        StringBuilder stripped = new StringBuilder();
+        for (String line : actual.split("\n", -1)) {
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.startsWith("product\t")) {
+                String[] fields = line.split("\t", -1);
+                assertEquals(8, fields.length, line);
+                Path product = TestPaths.buildDirectory()
+                        .resolve("generated-resources/native")
+                        .resolve(fields[6].substring(1));
+                assertEquals(
+                        java.util.HexFormat.of()
+                                .formatHex(java.security.MessageDigest.getInstance("SHA-256")
+                                        .digest(Files.readAllBytes(product))),
+                        fields[7],
+                        fields[1]);
+                stripped.append(line, 0, line.lastIndexOf('\t'));
+            } else {
+                stripped.append(line);
+            }
+            stripped.append('\n');
+        }
+        assertEquals(CATALOG, stripped.toString());
     }
 }

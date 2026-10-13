@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Stream;
 import lombok.Getter;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,15 +27,15 @@ public final class LinuxPaths {
     public static final Path CPU_INFO_BASE = Paths.get("/sys/devices/system/cpu/");
     public static final Path THERMAL_BASE = Paths.get("/sys/class/thermal/");
     public static final Path HWMON_BASE = Paths.get("/sys/class/hwmon/");
-    public static final Path CGROUP_V2_USR_PATH;
-    public static final Path CPU_MAX;
-    public static final Path CPU_STAT;
-    public static final Path EFFECTIVE_CPU;
-    public static final Path CPU_PRESSURE;
-    public static final Path MEMORY_MAX;
-    public static final Path MEMORY_CURRENT;
-    public static final Path MEMORY_STAT;
-    public static final Path IO_STAT;
+    public static final @Nullable Path CGROUP_V2_USR_PATH;
+    public static final @Nullable Path CPU_MAX;
+    public static final @Nullable Path CPU_STAT;
+    public static final @Nullable Path EFFECTIVE_CPU;
+    public static final @Nullable Path CPU_PRESSURE;
+    public static final @Nullable Path MEMORY_MAX;
+    public static final @Nullable Path MEMORY_CURRENT;
+    public static final @Nullable Path MEMORY_STAT;
+    public static final @Nullable Path IO_STAT;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxPaths.class));
 
@@ -67,7 +68,7 @@ public final class LinuxPaths {
     @Getter
     private final CgroupMode mode;
 
-    private final Path cgroupV2UserPath;
+    private final @Nullable Path cgroupV2UserPath;
     private final Map<String, Path> v1ControllerMounts;
     private final Map<String, String> v1SelfPaths;
 
@@ -192,7 +193,7 @@ public final class LinuxPaths {
         throw new RuntimeException("cgroupV2 not supported.");
     }
 
-    public Path resolveV2Path(String filename) {
+    public @Nullable Path resolveV2Path(String filename) {
         if (cgroupV2UserPath != null) {
             Path p = cgroupV2UserPath.resolve(filename);
             if (Files.exists(p)) {
@@ -206,7 +207,7 @@ public final class LinuxPaths {
         return null;
     }
 
-    public Path resolveV1Path(String controller, String filename) {
+    public @Nullable Path resolveV1Path(String controller, String filename) {
         Path mount = v1ControllerMounts.get(controller);
         if (mount != null) {
             String subpath = v1SelfPaths.get(controller);

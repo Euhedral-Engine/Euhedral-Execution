@@ -15,6 +15,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 
 @SuppressWarnings("unused")
 public final class TopologyMapper {
@@ -23,7 +24,7 @@ public final class TopologyMapper {
     private final UnmodifiableBitSet allowedCpus;
     private final int[] socketVersions;
     private final AtomicLong submissionSequence = new AtomicLong();
-    private final AtomicReference<PendingRequest> pending = new AtomicReference<>();
+    private final AtomicReference<@Nullable PendingRequest> pending = new AtomicReference<>();
     private final AtomicBoolean drainOwner = new AtomicBoolean();
     // The graph is completely frozen before this volatile write. Reader methods perform one
     // volatile read, which publishes every final value reachable from the selected graph.
@@ -49,7 +50,8 @@ public final class TopologyMapper {
                 new BitSet(), new BitSet(), new BitSet(), fixedNullList(topologyModel.maxSocketId() + 1), -1);
     }
 
-    private static boolean sameMembership(EffectiveSocketTopology first, EffectiveSocketTopology second) {
+    private static boolean sameMembership(
+            @Nullable EffectiveSocketTopology first, @Nullable EffectiveSocketTopology second) {
         if (first == null || second == null) {
             return first == second;
         }
@@ -63,11 +65,11 @@ public final class TopologyMapper {
         return value + 1;
     }
 
-    private static <T> List<T> fixedNullList(int size) {
+    private static <T> List<@Nullable T> fixedNullList(int size) {
         return Collections.unmodifiableList(new ArrayList<>(Collections.nCopies(size, null)));
     }
 
-    public EffectiveSocketTopology getEffectiveSocketTopology(int socketId) {
+    public @Nullable EffectiveSocketTopology getEffectiveSocketTopology(int socketId) {
         EffectiveSystemTopology topology = effectiveTopology;
         if (socketId < 0 || socketId >= topology.socketTopologies.size()) {
             return null;
@@ -163,7 +165,7 @@ public final class TopologyMapper {
         }
 
         int nextGlobalVersion = previous.globalVersion == -1 ? 1 : checkedIncrement(previous.globalVersion, "global");
-        List<EffectiveSocketTopology> nextSockets =
+        List<@Nullable EffectiveSocketTopology> nextSockets =
                 new ArrayList<>(Collections.nCopies(topologyModel.maxSocketId() + 1, null));
         int[] nextSocketVersions = socketVersions.clone();
 
@@ -193,7 +195,7 @@ public final class TopologyMapper {
         effectiveTopology = next;
     }
 
-    private EffectiveSocketTopology buildSocketTopology(
+    private @Nullable EffectiveSocketTopology buildSocketTopology(
             int socketId, BitSet globalCpus, BitSet globalCores, boolean active, int version) {
         if (!active) {
             return null;
@@ -209,8 +211,8 @@ public final class TopologyMapper {
         return new EffectiveSocketTopology(version, socketId, cores, cpus, buildCoreToCpus(cpus));
     }
 
-    private List<BitSet> buildCoreToCpus(BitSet cpus) {
-        List<BitSet> cores = new ArrayList<>(Collections.nCopies(topologyModel.maxCoreId() + 1, null));
+    private List<@Nullable BitSet> buildCoreToCpus(BitSet cpus) {
+        List<@Nullable BitSet> cores = new ArrayList<>(Collections.nCopies(topologyModel.maxCoreId() + 1, null));
         for (int cpu = cpus.nextSetBit(0); cpu >= 0; cpu = cpus.nextSetBit(cpu + 1)) {
             CpuInfo info = topologyModel.cpuInfo().get(cpu);
             BitSet coreCpus = cores.get(info.core());
@@ -232,12 +234,16 @@ public final class TopologyMapper {
     private record PendingRequest(long sequence, UnmodifiableBitSet membership) {}
 
     public record EffectiveSocketTopology(
-            int version, int socketId, BitSet effectiveCores, BitSet effectiveCpus, List<BitSet> effectiveCoreToCpu) {
+            int version,
+            int socketId,
+            BitSet effectiveCores,
+            BitSet effectiveCpus,
+            List<@Nullable BitSet> effectiveCoreToCpu) {
 
         public EffectiveSocketTopology {
             effectiveCores = new UnmodifiableBitSet(Objects.requireNonNull(effectiveCores, "effectiveCores"));
             effectiveCpus = new UnmodifiableBitSet(Objects.requireNonNull(effectiveCpus, "effectiveCpus"));
-            List<BitSet> ownedCoreToCpu =
+            List<@Nullable BitSet> ownedCoreToCpu =
                     new ArrayList<>(Objects.requireNonNull(effectiveCoreToCpu, "effectiveCoreToCpu")
                             .size());
             for (BitSet coreCpus : effectiveCoreToCpu) {
@@ -251,7 +257,7 @@ public final class TopologyMapper {
             BitSet effectiveSockets,
             BitSet effectiveCores,
             BitSet effectiveCpus,
-            List<EffectiveSocketTopology> socketTopologies,
+            List<@Nullable EffectiveSocketTopology> socketTopologies,
             int globalVersion) {
 
         public EffectiveSystemTopology {
@@ -262,6 +268,21 @@ public final class TopologyMapper {
             // rejects those holes, so copy into an unmodifiable list without changing the shape.
             socketTopologies = Collections.unmodifiableList(
                     new ArrayList<>(Objects.requireNonNull(socketTopologies, "socketTopologies")));
+        }
+
+        /// Returns the active sockets without holes, in ascending socket-id order. The ID-indexed
+        /// {@link #socketTopologies()} keeps its {@code null} entries for inactive sockets.
+        ///
+        /// A record cannot carry a private precomputed field without changing its canonical
+        /// constructor, so this allocates a new unmodifiable list on every call.
+        public List<EffectiveSocketTopology> activeSockets() {
+            List<EffectiveSocketTopology> active = new ArrayList<>(effectiveSockets.cardinality());
+            for (@Nullable EffectiveSocketTopology socket : socketTopologies) {
+                if (socket != null) {
+                    active.add(socket);
+                }
+            }
+            return Collections.unmodifiableList(active);
         }
     }
 }

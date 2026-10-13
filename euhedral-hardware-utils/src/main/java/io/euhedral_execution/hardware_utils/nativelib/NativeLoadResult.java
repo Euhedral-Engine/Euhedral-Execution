@@ -2,6 +2,7 @@ package io.euhedral_execution.hardware_utils.nativelib;
 
 import java.nio.file.Path;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 record NativeLoadResult(NativeProduct product, Path extractionPath, List<NativeLoadFailure> failures) {
 
@@ -10,4 +11,4 @@ record NativeLoadResult(NativeProduct product, Path extractionPath, List<NativeL
     }
 }
 
-record NativeLoadFailure(NativeProduct product, Path extractionPath, Throwable cause) {}
+record NativeLoadFailure(NativeProduct product, @Nullable Path extractionPath, Throwable cause) {}

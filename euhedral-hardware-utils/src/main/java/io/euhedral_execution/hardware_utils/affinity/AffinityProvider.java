@@ -1,5 +1,7 @@
 package io.euhedral_execution.hardware_utils.affinity;
 
+import org.jspecify.annotations.Nullable;
+
 /// Operational boundary between common affinity policy and platform facades.
 public interface AffinityProvider {
 
@@ -14,7 +16,7 @@ public interface AffinityProvider {
     /// Captures the calling thread's current exact CPU mask without changing it.
     ///
     /// @return a little-endian mask snapshot, or `null` when exact capture is unavailable
-    default long[] captureAffinity() {
+    default long @Nullable [] captureAffinity() {
         return null;
     }
 
