@@ -25,7 +25,7 @@ public final class TopologyQueries {
         return model.socketInfo().get(socket) != null;
     }
 
-    public static CpuInfo requireCpuInfo(TopologyModel model, int cpu) {
+    public static CpuInfo getCpuInfoOrThrow(TopologyModel model, int cpu) {
         CpuInfo info = model.cpuInfo().get(cpu);
         if (info == null) {
             throw inactive("cpu ", cpu, "logical CPU", model.cpuInfo());
@@ -33,7 +33,7 @@ public final class TopologyQueries {
         return info;
     }
 
-    public static CoreInfo requireCoreInfo(TopologyModel model, int core) {
+    public static CoreInfo getCoreInfoOrThrow(TopologyModel model, int core) {
         CoreInfo info = model.coreInfo().get(core);
         if (info == null) {
             throw inactive("core ", core, "core", model.coreInfo());
@@ -41,7 +41,7 @@ public final class TopologyQueries {
         return info;
     }
 
-    public static SocketInfo requireSocketInfo(TopologyModel model, int socket) {
+    public static SocketInfo getSocketInfoOrThrow(TopologyModel model, int socket) {
         SocketInfo info = model.socketInfo().get(socket);
         if (info == null) {
             throw inactive("socket ", socket, "socket", model.socketInfo());
@@ -49,7 +49,7 @@ public final class TopologyQueries {
         return info;
     }
 
-    public static CpuCacheLayout requireCacheLayout(TopologyModel model, int cpu) {
+    public static CpuCacheLayout getCacheLayoutOrThrow(TopologyModel model, int cpu) {
         CpuCacheLayout layout = model.cacheLayout().get(cpu);
         if (layout == null) {
             throw inactive("cpu ", cpu, "logical CPU", model.cpuInfo());

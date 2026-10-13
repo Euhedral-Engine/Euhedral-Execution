@@ -63,9 +63,9 @@ class SystemInfoTest {
             assertEquals(SystemInfo.getCoreInfo(id) != null, SystemInfo.isActiveCore(id));
             assertEquals(SystemInfo.getSocketInfo(id) != null, SystemInfo.isActiveSocket(id));
             if (SystemInfo.isActiveCpu(id)) {
-                assertEquals(SystemInfo.getCpuInfo(id), SystemInfo.requireCpuInfo(id));
+                assertEquals(SystemInfo.getCpuInfo(id), SystemInfo.getCpuInfoOrThrow(id));
             } else {
-                assertThrows(IllegalArgumentException.class, () -> SystemInfo.requireCpuInfo(probe));
+                assertThrows(IllegalArgumentException.class, () -> SystemInfo.getCpuInfoOrThrow(probe));
             }
         }
         assertFalse(SystemInfo.isActiveCpu(Integer.MAX_VALUE));

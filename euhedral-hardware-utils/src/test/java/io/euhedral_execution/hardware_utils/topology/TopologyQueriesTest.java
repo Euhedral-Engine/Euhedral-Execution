@@ -38,29 +38,29 @@ class TopologyQueriesTest {
     }
 
     @Test
-    void requireCpuInfoReturnsLookupOrNamesIdAndActiveSet() {
-        assertEquals(model.cpuInfo().get(3), TopologyQueries.requireCpuInfo(model, 3));
+    void getCpuInfoOrThrowReturnsLookupOrNamesIdAndActiveSet() {
+        assertEquals(model.cpuInfo().get(3), TopologyQueries.getCpuInfoOrThrow(model, 3));
         IllegalArgumentException e =
-                assertThrows(IllegalArgumentException.class, () -> TopologyQueries.requireCpuInfo(model, 2));
+                assertThrows(IllegalArgumentException.class, () -> TopologyQueries.getCpuInfoOrThrow(model, 2));
         assertEquals("cpu 2 is not an active logical CPU (active: 0-1,3,6-7)", e.getMessage());
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.requireCpuInfo(model, -1))
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.getCpuInfoOrThrow(model, -1))
                 .getMessage()
                 .contains("cpu -1"));
     }
 
     @Test
-    void requireCoreSocketAndCacheLayout() {
-        assertEquals(model.coreInfo().get(0), TopologyQueries.requireCoreInfo(model, 0));
-        assertEquals(model.socketInfo().get(1), TopologyQueries.requireSocketInfo(model, 1));
-        assertEquals(model.cacheLayout().get(7), TopologyQueries.requireCacheLayout(model, 7));
+    void coreSocketAndCacheLayoutOrThrow() {
+        assertEquals(model.coreInfo().get(0), TopologyQueries.getCoreInfoOrThrow(model, 0));
+        assertEquals(model.socketInfo().get(1), TopologyQueries.getSocketInfoOrThrow(model, 1));
+        assertEquals(model.cacheLayout().get(7), TopologyQueries.getCacheLayoutOrThrow(model, 7));
 
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.requireCoreInfo(model, 99))
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.getCoreInfoOrThrow(model, 99))
                 .getMessage()
                 .contains("core 99"));
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.requireSocketInfo(model, 3))
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.getSocketInfoOrThrow(model, 3))
                 .getMessage()
                 .contains("socket 3"));
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.requireCacheLayout(model, 2))
+        assertTrue(assertThrows(IllegalArgumentException.class, () -> TopologyQueries.getCacheLayoutOrThrow(model, 2))
                 .getMessage()
                 .contains("cpu 2"));
     }

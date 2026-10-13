@@ -48,7 +48,8 @@ class NullContractTest {
 
     @Test
     void strictTopologyAccessorsAreNotNullable() throws Exception {
-        for (String name : List.of("requireCpuInfo", "requireCoreInfo", "requireSocketInfo", "requireCacheLayout")) {
+        for (String name :
+                List.of("getCpuInfoOrThrow", "getCoreInfoOrThrow", "getSocketInfoOrThrow", "getCacheLayoutOrThrow")) {
             var method = SystemInfo.class.getMethod(name, int.class);
             assertFalse(
                     method.getAnnotatedReturnType().isAnnotationPresent(Nullable.class),

@@ -216,29 +216,29 @@ public final class SystemInfo {
     /// Strict form of {@link #getCpuInfo(int)}.
     ///
     /// @throws IllegalArgumentException if {@code cpu} is not active; the message names the id and the active set
-    public static CpuInfo requireCpuInfo(int cpu) {
-        return TopologyQueries.requireCpuInfo(TOPOLOGY_MODEL, cpu);
+    public static CpuInfo getCpuInfoOrThrow(int cpu) {
+        return TopologyQueries.getCpuInfoOrThrow(TOPOLOGY_MODEL, cpu);
     }
 
     /// Strict form of {@link #getCoreInfo(int)}.
     ///
     /// @throws IllegalArgumentException if {@code core} is not active
-    public static CoreInfo requireCoreInfo(int core) {
-        return TopologyQueries.requireCoreInfo(TOPOLOGY_MODEL, core);
+    public static CoreInfo getCoreInfoOrThrow(int core) {
+        return TopologyQueries.getCoreInfoOrThrow(TOPOLOGY_MODEL, core);
     }
 
     /// Strict form of {@link #getSocketInfo(int)}.
     ///
     /// @throws IllegalArgumentException if {@code socket} is not active
-    public static SocketInfo requireSocketInfo(int socket) {
-        return TopologyQueries.requireSocketInfo(TOPOLOGY_MODEL, socket);
+    public static SocketInfo getSocketInfoOrThrow(int socket) {
+        return TopologyQueries.getSocketInfoOrThrow(TOPOLOGY_MODEL, socket);
     }
 
     /// Strict form of {@link #getCacheLayout(int)}.
     ///
     /// @throws IllegalArgumentException if {@code cpu} is not active
-    public static CpuCacheLayout requireCacheLayout(int cpu) {
-        return TopologyQueries.requireCacheLayout(TOPOLOGY_MODEL, cpu);
+    public static CpuCacheLayout getCacheLayoutOrThrow(int cpu) {
+        return TopologyQueries.getCacheLayoutOrThrow(TOPOLOGY_MODEL, cpu);
     }
 
     public static @Nullable CpuCacheLayout getCacheLayout(int cpu) {
