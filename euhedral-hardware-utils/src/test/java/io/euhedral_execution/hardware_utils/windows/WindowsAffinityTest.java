@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
@@ -55,5 +56,61 @@ class WindowsAffinityTest {
                 WindowsAffinity.INSTANCE.setTimerResolution(-1000L);
             });
         }
+    }
+
+    @Test
+    void negativeResolutionDoesNotDisableFutureCalls() {
+        AtomicInteger calls = new AtomicInteger();
+        WindowsAffinity affinity = new WindowsAffinity(AffinityCapability.EXACT, true, (resolution, set) -> {
+            calls.incrementAndGet();
+            return 10_000;
+        });
+        assertThrows(IllegalArgumentException.class, () -> affinity.setTimerResolution(-1000L));
+        assertEquals(0, calls.get());
+
+        assertTrue(affinity.setTimerResolution(10_000L));
+        assertEquals(1, calls.get());
+    }
+
+    @Test
+    void unsupportedCapabilityReturnsFalseWithoutNativeCall() {
+        AtomicInteger calls = new AtomicInteger();
+        WindowsAffinity affinity = new WindowsAffinity(AffinityCapability.UNSUPPORTED, false, (resolution, set) -> {
+            calls.incrementAndGet();
+            return 10_000;
+        });
+        assertFalse(affinity.setTimerResolution(10_000L));
+        assertThrows(IllegalArgumentException.class, () -> affinity.setTimerResolution(-1L));
+        assertEquals(0, calls.get());
+    }
+
+    @Test
+    void nativeLinkageAndRuntimeFailuresReturnFalseAndAllowRetry() {
+        AtomicInteger calls = new AtomicInteger();
+        WindowsAffinity affinity = new WindowsAffinity(AffinityCapability.EXACT, true, (resolution, set) -> {
+            switch (calls.incrementAndGet()) {
+                case 1 -> throw new UnsatisfiedLinkError("configured failure");
+                case 2 -> throw new IllegalStateException("configured failure");
+                default -> {
+                    return 10_000;
+                }
+            }
+        });
+        assertFalse(affinity.setTimerResolution(10_000L));
+        assertFalse(affinity.setTimerResolution(10_000L));
+        assertTrue(affinity.setTimerResolution(10_000L));
+        assertEquals(3, calls.get());
+    }
+
+    @Test
+    void secondSuccessfulRequestIsRejectedWithoutNativeCall() {
+        AtomicInteger calls = new AtomicInteger();
+        WindowsAffinity affinity = new WindowsAffinity(AffinityCapability.EXACT, true, (resolution, set) -> {
+            calls.incrementAndGet();
+            return 10_000;
+        });
+        assertTrue(affinity.setTimerResolution(10_000L));
+        assertFalse(affinity.setTimerResolution(10_000L));
+        assertEquals(1, calls.get());
     }
 }

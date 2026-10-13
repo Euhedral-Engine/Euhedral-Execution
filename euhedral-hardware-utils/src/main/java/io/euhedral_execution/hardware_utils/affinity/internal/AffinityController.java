@@ -5,8 +5,13 @@ import io.euhedral_execution.hardware_utils.affinity.AffinityProvider;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class AffinityController {
+
+    // Same name as Constants.getLoggerName(AffinityController.class). Spelled out here because
+    // affinity.internal -> util.internal is not an approved package edge.
+    private static final Logger LOGGER = LoggerFactory.getLogger("euhedral.hardware_utils.AffinityController");
 
     private final AffinityProvider provider;
     private final BitSet supported;
@@ -184,7 +189,14 @@ public final class AffinityController {
         if (provider == null) {
             return false;
         }
-        return provider.setTimerResolution(nanos);
+        try {
+            return provider.setTimerResolution(nanos);
+        } catch (IllegalArgumentException invalid) {
+            throw invalid;
+        } catch (RuntimeException | LinkageError e) {
+            LOGGER.error("Failed to set timer resolution.", e);
+            return false;
+        }
     }
 
     /// Applies an exact mask only after preserving the thread's first original binding.

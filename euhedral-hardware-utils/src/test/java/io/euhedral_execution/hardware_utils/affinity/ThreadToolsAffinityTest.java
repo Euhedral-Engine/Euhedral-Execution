@@ -211,6 +211,34 @@ class ThreadToolsAffinityTest {
     }
 
     @Test
+    void timerResolutionValidationExceptionsPropagateFromController() {
+        FakeProvider provider = new FakeProvider(AffinityCapability.EXACT);
+        AffinityController controller = controller(provider, bits(0), 1);
+        assertThrows(IllegalArgumentException.class, () -> controller.setTimerResolution(-1L));
+        assertEquals(0, provider.timerCalls);
+    }
+
+    @Test
+    void timerResolutionNativeFailuresReturnFalseFromController() {
+        FakeProvider provider = new FakeProvider(AffinityCapability.EXACT);
+        AffinityController controller = controller(provider, bits(0), 1);
+        provider.timerFailure = new UnsatisfiedLinkError("configured failure");
+        assertFalse(controller.setTimerResolution(1_000L));
+        provider.timerFailure = new IllegalStateException("configured failure");
+        assertFalse(controller.setTimerResolution(1_000L));
+        assertEquals(2, provider.timerCalls);
+    }
+
+    @Test
+    void unsupportedTimerResolutionReturnsFalseWithoutThrowingFromController() {
+        FakeProvider provider = new FakeProvider(AffinityCapability.UNSUPPORTED);
+        provider.timerResult = false;
+        AffinityController controller = controller(provider, bits(0), 1);
+        assertFalse(controller.setTimerResolution(1_000L));
+        assertEquals(1, provider.timerCalls);
+    }
+
+    @Test
     void managedOwnersAreNestedLifoThreadOwnedAndCleaned() throws Exception {
         AffinityController controller = controller(null, bits(0, 2), 3);
         assertThrows(IllegalArgumentException.class, () -> controller.bindManagedCpu(1));
@@ -287,6 +315,9 @@ class ThreadToolsAffinityTest {
         private boolean currentLinkageFailure;
         private long[] applied;
         private long[] restored;
+        private int timerCalls;
+        private boolean timerResult = true;
+        private Throwable timerFailure;
 
         private FakeProvider(AffinityCapability capability) {
             this.capability = capability;
@@ -353,7 +384,17 @@ class ThreadToolsAffinityTest {
 
         @Override
         public boolean setTimerResolution(long nanos) {
-            return true;
+            if (nanos < 0) {
+                throw new IllegalArgumentException("Cannot set negative resolution: " + nanos);
+            }
+            timerCalls++;
+            if (timerFailure instanceof Error error) {
+                throw error;
+            }
+            if (timerFailure instanceof RuntimeException failure) {
+                throw failure;
+            }
+            return timerResult;
         }
     }
 }
