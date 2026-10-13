@@ -22,13 +22,14 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// macOS CPU topology provider with sysctl key discovery and P/E core classification.
 public final class MacosSystemLayout {
 
-    public static final MacosSystemLayout INSTANCE;
+    public static final @Nullable MacosSystemLayout INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(MacosSystemLayout.class));
 
     static {
@@ -41,7 +42,7 @@ public final class MacosSystemLayout {
         this(SysctlNative.INSTANCE);
     }
 
-    public MacosSystemLayout(SysctlProvider provider) {
+    public MacosSystemLayout(@Nullable SysctlProvider provider) {
         this.model = TopologyBootstrap.normalize(
                 () -> collect(provider), Runtime.getRuntime().availableProcessors(), LOGGER, "macos");
     }
@@ -50,9 +51,9 @@ public final class MacosSystemLayout {
 
     public static native int getSysctlInt(String key);
 
-    public static native String getSysctlString(String key);
+    public static native @Nullable String getSysctlString(String key);
 
-    private static TopologyInput collect(SysctlProvider provider) {
+    private static TopologyInput collect(@Nullable SysctlProvider provider) {
         if (provider == null) {
             return fallbackInput(Runtime.getRuntime().availableProcessors());
         }

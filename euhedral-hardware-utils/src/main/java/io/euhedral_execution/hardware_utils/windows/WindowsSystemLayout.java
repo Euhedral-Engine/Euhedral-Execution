@@ -30,12 +30,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class WindowsSystemLayout {
 
-    public static final WindowsSystemLayout INSTANCE;
+    public static final @Nullable WindowsSystemLayout INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsSystemLayout.class));
 
     static {
@@ -61,7 +62,7 @@ public final class WindowsSystemLayout {
                 TopologyBootstrap.normalize(provider, Runtime.getRuntime().availableProcessors(), LOGGER, "windows");
     }
 
-    private static native byte[] getRawTopologyInfo();
+    private static native byte @Nullable [] getRawTopologyInfo();
 
     private static TopologyInput translate(List<SystemLogicalProcessorInformation> relationships) {
         List<ProcessorRelationship> packages = new ArrayList<>();

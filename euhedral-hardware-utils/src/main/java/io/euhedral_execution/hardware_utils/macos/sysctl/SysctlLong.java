@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.macos.sysctl;
 
 import java.util.OptionalLong;
+import org.jspecify.annotations.Nullable;
 
 /// Type-safe long sysctl key query helper.
 public final class SysctlLong {
@@ -13,7 +14,7 @@ public final class SysctlLong {
     }
 
     /// Query sysctl long value using the specified sysctl provider.
-    public static OptionalLong query(SysctlProvider provider, String key) {
+    public static OptionalLong query(@Nullable SysctlProvider provider, @Nullable String key) {
         if (provider == null || key == null) {
             return OptionalLong.empty();
         }

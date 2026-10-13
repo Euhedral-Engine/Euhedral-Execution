@@ -6,13 +6,14 @@ import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// Native Linux thread affinity, CPU discovery, and timer slack provider facade.
 public final class LinuxAffinity extends ThreadPinner {
 
-    public static final LinuxAffinity INSTANCE;
+    public static final @Nullable LinuxAffinity INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxAffinity.class));
 
     static {
@@ -47,7 +48,7 @@ public final class LinuxAffinity extends ThreadPinner {
 
     /// Captures the calling thread's current exact CPU mask without changing it.
     @Override
-    public long[] captureAffinity() {
+    public long @Nullable [] captureAffinity() {
         if (capability() == AffinityCapability.UNSUPPORTED) {
             return null;
         }

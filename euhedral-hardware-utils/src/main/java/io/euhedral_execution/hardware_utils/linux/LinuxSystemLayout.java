@@ -24,6 +24,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,7 +36,7 @@ import org.slf4j.LoggerFactory;
 /// `null` holes for offline or unmapped CPU IDs.
 public final class LinuxSystemLayout {
 
-    public static final LinuxSystemLayout INSTANCE;
+    public static final @Nullable LinuxSystemLayout INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(LinuxSystemLayout.class));
     private static final Path CPU_ROOT = Path.of("/sys/devices/system/cpu");
 
@@ -58,7 +59,7 @@ public final class LinuxSystemLayout {
     /// Scans sysfs CPU root directory for `cpu\d+` subdirectories, collecting topology
     /// attributes, cache domains, and core classification data. Returns an empty `TopologyInput`
     /// if `cpuRoot` is absent or unreadable.
-    private static TopologyInput collect(Path cpuRoot) {
+    private static TopologyInput collect(@Nullable Path cpuRoot) {
         if (cpuRoot == null || !Files.isDirectory(cpuRoot)) {
             return new TopologyInput("linux", List.of(), List.of());
         }
@@ -140,7 +141,7 @@ public final class LinuxSystemLayout {
 
     /// Parses Linux cpulist syntax such as `0-3,6,8-11`. Returns `null` (unknown) for empty or
     /// malformed input, including reversed ranges.
-    static BitSet parseCpuList(String text) {
+    static @Nullable BitSet parseCpuList(@Nullable String text) {
         if (text == null) {
             return null;
         }

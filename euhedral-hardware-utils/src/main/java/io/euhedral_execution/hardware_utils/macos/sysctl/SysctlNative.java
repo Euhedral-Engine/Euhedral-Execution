@@ -6,6 +6,7 @@ import io.euhedral_execution.hardware_utils.util.OSName;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import org.jspecify.annotations.Nullable;
 
 /// Native sysctl provider delegating to JNI native sysctlbyname wrappers.
 public final class SysctlNative implements SysctlProvider {
@@ -28,7 +29,7 @@ public final class SysctlNative implements SysctlProvider {
     }
 
     @Override
-    public Optional<Object> queryRaw(String key) {
+    public Optional<Object> queryRaw(@Nullable String key) {
         if (!loaded || key == null) {
             return Optional.empty();
         }
@@ -44,7 +45,7 @@ public final class SysctlNative implements SysctlProvider {
     }
 
     @Override
-    public OptionalInt getInt(String key) {
+    public OptionalInt getInt(@Nullable String key) {
         if (!loaded || key == null) {
             return OptionalInt.empty();
         }
@@ -63,7 +64,7 @@ public final class SysctlNative implements SysctlProvider {
     }
 
     @Override
-    public OptionalLong getLong(String key) {
+    public OptionalLong getLong(@Nullable String key) {
         if (!loaded || key == null) {
             return OptionalLong.empty();
         }
@@ -82,7 +83,7 @@ public final class SysctlNative implements SysctlProvider {
     }
 
     @Override
-    public Optional<String> getString(String key) {
+    public Optional<String> getString(@Nullable String key) {
         if (!loaded || key == null) {
             return Optional.empty();
         }

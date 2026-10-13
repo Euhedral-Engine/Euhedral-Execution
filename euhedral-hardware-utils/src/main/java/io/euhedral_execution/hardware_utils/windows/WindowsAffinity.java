@@ -8,13 +8,14 @@ import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /// Native Windows thread affinity, CPU discovery, and timer resolution provider facade.
 public final class WindowsAffinity extends ThreadPinner {
 
-    public static final WindowsAffinity INSTANCE;
+    public static final @Nullable WindowsAffinity INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(WindowsAffinity.class));
 
     static {
@@ -68,7 +69,7 @@ public final class WindowsAffinity extends ThreadPinner {
 
     /// Captures the calling thread's current exact CPU mask without changing it.
     @Override
-    public long[] captureAffinity() {
+    public long @Nullable [] captureAffinity() {
         if (capability() == AffinityCapability.UNSUPPORTED) {
             return null;
         }

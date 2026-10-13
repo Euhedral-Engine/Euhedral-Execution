@@ -562,7 +562,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     /// Maps a read plus a parsed value to a status. File missing/unreadable: the read status. Key line
     /// absent: UNSUPPORTED, unless that key was parsed before (then it vanished: FAILED). Key line
     /// present but malformed or overflowing: FAILED. Marks the key seen on success.
-    private int counterStatus(String content, long parsed, long scale, boolean keyPresent, int keyBit) {
+    private int counterStatus(@Nullable String content, long parsed, long scale, boolean keyPresent, int keyBit) {
         if (content == null) {
             return readStatus;
         }
@@ -704,7 +704,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
         }
     }
 
-    private void readMemCurrent(Path path) {
+    private void readMemCurrent(@Nullable Path path) {
         String content = readSource(path, SRC_MEM_CUR);
         if (content == null) {
             memCurStatus = readStatus;
@@ -850,7 +850,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     /// Reads a source file and records ABSENT/FAILED in {@link #readStatus} when it returns null. A
     /// source that was read successfully before and is now missing is FAILED (it vanished), while one
     /// never seen is ABSENT (this host does not provide it).
-    private String readSource(Path path, int seenBit) {
+    private @Nullable String readSource(@Nullable Path path, int seenBit) {
         String s = readFileInternal(path);
         if (s != null) {
             seenMask |= seenBit;
@@ -863,7 +863,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     /// Reads at most {@link #MAX_FILE_BYTES} bytes. Returns null for a missing file (readStatus
     /// ABSENT), an I/O error, or a file larger than the cap (readStatus FAILED). Callers hold the
     /// provider lock.
-    private String readFileInternal(Path path) {
+    private @Nullable String readFileInternal(@Nullable Path path) {
         if (path == null || !Files.exists(path)) {
             readStatus = ABSENT;
             return null;
@@ -907,7 +907,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     /// Reads a file of at most 1 MiB, holding the provider lock for the duration. Returns `null` on
     /// failure (the file is missing or unreadable) or when the file is larger than 1 MiB; a truncated
     /// read is never returned because a partial counter file would parse as a plausible wrong value.
-    public @Nullable String readFileBounded(Path path) {
+    public @Nullable String readFileBounded(@Nullable Path path) {
         acquireLock();
         try {
             return readFileInternal(path);

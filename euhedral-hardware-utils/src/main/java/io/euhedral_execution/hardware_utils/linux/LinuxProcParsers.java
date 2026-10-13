@@ -1,5 +1,7 @@
 package io.euhedral_execution.hardware_utils.linux;
 
+import org.jspecify.annotations.Nullable;
+
 /// Allocation-free parsers for the `/proc` and cgroup text formats read by
 /// {@link LinuxResourceProvider}. Every method is total: malformed, truncated or overflowing input
 /// yields `-1`, `false` or `0` as documented, and never an exception. Quantities are non-negative,
@@ -86,11 +88,11 @@ final class LinuxProcParsers {
     /// Parses a `cpuN user nice system idle iowait [irq softirq steal ...]` line into
     /// `out[0]=N, out[1]=iowait, out[2]=steal` (steal is 0 on kernels that omit it). Returns false
     /// for the aggregate `cpu` line, truncated lines, non-numeric fields or a short `out`.
-    static boolean parseStatLine(String line, long[] out) {
+    static boolean parseStatLine(String line, long @Nullable [] out) {
         return parseStatLine(line, 0, line.length(), out);
     }
 
-    static boolean parseStatLine(CharSequence s, int from, int to, long[] out) {
+    static boolean parseStatLine(CharSequence s, int from, int to, long @Nullable [] out) {
         if (out == null || out.length < 3 || from < 0 || to > s.length() || to - from < 5) {
             return false;
         }
@@ -220,7 +222,7 @@ final class LinuxProcParsers {
     /// `out[0]=major, out[1..2]=device-name [start,end) offsets, out[3]=sectors read,
     /// out[4]=sectors written, out[5]=ms spent doing I/O`; 0 if the line is too short to be a
     /// record; -1 if it has the fields but one is malformed.
-    static int parseDiskstatsLine(CharSequence s, int from, int to, long[] out) {
+    static int parseDiskstatsLine(CharSequence s, int from, int to, long @Nullable [] out) {
         if (out == null || out.length < 6 || from < 0 || to > s.length()) {
             return -1;
         }

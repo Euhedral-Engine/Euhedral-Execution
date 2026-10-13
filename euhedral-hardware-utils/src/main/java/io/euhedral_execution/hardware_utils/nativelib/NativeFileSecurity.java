@@ -20,6 +20,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import org.jspecify.annotations.Nullable;
 
 interface NativeFileSecurity {
 
@@ -181,7 +182,7 @@ interface NativeFileSecurity {
 
         private final OwnerLookup ownerLookup;
         private final UnixIds unixIds;
-        private volatile UserPrincipal currentUser;
+        private volatile @Nullable UserPrincipal currentUser;
 
         PosixSecurity() {
             this(OwnerLookup.DEFAULT, UnixIds.DEFAULT);

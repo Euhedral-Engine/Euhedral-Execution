@@ -57,10 +57,10 @@ final class NativeLibraryExtractor {
     private final AtomicBoolean hookRegistered = new AtomicBoolean();
     // The shutdown hook thread reads these, so they must be safely published.
     private volatile @Nullable IOException prepareFailure;
-    private volatile Path baseDirectory;
-    private volatile Path runDirectory;
-    private volatile Path marker;
-    private volatile Path retainedLibrary;
+    private volatile @Nullable Path baseDirectory;
+    private volatile @Nullable Path runDirectory;
+    private volatile @Nullable Path marker;
+    private volatile @Nullable Path retainedLibrary;
     private volatile long extractedBytes;
     private volatile byte @Nullable [] extractedDigest;
 
@@ -329,7 +329,7 @@ final class NativeLibraryExtractor {
         }
     }
 
-    void candidateFailed(Path library) {
+    void candidateFailed(@Nullable Path library) {
         extractedDigest = null;
         extractedBytes = 0;
         deleteCandidate(library);
@@ -503,7 +503,7 @@ final class NativeLibraryExtractor {
         }
     }
 
-    private void deleteCandidate(Path library) {
+    private void deleteCandidate(@Nullable Path library) {
         if (library == null || !library.getParent().equals(runDirectory)) {
             return;
         }
@@ -540,6 +540,7 @@ final class NativeLibraryExtractor {
     @FunctionalInterface
     interface ResourceInput {
 
+        @Nullable
         InputStream open(String resourcePath) throws IOException;
     }
 

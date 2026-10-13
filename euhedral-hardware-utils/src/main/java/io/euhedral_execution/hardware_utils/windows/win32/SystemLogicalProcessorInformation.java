@@ -4,6 +4,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.List;
+import org.jspecify.annotations.Nullable;
 
 /// [SYSTEM_LOGICAL_PROCESSOR_INFORMATION](https://learn.microsoft.com/en-us/windows/win32/api/winnt/ns-winnt-system_logical_processor_information_ex)
 public abstract class SystemLogicalProcessorInformation {
@@ -14,14 +15,14 @@ public abstract class SystemLogicalProcessorInformation {
         this.relationship = relationship;
     }
 
-    public static List<SystemLogicalProcessorInformation> parse(byte[] rawData) {
+    public static List<SystemLogicalProcessorInformation> parse(byte @Nullable [] rawData) {
         if (rawData == null || rawData.length == 0) {
             return List.of();
         }
         return parse(ByteBuffer.wrap(rawData));
     }
 
-    public static List<SystemLogicalProcessorInformation> parse(ByteBuffer buffer) {
+    public static List<SystemLogicalProcessorInformation> parse(@Nullable ByteBuffer buffer) {
         if (buffer == null || buffer.remaining() == 0) {
             return List.of();
         }

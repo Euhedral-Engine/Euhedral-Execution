@@ -3,6 +3,7 @@ package io.euhedral_execution.hardware_utils.windows;
 import io.euhedral_execution.hardware_utils.affinity.internal.AffinityMasks;
 import io.euhedral_execution.hardware_utils.topology.SystemInfo;
 import java.util.BitSet;
+import org.jspecify.annotations.Nullable;
 
 final class WindowsAffinityCalls {
 
@@ -12,7 +13,7 @@ final class WindowsAffinityCalls {
     ///
     /// @param masks little-endian words, one word per possible 64-CPU processor group
     /// @param call  injectable JNI-shaped operation for production and deterministic tests
-    static boolean apply(long[] masks, RawCall call) {
+    static boolean apply(long @Nullable [] masks, RawCall call) {
         BitSet supported = SystemInfo.getCpuSet();
         long[] request = AffinityMasks.canonical(masks, SystemInfo.getCpuCount(), supported);
         if (request == null || AffinityMasks.nonzeroWords(request) == 0) {

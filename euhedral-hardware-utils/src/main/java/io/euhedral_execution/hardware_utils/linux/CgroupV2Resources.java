@@ -20,6 +20,7 @@ import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,15 +60,15 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
         }
     }
 
-    private final FileChannel procStatChannel;
-    private final FileChannel effectiveCpuChannel;
-    private final FileChannel cpuMaxChannel;
-    private final FileChannel cpuPressureChannel;
-    private final FileChannel cpuStatChannel;
-    private final FileChannel memoryMaxChannel;
-    private final FileChannel memoryCurrentChannel;
-    private final FileChannel memoryStatChannel;
-    private final FileChannel ioStatChannel;
+    private final @Nullable FileChannel procStatChannel;
+    private final @Nullable FileChannel effectiveCpuChannel;
+    private final @Nullable FileChannel cpuMaxChannel;
+    private final @Nullable FileChannel cpuPressureChannel;
+    private final @Nullable FileChannel cpuStatChannel;
+    private final @Nullable FileChannel memoryMaxChannel;
+    private final @Nullable FileChannel memoryCurrentChannel;
+    private final @Nullable FileChannel memoryStatChannel;
+    private final @Nullable FileChannel ioStatChannel;
     private final ByteBuffer buffer = ByteBuffer.allocateDirect(65_536);
 
     private final BitSet effectiveCpus = new BitSet(SystemInfo.getCpuCount());
@@ -79,7 +80,7 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
     private final CpuMetrics cpuMetrics = new CpuMetrics();
 
     private final AtomicBoolean wip = new AtomicBoolean(false);
-    private final AtomicReference<SystemSnapshot> snapshot = new AtomicReference<>();
+    private final AtomicReference<@Nullable SystemSnapshot> snapshot = new AtomicReference<>();
 
     private long lastTotalStallUsec = 0;
 
@@ -152,7 +153,7 @@ public class CgroupV2Resources implements SystemSnapshotProvider {
     }
 
     @Override
-    public SystemSnapshot getSnapshot() {
+    public @Nullable SystemSnapshot getSnapshot() {
         if (!wip.compareAndSet(false, true)) {
             while (wip.get()) {
                 Thread.onSpinWait();

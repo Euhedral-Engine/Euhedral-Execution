@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -238,7 +239,7 @@ final class NativeProductCatalog {
         }
     }
 
-    private static String normalizeOs(String value) {
+    private static String normalizeOs(@Nullable String value) {
         String normalized = normalizeProperty(value);
         StringBuilder result = new StringBuilder(normalized.length());
         boolean whitespace = false;
@@ -257,7 +258,7 @@ final class NativeProductCatalog {
         return result.toString();
     }
 
-    private static String normalizeProperty(String value) {
+    private static String normalizeProperty(@Nullable String value) {
         if (value == null) {
             return "";
         }
@@ -284,7 +285,7 @@ final class NativeProductCatalog {
         return new IOException(message.startsWith("native-loader:") ? message : "native-loader: " + message, cause);
     }
 
-    List<NativeProduct> select(String osName, String osArch) {
+    List<NativeProduct> select(@Nullable String osName, @Nullable String osArch) {
         String normalizedOs = normalizeOs(osName);
         String canonicalOs = resolveOs(osName, normalizedOs);
         String normalizedArch = normalizeProperty(osArch);
@@ -304,11 +305,11 @@ final class NativeProductCatalog {
         return selected;
     }
 
-    String canonicalOs(String osName) {
+    String canonicalOs(@Nullable String osName) {
         return resolveOs(osName, normalizeOs(osName));
     }
 
-    String canonicalArchitecture(String osArch) {
+    String canonicalArchitecture(@Nullable String osArch) {
         String canonical = architectureAliases.get(normalizeProperty(osArch));
         if (canonical == null) {
             throw new IllegalArgumentException("native-loader: unsupported architecture '" + osArch
@@ -317,7 +318,7 @@ final class NativeProductCatalog {
         return canonical;
     }
 
-    private String resolveOs(String original, String normalized) {
+    private String resolveOs(@Nullable String original, String normalized) {
         List<OsRule> exact = osRules.stream()
                 .filter(rule -> rule.match() == Match.EXACT && rule.value().equals(normalized))
                 .toList();

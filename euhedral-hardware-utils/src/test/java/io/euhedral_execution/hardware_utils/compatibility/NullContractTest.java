@@ -260,4 +260,157 @@ class NullContractTest {
                 Class.forName(base + "internal.MonotonicClock"),
                 Class.forName(base + "internal.pressure.PressureState"));
     }
+
+    private static Class<?> load(String name) throws ClassNotFoundException {
+        // Not initialized: reflecting on declarations must not run platform static initializers.
+        return Class.forName(
+                "io.euhedral_execution.hardware_utils." + name, false, NullContractTest.class.getClassLoader());
+    }
+
+    @Test
+    void platformInstancesAreNullableOnOtherOperatingSystems() throws Exception {
+        for (String name : List.of(
+                "linux.LinuxAffinity",
+                "linux.LinuxSystemLayout",
+                "macos.MacosAffinity",
+                "macos.MacosResources",
+                "macos.MacosSystemLayout",
+                "windows.WindowsAffinity",
+                "windows.WindowsResources",
+                "windows.WindowsSystemLayout")) {
+            assertTrue(nullableField(load(name), "INSTANCE"), name + ".INSTANCE is null on other operating systems");
+        }
+        var paths = load("linux.LinuxPaths");
+        for (String name : List.of(
+                "CGROUP_V2_USR_PATH",
+                "CPU_MAX",
+                "CPU_STAT",
+                "EFFECTIVE_CPU",
+                "CPU_PRESSURE",
+                "MEMORY_MAX",
+                "MEMORY_CURRENT",
+                "MEMORY_STAT",
+                "IO_STAT")) {
+            assertTrue(nullableField(paths, name), "LinuxPaths." + name + " is null off Linux");
+        }
+        assertTrue(nullableField(paths, "cgroupV2UserPath"));
+        assertTrue(nullableReturn(paths, "resolveV2Path", String.class));
+        assertTrue(nullableReturn(paths, "resolveV1Path", String.class, String.class));
+    }
+
+    @Test
+    void platformReturnsAndParametersAreNullable() throws Exception {
+        assertTrue(nullableReturn(load("linux.LinuxAffinity"), "captureAffinity"));
+        assertTrue(nullableReturn(load("windows.WindowsAffinity"), "captureAffinity"));
+        assertTrue(nullableReturn(load("windows.WindowsResources"), "getSnapshot"), "empty AtomicReference");
+        assertTrue(nullableReturn(load("linux.CgroupV2Resources"), "getSnapshot"), "no snapshot yet or failure");
+        assertTrue(((AnnotatedParameterizedType) load("linux.CgroupV2Resources")
+                        .getDeclaredField("snapshot")
+                        .getAnnotatedType())
+                .getAnnotatedActualTypeArguments()[0].isAnnotationPresent(Nullable.class));
+        for (String name : List.of(
+                "procStatChannel",
+                "effectiveCpuChannel",
+                "cpuMaxChannel",
+                "cpuPressureChannel",
+                "cpuStatChannel",
+                "memoryMaxChannel",
+                "memoryCurrentChannel",
+                "memoryStatChannel",
+                "ioStatChannel")) {
+            assertTrue(nullableField(load("linux.CgroupV2Resources"), name), name);
+        }
+        assertTrue(((AnnotatedParameterizedType) load("windows.WindowsResources")
+                        .getDeclaredField("snapshot")
+                        .getAnnotatedType())
+                .getAnnotatedActualTypeArguments()[0].isAnnotationPresent(Nullable.class));
+        var provider = load("linux.LinuxResourceProvider");
+        assertTrue(nullableReturn(provider, "readFileInternal", java.nio.file.Path.class));
+        assertTrue(nullableParam(provider, "readFileInternal", 0, java.nio.file.Path.class));
+        assertTrue(nullableReturn(provider, "readSource", java.nio.file.Path.class, int.class));
+        assertTrue(nullableParam(provider, "readSource", 0, java.nio.file.Path.class, int.class));
+        var layout = load("linux.LinuxSystemLayout");
+        assertTrue(nullableReturn(layout, "parseCpuList", String.class));
+        assertTrue(nullableParam(layout, "parseCpuList", 0, String.class));
+        var calls = load("linux.LinuxAffinityCalls");
+        assertTrue(nullableParam(calls, "apply", 0, long[].class, load("linux.LinuxAffinityCalls$RawCall")));
+        assertTrue(nullableParam(
+                load("windows.WindowsAffinityCalls"),
+                "apply",
+                0,
+                long[].class,
+                load("windows.WindowsAffinityCalls$RawCall")));
+        assertTrue(nullableParam(load("macos.MacosSystemLayout"), "collect", 0, load("macos.sysctl.SysctlProvider")));
+        assertTrue(load("macos.MacosSystemLayout")
+                .getConstructor(load("macos.sysctl.SysctlProvider"))
+                .getAnnotatedParameterTypes()[0]
+                .isAnnotationPresent(Nullable.class));
+        assertTrue(load("macos.MacosResources")
+                .getConstructor(load("macos.MacosResources$MacosResourceProbe"))
+                .getAnnotatedParameterTypes()[0]
+                .isAnnotationPresent(Nullable.class));
+    }
+
+    @Test
+    void nativeMethodsReturningObjectsAreNullable() throws Exception {
+        assertTrue(
+                nullableReturn(load("macos.MacosSystemLayout"), "getSysctlString", String.class),
+                "JNI may return NULL");
+        assertTrue(nullableReturn(load("macos.MacosResources"), "getCpuTimes"));
+        assertTrue(nullableReturn(load("macos.MacosResources"), "getMemorySnapshot"));
+        assertTrue(nullableReturn(load("windows.WindowsSystemLayout"), "getRawTopologyInfo"));
+    }
+
+    @Test
+    void sysctlAndWin32InputsAreNullable() throws Exception {
+        var provider = load("macos.sysctl.SysctlProvider");
+        for (String name : List.of("SysctlInt", "SysctlLong", "SysctlString")) {
+            var helper = load("macos.sysctl." + name);
+            assertTrue(nullableParam(helper, "query", 0, provider, String.class), name + " provider");
+            assertTrue(nullableParam(helper, "query", 1, provider, String.class), name + " key");
+        }
+        var nativeProvider = load("macos.sysctl.SysctlNative");
+        assertTrue(nullableParam(nativeProvider, "queryRaw", 0, String.class));
+        assertTrue(nullableParam(nativeProvider, "getInt", 0, String.class));
+        assertTrue(nullableParam(nativeProvider, "getLong", 0, String.class));
+        assertTrue(nullableParam(nativeProvider, "getString", 0, String.class));
+        var info = load("windows.win32.SystemLogicalProcessorInformation");
+        assertTrue(nullableParam(info, "parse", 0, byte[].class));
+        assertTrue(nullableParam(info, "parse", 0, java.nio.ByteBuffer.class));
+    }
+
+    @Test
+    void nativeLibraryNullContracts() throws Exception {
+        var failure = load("nativelib.NativeLoadFailure");
+        assertTrue(nullableComponent(failure, "extractionPath"), "extraction can fail before a path exists");
+        var input = load("nativelib.NativeLibraryExtractor$ResourceInput");
+        assertTrue(nullableReturn(input, "open", String.class), "getResourceAsStream returns null");
+        var extractor = load("nativelib.NativeLibraryExtractor");
+        for (String name : List.of("baseDirectory", "runDirectory", "marker", "retainedLibrary")) {
+            assertTrue(nullableField(extractor, name), name + " is null until prepared and after cleanup");
+        }
+        assertTrue(nullableParam(extractor, "candidateFailed", 0, java.nio.file.Path.class));
+        assertTrue(nullableParam(extractor, "deleteCandidate", 0, java.nio.file.Path.class));
+        var catalog = load("nativelib.NativeProductCatalog");
+        assertTrue(nullableParam(catalog, "normalizeProperty", 0, String.class));
+        assertTrue(nullableParam(catalog, "canonicalOs", 0, String.class));
+        assertTrue(nullableParam(catalog, "canonicalArchitecture", 0, String.class));
+        assertTrue(nullableParam(catalog, "select", 0, String.class, String.class));
+        assertTrue(nullableParam(catalog, "select", 1, String.class, String.class));
+        assertTrue(nullableParam(load("nativelib.NativeLibraryLoader"), "sanitize", 0, String.class));
+        assertTrue(nullableParam(load("nativelib.NativeLibraryLoader"), "load", 0, String.class, String.class));
+        assertTrue(nullableParam(load("nativelib.NativeLibraryLoader"), "load", 1, String.class, String.class));
+        assertTrue(nullableField(load("nativelib.NativeFileSecurity$PosixSecurity"), "currentUser"));
+    }
+
+    @Test
+    void platformPackagesAreNullMarked() throws Exception {
+        assertMarked(
+                load("linux.LinuxPaths"),
+                load("macos.MacosAffinity"),
+                load("macos.sysctl.SysctlProvider"),
+                load("windows.WindowsAffinity"),
+                load("windows.win32.GroupAffinity"),
+                load("nativelib.JNIClassLoader"));
+    }
 }

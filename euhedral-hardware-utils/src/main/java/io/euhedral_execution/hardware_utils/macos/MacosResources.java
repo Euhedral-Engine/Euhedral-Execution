@@ -12,12 +12,13 @@ import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.locks.LockSupport;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public final class MacosResources implements SystemSnapshotProvider {
 
-    public static final MacosResources INSTANCE;
+    public static final @Nullable MacosResources INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(MacosResources.class));
     private static final VarHandle LOCK_STATE;
     private static final long LOG_RATE_LIMIT_NS = 60_000_000_000L;
@@ -55,7 +56,7 @@ public final class MacosResources implements SystemSnapshotProvider {
     }
 
     /// Constructs a MacosResources provider with a custom resource probe.
-    public MacosResources(MacosResourceProbe probe) {
+    public MacosResources(@Nullable MacosResourceProbe probe) {
         this.probe = probe != null ? probe : DefaultNativeProbe.INSTANCE;
     }
 
@@ -75,13 +76,13 @@ public final class MacosResources implements SystemSnapshotProvider {
     public static native boolean getMachTimebaseNative(int[] outNumerDenom);
 
     /// Legacy native method to query CPU usage times.
-    public static native long[] getCpuTimes();
+    public static native long @Nullable [] getCpuTimes();
 
     /// Legacy native method to query system CPU load.
     public static native double getSystemCpuLoad();
 
     /// Legacy native method to query memory snapshot.
-    public static native long[] getMemorySnapshot();
+    public static native long @Nullable [] getMemorySnapshot();
 
     /// Legacy native method to query cumulative disk I/O bytes.
     public static native long getIoBytes();

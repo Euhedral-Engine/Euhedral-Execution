@@ -5,6 +5,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
 final class NativeLibraryLoader {
@@ -54,7 +55,7 @@ final class NativeLibraryLoader {
                 .toString();
     }
 
-    private static String sanitize(String value) {
+    private static String sanitize(@Nullable String value) {
         if (value == null) {
             return "";
         }
@@ -66,7 +67,7 @@ final class NativeLibraryLoader {
         return sanitized.toString().strip();
     }
 
-    NativeLoadResult load(String osName, String osArch) {
+    NativeLoadResult load(@Nullable String osName, @Nullable String osArch) {
         String canonicalOs = catalog.canonicalOs(osName);
         String canonicalArchitecture = catalog.canonicalArchitecture(osArch);
         List<NativeProduct> candidates = catalog.select(osName, osArch);

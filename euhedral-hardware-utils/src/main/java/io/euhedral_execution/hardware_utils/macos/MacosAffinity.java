@@ -5,6 +5,7 @@ import io.euhedral_execution.hardware_utils.affinity.ThreadPinner;
 import io.euhedral_execution.hardware_utils.nativelib.JNIClassLoader;
 import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,7 +13,7 @@ import org.slf4j.LoggerFactory;
 /// safe timer resolution policy, and physical current CPU query semantics returning -1 (UNSUPPORTED).
 public final class MacosAffinity extends ThreadPinner {
 
-    public static final MacosAffinity INSTANCE;
+    public static final @Nullable MacosAffinity INSTANCE;
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(MacosAffinity.class));
 
     static {
