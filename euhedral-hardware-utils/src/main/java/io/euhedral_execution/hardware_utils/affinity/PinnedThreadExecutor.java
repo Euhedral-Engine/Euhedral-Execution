@@ -21,6 +21,7 @@ import java.util.function.Function;
 import java.util.function.IntPredicate;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -79,7 +80,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     }
 
     /// Returns the currently running executor for a logical CPU without restarting it.
-    public static PinnedThreadExecutor get(long cpu) {
+    public static @Nullable PinnedThreadExecutor get(long cpu) {
         return REGISTRY.get(cpu);
     }
 
@@ -498,7 +499,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         private final TaskBinding taskBinding;
         private final ThreadConfigurator threadConfigurator;
         private final IntPredicate cpuValidator;
-        private HookRegistration hook;
+        private @Nullable HookRegistration hook;
         private boolean shutdownInProgress;
 
         /// Creates an isolated registry from bounded cleanup, hook, and task-binding roles.
@@ -616,7 +617,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         }
 
         /// Observes only a live RUNNING identity and performs safe stale cleanup when possible.
-        synchronized PinnedThreadExecutor get(long cpuKey) {
+        synchronized @Nullable PinnedThreadExecutor get(long cpuKey) {
             validateCpu(cpuKey);
             RegistryEntry entry = this.entries.get(cpuKey);
             if (entry == null) {
@@ -639,12 +640,12 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         }
 
         /// Runs an optional deterministic barrier after the snapshot closes while still gated.
-        void closeAll(Runnable afterClosedWhileLocked) {
+        void closeAll(@Nullable Runnable afterClosedWhileLocked) {
             closeAll(afterClosedWhileLocked, null);
         }
 
         /// Runs deterministic barriers around release of the close-all registry gate.
-        void closeAll(Runnable afterClosedWhileLocked, Runnable beforeCleanupAfterRelease) {
+        void closeAll(@Nullable Runnable afterClosedWhileLocked, @Nullable Runnable beforeCleanupAfterRelease) {
             List<CloseRequest> requests;
             synchronized (this) {
                 requests = new ArrayList<>(this.entries.size());
@@ -704,19 +705,19 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
         }
 
         /// Returns the exact mapped executor regardless of lifecycle for race assertions.
-        synchronized PinnedThreadExecutor executorForTest(long cpuKey) {
+        synchronized @Nullable PinnedThreadExecutor executorForTest(long cpuKey) {
             RegistryEntry entry = this.entries.get(cpuKey);
             return entry == null ? null : entry.executor().get();
         }
 
         /// Returns the exact mapped cleanup action for delayed-action assertions.
-        synchronized Runnable actionForTest(long cpuKey) {
+        synchronized @Nullable Runnable actionForTest(long cpuKey) {
             RegistryEntry entry = this.entries.get(cpuKey);
             return entry == null ? null : entry.action();
         }
 
         /// Returns the mapped lifecycle control for deterministic state-boundary assertions.
-        synchronized LifecycleControl controlForTest(long cpuKey) {
+        synchronized @Nullable LifecycleControl controlForTest(long cpuKey) {
             RegistryEntry entry = this.entries.get(cpuKey);
             return entry == null ? null : entry.control();
         }
@@ -774,7 +775,7 @@ public final class PinnedThreadExecutor extends AbstractExecutorService implemen
     /// Holds the registration assigned during construction and before registry publication.
     private static final class CleanupSlot {
 
-        private CleanupRegistration registration;
+        private @Nullable CleanupRegistration registration;
 
         /// Assigns the one registration before the executor is published.
         private void initialize(CleanupRegistration registration) {

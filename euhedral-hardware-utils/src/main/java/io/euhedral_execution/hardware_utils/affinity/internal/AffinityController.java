@@ -4,16 +4,17 @@ import io.euhedral_execution.hardware_utils.affinity.AffinityCapability;
 import io.euhedral_execution.hardware_utils.affinity.AffinityProvider;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
 public final class AffinityController {
 
-    private final AffinityProvider provider;
+    private final @Nullable AffinityProvider provider;
     private final BitSet supported;
     private final int span;
     private final AffinityCapability capability;
     private final UnmodifiableBitSet baseMask;
-    private final Logger logger;
+    private final @Nullable Logger logger;
     private final ThreadLocal<Lease> leases = new ThreadLocal<>();
     private final ThreadLocal<Owner> owners = new ThreadLocal<>();
 
@@ -23,7 +24,8 @@ public final class AffinityController {
     /// @param supported logical CPU IDs accepted by this controller; copied on entry
     /// @param span      exclusive upper bound for logical CPU IDs, including sparse holes
     /// @param logger    bounded diagnostics sink, or `null` in deterministic tests
-    public AffinityController(AffinityProvider provider, BitSet supported, int span, Logger logger) {
+    public AffinityController(
+            @Nullable AffinityProvider provider, BitSet supported, int span, @Nullable Logger logger) {
         if (span < 1 || span > AffinityMasks.MAX_BITS) {
             throw new IllegalArgumentException("Invalid logical CPU span: " + span);
         }
@@ -69,7 +71,7 @@ public final class AffinityController {
     }
 
     /// Validates and applies the complete little-endian logical CPU mask.
-    public boolean setAffinity(long[] source) {
+    public boolean setAffinity(long @Nullable [] source) {
         long[] request = canonical(source);
         if (request == null || capability == AffinityCapability.UNSUPPORTED) {
             return false;
@@ -93,7 +95,7 @@ public final class AffinityController {
     }
 
     /// Copies and validates every logical CPU before allocating the request mask.
-    public boolean setAffinity(int[] source) {
+    public boolean setAffinity(int @Nullable [] source) {
         if (source == null || source.length == 0 || source.length > AffinityMasks.MAX_BITS) {
             return false;
         }
@@ -113,7 +115,7 @@ public final class AffinityController {
     }
 
     /// Copies and validates a caller-owned bit set before conversion.
-    public boolean setAffinity(BitSet source) {
+    public boolean setAffinity(@Nullable BitSet source) {
         if (source == null || source.isEmpty() || source.length() > AffinityMasks.MAX_BITS) {
             return false;
         }
@@ -269,7 +271,7 @@ public final class AffinityController {
         }
     }
 
-    private long[] canonical(long[] source) {
+    private long @Nullable [] canonical(long @Nullable [] source) {
         return AffinityMasks.canonical(source, span, supported);
     }
 
@@ -277,7 +279,7 @@ public final class AffinityController {
         return cpu >= 0 && cpu < span && supported.get(cpu);
     }
 
-    private void diagnostic(String message, Throwable failure) {
+    private void diagnostic(String message, @Nullable Throwable failure) {
         if (logger == null) {
             return;
         }
@@ -298,9 +300,9 @@ public final class AffinityController {
     private static final class Lease {
 
         private final boolean exact;
-        private final long[] snapshot;
+        private final long @Nullable [] snapshot;
 
-        private Lease(boolean exact, long[] snapshot) {
+        private Lease(boolean exact, long @Nullable [] snapshot) {
             this.exact = exact;
             this.snapshot = snapshot == null ? null : snapshot.clone();
         }
@@ -309,11 +311,11 @@ public final class AffinityController {
     private final class Owner implements ManagedOwner {
 
         private final Thread thread;
-        private final Owner predecessor;
+        private final @Nullable Owner predecessor;
         private final int cpu;
         private boolean closed;
 
-        private Owner(Thread thread, Owner predecessor, int cpu) {
+        private Owner(Thread thread, @Nullable Owner predecessor, int cpu) {
             this.thread = thread;
             this.predecessor = predecessor;
             this.cpu = cpu;
