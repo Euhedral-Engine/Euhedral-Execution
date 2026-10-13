@@ -61,6 +61,38 @@ public final class LatestValueDispatcher {
         }
     }
 
+    /// Blocks the dispatch thread until a value is pending or close has begun.
+    ///
+    /// Lost-wakeup argument. The only producers of work for this thread are
+    /// `offer` (writes `pendingUtilization` under the lock, releases the lock with a
+    /// release store, then unparks) and `beginClose` (sets CLOSING under the lock, then
+    /// unparks). Listener add/remove only mutate the snapshot that is read at dispatch time and
+    /// never create work. Every condition is re-read here under the same lock, so a producer's
+    /// state is visible once its lock release precedes our acquire; if it releases after our
+    /// check, its subsequent unpark leaves a permit that makes the next `park` return at once.
+    /// The condition is re-checked after every `park` return, so spurious wake-ups and
+    /// interrupts are harmless.
+    ///
+    /// Interrupts are treated as wake-ups: the flag is cleared so a stray interrupt cannot make
+    /// `park` return immediately forever, and the loop re-checks state. Close is signalled by
+    /// CLOSING, not by interruption, so close semantics are unchanged.
+    private void awaitWork() {
+        while (true) {
+            acquireLock();
+            boolean ready;
+            try {
+                ready = (boolean) CLOSING.getAcquire(this) || pendingUtilization != null;
+            } finally {
+                releaseLock();
+            }
+            if (ready) {
+                return;
+            }
+            LockSupport.park(this);
+            Thread.interrupted();
+        }
+    }
+
     /// Adds a listener using object identity deduplication while the dispatcher is open.
     public void addListener(@NonNull MonitorListener listener) {
         Objects.requireNonNull(listener);
@@ -158,8 +190,7 @@ public final class LatestValueDispatcher {
                 HardwareUtilization toDispatch;
                 MonitorListener[] listenersSnapshot;
 
-                awaitWhile(() ->
-                        !(boolean) CLOSING.getAcquire(this) && !this.lock.getAcquire() && pendingUtilization == null);
+                awaitWork();
                 try {
                     acquireLock();
 
