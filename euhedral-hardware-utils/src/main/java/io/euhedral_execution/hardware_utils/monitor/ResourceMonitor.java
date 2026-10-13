@@ -100,6 +100,7 @@ public class ResourceMonitor implements AutoCloseable {
             MonotonicClock clock,
             DeadlineWaiter waiter,
             ThreadFactory threadFactory) {
+        LatestValueDispatcher createdDispatcher = null;
         try {
             if (sampleRate == null || sampleRate.toNanos() <= 0) {
                 throw new IllegalArgumentException("Invalid sample rate");
@@ -113,7 +114,8 @@ public class ResourceMonitor implements AutoCloseable {
             this.waiter = waiter;
             this.threadFactory = threadFactory;
             this.provider = SystemSnapshotCompatibilityAdapter.wrap(provider);
-            this.dispatcher = new LatestValueDispatcher();
+            createdDispatcher = new LatestValueDispatcher();
+            this.dispatcher = createdDispatcher;
 
             // Initialization: do not sample in constructor.
             int cpuCount = SystemInfo.getCpuCount();
@@ -122,6 +124,10 @@ public class ResourceMonitor implements AutoCloseable {
 
         } catch (Throwable t) {
             this.state = CLOSED;
+            if (createdDispatcher != null) {
+                // Its thread is already running; nothing else owns it, so stop it before propagating.
+                createdDispatcher.beginClose(null);
+            }
             throw t;
         }
     }
@@ -336,6 +342,9 @@ public class ResourceMonitor implements AutoCloseable {
                         // stop()/start()/close() CAS the state before unparking us and we re-read the state
                         // on every wakeup, so neither a lost nor a spurious wakeup can strand this thread.
                         LockSupport.park(this);
+                        // A set interrupt flag makes park return immediately, so clear it or this loop spins.
+                        // close() signals through the state, which is re-read at the top of the loop.
+                        Thread.interrupted();
                         continue;
                     }
                     if (s == STARTING) {

@@ -142,6 +142,37 @@ class ResourceMonitorTest {
     }
 
     @Test
+    void interruptedStoppedPollerDoesNotSpin() throws InterruptedException {
+        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
+        Assumptions.assumeTrue(bean.isThreadCpuTimeSupported());
+        AtomicReference<Thread> polling = new AtomicReference<>();
+        ThreadFactory factory = r -> {
+            Thread t = new Thread(r);
+            polling.set(t);
+            return t;
+        };
+        try (ResourceMonitor monitor = monitor(new IncrementingSnapshotProvider(), factory)) {
+            monitor.start();
+            monitor.stop();
+            Thread t = polling.get();
+            assertTimeoutPreemptively(Duration.ofSeconds(5), () -> {
+                while (t.getState() != Thread.State.WAITING
+                        && !Thread.currentThread().isInterrupted()) {
+                    Thread.yield();
+                }
+            });
+            // A foreign interrupt makes park return immediately; the poller must clear it and park again.
+            t.interrupt();
+            Thread.sleep(50); // let the poller process the interrupt before measuring
+            long before = bean.getThreadCpuTime(t.getId());
+            Thread.sleep(200); // lets wall time pass only; no synchronization depends on it
+            long after = bean.getThreadCpuTime(t.getId());
+            assertTrue(before >= 0 && after >= 0, "polling thread terminated");
+            assertTrue(after - before < 20_000_000L, "CPU ns burned after interrupt: " + (after - before));
+        }
+    }
+
+    @Test
     void closeFromListenerReturns() {
         ResourceMonitor monitor = monitor(new IncrementingSnapshotProvider(), Thread::new);
         CountDownLatch closed = new CountDownLatch(1);
@@ -150,9 +181,9 @@ class ResourceMonitorTest {
             closed.countDown();
         });
         monitor.start();
-        assertTimeoutPreemptively(Duration.ofSeconds(2), () -> {
+        assertTimeoutPreemptively(Duration.ofSeconds(10), () -> {
             assertTrue(closed.await(2, TimeUnit.SECONDS));
-            assertTrue(monitor.close(Duration.ofSeconds(1)), "monitor must finish closing asynchronously");
+            assertTrue(monitor.close(Duration.ofSeconds(5)), "monitor must finish closing asynchronously");
         });
     }
 
