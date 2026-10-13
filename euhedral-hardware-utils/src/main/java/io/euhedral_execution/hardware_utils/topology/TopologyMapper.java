@@ -269,5 +269,20 @@ public final class TopologyMapper {
             socketTopologies = Collections.unmodifiableList(
                     new ArrayList<>(Objects.requireNonNull(socketTopologies, "socketTopologies")));
         }
+
+        /// Returns the active sockets without holes, in ascending socket-id order. The ID-indexed
+        /// {@link #socketTopologies()} keeps its {@code null} entries for inactive sockets.
+        ///
+        /// A record cannot carry a private precomputed field without changing its canonical
+        /// constructor, so this allocates a new unmodifiable list on every call.
+        public List<EffectiveSocketTopology> activeSockets() {
+            List<EffectiveSocketTopology> active = new ArrayList<>(effectiveSockets.cardinality());
+            for (EffectiveSocketTopology socket : socketTopologies) {
+                if (socket != null) {
+                    active.add(socket);
+                }
+            }
+            return Collections.unmodifiableList(active);
+        }
     }
 }

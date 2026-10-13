@@ -21,6 +21,20 @@ final class TopologyHelpers {
                         "linux", List.of(linuxCpu(0, 0, 0), linuxCpu(3, 0, 1), linuxCpu(7, 1, 0)), List.of()));
     }
 
+    /// Sparse CPUs {0, 1, 3, 4, 6, 7} over three sockets (one core each pair of CPUs).
+    static TopologyModel sparseThreeSocketModel() {
+        return new TopologyNormalizer()
+                .normalize(new TopologyInput(
+                        "linux",
+                        List.of(
+                                linuxCpu(0, 0, 0),
+                                linuxCpu(1, 0, 1),
+                                linuxCpu(3, 1, 0),
+                                linuxCpu(6, 2, 0),
+                                linuxCpu(7, 2, 1)),
+                        List.of()));
+    }
+
     static TopologyModel coreZeroModel() {
         return new TopologyNormalizer().normalize(new TopologyInput("fallback", List.of(fallbackCpu(5)), List.of()));
     }

@@ -53,4 +53,21 @@ class SystemInfoTest {
         assertEquals(bits(0), SystemInfo.fromHexMask("0x1"));
         assertThrows(NumberFormatException.class, () -> SystemInfo.fromHexMask("not-a-mask"));
     }
+
+    @Test
+    void presenceAndStrictAccessorsAgreeWithNullableLookups() {
+        int limit = Math.max(SystemInfo.getCpuCount(), SystemInfo.getMaxCoreId()) + 3;
+        for (int id = -1; id < limit; id++) {
+            final int probe = id;
+            assertEquals(SystemInfo.getCpuInfo(id) != null, SystemInfo.isActiveCpu(id));
+            assertEquals(SystemInfo.getCoreInfo(id) != null, SystemInfo.isActiveCore(id));
+            assertEquals(SystemInfo.getSocketInfo(id) != null, SystemInfo.isActiveSocket(id));
+            if (SystemInfo.isActiveCpu(id)) {
+                assertEquals(SystemInfo.getCpuInfo(id), SystemInfo.requireCpuInfo(id));
+            } else {
+                assertThrows(IllegalArgumentException.class, () -> SystemInfo.requireCpuInfo(probe));
+            }
+        }
+        assertFalse(SystemInfo.isActiveCpu(Integer.MAX_VALUE));
+    }
 }

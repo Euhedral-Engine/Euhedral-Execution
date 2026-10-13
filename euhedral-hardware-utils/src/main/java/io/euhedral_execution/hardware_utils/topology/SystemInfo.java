@@ -7,6 +7,7 @@ import io.euhedral_execution.hardware_utils.monitor.SystemUtilization.SystemSnap
 import io.euhedral_execution.hardware_utils.topology.internal.MaskCodec;
 import io.euhedral_execution.hardware_utils.topology.internal.TopologyBootstrap;
 import io.euhedral_execution.hardware_utils.topology.internal.TopologyModel;
+import io.euhedral_execution.hardware_utils.topology.internal.TopologyQueries;
 import io.euhedral_execution.hardware_utils.util.OSName;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import io.euhedral_execution.hardware_utils.util.internal.Constants;
@@ -194,6 +195,50 @@ public final class SystemInfo {
 
     public static @Nullable CpuInfo getCpuInfo(int cpu) {
         return CPU_INFO.get(cpu);
+    }
+
+    /// Returns whether {@code cpu} is an active logical CPU, equivalent to {@code getCpuInfo(cpu) != null}.
+    /// Never throws; negative and out-of-range ids are simply not active.
+    public static boolean isActiveCpu(int cpu) {
+        return TopologyQueries.isActiveCpu(TOPOLOGY_MODEL, cpu);
+    }
+
+    /// Returns whether {@code core} is an active core, equivalent to {@code getCoreInfo(core) != null}.
+    public static boolean isActiveCore(int core) {
+        return TopologyQueries.isActiveCore(TOPOLOGY_MODEL, core);
+    }
+
+    /// Returns whether {@code socket} is an active socket, equivalent to {@code getSocketInfo(socket) != null}.
+    public static boolean isActiveSocket(int socket) {
+        return TopologyQueries.isActiveSocket(TOPOLOGY_MODEL, socket);
+    }
+
+    /// Strict form of {@link #getCpuInfo(int)}.
+    ///
+    /// @throws IllegalArgumentException if {@code cpu} is not active; the message names the id and the active set
+    public static CpuInfo requireCpuInfo(int cpu) {
+        return TopologyQueries.requireCpuInfo(TOPOLOGY_MODEL, cpu);
+    }
+
+    /// Strict form of {@link #getCoreInfo(int)}.
+    ///
+    /// @throws IllegalArgumentException if {@code core} is not active
+    public static CoreInfo requireCoreInfo(int core) {
+        return TopologyQueries.requireCoreInfo(TOPOLOGY_MODEL, core);
+    }
+
+    /// Strict form of {@link #getSocketInfo(int)}.
+    ///
+    /// @throws IllegalArgumentException if {@code socket} is not active
+    public static SocketInfo requireSocketInfo(int socket) {
+        return TopologyQueries.requireSocketInfo(TOPOLOGY_MODEL, socket);
+    }
+
+    /// Strict form of {@link #getCacheLayout(int)}.
+    ///
+    /// @throws IllegalArgumentException if {@code cpu} is not active or has no cache layout
+    public static CpuCacheLayout requireCacheLayout(int cpu) {
+        return TopologyQueries.requireCacheLayout(TOPOLOGY_MODEL, cpu);
     }
 
     public static @Nullable CpuCacheLayout getCacheLayout(int cpu) {
