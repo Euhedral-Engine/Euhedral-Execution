@@ -12,6 +12,7 @@ import io.euhedral_execution.hardware_utils.windows.WindowsResources;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 
 public final class TopologyBootstrap {
@@ -55,7 +56,7 @@ public final class TopologyBootstrap {
         return owner;
     }
 
-    public static SystemSnapshotProvider resources(Logger logger) {
+    public static @Nullable SystemSnapshotProvider resources(Logger logger) {
         try {
             if (OSName.isLinux()) {
                 return new LinuxResourceProvider();

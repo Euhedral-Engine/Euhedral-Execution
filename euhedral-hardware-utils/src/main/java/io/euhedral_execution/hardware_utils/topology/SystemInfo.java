@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.StringJoiner;
 import lombok.Getter;
 import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,7 +37,7 @@ public final class SystemInfo {
     public static final int MAX_CORE_ID;
     public static final int MAX_SOCKET_ID;
 
-    public static final SystemSnapshotProvider SNAPSHOTTER;
+    public static final @Nullable SystemSnapshotProvider SNAPSHOTTER;
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Constants.getLoggerName(SystemInfo.class));
     private static final UnmodifiableBitSet CPU_SET;
@@ -183,19 +184,19 @@ public final class SystemInfo {
         return "\u001b[1;35m" + line + "\u001b[0m";
     }
 
-    public static SocketInfo getSocketInfo(int socket) {
+    public static @Nullable SocketInfo getSocketInfo(int socket) {
         return SOCKET_INFO.get(socket);
     }
 
-    public static CoreInfo getCoreInfo(int core) {
+    public static @Nullable CoreInfo getCoreInfo(int core) {
         return CORE_INFO.get(core);
     }
 
-    public static CpuInfo getCpuInfo(int cpu) {
+    public static @Nullable CpuInfo getCpuInfo(int cpu) {
         return CPU_INFO.get(cpu);
     }
 
-    public static CpuCacheLayout getCacheLayout(int cpu) {
+    public static @Nullable CpuCacheLayout getCacheLayout(int cpu) {
         return CPU_CACHE.get(cpu);
     }
 
