@@ -5,13 +5,8 @@ import io.euhedral_execution.hardware_utils.affinity.AffinityProvider;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
 import java.util.BitSet;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public final class AffinityController {
-
-    // Same name as Constants.getLoggerName(AffinityController.class). Spelled out here because
-    // affinity.internal -> util.internal is not an approved package edge.
-    private static final Logger LOGGER = LoggerFactory.getLogger("euhedral.hardware_utils.AffinityController");
 
     private final AffinityProvider provider;
     private final BitSet supported;
@@ -189,12 +184,14 @@ public final class AffinityController {
         if (provider == null) {
             return false;
         }
+        if (nanos < 0) {
+            // Each provider owns its negative-input exception type; do not translate it into false.
+            return provider.setTimerResolution(nanos);
+        }
         try {
             return provider.setTimerResolution(nanos);
-        } catch (IllegalArgumentException invalid) {
-            throw invalid;
-        } catch (RuntimeException | LinkageError e) {
-            LOGGER.error("Failed to set timer resolution.", e);
+        } catch (RuntimeException | LinkageError failure) {
+            diagnostic("Timer resolution request failed", failure);
             return false;
         }
     }
