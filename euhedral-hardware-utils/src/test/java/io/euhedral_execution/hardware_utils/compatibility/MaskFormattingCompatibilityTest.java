@@ -69,6 +69,7 @@ class MaskFormattingCompatibilityTest {
         set.set(63);
         set.set(64);
         set.set(1023);
+        set.set(1024);
         assertEquals(set, SystemInfo.fromHexMask(SystemInfo.toHexMask(set)));
     }
 

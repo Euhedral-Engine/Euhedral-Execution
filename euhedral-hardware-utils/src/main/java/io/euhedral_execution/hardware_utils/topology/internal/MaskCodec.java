@@ -5,6 +5,8 @@ import java.util.StringJoiner;
 
 public final class MaskCodec {
 
+    private static final int MAX_CHUNKS = 1 << 26;
+
     private MaskCodec() {}
 
     /**
@@ -36,6 +38,7 @@ public final class MaskCodec {
                 chunkCount++;
             }
         }
+        checkChunkCount(chunkCount);
         BitSet set = new BitSet(32 * chunkCount);
         int start = 0;
         for (int index = 0; index < chunkCount; index++) {
@@ -47,6 +50,14 @@ public final class MaskCodec {
             start = next + 1;
         }
         return set;
+    }
+
+    /// Caps the chunk count so `32 * chunkCount` and the per-chunk bit offsets cannot overflow an int.
+    static void checkChunkCount(int chunkCount) {
+        if (chunkCount > MAX_CHUNKS) {
+            throw new NumberFormatException(
+                    "mask has " + chunkCount + " chunks; at most " + MAX_CHUNKS + " (2^26) are supported");
+        }
     }
 
     private static void parseChunk(String mask, int from, int to, int index, int fromRight, BitSet set) {
