@@ -413,4 +413,43 @@ class NullContractTest {
                 load("windows.win32.GroupAffinity"),
                 load("nativelib.JNIClassLoader"));
     }
+
+    @Test
+    void everyMainPackageIsNullMarked() throws Exception {
+        // The tests run on the classpath, so enumerate packages from the compiled main classes directory
+        // (the same source PackageDependencyTest scans) and load one class per package without
+        // initializing it.
+        String property = System.getProperty("classes.directory");
+        org.junit.jupiter.api.Assertions.assertNotNull(property, "classes.directory system property is not set");
+        String root = "io/euhedral_execution/hardware_utils";
+        java.util.Map<String, String> classPerPackage = new java.util.TreeMap<>();
+        for (String directory : property.split(java.io.File.pathSeparator)) {
+            java.nio.file.Path base = java.nio.file.Path.of(directory);
+            try (var files = java.nio.file.Files.walk(base.resolve(root))) {
+                for (java.nio.file.Path file : (Iterable<java.nio.file.Path>) files::iterator) {
+                    String name = file.getFileName().toString();
+                    if (!name.endsWith(".class")
+                            || name.equals("package-info.class")
+                            || name.equals("module-info.class")) {
+                        continue;
+                    }
+                    String relative = base.relativize(file).toString().replace(java.io.File.separatorChar, '/');
+                    String className = relative.substring(0, relative.length() - ".class".length())
+                            .replace('/', '.');
+                    String packageName = className.substring(0, className.lastIndexOf('.'));
+                    classPerPackage.putIfAbsent(packageName, className);
+                }
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertFalse(classPerPackage.isEmpty(), "no main classes found in " + property);
+        List<String> unmarked = new java.util.ArrayList<>();
+        for (var entry : classPerPackage.entrySet()) {
+            Class<?> anchor = Class.forName(entry.getValue(), false, NullContractTest.class.getClassLoader());
+            if (!anchor.getPackage().isAnnotationPresent(NullMarked.class)) {
+                unmarked.add(entry.getKey());
+            }
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(
+                List.of(), unmarked, "every main package must have a package-info annotated @NullMarked");
+    }
 }
