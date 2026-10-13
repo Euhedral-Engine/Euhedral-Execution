@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.monitor.internal;
 
 import io.euhedral_execution.hardware_utils.monitor.sampling.samples.SlowHardwareSample;
+import org.jspecify.annotations.Nullable;
 
 /// Anchors an independent 5-second slow-sample attempt grid and retains the last
 /// successful slow sample within a 15-second TTL.
@@ -29,7 +30,7 @@ public final class SlowSampleCache {
     private long nextAttemptNs;
 
     /// The last successfully stored slow sample, or null if none.
-    private SlowHardwareSample lastSample;
+    private @Nullable SlowHardwareSample lastSample;
 
     public SlowSampleCache() {
         this.nextAttemptNs = 0L;
@@ -76,7 +77,7 @@ public final class SlowSampleCache {
     ///
     /// Age is computed as evaluationNs - sample.observedAtNs() using signed
     /// subtraction. A negative age (clock anomaly) treats the sample as expired.
-    public SlowHardwareSample resolve(long evaluationNs) {
+    public @Nullable SlowHardwareSample resolve(long evaluationNs) {
         if (lastSample == null) {
             return null;
         }

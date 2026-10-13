@@ -68,8 +68,8 @@ public class ResourceMonitor implements AutoCloseable {
     private final SampleStateEngine stateEngine;
 
     private volatile PressureState pressureState;
-    private volatile Thread pollingThread;
-    private volatile HardwareUtilization lastUtilization;
+    private volatile @Nullable Thread pollingThread;
+    private volatile @Nullable HardwareUtilization lastUtilization;
 
     // For coalesced stopped read
     private volatile boolean coalescedReadPending = false;

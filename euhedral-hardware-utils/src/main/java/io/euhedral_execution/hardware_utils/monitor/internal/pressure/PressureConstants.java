@@ -1,6 +1,7 @@
 package io.euhedral_execution.hardware_utils.monitor.internal.pressure;
 
 import io.euhedral_execution.hardware_utils.monitor.sampling.enums.ThermalSeverity;
+import org.jspecify.annotations.Nullable;
 
 final class PressureConstants {
 
@@ -46,7 +47,7 @@ final class PressureConstants {
         return x;
     }
 
-    static double thermalLoss(ThermalSeverity severity) {
+    static double thermalLoss(@Nullable ThermalSeverity severity) {
         if (severity == null) {
             return THERMAL_LOSS_NOMINAL;
         }

@@ -24,6 +24,7 @@ import io.euhedral_execution.hardware_utils.monitor.sampling.signals.SystemSlowI
 import io.euhedral_execution.hardware_utils.monitor.sampling.signals.SystemSlowSignals;
 import io.euhedral_execution.hardware_utils.monitor.sampling.signals.ThermalSignal;
 import io.euhedral_execution.hardware_utils.util.UnmodifiableBitSet;
+import org.jspecify.annotations.Nullable;
 
 /// Per-monitor-instance state engine for converting raw provider samples into resolved interval
 /// records (CounterDelta, ResolvedLong, ResolvedDouble, LatencyInterval, IntervalHardwareSample).
@@ -86,7 +87,7 @@ public final class SampleStateEngine {
     /// Slow-sample cache with its own 5-second anchored attempt grid.
     private final SlowSampleCache slowCache = new SlowSampleCache();
     private long lastEvaluationNs;
-    private UnmodifiableBitSet lastMembership;
+    private @Nullable UnmodifiableBitSet lastMembership;
     private long lastMembershipObservedAtNs;
     /// Constructs an engine for the given fixed logical CPU span and fast period.
     ///
@@ -189,7 +190,7 @@ public final class SampleStateEngine {
 
     /// Stores a successful slow sample and advances the grid anchor.
     /// sample must not be null; call this only when the provider returned successfully.
-    public void processSlow(long pollStartNs, SlowHardwareSample sample) {
+    public void processSlow(long pollStartNs, @Nullable SlowHardwareSample sample) {
         if (sample != null) {
             slowCache.anchorAndStore(pollStartNs, sample);
         }
@@ -216,7 +217,7 @@ public final class SampleStateEngine {
     ///   strictly newer outer observedAtNs may replace it; stale provider output
     ///   cannot remap topology. Removing a CPU from membership immediately clears its
     ///   per-CPU baselines and gauge states.
-    public IntervalHardwareSample processFast(long evaluationNs, FastHardwareSample sample) {
+    public @Nullable IntervalHardwareSample processFast(long evaluationNs, @Nullable FastHardwareSample sample) {
         if (lastEvaluationNs != 0 && (evaluationNs - lastEvaluationNs) <= 0) {
             // Regressing or duplicate monitor time: clear all state and produce no publication.
             clearAll();
@@ -488,7 +489,7 @@ public final class SampleStateEngine {
         ///
         /// UNSUPPORTED clears the baseline immediately.
         /// TRANSIENT_FAILURE retains the baseline for TTL but produces no contribution.
-        CounterDelta evaluate(CounterSignal signal, long outerObservedAtNs, long evaluationNs, long ttl) {
+        CounterDelta evaluate(@Nullable CounterSignal signal, long outerObservedAtNs, long evaluationNs, long ttl) {
             if (signal == null || signal.validity() != SignalValidity.VALID) {
                 if (signal != null && signal.validity() == SignalValidity.UNSUPPORTED) {
                     hasBaseline = false;
@@ -564,7 +565,7 @@ public final class SampleStateEngine {
 
         /// Updates the stored double gauge value from signal. Strictly newer timestamps only;
         /// TRANSIENT_FAILURE is ignored; UNSUPPORTED clears.
-        void updateDouble(DoubleGaugeSignal signal) {
+        void updateDouble(@Nullable DoubleGaugeSignal signal) {
             if (signal == null || signal.validity() == SignalValidity.UNSUPPORTED) {
                 hasValue = false;
                 return;
@@ -580,7 +581,7 @@ public final class SampleStateEngine {
         }
 
         /// Updates the stored long gauge value from signal.
-        void updateLong(LongGaugeSignal signal) {
+        void updateLong(@Nullable LongGaugeSignal signal) {
             if (signal == null || signal.validity() == SignalValidity.UNSUPPORTED) {
                 hasValue = false;
                 return;
@@ -594,7 +595,7 @@ public final class SampleStateEngine {
         }
 
         /// Updates the stored thermal severity from signal.
-        void updateThermal(ThermalSignal signal) {
+        void updateThermal(@Nullable ThermalSignal signal) {
             if (signal == null || signal.validity() == SignalValidity.UNSUPPORTED) {
                 hasValue = false;
                 return;
@@ -608,7 +609,7 @@ public final class SampleStateEngine {
         }
 
         /// Updates the stored boolean value from signal.
-        void updateBoolean(BooleanSignal signal) {
+        void updateBoolean(@Nullable BooleanSignal signal) {
             if (signal == null || signal.validity() == SignalValidity.UNSUPPORTED) {
                 hasValue = false;
                 return;
