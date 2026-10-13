@@ -1,6 +1,8 @@
 package io.euhedral_execution.hardware_utils.topology;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.BitSet;
@@ -23,6 +25,26 @@ class SystemInfoTest {
             String mask = SystemInfo.toHexMask(expected);
             assertEquals(expected, SystemInfo.fromHexMask(mask), mask);
         }
+    }
+
+    @Test
+    void recordToStringDoesNotTouchGlobals() {
+        SystemInfo.CpuCacheLayout layout = new SystemInfo.CpuCacheLayout(
+                Integer.MAX_VALUE - 1,
+                SystemInfo.DEFAULT_L1,
+                SystemInfo.DEFAULT_L2,
+                SystemInfo.DEFAULT_L3,
+                1,
+                1,
+                1,
+                "1",
+                "1",
+                "1",
+                64);
+        assertDoesNotThrow(layout::toString);
+
+        SystemInfo.CoreInfo pCore = new SystemInfo.CoreInfo("1", true, 0, 0);
+        assertFalse(pCore.toString().contains("\u001b"), pCore.toString());
     }
 
     @Test

@@ -13,6 +13,7 @@ import io.euhedral_execution.hardware_utils.util.internal.Constants;
 import io.euhedral_execution.hardware_utils.windows.WindowsSystemLayout;
 import java.util.BitSet;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.StringJoiner;
@@ -55,7 +56,7 @@ public final class SystemInfo {
     private static final boolean X86;
 
     static {
-        String arch = System.getProperty("os.arch").toLowerCase();
+        String arch = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
         X86 = !(arch.startsWith("aarch64") || arch.contains("arm64"));
 
         TOPOLOGY_MODEL = selectTopology();
@@ -81,8 +82,13 @@ public final class SystemInfo {
         cores.or(E_CORE_SET);
         CORE_SET = UnmodifiableBitSet.wrap(cores);
 
-        String debugOut = asString();
-        LOGGER.debug("\n{}", debugOut);
+        if (LOGGER.isDebugEnabled()) {
+            try {
+                LOGGER.debug("\n{}", asString());
+            } catch (RuntimeException e) {
+                LOGGER.debug("topology dump failed", e);
+            }
+        }
     }
 
     private SystemInfo() {}
@@ -143,14 +149,14 @@ public final class SystemInfo {
         for (int i = 0; i < MAX_CORE_ID + 1; i++) {
             CoreInfo info = getCoreInfo(i);
             if (info != null) {
-                sj.add(info.toString());
+                sj.add(info.pCore() ? pCoreColor(info.toString()) : info.toString());
             }
         }
         sj.add(lineBreak);
         for (int i = 0; i < CPU_COUNT; i++) {
             CpuInfo info = getCpuInfo(i);
             if (info != null) {
-                sj.add(info.toString());
+                sj.add(isPCore(info.core()) ? pCoreColor(info.toString()) : info.toString());
             }
         }
         sj.add(lineBreak);
@@ -159,11 +165,22 @@ public final class SystemInfo {
             if (layout == null) {
                 continue;
             }
-            sj.add(layout.toString());
+            CpuInfo cpu = getCpuInfo(layout.cpu());
+            boolean pCore = cpu != null && isPCore(cpu.core());
+            sj.add(pCore ? pCoreColor(layout.toString()) : layout.toString());
         }
         sj.add(lineBreak);
 
         return sj.toString();
+    }
+
+    private static boolean isPCore(int core) {
+        CoreInfo info = CORE_INFO.get(core);
+        return info != null && info.pCore();
+    }
+
+    private static String pCoreColor(String line) {
+        return "\u001b[1;35m" + line + "\u001b[0m";
     }
 
     public static SocketInfo getSocketInfo(int socket) {
@@ -265,12 +282,10 @@ public final class SystemInfo {
 
         @Override
         public @NonNull String toString() {
-            String base = CpuInfo.class.getSimpleName() + ": ["
+            return CpuInfo.class.getSimpleName() + ": ["
                     + "cpu = " + cpu + ", "
                     + "core = " + core + ", "
                     + "socket = " + socket + "]";
-            CoreInfo pCore = CORE_INFO.get(core);
-            return pCore != null && pCore.pCore ? pCore.color(base) : base;
         }
     }
 
@@ -282,16 +297,11 @@ public final class SystemInfo {
 
         @Override
         public @NonNull String toString() {
-            String base = CoreInfo.class.getSimpleName() + ": ["
+            return CoreInfo.class.getSimpleName() + ": ["
                     + "cpuHexMask = \"" + cpuHexMask + "\", "
                     + "pCore = " + pCore + ", "
                     + "core = " + core + ", "
                     + "socket = " + socket + "]";
-            return pCore ? color(base) : base;
-        }
-
-        private String color(String base) {
-            return "\u001b[1;35m" + base + "\u001b[0m";
         }
     }
 
@@ -342,7 +352,7 @@ public final class SystemInfo {
 
         @Override
         public @NonNull String toString() {
-            String base = CpuCacheLayout.class.getSimpleName()
+            return CpuCacheLayout.class.getSimpleName()
                     + ": [cpu = " + cpu + ", "
                     + "bytesL1 = " + formatBytes(bytesL1) + ", "
                     + "bytesL2 = " + formatBytes(bytesL2) + ", "
@@ -354,8 +364,6 @@ public final class SystemInfo {
                     + "maskL2 = \"" + maskL2 + "\", "
                     + "maskL3 = \"" + maskL3 + "\", "
                     + "cacheLineBytes = " + cacheLineBytes + "]";
-            CoreInfo pCore = CORE_INFO.get(CPU_INFO.get(cpu).core);
-            return pCore != null && pCore.pCore ? pCore.color(base) : base;
         }
 
         private String formatBytes(long bytes) {
