@@ -62,7 +62,8 @@ final class LinuxProcParsers {
         return e - s == 3 && content.startsWith("max", s);
     }
 
-    /// Quota in microseconds from `cpu.max`. -1 for `max`, an absent, zero or malformed quota.
+    /// Quota in microseconds from `cpu.max`. -1 for `max`, and also for an absent or malformed quota
+    /// and for an explicit `0` (a zero quota is invalid, not "no quota").
     static long parseCpuMaxQuotaMicros(String content) {
         int end = content.length();
         int s = skipSpaces(content, 0, end);
@@ -173,6 +174,24 @@ final class LinuxProcParsers {
             i = e + 1;
         }
         return -1L;
+    }
+
+    /// True if some line starts with `key` followed by whitespace, whatever follows.
+    static boolean hasKeyedLine(String content, String key) {
+        int n = content.length();
+        int kl = key.length();
+        int i = 0;
+        while (i < n) {
+            int e = content.indexOf('\n', i);
+            if (e < 0) {
+                e = n;
+            }
+            if (content.startsWith(key, i) && i + kl < e && isSpace(content.charAt(i + kl))) {
+                return true;
+            }
+            i = e + 1;
+        }
+        return false;
     }
 
     /// The `total=` microsecond counter of the `some` line of a PSI file, or -1.

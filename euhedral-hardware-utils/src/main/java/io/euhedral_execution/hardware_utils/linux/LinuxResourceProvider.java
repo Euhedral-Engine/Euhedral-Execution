@@ -86,6 +86,17 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     private static final int SRC_MEMINFO = 1 << 10;
     private static final int SRC_DISKSTATS = 1 << 11;
     private static final int SRC_IO_PRESSURE = 1 << 12;
+    // Per-key seen bits: a file can be present while a key is legitimately missing (cpu.stat has no
+    // throttled_usec when the cpu controller is not enabled for the cgroup).
+    private static final int KEY_USAGE = 1 << 13;
+    private static final int KEY_THROTTLE = 1 << 14;
+
+    // I/O stall source, chosen at first sight and never switched: the two counters have unrelated
+    // baselines, so mixing them mid-stream would corrupt deltas.
+    private static final int IO_SRC_UNCHOSEN = 0;
+    private static final int IO_SRC_PRESSURE = 1;
+    private static final int IO_SRC_DISKSTATS = 2;
+    private int ioStallSource = IO_SRC_UNCHOSEN;
 
     // Per-provider scratch and result slots, all guarded by lockState; nothing here allocates per tick.
     private byte[] scratch = new byte[16_384];
@@ -162,7 +173,10 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
     }
 
     /// Exact (fractional) CPU quota as of the most recent {@link #sampleFast(long)} or
-    /// {@link #getSnapshot()}. {@code FastHardwareSample#quotaCapacityCpus()} is a whole-CPU long
+    /// {@link #getSnapshot()} (this provider updates it from both; {@code WindowsResources} updates
+    /// it from {@code sampleFast} only). It holds the latest sampled value, not a value tied to one
+    /// sample: callers should compare its {@code observedAtNs} with the sample's timestamp. {@code
+    /// FastHardwareSample#quotaCapacityCpus()} is a whole-CPU long
     /// and truncates toward zero (a 0.5 CPU quota reads 0); this signal carries the unrounded value.
     /// It is UNSUPPORTED until the first sample, and TRANSIENT_FAILURE when the quota could not be
     /// read or parsed.
@@ -183,8 +197,9 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             readMemoryStats();
             readFilteredDiskIoBytes();
 
-            // The legacy snapshot has no validity channel: a value that is not OK reads as 0 (and an
-            // unreadable quota as the effective-CPU count), exactly the pre-existing legacy shape.
+            // The legacy snapshot has no validity channel: a value that is not OK reads as 0, except an
+            // unreadable quota (effective-CPU count) and an unreadable memory limit (Long.MAX_VALUE,
+            // i.e. unlimited), which match the pre-existing legacy shape.
             double quotaCpus = quotaStatus == OK ? quotaCpusValue : effectiveCpus.cardinality();
             long periodMicros = periodStatus == OK ? quotaPeriodMicros : DEFAULT_PERIOD_MICROS;
             long[] memSnap = new long[] {
@@ -479,21 +494,24 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
         String content = null;
         long v = -1L;
         long scale = 1L;
+        boolean keyPresent = false;
         if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             content = readSource(paths.resolveV2Path("cpu.stat"), SRC_CPU_STAT);
             if (content != null) {
                 v = LinuxProcParsers.parseKeyedLong(content, "usage_usec");
+                keyPresent = LinuxProcParsers.hasKeyedLine(content, "usage_usec");
                 scale = 1000L;
             }
         } else if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V1) {
             content = readSource(paths.resolveV1Path("cpuacct", "cpuacct.usage"), SRC_CPUACCT);
             if (content != null) {
                 v = LinuxProcParsers.parseSingleLong(content);
+                keyPresent = true;
             }
         } else {
             return;
         }
-        usageStatus = counterStatus(content, v, scale, true);
+        usageStatus = counterStatus(content, v, scale, keyPresent, KEY_USAGE);
         if (usageStatus == OK) {
             cpuUsageNs = v * scale;
         }
@@ -505,34 +523,43 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
         String content = null;
         long v = -1L;
         long scale = 1L;
+        boolean keyPresent = false;
         if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V2 || paths.getMode() == LinuxPaths.CgroupMode.HYBRID) {
             content = readSource(paths.resolveV2Path("cpu.stat"), SRC_CPU_STAT);
             if (content != null) {
                 v = LinuxProcParsers.parseKeyedLong(content, "throttled_usec");
+                keyPresent = LinuxProcParsers.hasKeyedLine(content, "throttled_usec");
                 scale = 1000L;
             }
         } else if (paths.getMode() == LinuxPaths.CgroupMode.CGROUP_V1) {
             content = readSource(paths.resolveV1Path("cpu", "cpu.stat"), SRC_V1_CPU_STAT);
             if (content != null) {
                 v = LinuxProcParsers.parseKeyedLong(content, "throttled_time");
+                keyPresent = LinuxProcParsers.hasKeyedLine(content, "throttled_time");
             }
         } else {
             return;
         }
-        throttleStatus = counterStatus(content, v, scale, true);
+        throttleStatus = counterStatus(content, v, scale, keyPresent, KEY_THROTTLE);
         if (throttleStatus == OK) {
             cpuThrottleNs = v * scale;
         }
     }
 
-    /// Maps a read ({@code content}, last {@link #readStatus}) plus a parsed value to a status.
-    private int counterStatus(String content, long parsed, long scale, boolean checkOverflow) {
+    /// Maps a read plus a parsed value to a status. File missing/unreadable: the read status. Key line
+    /// absent: UNSUPPORTED, unless that key was parsed before (then it vanished: FAILED). Key line
+    /// present but malformed or overflowing: FAILED. Marks the key seen on success.
+    private int counterStatus(String content, long parsed, long scale, boolean keyPresent, int keyBit) {
         if (content == null) {
             return readStatus;
         }
-        if (parsed < 0L || (checkOverflow && parsed > Long.MAX_VALUE / scale)) {
+        if (!keyPresent) {
+            return (seenMask & keyBit) != 0 ? FAILED : ABSENT;
+        }
+        if (parsed < 0L || parsed > Long.MAX_VALUE / scale) {
             return FAILED;
         }
+        seenMask |= keyBit;
         return OK;
     }
 
@@ -542,6 +569,7 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
             String procStat = readSource(LinuxPaths.PROC_STAT, SRC_PROC_STAT);
             if (procStat == null) {
                 pressureStatus = readStatus;
+                Arrays.fill(perCpuWaitStallNs, 0.0);
                 return;
             }
             int n = procStat.length();
@@ -709,16 +737,30 @@ public class LinuxResourceProvider implements DetailedSystemSnapshotProvider, Au
         }
     }
 
+    /// I/O stall comes from io.pressure (PSI) when the host has it, otherwise from diskstats. The
+    /// source is chosen at first sight and kept: falling back after a PSI failure, or switching to PSI
+    /// once it appears, would splice two counters with unrelated baselines. A failing chosen source is
+    /// reported as TRANSIENT_FAILURE.
     private void readIoStallNs() {
         ioStallNs = 0L;
-        String content = readSource(paths.resolveV2Path("io.pressure"), SRC_IO_PRESSURE);
-        if (content != null) {
-            long totalUs = LinuxProcParsers.parsePsiSomeTotal(content);
-            if (totalUs >= 0L && totalUs <= Long.MAX_VALUE / 1000L) {
-                ioStallStatus = OK;
-                ioStallNs = totalUs * 1000L;
+        if (ioStallSource != IO_SRC_DISKSTATS) {
+            String content = readSource(paths.resolveV2Path("io.pressure"), SRC_IO_PRESSURE);
+            if (content != null) {
+                long totalUs = LinuxProcParsers.parsePsiSomeTotal(content);
+                if (totalUs >= 0L && totalUs <= Long.MAX_VALUE / 1000L) {
+                    ioStallSource = IO_SRC_PRESSURE;
+                    ioStallStatus = OK;
+                    ioStallNs = totalUs * 1000L;
+                } else {
+                    ioStallStatus = FAILED;
+                }
                 return;
             }
+            if (readStatus == FAILED || ioStallSource == IO_SRC_PRESSURE) {
+                ioStallStatus = FAILED;
+                return;
+            }
+            ioStallSource = IO_SRC_DISKSTATS;
         }
         String diskstats = readSource(LinuxPaths.PROC_DISKSTATS, SRC_DISKSTATS);
         if (diskstats == null) {

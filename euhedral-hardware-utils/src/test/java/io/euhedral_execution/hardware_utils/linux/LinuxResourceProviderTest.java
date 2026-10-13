@@ -220,7 +220,7 @@ class LinuxResourceProviderTest {
     }
 
     @Test
-    void failedCpuStatReadIsTransientFailure(@TempDir Path tempDir) throws IOException {
+    void unreadableCpuStatIsTransientFailure(@TempDir Path tempDir) throws IOException {
         Path root = v2Fixture(tempDir);
         Path cpuStat = root.resolve("cpu.stat");
         Files.writeString(cpuStat, "usage_usec 1000\nthrottled_usec 10\n");
@@ -230,8 +230,9 @@ class LinuxResourceProviderTest {
             assertEquals(1_000_000L, first.productiveCpuNs().value());
             assertEquals(10_000L, first.scopeQuotaThrottledNs().value());
 
-            // A directory in place of the file: it exists but every read fails. (Deleting it would fall
-            // through to the host's real cgroup root via LinuxPaths.resolveV2Path.)
+            // A directory in place of the file: it exists but every read fails. The "deleted file" case
+            // is masked by LinuxPaths.resolveV2Path falling back to the host's real cgroup root
+            // (which Phase 4 fixes), so it cannot be asserted hermetically here.
             Files.delete(cpuStat);
             Files.createDirectory(cpuStat);
             FastHardwareSample second = provider.sampleFast(2L);
@@ -240,6 +241,50 @@ class LinuxResourceProviderTest {
             assertEquals(
                     SignalValidity.TRANSIENT_FAILURE,
                     second.scopeQuotaThrottledNs().validity());
+        }
+    }
+
+    @Test
+    void missingThrottleKeyIsUnsupportedAcrossTicks(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            for (long t = 1; t <= 4; t++) {
+                FastHardwareSample s = provider.sampleFast(t);
+                assertEquals(SignalValidity.VALID, s.productiveCpuNs().validity());
+                assertEquals(
+                        SignalValidity.UNSUPPORTED, s.scopeQuotaThrottledNs().validity());
+            }
+            // Once seen, a vanished key is a failure, and a malformed one is too.
+            Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\nthrottled_usec 5\n");
+            assertEquals(
+                    SignalValidity.VALID,
+                    provider.sampleFast(5L).scopeQuotaThrottledNs().validity());
+            Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\n");
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    provider.sampleFast(6L).scopeQuotaThrottledNs().validity());
+            Files.writeString(root.resolve("cpu.stat"), "usage_usec 1000\nthrottled_usec junk\n");
+            assertEquals(
+                    SignalValidity.TRANSIENT_FAILURE,
+                    provider.sampleFast(7L).scopeQuotaThrottledNs().validity());
+        }
+    }
+
+    @Test
+    void ioPressureFailureDoesNotFallBackToDiskstats(@TempDir Path tempDir) throws IOException {
+        Path root = v2Fixture(tempDir);
+        Path psi = root.resolve("io.pressure");
+        Files.writeString(psi, "some avg10=0.00 avg60=0.00 avg300=0.00 total=7\n");
+        try (LinuxResourceProvider provider = new LinuxResourceProvider(v2Paths(tempDir))) {
+            var ok = provider.sampleFast(1L).ioSignals().completedOperations();
+            assertEquals(SignalValidity.VALID, ok.validity());
+            assertEquals(7000L, ok.value());
+
+            Files.writeString(psi, "some avg10=0.00 total=garbage\n");
+            var bad = provider.sampleFast(2L).ioSignals().completedOperations();
+            assertEquals(SignalValidity.TRANSIENT_FAILURE, bad.validity());
+            assertEquals(0L, bad.value());
         }
     }
 

@@ -59,7 +59,9 @@ public final class WindowsResources implements SystemSnapshotProvider {
     private final AtomicReference<SystemSnapshot> snapshot = new AtomicReference<>();
     private volatile DoubleGaugeSignal quotaExact = DoubleGaugeSignal.unsupported(0L);
 
-    /// Unrounded CPU quota from the most recent {@link #sampleFast(long)}. The long
+    /// Unrounded CPU quota from the most recent {@link #sampleFast(long)} (unlike the Linux provider,
+    /// {@link #getSnapshot()} does not update it). It holds the latest sampled value, so callers
+    /// should compare its {@code observedAtNs} with the sample's timestamp. The long
     /// {@code FastHardwareSample#quotaCapacityCpus()} truncates toward zero; this keeps the fraction.
     public DoubleGaugeSignal quotaCapacityCpusExact() {
         return quotaExact;
