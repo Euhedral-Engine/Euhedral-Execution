@@ -994,7 +994,7 @@ class NativeLoaderTest {
         assertTrue(loaded.isEmpty());
         assertTrue(
                 java.util.Arrays.stream(failure.getSuppressed())
-                        .anyMatch(cause -> cause.getMessage().contains("SHA-256 mismatch")),
+                        .anyMatch(cause -> String.valueOf(cause.getMessage()).contains("SHA-256 mismatch")),
                 "the hash mismatch must be the recorded cause");
     }
 
@@ -1050,6 +1050,7 @@ class NativeLoaderTest {
         assertEquals(1001L, NativeFileSecurity.UnixIds.parseEffectiveUid(status));
         assertThrows(IOException.class, () -> NativeFileSecurity.UnixIds.parseEffectiveUid("Name:\tjava\n"));
         assertThrows(IOException.class, () -> NativeFileSecurity.UnixIds.parseEffectiveUid("Uid:\t1000\n"));
+        assertThrows(IOException.class, () -> NativeFileSecurity.UnixIds.parseEffectiveUid("Uid:\t1000\t-5\t0\t0\n"));
     }
 
     @Test

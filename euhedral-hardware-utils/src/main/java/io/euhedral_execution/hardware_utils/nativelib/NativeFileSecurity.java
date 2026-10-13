@@ -147,7 +147,11 @@ interface NativeFileSecurity {
 
             @Override
             public long ownerUid(Path path) throws IOException {
-                return unsignedUid(Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS));
+                try {
+                    return unsignedUid(Files.getAttribute(path, "unix:uid", LinkOption.NOFOLLOW_LINKS));
+                } catch (UnsupportedOperationException | IllegalArgumentException e) {
+                    throw new IOException("native-loader: owner uid is unavailable for " + path, e);
+                }
             }
         };
 
@@ -163,7 +167,11 @@ interface NativeFileSecurity {
                     String[] fields = line.substring(4).trim().split("\\s+");
                     if (fields.length >= 2) {
                         try {
-                            return Long.parseLong(fields[1]);
+                            long effective = Long.parseLong(fields[1]);
+                            if (effective < 0) {
+                                throw new IOException("native-loader: negative effective uid in /proc/self/status");
+                            }
+                            return effective;
                         } catch (NumberFormatException e) {
                             throw new IOException("native-loader: malformed Uid line in /proc/self/status", e);
                         }
