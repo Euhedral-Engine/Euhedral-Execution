@@ -16,6 +16,8 @@ import io.euhedral_execution.core.flow_control.LatticeVertex.RoutingFunction;
 import io.euhedral_execution.core.frames.AbstractFrame;
 import io.euhedral_execution.core.generics.LatticeReceiver;
 import io.euhedral_execution.core.generics.LatticeSource;
+import io.euhedral_execution.data_structures.atomics.PaddedAtomicLong;
+import io.euhedral_execution.data_structures.queues.MpscQueue;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -353,6 +355,101 @@ class LatticeVertexTest {
         interceptor.releaseLock();
 
         assertFalse(interceptor.isProductive());
+    }
+
+    /// A push is evidence only during the worker's own service of the handle. `UpstreamQueue` counts the
+    /// handles a worker found empty and reconciles that count against the observation when a service
+    /// ends, so a push between services must not change the observation: it would leave the count one too
+    /// high while the observation read productive.
+    @Test
+    void shouldNotMarkProductiveFromAPushOutsideTheHandlesService() {
+        LatticeVertex.UpstreamInterceptor interceptor = routableInterceptor();
+        interceptor.upstream = new RecordingSource();
+        UpstreamQueue queue = queueOf(interceptor);
+
+        assertEquals(1L, queue.getProductiveHandleCount());
+        assertEquals(0L, queue.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
+        assertEquals(0L, queue.getProductiveHandleCount());
+        assertEquals(1L, queue.nonproductiveCount);
+
+        interceptor.push(new TestFrame("pushed between services"));
+
+        assertFalse(interceptor.isProductive(), "a push outside a service is no evidence");
+        queue.request(1L);
+        assertFalse(interceptor.isProductive(), "a request that pushes nothing keeps the worker's view");
+        assertEquals(0L, queue.getProductiveHandleCount());
+        assertEquals(1L, queue.nonproductiveCount);
+    }
+
+    @Test
+    void shouldMarkProductiveFromAPushDuringTheHandlesOwnService() {
+        LatticeVertex.UpstreamInterceptor interceptor = routableInterceptor();
+        interceptor.upstream = new PushingSource(interceptor);
+        UpstreamQueue queue = queueOf(interceptor);
+
+        assertEquals(0L, queue.pull(frame -> {}, LatticeVertex.NO_STOP, 1L));
+        assertEquals(0L, queue.getProductiveHandleCount());
+
+        queue.request(1L);
+
+        assertTrue(interceptor.isProductive());
+        assertEquals(1L, queue.getProductiveHandleCount());
+        assertEquals(0L, queue.nonproductiveCount);
+    }
+
+    private LatticeVertex.UpstreamInterceptor routableInterceptor() {
+        TestReceiver terminal = new TestReceiver();
+        LatticeEdge edge = new LatticeEdge(new AtomicBoolean());
+        edge.addDownstream(terminal);
+        BitSet active = new BitSet();
+        active.set(0, 4);
+        LatticeEdge[] handles = new LatticeEdge[4];
+        Arrays.fill(handles, edge);
+        node.setDrain(true);
+        node.setDownstreamMapping(active, handles);
+        node.setDrain(false);
+        return node.new UpstreamInterceptor();
+    }
+
+    private static UpstreamQueue queueOf(LatticeVertex.UpstreamInterceptor interceptor) {
+        MpscQueue<UpstreamQueue.UpstreamHandle> handles = new MpscQueue<>(16);
+        PaddedAtomicLong count = new PaddedAtomicLong();
+        UpstreamQueue queue = new UpstreamQueue(0, handles, count);
+        handles.offer(interceptor);
+        count.incrementAndGet();
+        return queue;
+    }
+
+    /// Pushes one frame through its handle from inside `request`.
+    private static final class PushingSource implements LatticeSource {
+
+        private final LatticeVertex.UpstreamInterceptor interceptor;
+
+        private PushingSource(LatticeVertex.UpstreamInterceptor interceptor) {
+            this.interceptor = interceptor;
+        }
+
+        @Override
+        public void addDownstream(LatticeReceiver downstream) {}
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            return 0;
+        }
+
+        @Override
+        public void request(long demand) {
+            interceptor.push(new TestFrame("pushed during the request"));
+        }
+
+        @Override
+        public void complete() {}
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
     }
 
     private static final class RecordingSource implements LatticeSource {

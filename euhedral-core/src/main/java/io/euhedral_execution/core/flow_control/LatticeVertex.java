@@ -574,11 +574,11 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
         public void push(AbstractFrame frame) {
             ProductivityObservation observation = observation();
             if (LatticeVertex.this.pushIfRoutable(frame)) {
-                observation.productive = true;
+                observation.recordPush(true);
                 return;
             }
 
-            observation.productive = false;
+            observation.recordPush(false);
             frame.doFinallyWithError(new IllegalStateException("Cannot route a frame without an active downstream"));
         }
 
@@ -694,6 +694,10 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
 
         @Override
         public void releaseLock() {
+            ProductivityObservation observation = this.productivity.get();
+            if (observation != null) {
+                observation.end();
+            }
             this.wip.setRelease(0);
         }
 
@@ -715,10 +719,28 @@ public class LatticeVertex extends LatticeEdge implements AutoCloseable {
             private boolean previousProductive = true;
             private boolean stopped;
 
+            /// Whether this worker holds the handle's lock: between `begin()` and `end()`.
+            private boolean servicing;
+
             private void begin() {
                 this.previousProductive = this.productive;
                 this.productive = false;
                 this.stopped = false;
+                this.servicing = true;
+            }
+
+            private void end() {
+                this.servicing = false;
+            }
+
+            /// Records a push through the handle. It is evidence only during this worker's own service of
+            /// the handle: `UpstreamQueue` reconciles its unproductive count against the observation at
+            /// the end of a service, so a change made between services would never be counted. The last
+            /// push of a service decides.
+            private void recordPush(boolean routed) {
+                if (this.servicing) {
+                    this.productive = routed;
+                }
             }
 
             private void restore() {
