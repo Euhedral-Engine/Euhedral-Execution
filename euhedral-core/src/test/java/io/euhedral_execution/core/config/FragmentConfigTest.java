@@ -40,6 +40,25 @@ class FragmentConfigTest {
     }
 
     @Test
+    void probeIntervalDefaultsToOneMillisecondAndChangesAloneAndIsKeptByTheOtherSetter() {
+        assertEquals(1_000_000L, IdlePolicy.DEFAULT_PROBE_INTERVAL_NS);
+        assertEquals(IdlePolicy.DEFAULT_PROBE_INTERVAL_NS, IdlePolicy.DEFAULT.probeIntervalNs());
+        assertEquals(IdlePolicy.DEFAULT_PROBE_INTERVAL_NS, new IdlePolicy(1L, 1L).probeIntervalNs());
+
+        IdlePolicy changed = new IdlePolicy(43_000L, 7_000_000L).withProbeIntervalNs(7_000_000L);
+        assertEquals(7_000_000L, changed.probeIntervalNs());
+        assertEquals(43_000L, changed.idleParkNs());
+        assertEquals(7_000_000L, changed.contentionHalfLifeNanos());
+        assertEquals(IdlePolicy.DEFAULT_UNPRODUCTIVE_PARK_NS, changed.unproductiveParkNs());
+        assertEquals(7_000_000L, changed.withUnproductiveParkNs(0L).probeIntervalNs());
+        assertEquals(0L, IdlePolicy.DEFAULT.withProbeIntervalNs(0L).probeIntervalNs());
+        assertEquals(
+                Long.MAX_VALUE,
+                IdlePolicy.DEFAULT.withProbeIntervalNs(Long.MAX_VALUE).probeIntervalNs());
+        assertThrows(IllegalArgumentException.class, () -> IdlePolicy.DEFAULT.withProbeIntervalNs(-1L));
+    }
+
+    @Test
     void benchmarkClonePreservesBothTimingValues() {
         IdlePolicy timing = new IdlePolicy(43_000L, 7_000_000L);
         FragmentConfig config = FragmentConfig.ofBenchmark(Mockito.mock(FragmentObserver.class), timing);

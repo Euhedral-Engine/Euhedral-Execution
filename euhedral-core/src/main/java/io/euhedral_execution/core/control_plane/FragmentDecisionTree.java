@@ -213,6 +213,11 @@ final class FragmentDecisionTree {
         return this.idlePolicy.unproductiveParkNs();
     }
 
+    /// Returns the longest a worker sits out the `IDLE` path without entering a handle.
+    long probeIntervalNs() {
+        return this.idlePolicy.probeIntervalNs();
+    }
+
     long contentionHalfLifeNanos() {
         return this.idlePolicy.contentionHalfLifeNanos();
     }

@@ -183,7 +183,9 @@ The active loop order is:
 There is no active `CACHE` execution-path enum. `DIRECT` can pull already-available unordered work
 and requests routed work after a miss. `STAGED` requests routed work. `IDLE` is guarded
 participation
-withdrawal, not a cache-consumption mode.
+withdrawal, not a cache-consumption mode. A worker that sits out takes a `DIRECT` cycle once per
+`IdlePolicy.probeIntervalNs` (worker-local clock `CycleState.lastEntryNs`, no shared state): a worker on
+`IDLE` enters no handle, so its view of the handles cannot change otherwise.
 
 - `ControlPlaneCache` is partitioned MPSC: routed producers are concurrent, while the fragment is
   the

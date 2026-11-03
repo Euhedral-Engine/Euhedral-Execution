@@ -278,7 +278,11 @@ The decision tree balances several live inputs: sampled execution runtimes, upst
 contention, productive handle counts, active worker tallies, and the worker's own rank index. Under
 high concurrency, an offline-trained logistic participation model steps in, gracefully shifting
 excess workers into the `IDLE` path to avoid destructive lock thrashing on upstream sources. The
-primary worker (rank 1) is never forced into `IDLE` withdrawal.
+primary worker (rank 1) is never forced into `IDLE` withdrawal. A worker on the `IDLE` path enters no
+handle, so its view of the handles, which is what keeps it out, cannot change by itself; once per probe
+interval (`IdlePolicy.probeIntervalNs`, 1 ms by default) its cycle takes the `DIRECT` path instead, so it
+enters a handle and sees whether it has work. Without that probe the primary worker would be the only one to
+enter any handle, and a frame that held it would leave every source unserved while the other workers sat idle.
 
 Freshly started workers default to `DIRECT` until baseline execution samples are gathered. Once
 warmed up, switching to `DIRECT` requires low contention (at or below 85%) and execution runtimes
@@ -453,6 +457,10 @@ offline models:
   constants into precise, nanosecond-calibrated limits tailored to the host CPU.
 - [`IdlePolicy`](../euhedral-core/src/main/java/io/euhedral_execution/core/config/IdlePolicy.java)
   carries IDLE park and acquisition-contention timing independently of decision-tree thresholds.
+  `probeIntervalNs` (default 1 ms) is the longest a worker sits out the `IDLE` path without entering a
+  handle: when it has passed, the worker's next cycle takes the `DIRECT` path (a pull of the handles, then a
+  request if the pull ran nothing) and the clock starts again. The clock is the worker's own cycle state, so
+  the probe adds no shared state. `0` never takes the `IDLE` path; `Long.MAX_VALUE` sits out for good.
   `unproductiveParkNs` (default 15 µs, `0` disables) is the park of a worker that processed
   nothing while none of its upstream handles emitted work on their last pull or request. Raise it
   to save power while a source is connected but quiet; a parked worker notices new work up to one

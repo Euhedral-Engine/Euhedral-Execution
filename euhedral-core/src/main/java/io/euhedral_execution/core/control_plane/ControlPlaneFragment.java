@@ -323,6 +323,9 @@ public final class ControlPlaneFragment extends WorkRequester {
         int registeredWorkers = this.state.registeredWorkers;
         ExecutionPath path =
                 selectExecutionPath(contention, productiveHandleCount, upstreamHandleCount, registeredWorkers);
+        if (path != ExecutionPath.IDLE) {
+            this.state.lastEntryNs = this.state.nowNs;
+        }
 
         if (path == ExecutionPath.DIRECT) {
             if (limit > 0L) {
@@ -385,11 +388,21 @@ public final class ControlPlaneFragment extends WorkRequester {
     private ExecutionPath selectExecutionPath(
             long contention, long productiveHandleCount, long upstreamHandleCount, int registeredWorkers) {
         int workerRank = super.getThreadRank(this.cpu);
-        if (this.controlPolicy.shouldIdle(contention, productiveHandleCount, registeredWorkers, workerRank)) {
-            return ExecutionPath.IDLE;
+        if (!this.controlPolicy.shouldIdle(contention, productiveHandleCount, registeredWorkers, workerRank)) {
+            return this.controlPolicy.selectExecutionPath(
+                    productiveHandleCount, upstreamHandleCount, registeredWorkers, contention);
         }
-        return this.controlPolicy.selectExecutionPath(
-                productiveHandleCount, upstreamHandleCount, registeredWorkers, contention);
+        // A worker that sits out services no handle, so its view of them (which keeps it out) never changes. One
+        // that stayed out for good would leave the first-ranked worker the only one to enter any handle.
+        if (probeDue()) {
+            return ExecutionPath.DIRECT;
+        }
+        return ExecutionPath.IDLE;
+    }
+
+    /// Whether the worker has sat out the handles for the probe interval, as of the cycle's last clock read.
+    private boolean probeDue() {
+        return this.state.nowNs - this.state.lastEntryNs >= this.controlPolicy.probeIntervalNs();
     }
 
     private long drainLocalCache(long limit) {
@@ -727,6 +740,9 @@ public final class ControlPlaneFragment extends WorkRequester {
 
         long nowNs = System.nanoTime();
 
+        /// When the worker last chose a path that enters its handles (any but `IDLE`).
+        long lastEntryNs = this.nowNs;
+
         int neighborCursor = 0;
 
         void reset() {
@@ -742,6 +758,7 @@ public final class ControlPlaneFragment extends WorkRequester {
             this.cycleEpoch = -1L;
             this.batchEpoch = 0L;
             this.nowNs = System.nanoTime();
+            this.lastEntryNs = this.nowNs;
         }
     }
 }
