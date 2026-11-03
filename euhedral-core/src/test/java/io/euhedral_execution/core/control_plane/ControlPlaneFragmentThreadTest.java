@@ -26,6 +26,7 @@ import io.euhedral_execution.core.impl.BaseCloneableObject;
 import io.euhedral_execution.core.impl.DefaultExecutor;
 import io.euhedral_execution.core.ingest.ArrayIngestSink;
 import io.euhedral_execution.core.metrics.MetricsAggregator;
+import io.euhedral_execution.core.utils.FlowThread;
 import io.euhedral_execution.hardware_utils.affinity.PinnedThreadExecutor;
 import io.euhedral_execution.hardware_utils.affinity.ThreadTools;
 import io.euhedral_execution.hardware_utils.monitor.SystemUtilization;
@@ -35,13 +36,18 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.BitSet;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -485,6 +491,256 @@ class ControlPlaneFragmentThreadTest {
         }
     }
 
+    /// With the first-ranked worker held inside a frame, a worker that sits out is the only one that can
+    /// enter the handles; it must not sit out for good.
+    @Test
+    void aWorkerThatSitsOutStillEntersAHandle() throws Exception {
+        long entries = withWorkerSittingOut(quickIdle(), worker -> {
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            while (worker.entries() == 0L && System.nanoTime() < deadline) {
+                worker.cycle();
+            }
+            return worker.entries();
+        });
+        assertTrue(entries > 0L, "an idle worker never entered the handle while the first-ranked worker was held");
+    }
+
+    /// The participation model is intact: within the probe interval the worker still sits out.
+    @Test
+    void aWorkerSitsOutBetweenProbes() throws Exception {
+        long entries = withWorkerSittingOut(quickIdle().withProbeIntervalNs(TimeUnit.HOURS.toNanos(1)), worker -> {
+            for (int i = 0; i < 20_000; i++) {
+                worker.cycle();
+            }
+            return worker.entries();
+        });
+        assertEquals(0L, entries, "the worker sat out every cycle");
+    }
+
+    @Test
+    void aZeroProbeIntervalNeverSitsOut() throws Exception {
+        long entries = withWorkerSittingOut(quickIdle().withProbeIntervalNs(0L), worker -> {
+            for (int i = 0; i < 100; i++) {
+                worker.cycle();
+            }
+            return worker.entries();
+        });
+        assertTrue(entries >= 100L, "every cycle entered a handle: " + entries);
+    }
+
+    /// A probe is one `DIRECT` cycle (a pull of the handle, then a request of it when the pull ran nothing),
+    /// and the next comes a probe interval later.
+    @Test
+    void aWorkerThatSitsOutProbesOncePerInterval() throws Exception {
+        long interval = TimeUnit.MILLISECONDS.toNanos(50);
+        long entriesPerProbe = 2L;
+        long[] result = withWorkerSittingOut(quickIdle().withProbeIntervalNs(interval), worker -> {
+            long start = System.nanoTime();
+            while (System.nanoTime() - start < 4 * interval) {
+                worker.cycle();
+            }
+            return new long[] {worker.entries(), System.nanoTime() - start};
+        });
+        long entries = result[0];
+        long most = (result[1] / interval + 1) * entriesPerProbe;
+        assertTrue(entries >= entriesPerProbe, "a probe was made: " + entries);
+        assertTrue(entries <= most, "at most one probe per interval: " + entries + " in " + result[1] + " ns");
+    }
+
+    /// A fixed, quick idle timing whose workers never take the unproductive park, so hand-driven cycles are fast.
+    private static IdlePolicy quickIdle() {
+        return new IdlePolicy(0L, IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS).withUnproductiveParkNs(0L);
+    }
+
+    private interface Sitting<T> {
+
+        T run(SittingWorker worker) throws Exception;
+    }
+
+    /// Registers a first-ranked worker that is never cycled (it is "inside a frame"), then runs `scenario`
+    /// on the pinned thread of a rank-2 worker whose policy says `IDLE`: it has a body-cost history and its
+    /// only handle looked empty. The scenario drives that worker's cycles by hand.
+    private static <T> T withWorkerSittingOut(IdlePolicy idle, Sitting<T> scenario) throws Exception {
+        requireTwoWorkerCores();
+        TestDistributor.resetSharedRoutingState();
+        ControlPlaneFragment anchor = new ControlPlaneFragment(configWith(idle, 0));
+        ControlPlaneFragment worker = new ControlPlaneFragment(configWith(idle, 1));
+        try {
+            onPinnedThread(anchor, () -> {
+                anchor.register();
+                return null;
+            });
+            return onPinnedThread(worker, () -> {
+                FlowThread.clearContext();
+                UpstreamQueue.UP_QUEUE.remove();
+                try {
+                    return scenario.run(new SittingWorker(anchor, worker, idle));
+                } finally {
+                    worker.removeThread();
+                    FlowThread.clearContext();
+                    UpstreamQueue.UP_QUEUE.remove();
+                }
+            });
+        } finally {
+            anchor.close();
+            worker.close();
+            TestDistributor.resetSharedRoutingState();
+            PinnedThreadExecutor.closeAll();
+        }
+    }
+
+    private static FragmentConfig configWith(IdlePolicy idle, int coreIndex) {
+        FragmentConfig base = FragmentConfig.ofDefaults().clone(cloneConfigOnCoreIndex(coreIndex));
+        return new FragmentConfig(
+                base.cloneConfig(),
+                base.cacheConfig(),
+                base.observer(),
+                base.maxBatchSize(),
+                base.smtEnabled(),
+                idle,
+                base.benchmarkMode(),
+                base.metricPrefix(),
+                base.registry());
+    }
+
+    private static <T> T onPinnedThread(ControlPlaneFragment fragment, Callable<T> task) throws Exception {
+        CompletableFuture<T> done = new CompletableFuture<>();
+        PinnedThreadExecutor.get(fragment.cpu).execute(() -> {
+            try {
+                done.complete(task.call());
+            } catch (Throwable failure) {
+                done.completeExceptionally(failure);
+            }
+        });
+        try {
+            return done.get(30, TimeUnit.SECONDS);
+        } catch (ExecutionException failure) {
+            if (failure.getCause() instanceof Exception cause) {
+                throw cause;
+            }
+            if (failure.getCause() instanceof Error cause) {
+                throw cause;
+            }
+            throw failure;
+        }
+    }
+
+    /// An upstream handle with nothing to give, which counts how often a worker enters it.
+    private static final class EnteredHandle extends UpstreamQueue.UpstreamHandle {
+
+        long entries;
+        boolean productive = true;
+
+        @Override
+        public long getId() {
+            return 1L;
+        }
+
+        @Override
+        public boolean acquireLock() {
+            this.entries++;
+            return true;
+        }
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            this.productive = false;
+            return 0L;
+        }
+
+        @Override
+        public void request(long demand) {}
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
+
+        @Override
+        public boolean isProductive() {
+            return this.productive;
+        }
+
+        @Override
+        public void setProductivity(boolean productive) {
+            this.productive = productive;
+        }
+
+        @Override
+        public void push(AbstractFrame frame) {}
+
+        @Override
+        public void onError(Throwable throwable) {}
+    }
+
+    /// A rank-2 worker, cycled by the thread that creates it (its pinned thread) through the worker loop's own
+    /// cycle, with its preconditions asserted: rank 2 behind a registered first-ranked worker, a body-cost
+    /// history, no productive handle, and a policy that says `IDLE`.
+    private static final class SittingWorker {
+
+        private final ControlPlaneFragment worker;
+        private final FlowThread.FlowContext context;
+        private final EnteredHandle handle = new EnteredHandle();
+        private final Method runCycle;
+
+        private SittingWorker(ControlPlaneFragment anchor, ControlPlaneFragment worker, IdlePolicy idle)
+                throws ReflectiveOperationException {
+            this.worker = worker;
+            this.context = FlowThread.initializeContext();
+            worker.register();
+            UpstreamQueue queue = worker.getThreadUpstreamQueue();
+            this.context.upstream = queue;
+            assertEquals(worker.cpu, queue.cpu, "the cycles run on the worker's own cpu");
+            assertEquals(1, TestDistributor.rankOf(anchor.cpu));
+            assertEquals(2, TestDistributor.rankOf(worker.cpu));
+            worker.addUpstream(this.handle);
+
+            FragmentDecisionTree policy = new FragmentDecisionTree(idle, 1_000L, 1_000L);
+            for (int i = 0; i < FragmentDecisionTree.BODY_COST_MIN_HISTORY; i++) {
+                policy.recordBodyCost(100L);
+            }
+            install("controlPolicy", policy);
+            install("upstreamQueue", queue);
+            Field stateField = ControlPlaneFragment.class.getDeclaredField("state");
+            stateField.setAccessible(true);
+            Object state = stateField.get(worker);
+            Field registered = state.getClass().getDeclaredField("registeredWorkers");
+            registered.setAccessible(true);
+            registered.setInt(state, 2);
+
+            // One look at the handle shows it empty: the worker's view of it is unproductive.
+            queue.pull(frame -> {}, frame -> false, 1L);
+            assertEquals(0L, queue.getProductiveHandleCount());
+            assertTrue(policy.shouldIdle(0L, 0L, 2, 2));
+            this.handle.entries = 0L;
+
+            this.runCycle = ControlPlaneFragment.class.getDeclaredMethod("runCycle", FlowThread.FlowContext.class);
+            this.runCycle.setAccessible(true);
+        }
+
+        private void install(String field, Object value) throws ReflectiveOperationException {
+            Field f = ControlPlaneFragment.class.getDeclaredField(field);
+            f.setAccessible(true);
+            f.set(this.worker, value);
+        }
+
+        void cycle() throws ReflectiveOperationException {
+            try {
+                this.runCycle.invoke(this.worker, this.context);
+            } catch (InvocationTargetException failure) {
+                if (failure.getCause() instanceof RuntimeException cause) {
+                    throw cause;
+                }
+                throw failure;
+            }
+        }
+
+        long entries() {
+            return this.handle.entries;
+        }
+    }
+
     private static void awaitWorkersAndCloseExecutors(ControlPlaneFragment fragment) {
         CloneConfig clone = fragment.getConfig().cloneConfig();
         if (clone != null) {
@@ -607,6 +863,10 @@ class ControlPlaneFragmentThreadTest {
 
         private static String ranks() {
             return CPU_RANK.getAcquire().toString();
+        }
+
+        private static int rankOf(int cpu) {
+            return CPU_RANK.getAcquire().get(cpu);
         }
 
         private TestDistributor(int downstreamCount) {

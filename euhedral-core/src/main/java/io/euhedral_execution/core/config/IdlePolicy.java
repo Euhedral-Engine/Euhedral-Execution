@@ -11,11 +11,23 @@ import org.jspecify.annotations.NonNull;
 /// @param unproductiveParkNs     Park of a worker that processed nothing while none of its upstream
 /// handles emitted work on their last attempt. Longer parks save power at the cost of the time a
 /// parked worker takes to notice new work. Zero disables the park.
+/// @param probeIntervalNs        The longest a worker sits out the `IDLE` path without entering a
+/// handle. A worker that sits out never services a handle, so its view of them (which decides to
+/// sit out) cannot change by itself; every probe interval its cycle takes the `DIRECT` path
+/// instead, enters one handle and so can find work. With the first-ranked worker held inside a
+/// frame, this is how long the lattice's handles go unserved at most. Zero makes every cycle enter
+/// a handle (the `IDLE` path is never taken); `Long.MAX_VALUE` sits out for good.
 public record IdlePolicy(
         long idleParkNs,
         long contentionHalfLifeNanos,
         @NonNull TimingProvider function,
-        long unproductiveParkNs) {
+        long unproductiveParkNs,
+        long probeIntervalNs) {
+
+    /// Retains the default probe interval.
+    public IdlePolicy(long idleParkNs, long contentionHalfLifeNanos, TimingProvider function, long unproductiveParkNs) {
+        this(idleParkNs, contentionHalfLifeNanos, function, unproductiveParkNs, DEFAULT_PROBE_INTERVAL_NS);
+    }
 
     /// Retains the default unproductive park.
     public IdlePolicy(long idleParkNs, long contentionHalfLifeNanos, TimingProvider function) {
@@ -53,6 +65,7 @@ public record IdlePolicy(
     public static final long DEFAULT_IDLE_PARK_NS = 15_000L;
     public static final long DEFAULT_UNPRODUCTIVE_PARK_NS = 15_000L;
     public static final long DEFAULT_CONTENTION_HALF_LIFE_NANOS = 1_000_000L;
+    public static final long DEFAULT_PROBE_INTERVAL_NS = 1_000_000L;
     /// Default IDLE timing policy selected from scarce-source calibration.
     /// Source policy: cache-scarce-v1 / policy-158a61afee6653cbbfde.
     public static final IdleTimingFunction DEFAULT_FUNCTION = new IdleTimingFunction(
@@ -103,10 +116,20 @@ public record IdlePolicy(
         if (contentionHalfLifeNanos <= 0L) {
             throw new IllegalArgumentException("contentionHalfLifeNanos must be positive");
         }
+        if (probeIntervalNs < 0L) {
+            throw new IllegalArgumentException("probeIntervalNs must not be negative");
+        }
     }
 
     /// Returns this policy with a different unproductive park.
     public IdlePolicy withUnproductiveParkNs(long unproductiveParkNs) {
-        return new IdlePolicy(this.idleParkNs, this.contentionHalfLifeNanos, this.function, unproductiveParkNs);
+        return new IdlePolicy(
+                this.idleParkNs, this.contentionHalfLifeNanos, this.function, unproductiveParkNs, this.probeIntervalNs);
+    }
+
+    /// Returns this policy with a different probe interval.
+    public IdlePolicy withProbeIntervalNs(long probeIntervalNs) {
+        return new IdlePolicy(
+                this.idleParkNs, this.contentionHalfLifeNanos, this.function, this.unproductiveParkNs, probeIntervalNs);
     }
 }
