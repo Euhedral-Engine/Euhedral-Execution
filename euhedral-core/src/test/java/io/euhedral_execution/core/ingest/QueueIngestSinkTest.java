@@ -8,7 +8,7 @@ import test_utils.TestReceiver;
 
 class QueueIngestSinkTest {
     @Test
-    void requestInsidePullConsumerRoutesAfterPullReleasesOwnership() {
+    void requestInsidePullConsumerIsDeliveredByTheNextRequestAndThePullPushesNothing() {
         var sink = new QueueIngestSink();
         var source = sink.getDelegate();
         var receiver = new TestReceiver();
@@ -23,6 +23,7 @@ class QueueIngestSinkTest {
         assertThat(source.pull(
                         frame -> {
                             assertThat(frame).isSameAs(first);
+                            // The queue is held: the request banks its demand and leaves a wakeup.
                             source.request(1);
                             assertThat(receiver.received).isEmpty();
                         },
@@ -30,8 +31,15 @@ class QueueIngestSinkTest {
                         3))
                 .isOne();
 
-        assertThat(receiver.received).containsExactly(second);
-        assertThat(sink.size()).isOne();
+        // The pull pushed nothing as it released the queue: a worker that entered from a pull must not push.
+        assertThat(receiver.received).isEmpty();
+        assertThat(sink.size()).isEqualTo(2);
+        assertThat(sink.getDemand()).isOne();
+
+        // The next request delivers it, within the demand banked (the consumer's 1 and this request's 1).
+        source.request(1);
+        assertThat(receiver.received).containsExactly(second, third);
+        assertThat(sink.size()).isZero();
         assertThat(sink.getDemand()).isZero();
     }
 
