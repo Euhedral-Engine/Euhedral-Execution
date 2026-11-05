@@ -318,6 +318,27 @@ class UpstreamQueueTest {
         assertEquals(64L, idle.requested);
     }
 
+    /// A pull of A finds nothing, a pull of B finds frames, then a request: the hint to A is gone, so the request
+    /// goes to the front of the queue (C). The Rust queue has the same test.
+    @Test
+    void aHintToAnEmptyHandleIsGoneWhenALaterPullFindsFrames() {
+        TestUpstreamHandle first = addHandle();
+        first.pullResult = 0L;
+        TestUpstreamHandle second = addHandle();
+        TestUpstreamHandle third = addHandle();
+
+        queue.pull(frame -> {}, frame -> false, 1L);
+        queue.pull(frame -> {}, frame -> false, 1L);
+        queue.request(1L);
+
+        assertEquals(1L, first.pulled);
+        assertEquals(1L, second.pulled);
+        assertEquals(0L, first.requested, "the empty handle is no longer the hint");
+        assertEquals(0L, second.requested);
+        assertEquals(1L, third.requested, "the request goes to the front of the queue");
+        assertEquals(3L, handles.sizeLong());
+    }
+
     @Test
     void aHandleThatFoundNothingDoesNotDisplaceOneThatStopped() {
         for (boolean readyFirst : new boolean[] {true, false}) {

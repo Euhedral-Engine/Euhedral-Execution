@@ -322,6 +322,12 @@ public class UpstreamQueue {
             return 0;
         }
 
+        // A hint left by a pull that found nothing is spent when another pull comes before the request. A hint
+        // left by a pull that stopped at a frame stays until a request routes the frame.
+        if (consumer != null && !this.pendingStopped) {
+            this.pendingRequest = null;
+        }
+
         FlowThread.FlowContext context = FlowThread.getContext();
         long totalPull = 0;
         long bucketSize = calculatePullBuckets(demand);

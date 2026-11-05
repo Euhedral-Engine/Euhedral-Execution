@@ -556,69 +556,74 @@ class ControlPlaneFragmentThreadTest {
     void aWorkerOverIdleHandlesReachesTheUnproductiveParkWhateverTheirNumber() throws Exception {
         assumeTrue(!workerCpus().isEmpty(), "Requires a CPU the worker thread can be pinned to");
         IdlePolicy idle = new IdlePolicy(0L, IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS).withUnproductiveParkNs(1L);
-        for (int n = 1; n <= 8; n++) {
-            int count = n;
-            TestDistributor.resetSharedRoutingState();
-            ControlPlaneFragment worker = new ControlPlaneFragment(configWith(idle, 0));
-            try {
-                long[] result = onPinnedThread(worker, () -> {
-                    FlowThread.clearContext();
-                    UpstreamQueue.UP_QUEUE.remove();
-                    try {
-                        FlowThread.FlowContext context = FlowThread.initializeContext();
-                        worker.register();
-                        UpstreamQueue queue = worker.getThreadUpstreamQueue();
-                        context.upstream = queue;
-                        CountingHandle[] handles = new CountingHandle[count];
-                        for (int i = 0; i < count; i++) {
-                            handles[i] = new CountingHandle();
-                            worker.addUpstream(handles[i]);
-                        }
-                        FragmentDecisionTree policy = new FragmentDecisionTree(idle, 1_000L, 1_000L);
-                        for (int i = 0; i < FragmentDecisionTree.BODY_COST_MIN_HISTORY; i++) {
-                            policy.recordBodyCost(100L);
-                        }
-                        setField(worker, "controlPolicy", policy);
-                        setField(worker, "upstreamQueue", queue);
-                        Object state = getField(worker, "state");
-                        java.lang.reflect.Field registered = state.getClass().getDeclaredField("registeredWorkers");
-                        registered.setAccessible(true);
-                        registered.setInt(state, 1);
-                        Method runCycle =
-                                ControlPlaneFragment.class.getDeclaredMethod("runCycle", FlowThread.FlowContext.class);
-                        runCycle.setAccessible(true);
-
-                        // One cycle per handle services each handle once; a second round makes sure.
-                        int bound = 2 * count;
-                        long parkedAt = -1L;
-                        for (int cycle = 1; cycle <= bound && parkedAt < 0L; cycle++) {
-                            runCycle.invoke(worker, context);
-                            if (queue.getProductiveHandleCount() == 0L) {
-                                parkedAt = cycle;
-                            }
-                        }
-                        long minPulls = Long.MAX_VALUE;
-                        long minRequests = Long.MAX_VALUE;
-                        for (CountingHandle handle : handles) {
-                            minPulls = Math.min(minPulls, handle.pulls);
-                            minRequests = Math.min(minRequests, handle.requests);
-                        }
-                        return new long[] {parkedAt, minPulls, minRequests};
-                    } finally {
-                        worker.removeThread();
+        try {
+            for (int n = 1; n <= 8; n++) {
+                int count = n;
+                TestDistributor.resetSharedRoutingState();
+                ControlPlaneFragment worker = new ControlPlaneFragment(configWith(idle, 0));
+                try {
+                    long[] result = onPinnedThread(worker, () -> {
                         FlowThread.clearContext();
                         UpstreamQueue.UP_QUEUE.remove();
-                    }
-                });
-                assertTrue(result[0] > 0L, count + " idle handles: still productive after " + 2 * count + " cycles");
-                assertTrue(result[1] > 0L, count + " idle handles: a handle was never pulled");
-                assertTrue(result[2] > 0L, count + " idle handles: a handle was never requested");
-            } finally {
-                worker.close();
-                TestDistributor.resetSharedRoutingState();
+                        try {
+                            FlowThread.FlowContext context = FlowThread.initializeContext();
+                            worker.register();
+                            UpstreamQueue queue = worker.getThreadUpstreamQueue();
+                            context.upstream = queue;
+                            CountingHandle[] handles = new CountingHandle[count];
+                            for (int i = 0; i < count; i++) {
+                                handles[i] = new CountingHandle();
+                                worker.addUpstream(handles[i]);
+                            }
+                            FragmentDecisionTree policy = new FragmentDecisionTree(idle, 1_000L, 1_000L);
+                            for (int i = 0; i < FragmentDecisionTree.BODY_COST_MIN_HISTORY; i++) {
+                                policy.recordBodyCost(100L);
+                            }
+                            setField(worker, "controlPolicy", policy);
+                            setField(worker, "upstreamQueue", queue);
+                            Object state = getField(worker, "state");
+                            java.lang.reflect.Field registered =
+                                    state.getClass().getDeclaredField("registeredWorkers");
+                            registered.setAccessible(true);
+                            registered.setInt(state, 1);
+                            Method runCycle = ControlPlaneFragment.class.getDeclaredMethod(
+                                    "runCycle", FlowThread.FlowContext.class);
+                            runCycle.setAccessible(true);
+
+                            // One cycle per handle services each handle once; a second round makes sure.
+                            int bound = 2 * count;
+                            long parkedAt = -1L;
+                            for (int cycle = 1; cycle <= bound && parkedAt < 0L; cycle++) {
+                                runCycle.invoke(worker, context);
+                                if (queue.getProductiveHandleCount() == 0L) {
+                                    parkedAt = cycle;
+                                }
+                            }
+                            long minPulls = Long.MAX_VALUE;
+                            long minRequests = Long.MAX_VALUE;
+                            for (CountingHandle handle : handles) {
+                                minPulls = Math.min(minPulls, handle.pulls);
+                                minRequests = Math.min(minRequests, handle.requests);
+                            }
+                            return new long[] {parkedAt, minPulls, minRequests};
+                        } finally {
+                            worker.removeThread();
+                            FlowThread.clearContext();
+                            UpstreamQueue.UP_QUEUE.remove();
+                        }
+                    });
+                    assertTrue(
+                            result[0] > 0L, count + " idle handles: still productive after " + 2 * count + " cycles");
+                    assertTrue(result[1] > 0L, count + " idle handles: a handle was never pulled");
+                    assertTrue(result[2] > 0L, count + " idle handles: a handle was never requested");
+                } finally {
+                    worker.close();
+                    TestDistributor.resetSharedRoutingState();
+                }
             }
+        } finally {
+            PinnedThreadExecutor.closeAll();
         }
-        PinnedThreadExecutor.closeAll();
     }
 
     private static void setField(ControlPlaneFragment fragment, String name, Object value)
