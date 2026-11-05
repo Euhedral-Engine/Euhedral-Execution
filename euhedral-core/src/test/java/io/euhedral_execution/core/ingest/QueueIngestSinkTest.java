@@ -44,6 +44,53 @@ class QueueIngestSinkTest {
     }
 
     @Test
+    void requestFromAnotherThreadWhilePullHoldsTheQueueIsDeliveredByTheNextRequestNotByThePull() throws Exception {
+        var sink = new QueueIngestSink();
+        var source = sink.getDelegate();
+        var receiver = new TestReceiver();
+        source.addDownstream(receiver);
+        for (int i = 0; i < 5; i++) sink.offer(new TestFrame("frame" + i));
+        var inside = new java.util.concurrent.CyclicBarrier(2);
+        var release = new java.util.concurrent.CyclicBarrier(2);
+
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var pulled = executor.submit(() -> source.pull(
+                    frame -> {
+                        try {
+                            inside.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                        } catch (Exception e) {
+                            throw new AssertionError(e);
+                        }
+                    },
+                    frame -> false,
+                    1));
+            inside.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            source.request(4);
+            assertThat(receiver.received)
+                    .as("the request did not wait for the pull, and delivered nothing yet")
+                    .isEmpty();
+            assertThat(sink.getDemand())
+                    .as("the refused request banked its demand")
+                    .isEqualTo(4);
+            release.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            assertThat(pulled.get(5, java.util.concurrent.TimeUnit.SECONDS)).isOne();
+        }
+
+        assertThat(receiver.received)
+                .as("the pull pushed nothing as it released the queue")
+                .isEmpty();
+        assertThat(sink.getDemand()).as("the refused request's demand is kept").isEqualTo(4);
+        assertThat(sink.size()).isEqualTo(4);
+
+        // The next request serves the wakeup: it delivers within the demand banked (4, and its own 1).
+        source.request(1);
+        assertThat(receiver.received).hasSize(4);
+        assertThat(sink.getDemand()).isOne();
+        assertThat(sink.size()).isZero();
+    }
+
+    @Test
     void reentrantRequestDrainsNewDemandWithoutAnotherExternalRequest() {
         var sink = new QueueIngestSink();
         var source = sink.getDelegate();
