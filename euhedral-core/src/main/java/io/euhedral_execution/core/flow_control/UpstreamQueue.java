@@ -89,7 +89,15 @@ public class UpstreamQueue {
 
     /// Owner-local hint only: the handle remains in the queue and still requires acquisition.
     /// A stopped direct pull must get a routed request instead of alternating past the same source.
+    /// A direct pull that found nothing leaves the same hint, so the request that follows it services the
+    /// same handle: a demand under the pull bucket target is one bucket, and if the pull and the request each took
+    /// the next handle of the rotation, an even number of handles would split in two (one half only ever requested
+    /// and never found empty, the other half only ever pulled).
     private UpstreamHandle pendingRequest;
+
+    /// Whether `pendingRequest` stopped a pull at a frame, rather than finding nothing. A handle that found nothing
+    /// never displaces one that stopped.
+    private boolean pendingStopped;
 
     public UpstreamQueue(int cpu, MpscQueue<UpstreamHandle> upstreams, PaddedAtomicLong upstreamCount) {
         this.cpu = cpu;
@@ -248,6 +256,7 @@ public class UpstreamQueue {
     public void resetForNextTrial() {
         resetAcquireContention();
         this.pendingRequest = null;
+        this.pendingStopped = false;
         restoreLiveHandlesInRegistrationOrder();
         this.cachedUpCount = this.upstreamCount.getAcquire();
         this.nonproductiveCount = 0L;
@@ -388,8 +397,8 @@ public class UpstreamQueue {
             long requestBefore,
             boolean wasProductive) {
         long drainCount = drain(handle, consumer, stopCondition, request);
-        if (consumer != null && handle.wasPullStopped()) {
-            this.pendingRequest = handle;
+        if (consumer != null) {
+            holdForRequest(handle, handle.wasPullStopped(), drainCount);
         }
         if (context != null) {
             context.satisfiedPull += drainCount;
@@ -406,6 +415,18 @@ public class UpstreamQueue {
         }
         reconcileProductivity(handle, wasProductive);
         return drainCount;
+    }
+
+    /// Leaves `handle` as the hint for the next request when its pull stopped at a frame, or found nothing.
+    private void holdForRequest(UpstreamHandle handle, boolean stopped, long pulled) {
+        if (!stopped && pulled > 0L) {
+            return;
+        }
+        if (!stopped && this.pendingStopped && this.pendingRequest != null) {
+            return;
+        }
+        this.pendingRequest = handle;
+        this.pendingStopped = stopped;
     }
 
     private void reconcileProductivity(UpstreamHandle handle, boolean wasProductive) {

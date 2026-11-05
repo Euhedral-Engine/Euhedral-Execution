@@ -547,6 +547,140 @@ class ControlPlaneFragmentThreadTest {
         assertTrue(entries <= most, "at most one probe per interval: " + entries + " in " + result[1] + " ns");
     }
 
+    /// A lone worker over `n` handles with nothing to give reaches the unproductive park within a bounded number of
+    /// cycles, however many handles there are. A `DIRECT` cycle that finds nothing is one pull and one request, and
+    /// each services one handle when the demand is a single bucket: if the request took the handle after the one
+    /// the pull took, an even number of handles would split in two, and the half that is only requested never reads
+    /// as empty and keeps its worker from parking.
+    @Test
+    void aWorkerOverIdleHandlesReachesTheUnproductiveParkWhateverTheirNumber() throws Exception {
+        assumeTrue(!workerCpus().isEmpty(), "Requires a CPU the worker thread can be pinned to");
+        IdlePolicy idle = new IdlePolicy(0L, IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS).withUnproductiveParkNs(1L);
+        for (int n = 1; n <= 8; n++) {
+            int count = n;
+            TestDistributor.resetSharedRoutingState();
+            ControlPlaneFragment worker = new ControlPlaneFragment(configWith(idle, 0));
+            try {
+                long[] result = onPinnedThread(worker, () -> {
+                    FlowThread.clearContext();
+                    UpstreamQueue.UP_QUEUE.remove();
+                    try {
+                        FlowThread.FlowContext context = FlowThread.initializeContext();
+                        worker.register();
+                        UpstreamQueue queue = worker.getThreadUpstreamQueue();
+                        context.upstream = queue;
+                        CountingHandle[] handles = new CountingHandle[count];
+                        for (int i = 0; i < count; i++) {
+                            handles[i] = new CountingHandle();
+                            worker.addUpstream(handles[i]);
+                        }
+                        FragmentDecisionTree policy = new FragmentDecisionTree(idle, 1_000L, 1_000L);
+                        for (int i = 0; i < FragmentDecisionTree.BODY_COST_MIN_HISTORY; i++) {
+                            policy.recordBodyCost(100L);
+                        }
+                        setField(worker, "controlPolicy", policy);
+                        setField(worker, "upstreamQueue", queue);
+                        Object state = getField(worker, "state");
+                        java.lang.reflect.Field registered = state.getClass().getDeclaredField("registeredWorkers");
+                        registered.setAccessible(true);
+                        registered.setInt(state, 1);
+                        Method runCycle =
+                                ControlPlaneFragment.class.getDeclaredMethod("runCycle", FlowThread.FlowContext.class);
+                        runCycle.setAccessible(true);
+
+                        // One cycle per handle services each handle once; a second round makes sure.
+                        int bound = 2 * count;
+                        long parkedAt = -1L;
+                        for (int cycle = 1; cycle <= bound && parkedAt < 0L; cycle++) {
+                            runCycle.invoke(worker, context);
+                            if (queue.getProductiveHandleCount() == 0L) {
+                                parkedAt = cycle;
+                            }
+                        }
+                        long minPulls = Long.MAX_VALUE;
+                        long minRequests = Long.MAX_VALUE;
+                        for (CountingHandle handle : handles) {
+                            minPulls = Math.min(minPulls, handle.pulls);
+                            minRequests = Math.min(minRequests, handle.requests);
+                        }
+                        return new long[] {parkedAt, minPulls, minRequests};
+                    } finally {
+                        worker.removeThread();
+                        FlowThread.clearContext();
+                        UpstreamQueue.UP_QUEUE.remove();
+                    }
+                });
+                assertTrue(result[0] > 0L, count + " idle handles: still productive after " + 2 * count + " cycles");
+                assertTrue(result[1] > 0L, count + " idle handles: a handle was never pulled");
+                assertTrue(result[2] > 0L, count + " idle handles: a handle was never requested");
+            } finally {
+                worker.close();
+                TestDistributor.resetSharedRoutingState();
+                PinnedThreadExecutor.closeAll();
+            }
+        }
+    }
+
+    private static void setField(ControlPlaneFragment fragment, String name, Object value)
+            throws ReflectiveOperationException {
+        Field field = ControlPlaneFragment.class.getDeclaredField(name);
+        field.setAccessible(true);
+        field.set(fragment, value);
+    }
+
+    private static Object getField(ControlPlaneFragment fragment, String name) throws ReflectiveOperationException {
+        Field field = ControlPlaneFragment.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return field.get(fragment);
+    }
+
+    /// An upstream handle with nothing to give, which counts its pulls and its requests apart.
+    private static final class CountingHandle extends UpstreamQueue.UpstreamHandle {
+
+        long pulls;
+        long requests;
+        boolean productive = true;
+
+        @Override
+        public long getId() {
+            return 1L;
+        }
+
+        @Override
+        public long pull(
+                Consumer<AbstractFrame> consumer, Function<AbstractFrame, Boolean> stopCondition, long demand) {
+            this.pulls++;
+            this.productive = false;
+            return 0L;
+        }
+
+        @Override
+        public void request(long demand) {
+            this.requests++;
+        }
+
+        @Override
+        public boolean isComplete() {
+            return false;
+        }
+
+        @Override
+        public boolean isProductive() {
+            return this.productive;
+        }
+
+        @Override
+        public void setProductivity(boolean productive) {
+            this.productive = productive;
+        }
+
+        @Override
+        public void push(AbstractFrame frame) {}
+
+        @Override
+        public void onError(Throwable throwable) {}
+    }
+
     /// A fixed, quick idle timing whose workers never take the unproductive park, so hand-driven cycles are fast.
     private static IdlePolicy quickIdle() {
         return new IdlePolicy(0L, IdlePolicy.DEFAULT_CONTENTION_HALF_LIFE_NANOS).withUnproductiveParkNs(0L);

@@ -220,6 +220,136 @@ class UpstreamQueueTest {
         assertEquals(2L, handles.sizeLong(), "prioritizing a request must not duplicate or lose handles");
     }
 
+    /// One idle direct cycle: a pull that finds nothing, then the request that follows it.
+    private void idleCycle() {
+        queue.pull(frame -> {}, frame -> false, 64L);
+        queue.request(64L);
+    }
+
+    private java.util.List<TestUpstreamHandle> addIdleHandles(int count) {
+        java.util.List<TestUpstreamHandle> idle = new java.util.ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            TestUpstreamHandle handle = addHandle();
+            handle.pullResult = 0L;
+            idle.add(handle);
+        }
+        return idle;
+    }
+
+    /// A demand under the bucket target is one bucket, so a pull and a request each service one handle. If the
+    /// request took the handle after the one the pull took, an even number of handles would split in two: half
+    /// never requested, the other half never pulled and productive for ever.
+    @Test
+    void everyIdleHandleIsPulledAndRequestedWhateverTheirNumber() {
+        for (int n : new int[] {1, 2, 3, 4, 5, 6, 8}) {
+            MpscQueue<UpstreamHandle> own = new MpscQueue<>(64);
+            PaddedAtomicLong ownCount = new PaddedAtomicLong();
+            UpstreamQueue target = new UpstreamQueue(0, own, ownCount);
+            java.util.List<TestUpstreamHandle> idle = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                TestUpstreamHandle handle = new TestUpstreamHandle();
+                handle.pullResult = 0L;
+                own.offer(handle);
+                ownCount.incrementAndGet();
+                idle.add(handle);
+            }
+
+            for (int cycle = 0; cycle < 1_000; cycle++) {
+                target.pull(frame -> {}, frame -> false, 64L);
+                target.request(64L);
+            }
+
+            for (int i = 0; i < n; i++) {
+                assertTrue(idle.get(i).requested > 0L, n + " handles: handle " + i + " was never requested");
+                assertTrue(idle.get(i).pulled > 0L, n + " handles: handle " + i + " was never pulled");
+            }
+            assertEquals(0L, target.getProductiveHandleCount(), n + " idle handles");
+        }
+    }
+
+    @Test
+    void idleHandlesAreServicedEvenlyByPullsAndRequests() {
+        for (int n : new int[] {2, 4, 6}) {
+            MpscQueue<UpstreamHandle> own = new MpscQueue<>(64);
+            PaddedAtomicLong ownCount = new PaddedAtomicLong();
+            UpstreamQueue target = new UpstreamQueue(0, own, ownCount);
+            java.util.List<TestUpstreamHandle> idle = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                TestUpstreamHandle handle = new TestUpstreamHandle();
+                handle.pullResult = 0L;
+                own.offer(handle);
+                ownCount.incrementAndGet();
+                idle.add(handle);
+            }
+
+            for (int cycle = 0; cycle < 600; cycle++) {
+                target.pull(frame -> {}, frame -> false, 64L);
+                target.request(64L);
+            }
+
+            for (TestUpstreamHandle handle : idle) {
+                assertEquals(600L / n * 64L, handle.requested, n + " handles");
+                assertEquals(600L / n * 64L, handle.pulled, n + " handles");
+            }
+        }
+    }
+
+    @Test
+    void aPullThatFoundNothingHoldsTheHandleForTheRequestThatFollows() {
+        java.util.List<TestUpstreamHandle> idle = addIdleHandles(2);
+
+        idleCycle();
+
+        assertEquals(64L, idle.get(0).pulled);
+        assertEquals(64L, idle.get(0).requested);
+        assertEquals(0L, idle.get(1).pulled + idle.get(1).requested);
+        assertEquals(2L, handles.sizeLong());
+    }
+
+    @Test
+    void aPullThatFoundFramesDoesNotHoldTheHandle() {
+        TestUpstreamHandle busy = addHandle();
+        TestUpstreamHandle idle = addHandle();
+
+        idleCycle();
+
+        assertEquals(64L, busy.pulled);
+        assertEquals(0L, busy.requested);
+        assertEquals(64L, idle.requested);
+    }
+
+    @Test
+    void aHandleThatFoundNothingDoesNotDisplaceOneThatStopped() {
+        for (boolean readyFirst : new boolean[] {true, false}) {
+            handles = new MpscQueue<>(64);
+            count = new PaddedAtomicLong();
+            queue = new UpstreamQueue(0, handles, count);
+            QueueFixture ready = queueFixture();
+            TestUpstreamHandle idle = new TestUpstreamHandle();
+            idle.pullResult = 0L;
+            TestReceiver receiver = new TestReceiver();
+            ready.vertex.downstreams[0].addDownstream(receiver);
+            if (readyFirst) {
+                handles.offer(ready.handle);
+                handles.offer(idle);
+            } else {
+                handles.offer(idle);
+                handles.offer(ready.handle);
+            }
+            count.setRelease(2L);
+            TestFrame frame = new TestFrame("ordered");
+            ready.sink.offer(frame);
+            queue.setPullBucketTreatment(1L, PullBucketDivisionMode.FLOOR);
+
+            /// Both handles are visited by one pull; whichever order they come in, the stopped one is the hint.
+            queue.pull(ignored -> {}, AbstractFrame::isOrdered, 2L);
+            queue.request(1L);
+
+            assertEquals(java.util.List.of(frame), receiver.received, "ready first: " + readyFirst);
+            assertEquals(0L, idle.requested, "ready first: " + readyFirst);
+        }
+    }
+
     @Test
     void stoppedSourceRequestHonorsDemandAndSharedHandleAcquisition() {
         QueueFixture ready = queueFixture();
