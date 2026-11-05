@@ -4,7 +4,13 @@ import io.euhedral_execution.core.frames.AbstractFrame;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-/// An interface for defining where data comes from
+/// An interface for defining where data comes from.
+///
+/// Only the lattice's workers call `request()` and `pull()`. Work that comes from outside (a submitter, a completion
+/// poller, another runtime) is offered into a queue the source owns, an MPSC that the source's `pull()` and `request()`
+/// take from on the workers' own visits, and the outside thread returns at once: it never calls `request()` or `pull()`
+/// to get its work admitted. A `pull()` pushes nothing, so a call from outside that finds the source held by a worker's
+/// `pull()` waits for the lattice's next `request()` of that source.
 public interface LatticeSource {
 
     void addDownstream(LatticeReceiver downstream);
