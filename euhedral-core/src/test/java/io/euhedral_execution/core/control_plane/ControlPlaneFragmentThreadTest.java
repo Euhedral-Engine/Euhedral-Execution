@@ -616,9 +616,9 @@ class ControlPlaneFragmentThreadTest {
             } finally {
                 worker.close();
                 TestDistributor.resetSharedRoutingState();
-                PinnedThreadExecutor.closeAll();
             }
         }
+        PinnedThreadExecutor.closeAll();
     }
 
     private static void setField(ControlPlaneFragment fragment, String name, Object value)
