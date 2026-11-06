@@ -172,8 +172,9 @@ public sealed class QueueIngestSink extends AbstractIngestSink permits PipelineR
                 count = this.queue.drain(consumer, stopCondition, demand);
             } finally {
                 this.draining.set(false);
+                // Lifecycle work only. A request refused the queue while this pull held it stays pending, with its
+                // demand banked, for the next request: a worker that entered from a pull must not push.
                 this.owner.onDrainFinished();
-                drainRequests();
             }
             if (count == 0 && (boolean) FINISH.getAcquire(this) && this.queue.isEmpty()) {
                 this.owner.complete();
